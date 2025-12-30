@@ -29,7 +29,9 @@ def upload_excel():
     Sube y parsea un archivo Excel de ETABS.
 
     Request:
-        multipart/form-data con campo 'file' conteniendo el Excel
+        multipart/form-data con campos:
+        - 'file': archivo Excel (requerido)
+        - 'hn_ft': altura del edificio en pies (opcional)
 
     Response:
         {
@@ -39,7 +41,13 @@ def upload_excel():
                 "total_piers": 10,
                 "total_stories": 3,
                 "stories": ["Cielo P1", "Cielo P2", ...],
-                "piers_list": [...]
+                "piers_list": [...],
+                "building": {
+                    "n_stories": 3,
+                    "hn_ft": 98.4,
+                    "hn_m": 30.0,
+                    "total_height_mm": 30000
+                }
             }
         }
     """
@@ -68,12 +76,23 @@ def upload_excel():
         # Leer contenido
         file_content = file.read()
 
+        # Obtener hn_ft opcional (altura del edificio en pies)
+        hn_ft = None
+        hn_ft_str = request.form.get('hn_ft')
+        if hn_ft_str:
+            try:
+                hn_ft = float(hn_ft_str)
+            except ValueError:
+                pass  # Ignorar si no es un número válido
+
         # Generar session_id
         session_id = str(uuid.uuid4())
 
-        # Parsear
+        # Parsear (ahora acepta hn_ft como parámetro opcional)
         service = get_analysis_service()
-        result = service.parse_excel(file_content, session_id)
+        result = service._session_manager.create_session(
+            file_content, session_id, hn_ft=hn_ft
+        )
 
         return jsonify(result)
 

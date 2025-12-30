@@ -164,16 +164,29 @@ class PierAnalysisService:
         # Obtener datos de la sesión
         parsed_data = self._session_manager.get_session(session_id)
 
+        # Obtener hn_ft del edificio
+        hn_ft = None
+        if parsed_data.building_info:
+            hn_ft = parsed_data.building_info.hn_ft
+
         # Analizar cada pier
         results: List[VerificationResult] = []
         for key, pier in parsed_data.piers.items():
             pier_forces = parsed_data.pier_forces.get(key)
+
+            # Obtener hwcs para este pier desde la info de continuidad
+            hwcs = None
+            if parsed_data.continuity_info and key in parsed_data.continuity_info:
+                hwcs = parsed_data.continuity_info[key].hwcs
+
             result = self._analyze_pier(
                 pier=pier,
                 pier_forces=pier_forces,
                 generate_plot=generate_plots,
                 moment_axis=moment_axis,
-                angle_deg=angle_deg
+                angle_deg=angle_deg,
+                hwcs=hwcs,
+                hn_ft=hn_ft
             )
             results.append(result)
 
@@ -397,7 +410,8 @@ class PierAnalysisService:
         generate_plot: bool,
         moment_axis: str,
         angle_deg: float,
-        hn_m: Optional[float] = None
+        hwcs: Optional[float] = None,
+        hn_ft: Optional[float] = None
     ) -> VerificationResult:
         """
         Ejecuta el análisis estructural de un pier individual.
@@ -408,6 +422,15 @@ class PierAnalysisService:
         - Clasificación de muros (§18.10.8)
         - Amplificación de cortante (§18.10.3.3)
         - Elementos de borde (§18.10.6)
+
+        Args:
+            pier: Pier a analizar
+            pier_forces: Fuerzas del pier
+            generate_plot: Generar gráfico P-M
+            moment_axis: Eje de momento
+            angle_deg: Ángulo para vista combinada
+            hwcs: Altura desde sección crítica (mm), opcional
+            hn_ft: Altura total del edificio (pies), opcional
         """
 
         # 1. Flexocompresión (delegado a FlexureService)
@@ -423,7 +446,9 @@ class PierAnalysisService:
 
         # 4. Amplificación de cortante (ACI 318-25 §18.10.3.3)
         Vu_max = shear_result.get('Vu_2', 0)
-        amplification = self._shear_service.get_amplification_dict(pier, Vu_max, hn_m)
+        amplification = self._shear_service.get_amplification_dict(
+            pier, Vu_max, hwcs=hwcs, hn_ft=hn_ft
+        )
 
         # 5. Elementos de borde (ACI 318-25 §18.10.6)
         boundary = {'required': False, 'method': '', 'aci_reference': ''}
@@ -573,16 +598,29 @@ class PierAnalysisService:
         if not filtered_piers:
             return {'success': True, 'summary_plot': None, 'count': 0}
 
+        # Obtener hn_ft del edificio
+        hn_ft = None
+        if parsed_data.building_info:
+            hn_ft = parsed_data.building_info.hn_ft
+
         # Analizar piers filtrados
         results: List[VerificationResult] = []
         for key, pier in filtered_piers.items():
             pier_forces = parsed_data.pier_forces.get(key)
+
+            # Obtener hwcs para este pier
+            hwcs = None
+            if parsed_data.continuity_info and key in parsed_data.continuity_info:
+                hwcs = parsed_data.continuity_info[key].hwcs
+
             result = self._analyze_pier(
                 pier=pier,
                 pier_forces=pier_forces,
                 generate_plot=False,  # No generar plots individuales
                 moment_axis='M3',
-                angle_deg=0
+                angle_deg=0,
+                hwcs=hwcs,
+                hn_ft=hn_ft
             )
             results.append(result)
 
@@ -865,8 +903,8 @@ class PierAnalysisService:
         pier_key: str,
         sdc: str = 'D',
         delta_u: float = 0,
-        hwcs: float = 0,
-        hn_ft: float = 0,
+        hwcs: Optional[float] = None,
+        hn_ft: Optional[float] = None,
         sigma_max: float = 0,
         is_wall_pier: bool = False
     ) -> Dict[str, Any]:
@@ -884,8 +922,8 @@ class PierAnalysisService:
             pier_key: Clave del pier (Story_Label)
             sdc: Categoria de Diseno Sismico ('A', 'B', 'C', 'D', 'E', 'F')
             delta_u: Desplazamiento de diseno en tope (mm)
-            hwcs: Altura del muro desde seccion critica (mm)
-            hn_ft: Altura total del edificio (pies)
+            hwcs: Altura del muro desde seccion critica (mm), None = usar calculado
+            hn_ft: Altura total del edificio (pies), None = usar calculado
             sigma_max: Esfuerzo maximo de compresion (MPa)
             is_wall_pier: Si es un pilar de muro (segmento estrecho)
 
@@ -899,6 +937,12 @@ class PierAnalysisService:
 
         pier = self._session_manager.get_pier(session_id, pier_key)
         pier_forces = self._session_manager.get_pier_forces(session_id, pier_key)
+
+        # Usar hwcs/hn_ft calculados si no se proporcionan
+        if hwcs is None or hwcs <= 0:
+            hwcs = self._session_manager.get_hwcs(session_id, pier_key)
+        if hn_ft is None or hn_ft <= 0:
+            hn_ft = self._session_manager.get_hn_ft(session_id)
 
         # Convertir SDC
         sdc_enum = {
@@ -922,15 +966,15 @@ class PierAnalysisService:
                     Vu = Vu_combo
                     Vu_Eh = Vu_combo
 
-        # Ejecutar verificacion
+        # Ejecutar verificacion (hwcs ya tiene valor calculado o de usuario)
         result = self._aci_318_25_service.verify_chapter_18(
             pier=pier,
             sdc=sdc_enum,
             Vu=Vu,
             Vu_Eh=Vu_Eh,
             delta_u=delta_u,
-            hwcs=hwcs if hwcs > 0 else pier.height,
-            hn_ft=hn_ft,
+            hwcs=hwcs if hwcs and hwcs > 0 else pier.height,
+            hn_ft=hn_ft if hn_ft else 0,
             sigma_max=sigma_max,
             is_wall_pier=is_wall_pier
         )
@@ -951,8 +995,8 @@ class PierAnalysisService:
         wall_type: str = 'bearing',
         sdc: str = 'D',
         delta_u: float = 0,
-        hwcs: float = 0,
-        hn_ft: float = 0,
+        hwcs: Optional[float] = None,
+        hn_ft: Optional[float] = None,
         sigma_max: float = 0,
         is_wall_pier: bool = False
     ) -> Dict[str, Any]:
@@ -965,8 +1009,8 @@ class PierAnalysisService:
             wall_type: Tipo de muro
             sdc: Categoria de Diseno Sismico
             delta_u: Desplazamiento de diseno (mm)
-            hwcs: Altura desde seccion critica (mm)
-            hn_ft: Altura del edificio (pies)
+            hwcs: Altura desde seccion critica (mm), None = usar calculado
+            hn_ft: Altura del edificio (pies), None = usar calculado
             sigma_max: Esfuerzo maximo (MPa)
             is_wall_pier: Si es pilar de muro
 
@@ -980,6 +1024,12 @@ class PierAnalysisService:
 
         pier = self._session_manager.get_pier(session_id, pier_key)
         pier_forces = self._session_manager.get_pier_forces(session_id, pier_key)
+
+        # Usar hwcs/hn_ft calculados si no se proporcionan
+        if hwcs is None or hwcs <= 0:
+            hwcs = self._session_manager.get_hwcs(session_id, pier_key)
+        if hn_ft is None or hn_ft <= 0:
+            hn_ft = self._session_manager.get_hn_ft(session_id)
 
         # Convertir SDC
         sdc_enum = {
@@ -997,8 +1047,8 @@ class PierAnalysisService:
             pier_forces=pier_forces,
             sdc=sdc_enum,
             delta_u=delta_u,
-            hwcs=hwcs if hwcs > 0 else pier.height,
-            hn_ft=hn_ft,
+            hwcs=hwcs if hwcs and hwcs > 0 else pier.height,
+            hn_ft=hn_ft if hn_ft else 0,
             sigma_max=sigma_max,
             is_wall_pier=is_wall_pier
         )
@@ -1013,7 +1063,7 @@ class PierAnalysisService:
         self,
         session_id: str,
         sdc: str = 'D',
-        hn_ft: float = 0
+        hn_ft: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         Verifica conformidad sismica para todos los piers de la sesion.
@@ -1021,7 +1071,7 @@ class PierAnalysisService:
         Args:
             session_id: ID de sesion
             sdc: Categoria de Diseno Sismico
-            hn_ft: Altura del edificio (pies)
+            hn_ft: Altura del edificio (pies), None = usar calculado
 
         Returns:
             Dict con resultados para todos los piers
@@ -1031,6 +1081,10 @@ class PierAnalysisService:
             return error
 
         parsed_data = self._session_manager.get_session(session_id)
+
+        # Usar hn_ft calculado si no se proporciona
+        if hn_ft is None or hn_ft <= 0:
+            hn_ft = self._session_manager.get_hn_ft(session_id)
 
         # Convertir SDC
         sdc_enum = {
@@ -1049,6 +1103,11 @@ class PierAnalysisService:
         for key, pier in parsed_data.piers.items():
             pier_forces = parsed_data.pier_forces.get(key)
 
+            # Obtener hwcs para este pier
+            hwcs = pier.height  # default
+            if parsed_data.continuity_info and key in parsed_data.continuity_info:
+                hwcs = parsed_data.continuity_info[key].hwcs
+
             # Obtener cortante maximo
             Vu = 0
             Vu_Eh = 0
@@ -1066,8 +1125,8 @@ class PierAnalysisService:
                 sdc=sdc_enum,
                 Vu=Vu,
                 Vu_Eh=Vu_Eh,
-                hwcs=pier.height,
-                hn_ft=hn_ft
+                hwcs=hwcs,
+                hn_ft=hn_ft if hn_ft else 0
             )
 
             issues_count += len(result.critical_issues)

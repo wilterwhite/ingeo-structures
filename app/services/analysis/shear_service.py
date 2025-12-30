@@ -352,7 +352,8 @@ class ShearService:
         self,
         pier: Pier,
         Vu: float,
-        hn_m: Optional[float] = None,
+        hwcs: Optional[float] = None,
+        hn_ft: Optional[float] = None,
         use_omega_0: bool = False,
         omega_0: float = 2.5
     ) -> ShearAmplificationResult:
@@ -364,19 +365,23 @@ class ShearService:
         Args:
             pier: Pier a verificar
             Vu: Cortante del análisis debido a sismo (tonf)
-            hn_m: Altura total del edificio (m), opcional
+            hwcs: Altura desde sección crítica (mm), opcional (default: pier.height)
+            hn_ft: Altura total del edificio (pies), opcional
             use_omega_0: Si usar Ω₀ en lugar de Ωv × ωv
             omega_0: Factor de sobrerresistencia del sistema (default 2.5)
 
         Returns:
             ShearAmplificationResult con cortante amplificado
         """
+        # Usar hwcs proporcionado o altura del pier
+        hwcs_value = hwcs if hwcs is not None and hwcs > 0 else pier.height
+
         # Verificar si debe amplificar
         classification = self.classify_wall(pier)
         is_wall_pier = self._wall_classification.is_wall_pier(classification)
 
         if not self._shear_amplification.should_amplify(
-            hwcs=pier.height,
+            hwcs=hwcs_value,
             lw=pier.width,
             is_wall_pier=is_wall_pier
         ):
@@ -387,18 +392,15 @@ class ShearService:
                 omega_v=1.0,
                 omega_v_dyn=1.0,
                 amplification=1.0,
-                hwcs_lw=pier.height / pier.width if pier.width > 0 else 0,
+                hwcs_lw=hwcs_value / pier.width if pier.width > 0 else 0,
                 hn_ft=None,
                 applies=False,
                 aci_reference="No aplica: pilar de muro o viga de acoplamiento"
             )
 
-        # Convertir altura a pies si se proporciona
-        hn_ft = convert_mm_to_ft(hn_m * 1000) if hn_m else None
-
         return self._shear_amplification.calculate_amplified_shear(
             Vu=Vu,
-            hwcs=pier.height,
+            hwcs=hwcs_value,
             lw=pier.width,
             hn_ft=hn_ft,
             use_omega_0=use_omega_0,
@@ -409,7 +411,8 @@ class ShearService:
         self,
         pier: Pier,
         Vu: float,
-        hn_m: Optional[float] = None
+        hwcs: Optional[float] = None,
+        hn_ft: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         Obtiene la amplificación de cortante como diccionario.
@@ -417,12 +420,13 @@ class ShearService:
         Args:
             pier: Pier a verificar
             Vu: Cortante del análisis (tonf)
-            hn_m: Altura total del edificio (m)
+            hwcs: Altura desde sección crítica (mm), opcional
+            hn_ft: Altura total del edificio (pies), opcional
 
         Returns:
             Dict con información de amplificación
         """
-        result = self.amplify_shear(pier, Vu, hn_m)
+        result = self.amplify_shear(pier, Vu, hwcs=hwcs, hn_ft=hn_ft)
         return {
             'Vu_original': round(result.Vu_original, 2),
             'Ve': round(result.Ve, 2),
@@ -591,7 +595,8 @@ class ShearService:
         self,
         pier: Pier,
         pier_forces: Optional[PierForces],
-        hn_m: Optional[float] = None
+        hwcs: Optional[float] = None,
+        hn_ft: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         Realiza verificación completa del pier incluyendo todas las mejoras ACI 318-25.
@@ -605,7 +610,8 @@ class ShearService:
         Args:
             pier: Pier a verificar
             pier_forces: Fuerzas del pier
-            hn_m: Altura total del edificio (m)
+            hwcs: Altura desde sección crítica (mm), opcional
+            hn_ft: Altura total del edificio (pies), opcional
 
         Returns:
             Dict con verificación completa
@@ -618,7 +624,7 @@ class ShearService:
 
         # 3. Amplificación de cortante (si aplica)
         Vu_max = shear_result.get('Vu_2', 0)
-        amplification = self.get_amplification_dict(pier, Vu_max, hn_m)
+        amplification = self.get_amplification_dict(pier, Vu_max, hwcs=hwcs, hn_ft=hn_ft)
 
         # 4. Verificación de elementos de borde (si hay fuerzas)
         boundary = None
