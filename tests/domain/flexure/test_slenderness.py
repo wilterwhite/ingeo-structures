@@ -333,3 +333,114 @@ class TestMomentoDisenoConMinimo:
         result_neg = service.get_design_moment(M2_kNm=-50, Pu_kN=Pu, h_mm=h)
 
         assert result_pos["M2_design_kNm"] == result_neg["M2_design_kNm"]
+
+
+class TestLimiteSegundoOrden:
+    """Tests para verificacion de limite 1.4x segun ACI 318-25 Seccion 6.2.5.3."""
+
+    def test_ratio_menor_14_pasa(self, service):
+        """Ratio < 1.4 cumple el limite."""
+        result = service.verify_second_order_limit(
+            Mu_first_order=100,
+            Mu_second_order=130  # ratio = 1.3 < 1.4
+        )
+
+        assert result["passes"] is True
+        assert result["status"] == "OK"
+        assert result["ratio"] == pytest.approx(1.3, rel=1e-3)
+
+    def test_ratio_igual_14_pasa(self, service):
+        """Ratio = 1.4 exacto cumple el limite."""
+        result = service.verify_second_order_limit(
+            Mu_first_order=100,
+            Mu_second_order=140  # ratio = 1.4
+        )
+
+        assert result["passes"] is True
+        assert result["status"] == "OK"
+
+    def test_ratio_mayor_14_falla(self, service):
+        """Ratio > 1.4 no cumple el limite."""
+        result = service.verify_second_order_limit(
+            Mu_first_order=100,
+            Mu_second_order=150  # ratio = 1.5 > 1.4
+        )
+
+        assert result["passes"] is False
+        assert result["status"] == "NO OK"
+        assert "revisar" in result["message"].lower()
+
+    def test_limite_es_14(self, service):
+        """El limite es 1.4."""
+        result = service.verify_second_order_limit(100, 100)
+        assert result["limit"] == 1.4
+
+    def test_valores_absolutos(self, service):
+        """Usa valores absolutos de momentos."""
+        result_pos = service.verify_second_order_limit(100, 130)
+        result_neg = service.verify_second_order_limit(-100, -130)
+
+        assert result_pos["ratio"] == result_neg["ratio"]
+
+    def test_mu1_cero_mu2_cero(self, service):
+        """Si ambos son cero, ratio = 1.0."""
+        result = service.verify_second_order_limit(0, 0)
+        assert result["ratio"] == 1.0
+        assert result["passes"] is True
+
+    def test_mu1_cero_mu2_positivo(self, service):
+        """Si Mu1 = 0 y Mu2 > 0, ratio = infinito."""
+        result = service.verify_second_order_limit(0, 50)
+        assert result["ratio"] == float('inf')
+        assert result["passes"] is False
+
+    def test_referencia_aci(self, service):
+        """Resultado incluye referencia ACI correcta."""
+        result = service.verify_second_order_limit(100, 130)
+        assert "6.2.5.3" in result["aci_reference"]
+
+
+class TestVerificacionEstabilidad:
+    """Tests para verificacion completa de estabilidad."""
+
+    def test_muro_corto_sin_magnificacion(self, service):
+        """Muro corto no magnifica, ratio = 1.0."""
+        pier = Pier(label="P1", story="Piso 1", width=3000, thickness=300, height=2000, fc=28, fy=420)
+
+        result = service.check_stability(pier, Pu_kN=500, Mu_kNm=50, k=0.8)
+
+        assert result["slenderness"]["is_slender"] is False
+        assert result["magnification"]["delta"] == 1.0
+        assert result["second_order_check"]["passes"] is True
+        assert result["overall_status"] == "OK"
+
+    def test_muro_esbelto_con_magnificacion(self, service):
+        """Muro esbelto magnifica momentos."""
+        pier = Pier(label="P1", story="Piso 1", width=3000, thickness=150, height=4000, fc=28, fy=420)
+
+        result = service.check_stability(pier, Pu_kN=200, Mu_kNm=50, k=0.8)
+
+        assert result["slenderness"]["is_slender"] is True
+        assert result["magnification"]["delta"] > 1.0
+
+    def test_resultado_contiene_todos_campos(self, service):
+        """Resultado tiene estructura completa."""
+        pier = Pier(label="P1", story="Piso 1", width=3000, thickness=200, height=3000, fc=28, fy=420)
+
+        result = service.check_stability(pier, Pu_kN=500, Mu_kNm=50, k=0.8)
+
+        assert "slenderness" in result
+        assert "magnification" in result
+        assert "moments" in result
+        assert "second_order_check" in result
+        assert "overall_status" in result
+
+    def test_momento_minimo_considerado(self, service):
+        """El momento minimo se considera en la verificacion."""
+        pier = Pier(label="P1", story="Piso 1", width=3000, thickness=200, height=3000, fc=28, fy=420)
+
+        result = service.check_stability(pier, Pu_kN=500, Mu_kNm=1, k=0.8)  # Mu muy bajo
+
+        # M2,min deberia controlar
+        assert result["moments"]["M2_min_kNm"] > 1
+        assert result["moments"]["controls_M2_min"] is True

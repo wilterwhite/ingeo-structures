@@ -35,6 +35,14 @@ M2_MIN_ECCENTRICITY_BASE = 15.0    # mm (equivale a 0.6 in)
 M2_MIN_ECCENTRICITY_FACTOR = 0.03  # mm/mm (adimensional)
 
 # =============================================================================
+# LIMITE DE EFECTOS DE SEGUNDO ORDEN - ACI 318-25 Seccion 6.2.5.3
+# =============================================================================
+# Mu (con efectos 2do orden) <= 1.4 * Mu (1er orden)
+# Si se excede este limite, revisar el sistema estructural.
+
+SECOND_ORDER_LIMIT = 1.4  # Factor maximo permitido de amplificacion
+
+# =============================================================================
 # NOTAS DE APLICACION
 # =============================================================================
 # - Para analisis a nivel de carga factorada

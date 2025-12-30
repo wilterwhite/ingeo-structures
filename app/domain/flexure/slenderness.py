@@ -17,6 +17,7 @@ from app.domain.constants.stiffness import (
     WALL_STIFFNESS_FACTOR,
     M2_MIN_ECCENTRICITY_BASE,
     M2_MIN_ECCENTRICITY_FACTOR,
+    SECOND_ORDER_LIMIT,
 )
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -373,4 +374,134 @@ class SlendernessService:
             "Mc_kNm": round(Mc, 2),
             "controls_M2_min": controls_min,
             "aci_reference": "ACI 318-25 Ec. 6.6.4.5.1, 6.6.4.5.4"
+        }
+
+    def verify_second_order_limit(
+        self,
+        Mu_first_order: float,
+        Mu_second_order: float
+    ) -> dict:
+        """
+        Verifica limite de efectos de segundo orden segun ACI 318-25 Seccion 6.2.5.3.
+
+        Mu (2do orden) <= 1.4 * Mu (1er orden)
+
+        Si se excede este limite, el sistema estructural es potencialmente
+        inestable y debe ser revisado (aumentar rigidez, reducir esbeltez, etc.)
+
+        Args:
+            Mu_first_order: Momento de analisis de primer orden (cualquier unidad)
+            Mu_second_order: Momento con efectos de segundo orden (misma unidad)
+
+        Returns:
+            dict con ratio, limite, status, y recomendacion
+        """
+        # Usar valores absolutos
+        Mu_1 = abs(Mu_first_order)
+        Mu_2 = abs(Mu_second_order)
+
+        # Evitar division por cero
+        if Mu_1 == 0:
+            if Mu_2 == 0:
+                ratio = 1.0
+            else:
+                ratio = float('inf')
+        else:
+            ratio = Mu_2 / Mu_1
+
+        # Verificar limite
+        limit = SECOND_ORDER_LIMIT
+        passes = ratio <= limit
+
+        # Determinar status y mensaje
+        if passes:
+            status = "OK"
+            message = "Efectos de 2do orden dentro de limites aceptables"
+        else:
+            status = "NO OK"
+            message = "Excede limite 1.4x - revisar sistema estructural"
+
+        return {
+            "Mu_first_order": Mu_1,
+            "Mu_second_order": Mu_2,
+            "ratio": round(ratio, 3) if ratio != float('inf') else float('inf'),
+            "limit": limit,
+            "status": status,
+            "passes": passes,
+            "message": message,
+            "aci_reference": "ACI 318-25 Seccion 6.2.5.3"
+        }
+
+    def check_stability(
+        self,
+        pier: 'Pier',
+        Pu_kN: float,
+        Mu_kNm: float,
+        k: float = 0.8
+    ) -> dict:
+        """
+        Verificacion completa de estabilidad para un pier.
+
+        Incluye:
+        - Analisis de esbeltez
+        - Magnificacion de momentos (si aplica)
+        - Verificacion de limite 1.4x
+        - Momento minimo M2,min
+
+        Args:
+            pier: Entidad Pier
+            Pu_kN: Carga axial factorada (kN)
+            Mu_kNm: Momento de primer orden (kN-m)
+            k: Factor de longitud efectiva
+
+        Returns:
+            dict con resultados completos de estabilidad
+        """
+        # Analisis de esbeltez
+        slenderness = self.analyze(pier, k=k)
+
+        # Factor de magnificacion
+        if slenderness.is_slender and Pu_kN > 0:
+            delta = self.get_moment_magnification(slenderness, Pu_kN)
+        else:
+            delta = 1.0
+
+        # Momento de diseno (considera M2,min)
+        design = self.get_design_moment(
+            M2_kNm=Mu_kNm,
+            Pu_kN=Pu_kN,
+            h_mm=pier.thickness,
+            delta=delta
+        )
+
+        # Verificar limite 1.4x
+        second_order_check = self.verify_second_order_limit(
+            Mu_first_order=max(abs(Mu_kNm), design["M2_min_kNm"]),
+            Mu_second_order=design["Mc_kNm"]
+        )
+
+        return {
+            "slenderness": {
+                "lambda": round(slenderness.lambda_ratio, 1),
+                "is_slender": slenderness.is_slender,
+                "Pc_kN": round(slenderness.Pc_kN, 1),
+            },
+            "magnification": {
+                "delta": round(delta, 3) if delta != float('inf') else float('inf'),
+                "Cm": slenderness.Cm,
+            },
+            "moments": {
+                "Mu_first_order_kNm": abs(Mu_kNm),
+                "M2_min_kNm": design["M2_min_kNm"],
+                "controls_M2_min": design["controls_M2_min"],
+                "Mc_design_kNm": design["Mc_kNm"],
+            },
+            "second_order_check": {
+                "ratio": second_order_check["ratio"],
+                "limit": SECOND_ORDER_LIMIT,
+                "passes": second_order_check["passes"],
+                "status": second_order_check["status"],
+            },
+            "overall_status": "OK" if second_order_check["passes"] else "REVISAR SISTEMA",
+            "aci_reference": "ACI 318-25 Secciones 6.2.5, 6.6.4"
         }
