@@ -13,7 +13,11 @@ Referencias:
 - ACI 318-25 Tabla 6.6.3.1.1(a): Rigidez efectiva
 """
 import math
-from app.domain.constants.stiffness import WALL_STIFFNESS_FACTOR
+from app.domain.constants.stiffness import (
+    WALL_STIFFNESS_FACTOR,
+    M2_MIN_ECCENTRICITY_BASE,
+    M2_MIN_ECCENTRICITY_FACTOR,
+)
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -288,4 +292,85 @@ class SlendernessService:
             "stiffness_factor": WALL_STIFFNESS_FACTOR,
             "EI_eff_Nmm2": round(EI_eff, 0),
             "aci_reference": "ACI 318-25 Tabla 6.6.3.1.1(a)"
+        }
+
+    def calculate_M2_min(
+        self,
+        Pu_kN: float,
+        h_mm: float
+    ) -> dict:
+        """
+        Calcula el momento minimo M2,min segun ACI 318-25 Seccion 6.6.4.5.4.
+
+        M2,min = Pu * e_min
+        e_min = 15 + 0.03*h (mm)
+
+        Este momento minimo asegura que el diseno considere una
+        excentricidad minima, evitando disenar con momentos muy pequenos.
+
+        Args:
+            Pu_kN: Carga axial factorada (kN)
+            h_mm: Dimension de la seccion en direccion de estabilidad (mm)
+                  Para muros, tipicamente es el espesor.
+
+        Returns:
+            dict con e_min, M2_min, y referencia ACI
+        """
+        # Excentricidad minima (mm)
+        e_min = M2_MIN_ECCENTRICITY_BASE + M2_MIN_ECCENTRICITY_FACTOR * h_mm
+
+        # Momento minimo
+        # M2,min (kN-m) = Pu (kN) * e_min (mm) / 1000
+        M2_min_kNm = abs(Pu_kN) * e_min / 1000
+
+        return {
+            "e_min_mm": round(e_min, 1),
+            "M2_min_kNm": round(M2_min_kNm, 2),
+            "Pu_kN": abs(Pu_kN),
+            "h_mm": h_mm,
+            "aci_reference": "ACI 318-25 Ec. 6.6.4.5.4"
+        }
+
+    def get_design_moment(
+        self,
+        M2_kNm: float,
+        Pu_kN: float,
+        h_mm: float,
+        delta: float = 1.0
+    ) -> dict:
+        """
+        Obtiene el momento de diseno considerando M2,min y magnificacion.
+
+        Mc = delta * max(M2, M2_min)
+
+        Args:
+            M2_kNm: Momento de analisis de primer orden (kN-m)
+            Pu_kN: Carga axial factorada (kN)
+            h_mm: Dimension de la seccion (mm)
+            delta: Factor de magnificacion (default 1.0)
+
+        Returns:
+            dict con momento de diseno y si M2_min controla
+        """
+        # Calcular M2,min
+        M2_min_result = self.calculate_M2_min(Pu_kN, h_mm)
+        M2_min = M2_min_result["M2_min_kNm"]
+
+        # M2 para diseno (el mayor entre M2 y M2,min)
+        M2_abs = abs(M2_kNm)
+        M2_design = max(M2_abs, M2_min)
+        controls_min = M2_min > M2_abs
+
+        # Momento magnificado
+        Mc = delta * M2_design
+
+        return {
+            "M2_kNm": M2_abs,
+            "M2_min_kNm": M2_min,
+            "e_min_mm": M2_min_result["e_min_mm"],
+            "M2_design_kNm": round(M2_design, 2),
+            "delta": delta,
+            "Mc_kNm": round(Mc, 2),
+            "controls_M2_min": controls_min,
+            "aci_reference": "ACI 318-25 Ec. 6.6.4.5.1, 6.6.4.5.4"
         }

@@ -213,3 +213,123 @@ class TestMagnificacionMomentos:
         """Delta siempre es >= 1.0."""
         delta = service._calculate_magnification_factor(Cm=0.5, Pc_kN=10000, Pu_kN=100)
         assert delta >= 1.0
+
+
+class TestMomentoMinimo:
+    """Tests para momento minimo M2,min segun ACI 318-25 Seccion 6.6.4.5.4."""
+
+    def test_excentricidad_minima_formula(self, service):
+        """e_min = 15 + 0.03*h (mm)."""
+        h = 200  # mm
+        Pu = 100  # kN
+
+        result = service.calculate_M2_min(Pu, h)
+
+        # e_min = 15 + 0.03*200 = 15 + 6 = 21 mm
+        assert result["e_min_mm"] == pytest.approx(21.0, rel=1e-3)
+
+    def test_m2_min_calculo(self, service):
+        """M2,min = Pu * e_min / 1000 (kN-m)."""
+        h = 200   # mm
+        Pu = 500  # kN
+
+        result = service.calculate_M2_min(Pu, h)
+
+        # e_min = 15 + 0.03*200 = 21 mm
+        # M2,min = 500 * 21 / 1000 = 10.5 kN-m
+        assert result["M2_min_kNm"] == pytest.approx(10.5, rel=1e-3)
+
+    def test_m2_min_aumenta_con_pu(self, service):
+        """Mayor carga axial produce mayor M2,min."""
+        h = 200  # mm
+
+        result_bajo = service.calculate_M2_min(Pu_kN=100, h_mm=h)
+        result_alto = service.calculate_M2_min(Pu_kN=500, h_mm=h)
+
+        assert result_alto["M2_min_kNm"] > result_bajo["M2_min_kNm"]
+
+    def test_m2_min_aumenta_con_espesor(self, service):
+        """Mayor espesor produce mayor e_min y M2,min."""
+        Pu = 500  # kN
+
+        result_delgado = service.calculate_M2_min(Pu, h_mm=150)
+        result_grueso = service.calculate_M2_min(Pu, h_mm=300)
+
+        assert result_grueso["e_min_mm"] > result_delgado["e_min_mm"]
+        assert result_grueso["M2_min_kNm"] > result_delgado["M2_min_kNm"]
+
+    def test_m2_min_usa_valor_absoluto_pu(self, service):
+        """M2,min usa valor absoluto de Pu."""
+        h = 200  # mm
+
+        result_pos = service.calculate_M2_min(Pu_kN=500, h_mm=h)
+        result_neg = service.calculate_M2_min(Pu_kN=-500, h_mm=h)
+
+        assert result_pos["M2_min_kNm"] == result_neg["M2_min_kNm"]
+
+    def test_referencia_aci(self, service):
+        """Resultado incluye referencia ACI correcta."""
+        result = service.calculate_M2_min(Pu_kN=500, h_mm=200)
+
+        assert result["aci_reference"] == "ACI 318-25 Ec. 6.6.4.5.4"
+
+
+class TestMomentoDisenoConMinimo:
+    """Tests para momento de diseno considerando M2,min."""
+
+    def test_m2_controla_si_mayor(self, service):
+        """Si M2 > M2,min, usa M2."""
+        Pu = 500   # kN
+        h = 200    # mm
+        M2 = 50    # kN-m (mayor que M2,min = 10.5)
+
+        result = service.get_design_moment(M2_kNm=M2, Pu_kN=Pu, h_mm=h)
+
+        assert result["controls_M2_min"] is False
+        assert result["M2_design_kNm"] == pytest.approx(50.0, rel=1e-3)
+
+    def test_m2_min_controla_si_mayor(self, service):
+        """Si M2,min > M2, usa M2,min."""
+        Pu = 500   # kN
+        h = 200    # mm
+        M2 = 5     # kN-m (menor que M2,min = 10.5)
+
+        result = service.get_design_moment(M2_kNm=M2, Pu_kN=Pu, h_mm=h)
+
+        assert result["controls_M2_min"] is True
+        assert result["M2_design_kNm"] == pytest.approx(10.5, rel=1e-3)
+
+    def test_magnificacion_aplicada(self, service):
+        """Mc = delta * M2_design."""
+        Pu = 500   # kN
+        h = 200    # mm
+        M2 = 50    # kN-m
+        delta = 1.2
+
+        result = service.get_design_moment(M2_kNm=M2, Pu_kN=Pu, h_mm=h, delta=delta)
+
+        # Mc = 1.2 * 50 = 60 kN-m
+        assert result["Mc_kNm"] == pytest.approx(60.0, rel=1e-3)
+        assert result["delta"] == 1.2
+
+    def test_magnificacion_con_m2_min(self, service):
+        """Magnificacion se aplica a M2,min si controla."""
+        Pu = 500   # kN
+        h = 200    # mm
+        M2 = 5     # kN-m (M2,min = 10.5 controla)
+        delta = 1.5
+
+        result = service.get_design_moment(M2_kNm=M2, Pu_kN=Pu, h_mm=h, delta=delta)
+
+        # Mc = 1.5 * 10.5 = 15.75 kN-m
+        assert result["Mc_kNm"] == pytest.approx(15.75, rel=1e-2)
+
+    def test_m2_negativo_usa_absoluto(self, service):
+        """Usa valor absoluto de M2."""
+        Pu = 500   # kN
+        h = 200    # mm
+
+        result_pos = service.get_design_moment(M2_kNm=50, Pu_kN=Pu, h_mm=h)
+        result_neg = service.get_design_moment(M2_kNm=-50, Pu_kN=Pu, h_mm=h)
+
+        assert result_pos["M2_design_kNm"] == result_neg["M2_design_kNm"]
