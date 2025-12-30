@@ -189,3 +189,49 @@ BOUNDARY_SPACING = {
     80: {'critical': (5, 6), 'other': (6, 6)},
     100: {'critical': (4, 6), 'other': (6, 6)},
 }
+
+
+# =============================================================================
+# FRICCION POR CORTANTE (ACI 318-25 Seccion 22.9)
+# =============================================================================
+#
+# Vn = mu x (Avf x fy + Nu)                    [Ec. 22.9.4.2]
+# Vn = Avf x fy x (mu x sin(alpha) + cos(alpha)) + mu x Nu  [Ec. 22.9.4.3]
+#
+# Aplica para transferencia de cortante a traves de:
+# - Juntas de construccion
+# - Interfaces entre concretos de diferentes edades
+# - Grietas existentes o potenciales
+
+# Tabla 22.9.4.2 - Coeficientes de friccion (mu)
+# Nota: lambda = 1.0 para concreto de peso normal
+SHEAR_FRICTION_MU = {
+    'monolithic': 1.4,           # (a) Concreto colocado monoliticamente
+    'roughened': 1.0,            # (b) Concreto contra concreto endurecido con rugosidad ~6mm
+    'not_roughened': 0.6,        # (c) Concreto contra concreto sin rugosidad intencional
+    'steel': 0.7,                # (d) Concreto contra acero estructural
+}
+
+# Tabla 22.9.4.4 - Limites maximos de Vn (unidades SI: MPa, mm)
+# Para concreto de peso normal, monolitico o rugoso ~6mm:
+#   Vn_max = min(0.2*f'c*Ac, (3.3 + 0.08*f'c)*Ac, 11*Ac)
+# Para otros casos:
+#   Vn_max = min(0.2*f'c*Ac, 5.5*Ac)
+#
+# Conversiones US -> SI:
+# 480 psi = 3.3 MPa, 1600 psi = 11 MPa, 800 psi = 5.5 MPa
+
+# Limites para casos normales (monolitico o rugoso)
+SHEAR_FRICTION_VN_MAX_COEF_1 = 0.2       # 0.2 * f'c * Ac
+SHEAR_FRICTION_VN_MAX_COEF_2_BASE = 3.3  # (3.3 + 0.08*f'c) * Ac
+SHEAR_FRICTION_VN_MAX_COEF_2_FC = 0.08   # Coeficiente de f'c
+SHEAR_FRICTION_VN_MAX_LIMIT_MPa = 11.0   # 11 MPa = 1600 psi
+
+# Limites para otros casos (no rugoso, acero)
+SHEAR_FRICTION_VN_MAX_OTHER_MPa = 5.5    # 5.5 MPa = 800 psi
+
+# Limite de fy para friccion por cortante (22.9.1.3)
+SHEAR_FRICTION_FY_LIMIT_MPa = 420.0      # 60,000 psi = 420 MPa
+
+# Factor phi para friccion por cortante (21.2.1(b))
+PHI_SHEAR_FRICTION = PHI_SHEAR  # 0.75, mismo que cortante regular

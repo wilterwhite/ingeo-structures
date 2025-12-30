@@ -9,12 +9,19 @@ Módulos:
 - verification: Cálculo de Vn (§11.5.4, §18.10.4, §22.5)
 - classification: Clasificación muro vs columna vs wall pier
 - results: Dataclasses para resultados de verificación
+- shear_friction: Fricción por cortante (§22.9)
 
 Nota: La amplificación de cortante sísmico (§18.10.3.3) está en chapter18/.
 """
 from .verification import ShearVerificationService
 from .classification import WallClassificationService, WallClassification, ElementType
 from .results import ShearResult, CombinedShearResult, WallGroupShearResult
+from .shear_friction import (
+    ShearFrictionService,
+    ShearFrictionResult,
+    ShearFrictionDesignResult,
+    SurfaceCondition,
+)
 
 __all__ = [
     # verification
@@ -27,4 +34,9 @@ __all__ = [
     'WallClassificationService',
     'WallClassification',
     'ElementType',
+    # shear_friction (§22.9)
+    'ShearFrictionService',
+    'ShearFrictionResult',
+    'ShearFrictionDesignResult',
+    'SurfaceCondition',
 ]
