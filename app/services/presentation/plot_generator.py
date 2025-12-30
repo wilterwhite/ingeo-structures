@@ -191,7 +191,7 @@ class PlotGenerator:
         Genera un gráfico de barras resumiendo los factores de seguridad.
 
         Muestra 1 barra por pier con el SF más crítico (mínimo entre flexión y corte).
-        Los valores mayores a SF_DISPLAY_MAX (3.0) se muestran truncados con indicador ">3.0".
+        Las barras se truncan visualmente a SF_DISPLAY_MAX (3.0) pero muestran el valor real.
 
         Args:
             results: Lista de diccionarios con 'pier_label', 'flexure_sf', 'shear_sf'
@@ -237,8 +237,13 @@ class PlotGenerator:
         for bar, sf, exceeds in zip(bars, raw_sf, exceeds_max):
             height = bar.get_height()
             if exceeds:
-                # Mostrar indicador de que excede el máximo
-                label = f'>3.0'
+                # Mostrar valor real aunque la barra esté truncada
+                if sf >= 100:
+                    label = f'{sf:.0f}'
+                elif sf >= 10:
+                    label = f'{sf:.1f}'
+                else:
+                    label = f'{sf:.2f}'
                 ax.annotate(label,
                            xy=(bar.get_x() + bar.get_width() / 2, height),
                            xytext=(0, 3),
