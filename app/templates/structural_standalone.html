@@ -3,14 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Análisis Estructural de Muros - ETABS</title>
+    <title>INGEO Structures - ACI 318-25</title>
     <link rel="stylesheet" href="{{ url_for('structural_static', filename='css/structural.css') }}">
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>Análisis Estructural de Muros</h1>
-            <p>Verificación de flexocompresión y corte según ACI 318-19</p>
+        <header class="app-header">
+            <div class="brand">
+                <span class="brand-name">INGEO</span>
+                <span class="brand-product">Structures</span>
+            </div>
+            <div class="header-divider"></div>
+            <div class="header-subtitle">Verificador de Muros ACI 318-25</div>
         </header>
 
         <!-- Step 1: Upload -->
@@ -183,7 +187,7 @@
                     </div>
                     <div class="filter-group">
                         <button class="btn btn-sm" id="toggle-all-combos-btn" title="Expandir/Colapsar todas las combinaciones">
-                            <span id="toggle-combos-icon">▶</span> Combos
+                            <span id="toggle-combos-icon">▶</span> Expandir todo
                         </button>
                     </div>
                     <div class="plane-indicator">
@@ -330,7 +334,7 @@
 
                 <!-- Esbeltez -->
                 <div class="details-section" id="slenderness-section">
-                    <h4>Esbeltez (ACI 318-19)</h4>
+                    <h4>Esbeltez (ACI 318-25)</h4>
                     <div class="details-grid">
                         <div class="detail-item">
                             <span class="detail-label">Lambda (k*lu/r)</span>

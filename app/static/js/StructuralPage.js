@@ -311,12 +311,14 @@ class StructuralPage {
     // =========================================================================
 
     toggleAllCombinations() {
-        const { toggleCombosIcon } = this.elements;
+        const { toggleCombosIcon, toggleAllCombosBtn } = this.elements;
         const allExpanded = this.resultsTable.toggleAllExpand();
 
-        // Actualizar ícono
-        if (toggleCombosIcon) {
+        // Actualizar ícono y texto
+        if (toggleCombosIcon && toggleAllCombosBtn) {
             toggleCombosIcon.textContent = allExpanded ? '▼' : '▶';
+            // Actualizar texto del botón (después del ícono)
+            toggleAllCombosBtn.innerHTML = `<span id="toggle-combos-icon">${allExpanded ? '▼' : '▶'}</span> ${allExpanded ? 'Colapsar todo' : 'Expandir todo'}`;
         }
     }
 
