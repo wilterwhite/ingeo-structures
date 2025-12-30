@@ -1,13 +1,19 @@
-# app/structural/domain/slenderness.py
+# app/domain/flexure/slenderness.py
 """
-Verificación de esbeltez para muros según ACI 318-19.
+Verificacion de esbeltez para muros segun ACI 318-25.
 
 Implementa:
-- Cálculo de esbeltez λ = k×lu/r
-- Magnificación de momentos para muros esbeltos
-- Reducción de capacidad por pandeo
+- Calculo de esbeltez lambda = k*lu/r
+- Magnificacion de momentos para muros esbeltos
+- Reduccion de capacidad por pandeo
+
+Referencias:
+- ACI 318-25 Seccion 6.2.5: Efectos de esbeltez
+- ACI 318-25 Seccion 6.6.4: Magnificacion de momentos
+- ACI 318-25 Tabla 6.6.3.1.1(a): Rigidez efectiva
 """
 import math
+from app.domain.constants.stiffness import WALL_STIFFNESS_FACTOR
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -40,18 +46,19 @@ class SlendernessResult:
 
 class SlendernessService:
     """
-    Servicio para análisis de esbeltez de muros según ACI 318-19.
+    Servicio para analisis de esbeltez de muros segun ACI 318-25.
 
     Referencias:
-    - ACI 318-19 Sección 6.2.5: Efectos de esbeltez
-    - ACI 318-19 Sección 6.6.4: Magnificación de momentos
-    - ACI 318-19 Sección 11.5.3: Método empírico para muros
+    - ACI 318-25 Seccion 6.2.5: Efectos de esbeltez
+    - ACI 318-25 Seccion 6.6.4: Magnificacion de momentos
+    - ACI 318-25 Seccion 11.5.3: Metodo empirico para muros
+    - ACI 318-25 Tabla 6.6.3.1.1(a): Rigidez efectiva
     """
 
-    # Límites de esbeltez ACI 318-19
-    LAMBDA_LIMIT_BRACED = 22      # Pórticos arriostrados (Tabla 6.2.5)
-    LAMBDA_LIMIT_UNBRACED = 22    # Pórticos no arriostrados
-    LAMBDA_MAX = 100              # Límite máximo permitido
+    # Limites de esbeltez ACI 318-25
+    LAMBDA_LIMIT_BRACED = 22      # Porticos arriostrados (Tabla 6.2.5)
+    LAMBDA_LIMIT_UNBRACED = 22    # Porticos no arriostrados
+    LAMBDA_MAX = 100              # Limite maximo permitido
 
     # Factor k típico para muros
     K_BRACED_BOTH = 0.8           # Arriostrado arriba y abajo
@@ -126,25 +133,27 @@ class SlendernessService:
 
     def _calculate_euler_load(self, pier: 'Pier', k: float) -> float:
         """
-        Calcula la carga crítica de pandeo de Euler.
+        Calcula la carga critica de pandeo de Euler.
 
-        Pc = π²(EI)eff / (k×lu)²
+        Pc = pi^2 * (EI)eff / (k*lu)^2
 
-        Para muros: (EI)eff = 0.25×Ec×Ig (ACI 318-19 Tabla 6.6.3.1.1)
+        Para muros agrietados: (EI)eff = 0.35*Ec*Ig
+        ACI 318-25 Tabla 6.6.3.1.1(a)
         """
-        # Módulo de elasticidad del hormigón
-        # Ec = 4700×√fc (MPa) para concreto de peso normal
+        # Modulo de elasticidad del hormigon
+        # Ec = 4700*sqrt(fc) (MPa) para concreto de peso normal
         fc = pier.fc
         Ec = 4700 * math.sqrt(fc)  # MPa
 
         # Momento de inercia bruto
-        # Ig = b×t³/12 para flexión fuera del plano
+        # Ig = b*t^3/12 para flexion fuera del plano
         b = pier.width      # mm
         t = pier.thickness  # mm
-        Ig = b * t**3 / 12  # mm⁴
+        Ig = b * t**3 / 12  # mm^4
 
-        # Rigidez efectiva (conservadora para muros)
-        EI_eff = 0.25 * Ec * Ig  # N-mm²
+        # Rigidez efectiva para muros agrietados (diseno sismico)
+        # ACI 318-25 Tabla 6.6.3.1.1(a): I = 0.35*Ig
+        EI_eff = WALL_STIFFNESS_FACTOR * Ec * Ig  # N-mm^2
 
         # Longitud efectiva
         lu = pier.height  # mm
@@ -165,11 +174,11 @@ class SlendernessService:
         Pu_kN: float = 0
     ) -> float:
         """
-        Calcula el factor de magnificación de momentos.
+        Calcula el factor de magnificacion de momentos.
 
-        δns = Cm / (1 - Pu/(0.75×Pc)) ≥ 1.0
+        delta_ns = Cm / (1 - Pu/(0.75*Pc)) >= 1.0
 
-        ACI 318-19 Ec. 6.6.4.5.2
+        ACI 318-25 Ec. 6.6.4.5.2
         """
         if Pu_kN <= 0 or Pc_kN <= 0:
             return 1.0
@@ -244,3 +253,39 @@ class SlendernessService:
             reduction_factor = max(reduction_factor, 0.0)
 
         return phi_Pn_max_kN * reduction_factor
+
+    def calculate_effective_stiffness(
+        self,
+        fc: float,
+        lw: float,
+        t: float
+    ) -> dict:
+        """
+        Calcula rigidez efectiva (EI)eff segun ACI 318-25 Tabla 6.6.3.1.1(a).
+
+        Muros siempre se consideran agrietados (0.35*Ig) para diseno sismico.
+
+        Args:
+            fc: Resistencia del hormigon (MPa)
+            lw: Largo del muro (mm)
+            t: Espesor del muro (mm)
+
+        Returns:
+            dict con Ec, Ig, factor, EI_eff, referencia ACI
+        """
+        # Modulo de elasticidad
+        Ec = 4700 * math.sqrt(fc)  # MPa
+
+        # Momento de inercia bruto
+        Ig = lw * t**3 / 12  # mm^4
+
+        # Rigidez efectiva (muros agrietados)
+        EI_eff = WALL_STIFFNESS_FACTOR * Ec * Ig  # N-mm^2
+
+        return {
+            "Ec_MPa": round(Ec, 1),
+            "Ig_mm4": round(Ig, 0),
+            "stiffness_factor": WALL_STIFFNESS_FACTOR,
+            "EI_eff_Nmm2": round(EI_eff, 0),
+            "aci_reference": "ACI 318-25 Tabla 6.6.3.1.1(a)"
+        }
