@@ -43,6 +43,23 @@ M2_MIN_ECCENTRICITY_FACTOR = 0.03  # mm/mm (adimensional)
 SECOND_ORDER_LIMIT = 1.4  # Factor maximo permitido de amplificacion
 
 # =============================================================================
+# FACTOR Cm - ACI 318-25 Seccion 6.6.4.5.3
+# =============================================================================
+# Cm = 0.6 - 0.4*(M1/M2) para miembros sin cargas transversales
+# Cm = 1.0 para miembros con cargas transversales
+#
+# Convencion de signos:
+# - M1 = momento menor en extremo (puede ser + o -)
+# - M2 = momento mayor en extremo (siempre positivo por convencion)
+# - M1/M2 positivo = curvatura doble (Cm bajo, ~0.4)
+# - M1/M2 negativo = curvatura simple (Cm alto, ~1.0)
+
+CM_BASE = 0.6        # Termino constante en formula Cm
+CM_FACTOR = 0.4      # Factor multiplicador de M1/M2
+CM_MIN = 0.4         # Valor minimo practico de Cm (ACI no especifica, pero es razonable)
+CM_TRANSVERSE = 1.0  # Cm cuando hay cargas transversales
+
+# =============================================================================
 # NOTAS DE APLICACION
 # =============================================================================
 # - Para analisis a nivel de carga factorada

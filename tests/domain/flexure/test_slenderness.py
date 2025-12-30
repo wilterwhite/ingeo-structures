@@ -16,6 +16,10 @@ from app.domain.constants.stiffness import (
     WALL_STIFFNESS_FACTOR,
     WALL_UNCRACKED_STIFFNESS_FACTOR,
     COLUMN_STIFFNESS_FACTOR,
+    CM_BASE,
+    CM_FACTOR,
+    CM_MIN,
+    CM_TRANSVERSE,
 )
 from app.domain.entities.pier import Pier
 
@@ -444,3 +448,103 @@ class TestVerificacionEstabilidad:
         # M2,min deberia controlar
         assert result["moments"]["M2_min_kNm"] > 1
         assert result["moments"]["controls_M2_min"] is True
+
+
+class TestFactorCm:
+    """Tests para factor Cm segun ACI 318-25 Seccion 6.6.4.5.3."""
+
+    def test_cm_con_cargas_transversales(self, service):
+        """Con cargas transversales, Cm = 1.0."""
+        result = service.calculate_Cm(M1=50, M2=100, has_transverse_loads=True)
+
+        assert result["Cm"] == CM_TRANSVERSE
+        assert result["Cm"] == 1.0
+        assert result["curvature"] == "transverse_loads"
+
+    def test_cm_curvatura_doble_mismo_signo(self, service):
+        """Curvatura doble (mismo signo): Cm bajo."""
+        # M1/M2 = 50/100 = 0.5 (positivo)
+        # Cm = 0.6 - 0.4*0.5 = 0.6 - 0.2 = 0.4
+        result = service.calculate_Cm(M1=50, M2=100, has_transverse_loads=False)
+
+        assert result["curvature"] == "double"
+        assert result["M1_M2_ratio"] == pytest.approx(0.5, rel=1e-3)
+        assert result["Cm"] == pytest.approx(0.4, rel=1e-3)
+
+    def test_cm_curvatura_simple_signos_opuestos(self, service):
+        """Curvatura simple (signos opuestos): Cm alto."""
+        # M1/M2 = -50/100 = -0.5 (negativo)
+        # Cm = 0.6 - 0.4*(-0.5) = 0.6 + 0.2 = 0.8
+        result = service.calculate_Cm(M1=-50, M2=100, has_transverse_loads=False)
+
+        assert result["curvature"] == "single"
+        assert result["M1_M2_ratio"] == pytest.approx(-0.5, rel=1e-3)
+        assert result["Cm"] == pytest.approx(0.8, rel=1e-3)
+
+    def test_cm_curvatura_simple_extrema(self, service):
+        """Curvatura simple maxima: M1/M2 = -1, Cm = 1.0."""
+        # M1/M2 = -100/100 = -1.0
+        # Cm = 0.6 - 0.4*(-1.0) = 0.6 + 0.4 = 1.0
+        result = service.calculate_Cm(M1=-100, M2=100, has_transverse_loads=False)
+
+        assert result["Cm"] == pytest.approx(1.0, rel=1e-3)
+
+    def test_cm_minimo(self, service):
+        """Cm tiene limite minimo de 0.4."""
+        # M1/M2 = 100/100 = 1.0
+        # Cm = 0.6 - 0.4*1.0 = 0.2, pero minimo es 0.4
+        result = service.calculate_Cm(M1=100, M2=100, has_transverse_loads=False)
+
+        assert result["Cm"] == CM_MIN
+        assert result["Cm"] == 0.4
+
+    def test_cm_formula(self, service):
+        """Verifica formula Cm = 0.6 - 0.4*(M1/M2)."""
+        # Diferentes ratios
+        test_cases = [
+            {"M1": 0, "M2": 100, "expected_ratio": 0.0, "expected_Cm": 0.6},
+            {"M1": 25, "M2": 100, "expected_ratio": 0.25, "expected_Cm": 0.5},
+            {"M1": -25, "M2": 100, "expected_ratio": -0.25, "expected_Cm": 0.7},
+            {"M1": -75, "M2": 100, "expected_ratio": -0.75, "expected_Cm": 0.9},
+        ]
+
+        for case in test_cases:
+            result = service.calculate_Cm(case["M1"], case["M2"], False)
+            assert result["M1_M2_ratio"] == pytest.approx(case["expected_ratio"], rel=1e-3)
+            assert result["Cm"] == pytest.approx(case["expected_Cm"], rel=1e-3)
+
+    def test_cm_determina_mayor_momento(self, service):
+        """M2 siempre es el mayor en valor absoluto."""
+        # M1=100, M2=50 -> internamente M2=100, M1=50
+        result = service.calculate_Cm(M1=100, M2=50, has_transverse_loads=False)
+
+        # Ratio debe ser 50/100 = 0.5
+        assert result["M1_M2_ratio"] == pytest.approx(0.5, rel=1e-3)
+
+    def test_cm_momento_cero(self, service):
+        """Si M2 ≈ 0, usar Cm = 1.0 (conservador)."""
+        result = service.calculate_Cm(M1=0, M2=0, has_transverse_loads=False)
+
+        assert result["Cm"] == 1.0
+        assert result["curvature"] == "negligible_moment"
+
+    def test_cm_m1_cero(self, service):
+        """Si M1 = 0, ratio = 0, Cm = 0.6."""
+        result = service.calculate_Cm(M1=0, M2=100, has_transverse_loads=False)
+
+        assert result["M1_M2_ratio"] == pytest.approx(0.0, rel=1e-3)
+        assert result["Cm"] == pytest.approx(0.6, rel=1e-3)
+        assert result["curvature"] == "zero_M1"
+
+    def test_cm_referencia_aci(self, service):
+        """Resultado incluye referencia ACI correcta."""
+        result = service.calculate_Cm(M1=50, M2=100, has_transverse_loads=False)
+
+        assert "6.6.4.5.3" in result["aci_reference"]
+
+    def test_constantes_cm(self):
+        """Verifica constantes Cm correctas."""
+        assert CM_BASE == 0.6
+        assert CM_FACTOR == 0.4
+        assert CM_MIN == 0.4
+        assert CM_TRANSVERSE == 1.0

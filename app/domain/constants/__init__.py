@@ -36,4 +36,8 @@ from .stiffness import (
     M2_MIN_ECCENTRICITY_BASE,
     M2_MIN_ECCENTRICITY_FACTOR,
     SECOND_ORDER_LIMIT,
+    CM_BASE,
+    CM_FACTOR,
+    CM_MIN,
+    CM_TRANSVERSE,
 )

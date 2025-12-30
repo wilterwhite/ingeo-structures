@@ -18,6 +18,10 @@ from app.domain.constants.stiffness import (
     M2_MIN_ECCENTRICITY_BASE,
     M2_MIN_ECCENTRICITY_FACTOR,
     SECOND_ORDER_LIMIT,
+    CM_BASE,
+    CM_FACTOR,
+    CM_MIN,
+    CM_TRANSVERSE,
 )
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -293,6 +297,93 @@ class SlendernessService:
             "stiffness_factor": WALL_STIFFNESS_FACTOR,
             "EI_eff_Nmm2": round(EI_eff, 0),
             "aci_reference": "ACI 318-25 Tabla 6.6.3.1.1(a)"
+        }
+
+    def calculate_Cm(
+        self,
+        M1: float,
+        M2: float,
+        has_transverse_loads: bool = False
+    ) -> dict:
+        """
+        Calcula el factor Cm segun ACI 318-25 Seccion 6.6.4.5.3.
+
+        Cm = 0.6 - 0.4*(M1/M2) para miembros sin cargas transversales
+        Cm = 1.0 para miembros con cargas transversales
+
+        Convencion de signos:
+        - M1 = momento menor en extremo (valor absoluto menor)
+        - M2 = momento mayor en extremo (valor absoluto mayor)
+        - Curvatura doble: M1 y M2 tienen mismo signo → M1/M2 positivo → Cm bajo
+        - Curvatura simple: M1 y M2 tienen signos opuestos → M1/M2 negativo → Cm alto
+
+        Args:
+            M1: Momento en extremo 1 (cualquier unidad, con signo)
+            M2: Momento en extremo 2 (cualquier unidad, con signo)
+            has_transverse_loads: True si hay cargas transversales entre apoyos
+
+        Returns:
+            dict con Cm, tipo de curvatura, y referencia ACI
+        """
+        # Si hay cargas transversales, Cm = 1.0
+        if has_transverse_loads:
+            return {
+                "Cm": CM_TRANSVERSE,
+                "M1": M1,
+                "M2": M2,
+                "M1_M2_ratio": None,
+                "curvature": "transverse_loads",
+                "aci_reference": "ACI 318-25 Sec. 6.6.4.5.3"
+            }
+
+        # Determinar cual es mayor en valor absoluto
+        abs_M1 = abs(M1)
+        abs_M2 = abs(M2)
+
+        # M2 debe ser el mayor, M1 el menor
+        if abs_M1 > abs_M2:
+            M1_calc, M2_calc = M2, M1
+        else:
+            M1_calc, M2_calc = M1, M2
+
+        # Evitar division por cero
+        if abs(M2_calc) < 1e-10:
+            # Si M2 ≈ 0, usar Cm = 1.0 (conservador)
+            return {
+                "Cm": CM_TRANSVERSE,
+                "M1": M1,
+                "M2": M2,
+                "M1_M2_ratio": 0.0,
+                "curvature": "negligible_moment",
+                "aci_reference": "ACI 318-25 Sec. 6.6.4.5.3"
+            }
+
+        # Calcular ratio M1/M2
+        # Positivo = curvatura doble (momentos mismo signo)
+        # Negativo = curvatura simple (momentos signos opuestos)
+        ratio = M1_calc / M2_calc
+
+        # Calcular Cm
+        Cm = CM_BASE - CM_FACTOR * ratio
+
+        # Aplicar limite minimo
+        Cm = max(Cm, CM_MIN)
+
+        # Determinar tipo de curvatura
+        if ratio > 0:
+            curvature = "double"  # Curvatura doble
+        elif ratio < 0:
+            curvature = "single"  # Curvatura simple
+        else:
+            curvature = "zero_M1"  # M1 = 0
+
+        return {
+            "Cm": round(Cm, 3),
+            "M1": M1_calc,
+            "M2": M2_calc,
+            "M1_M2_ratio": round(ratio, 3),
+            "curvature": curvature,
+            "aci_reference": "ACI 318-25 Sec. 6.6.4.5.3"
         }
 
     def calculate_M2_min(
