@@ -44,7 +44,7 @@ from ...domain.chapter18 import (
 )
 from ...domain.shear import ShearVerificationService
 from ...domain.flexure import SlendernessService
-from ...domain.constants import SeismicDesignCategory, WallCategory
+from ...domain.constants import SeismicDesignCategory, WallCategory, N_TO_TONF, NMM_TO_TONFM
 
 if TYPE_CHECKING:
     from ...domain.entities import Pier, PierForces
@@ -153,10 +153,6 @@ class ACI318_25_Service:
         """
         critical_issues = []
         warnings = []
-
-        # Factor de conversion
-        N_TO_TONF = 9806.65
-        NMM_TO_TONFM = 9806650.0
 
         # =====================================================================
         # 1. Verificar limites de diseno (11.3, 11.7)
