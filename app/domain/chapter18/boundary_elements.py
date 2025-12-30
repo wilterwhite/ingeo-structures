@@ -21,6 +21,7 @@ from typing import Optional, Tuple, List
 import math
 
 from ..constants.materials import SteelGrade
+from ..constants.units import N_TO_TONF
 
 
 class BoundaryElementMethod(Enum):
@@ -637,7 +638,6 @@ class BoundaryElementService:
         Vu_amp = omega_v * Omega_v * Vu
 
         # Calcular umbral (convertir a tonf)
-        N_TO_TONF = 9806.65
         threshold = lambda_factor * math.sqrt(fc) * Acv / N_TO_TONF
 
         requires_hook = Vu_amp >= threshold

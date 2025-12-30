@@ -8,6 +8,7 @@ from typing import List, Tuple, Optional
 from dataclasses import dataclass
 
 from ..calculations.steel_layer_calculator import SteelLayer, SteelLayerCalculator
+from ..constants.units import N_TO_TONF, NMM_TO_TONFM
 from .checker import FlexureChecker
 
 
@@ -42,11 +43,6 @@ class InteractionDiagramService:
     PHI_TENSION = 0.90      # Factor para tracción controlada
     EPSILON_TY = 0.002      # Deformación de fluencia típica (fy=400MPa)
     EPSILON_T_LIMIT = 0.005 # Límite para tracción controlada
-
-    # Factor de conversión: 1 tonf = 9806.65 N
-    N_TO_TONF = 9806.65
-    # Factor de conversión: N-mm a tonf-m = 9806.65 * 1000
-    NMM_TO_TONFM = 9806650.0
 
     def __init__(self):
         pass
@@ -185,10 +181,10 @@ class InteractionDiagramService:
 
         phi_P0 = self.PHI_COMPRESSION
         points.append(InteractionPoint(
-            Pn=P0_max / self.N_TO_TONF,
+            Pn=P0_max / N_TO_TONF,
             Mn=0,
             phi=phi_P0,
-            phi_Pn=phi_P0 * P0_max / self.N_TO_TONF,
+            phi_Pn=phi_P0 * P0_max / N_TO_TONF,
             phi_Mn=0,
             c=float('inf'),
             epsilon_t=0
@@ -292,11 +288,11 @@ class InteractionDiagramService:
                 Pn = P0_max
 
             points.append(InteractionPoint(
-                Pn=Pn / self.N_TO_TONF,
-                Mn=Mn / self.NMM_TO_TONFM,
+                Pn=Pn / N_TO_TONF,
+                Mn=Mn / NMM_TO_TONFM,
                 phi=phi,
-                phi_Pn=phi * Pn / self.N_TO_TONF,
-                phi_Mn=phi * Mn / self.NMM_TO_TONFM,
+                phi_Pn=phi * Pn / N_TO_TONF,
+                phi_Mn=phi * Mn / NMM_TO_TONFM,
                 c=c,
                 epsilon_t=epsilon_t_max
             ))
@@ -306,10 +302,10 @@ class InteractionDiagramService:
         phi_Pt = self.PHI_TENSION
 
         points.append(InteractionPoint(
-            Pn=Pt / self.N_TO_TONF,
+            Pn=Pt / N_TO_TONF,
             Mn=0,
             phi=phi_Pt,
-            phi_Pn=phi_Pt * Pt / self.N_TO_TONF,
+            phi_Pn=phi_Pt * Pt / N_TO_TONF,
             phi_Mn=0,
             c=0,
             epsilon_t=float('inf')

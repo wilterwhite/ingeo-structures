@@ -27,7 +27,7 @@ from .analysis.aci_318_25_service import (
 )
 from ..domain.entities import Pier, VerificationResult, PierForces
 from ..domain.flexure import InteractionDiagramService, SlendernessService, SteelLayer
-from ..domain.detailing import WallType, WallCastType
+from ..domain.chapter11 import WallType, WallCastType
 from ..domain.constants import SeismicDesignCategory
 
 

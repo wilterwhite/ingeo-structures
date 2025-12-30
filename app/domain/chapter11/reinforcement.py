@@ -1,25 +1,24 @@
-# app/structural/domain/reinforcement_limits.py
+# app/domain/chapter11/reinforcement.py
 """
-Verificacion de limites de refuerzo para muros segun ACI 318-25 Capitulo 11.
+Verificación de límites de refuerzo para muros según ACI 318-25 Capítulo 11.
 
 Implementa:
-- 11.6.1: Refuerzo minimo para cortante bajo
-- 11.6.2: Refuerzo minimo para cortante alto
-- Verificacion de cuantias segun tipo de muro y barra
+- §11.6.1: Refuerzo mínimo para cortante bajo (Tabla 11.6.1)
+- §11.6.2: Refuerzo mínimo para cortante alto (Ec. 11.6.2)
 
 Referencias ACI 318-25:
-- Tabla 11.6.1: Cuantia minima para cortante en plano bajo
-- Ec. 11.6.2: Cuantia longitudinal para cortante alto
+- Tabla 11.6.1: Cuantía mínima para cortante en plano bajo
+- Ec. 11.6.2: Cuantía longitudinal para cortante alto
 """
 from dataclasses import dataclass
 from typing import Optional, TYPE_CHECKING
 from enum import Enum
 import math
 
-from .constants.materials import SteelGrade
+from ..constants.materials import SteelGrade
 
 if TYPE_CHECKING:
-    from .entities.pier import Pier
+    from ..entities.pier import Pier
 
 
 class BarSize(Enum):

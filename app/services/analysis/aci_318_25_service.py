@@ -17,7 +17,7 @@ Este servicio actua como orquestador de todas las verificaciones ACI.
 from dataclasses import dataclass
 from typing import Dict, Any, List, Optional, TYPE_CHECKING
 
-from ...domain.detailing import (
+from ...domain.chapter11 import (
     WallLimitsService,
     WallLimitsResult,
     WallType,
@@ -26,23 +26,21 @@ from ...domain.detailing import (
     SimplifiedMethodResult,
     SlenderWallResult,
     BoundaryCondition,
+    ReinforcementLimitsService,
+    MinReinforcementResult,
+    ShearReinforcementResult,
+)
+from ...domain.chapter18 import (
+    ShearAmplificationService,
+    ShearAmplificationFactors,
+    SpecialWallRequirements,
+    DesignShearResult,
     BoundaryElementService,
     BoundaryElementMethod,
     BoundaryElementResult,
     WallPierService,
     WallPierDesignResult,
     WallPierCategory,
-)
-from ...domain.shear import (
-    ShearAmplificationService,
-    ShearAmplificationFactors,
-    SpecialWallRequirements,
-    DesignShearResult,
-)
-from ...domain.reinforcement_limits import (
-    ReinforcementLimitsService,
-    MinReinforcementResult,
-    ShearReinforcementResult
 )
 from ...domain.shear import ShearVerificationService
 from ...domain.flexure import SlendernessService

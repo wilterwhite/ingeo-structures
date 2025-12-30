@@ -1,15 +1,25 @@
-# app/structural/domain/detailing/__init__.py
+# app/domain/chapter18/__init__.py
 """
-Requisitos de detallado según ACI 318-25 Capítulo 18.
+Requisitos sísmicos para muros estructurales especiales según ACI 318-25 Capítulo 18.
 
 Módulos:
+- amplification: Amplificación de cortante sísmico (§18.10.3.3)
 - boundary_elements: Elementos de borde (§18.10.6)
 - piers: Pilares de muro (§18.10.8)
 - coupling_beams: Vigas de acoplamiento (§18.10.7)
+
+Re-exportados desde domain/chapter11/ para compatibilidad:
 - limits: Límites de diseño de muros (§11.3, §11.7)
 - design_methods: Métodos de diseño (§11.5.3, §11.8)
 """
 from ..constants.materials import SteelGrade
+from .amplification import (
+    ShearAmplificationService,
+    ShearAmplificationResult,
+    ShearAmplificationFactors,
+    DesignShearResult,
+    SpecialWallRequirements,
+)
 from .boundary_elements import (
     BoundaryElementService,
     BoundaryElementMethod,
@@ -39,7 +49,8 @@ from .coupling_beams import (
     ReinforcementType,
     ConfinementOption,
 )
-from .limits import (
+# Re-export from domain/chapter11/ for backward compatibility
+from ..chapter11 import (
     WallLimitsService,
     WallLimitsResult,
     WallType,
@@ -47,8 +58,6 @@ from .limits import (
     ThicknessCheckResult,
     SpacingCheckResult,
     DoubleCurtainCheckResult,
-)
-from .design_methods import (
     WallDesignMethodsService,
     SimplifiedMethodResult,
     SlenderWallResult,
@@ -56,6 +65,12 @@ from .design_methods import (
 )
 
 __all__ = [
+    # amplification
+    'ShearAmplificationService',
+    'ShearAmplificationResult',
+    'ShearAmplificationFactors',
+    'DesignShearResult',
+    'SpecialWallRequirements',
     # boundary_elements
     'BoundaryElementService',
     'BoundaryElementMethod',

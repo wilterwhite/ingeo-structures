@@ -1,21 +1,18 @@
-# app/structural/domain/shear/__init__.py
+# app/domain/shear/__init__.py
 """
-Verificación de cortante según ACI 318-25.
+Verificación de capacidad al corte según ACI 318-25.
+
+Este módulo calcula la resistencia nominal Vn usando las ecuaciones
+de los capítulos 11, 18 y 22 según corresponda por geometría.
 
 Módulos:
-- verification: Verificación de resistencia al corte (§11.5, §18.10.4)
-- amplification: Amplificación de cortante sísmico (§18.10.3.3)
-- classification: Clasificación de muros y wall piers (§18.10.8)
+- verification: Cálculo de Vn (§11.5.4, §18.10.4, §22.5)
+- classification: Clasificación muro vs columna vs wall pier
 - results: Dataclasses para resultados de verificación
+
+Nota: La amplificación de cortante sísmico (§18.10.3.3) está en chapter18/.
 """
 from .verification import ShearVerificationService
-from .amplification import (
-    ShearAmplificationService,
-    ShearAmplificationResult,
-    ShearAmplificationFactors,
-    DesignShearResult,
-    SpecialWallRequirements,
-)
 from .classification import WallClassificationService, WallClassification, ElementType
 from .results import ShearResult, CombinedShearResult, WallGroupShearResult
 
@@ -26,12 +23,6 @@ __all__ = [
     'ShearResult',
     'CombinedShearResult',
     'WallGroupShearResult',
-    # amplification
-    'ShearAmplificationService',
-    'ShearAmplificationResult',
-    'ShearAmplificationFactors',
-    'DesignShearResult',
-    'SpecialWallRequirements',
     # classification
     'WallClassificationService',
     'WallClassification',

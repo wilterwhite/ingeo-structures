@@ -1,4 +1,4 @@
-# app/structural/domain/wall_design_methods.py
+# app/domain/general/design_methods.py
 """
 Metodos de diseno para muros segun ACI 318-25 Capitulo 11.
 
@@ -18,8 +18,10 @@ from typing import Optional, Tuple, TYPE_CHECKING
 from enum import Enum
 import math
 
+from ..constants.units import N_TO_TONF
+
 if TYPE_CHECKING:
-    from .entities.pier import Pier
+    from ..entities.pier import Pier
 
 
 class BoundaryCondition(Enum):
@@ -99,10 +101,6 @@ class WallDesignMethodsService:
     - Fuerzas: N (internamente), tonf (salida)
     - Momentos: N-mm (internamente), tonf-m (salida)
     """
-
-    # Factor de conversion
-    N_TO_TONF = 9806.65
-    NMM_TO_TONFM = 9806650.0
 
     # Factores de reduccion (ACI 318-25 21.2.2)
     PHI_COMPRESSION = 0.65
@@ -217,8 +215,8 @@ class WallDesignMethodsService:
             h_mm=h_mm,
             Pn_N=Pn_N,
             phi_Pn_N=phi_Pn_N,
-            Pn_tonf=Pn_N / self.N_TO_TONF,
-            phi_Pn_tonf=phi_Pn_N / self.N_TO_TONF,
+            Pn_tonf=Pn_N / N_TO_TONF,
+            phi_Pn_tonf=phi_Pn_N / N_TO_TONF,
             slenderness_term=slenderness_term,
             is_applicable=is_applicable,
             applicability_note=note,
@@ -570,7 +568,7 @@ class WallDesignMethodsService:
         # (d) Pu <= 0.06*f'c*Ag
         Pu_limit = 0.06 * pier.fc * pier.Ag
         checks['Pu_limit'] = Pu_N <= Pu_limit
-        checks['Pu_limit_value'] = Pu_limit / self.N_TO_TONF
+        checks['Pu_limit_value'] = Pu_limit / N_TO_TONF
 
         is_applicable = all([
             checks['constant_section'],

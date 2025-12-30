@@ -25,14 +25,16 @@ from ...domain.shear import (
     WallClassificationService,
     WallClassification,
     ElementType,
-    ShearAmplificationService,
-    ShearAmplificationResult,
 )
-from ...domain.shear.amplification import convert_mm_to_ft
-from ...domain.detailing import (
+from ...domain.chapter18 import (
+    ShearAmplificationService,
     BoundaryElementService,
     BoundaryElementMethod,
-    BoundaryElementResult
+    BoundaryElementResult,
+)
+from ...domain.chapter18.amplification import (
+    ShearAmplificationResult,
+    convert_mm_to_ft,
 )
 
 
@@ -331,7 +333,7 @@ class ShearService:
         """
         classification = self.classify_wall(pier)
         return {
-            'type': classification.wall_type.value,
+            'type': classification.element_type.value,
             'lw_tw': round(classification.lw_tw, 2),
             'hw_lw': round(classification.hw_lw, 2),
             'aci_section': classification.aci_section,

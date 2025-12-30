@@ -1,11 +1,14 @@
-# app/structural/domain/shear/amplification.py
+# app/domain/chapter18/amplification.py
 """
-Amplificacion de cortante para muros estructurales especiales segun ACI 318-25.
+Amplificación de cortante para muros estructurales especiales según ACI 318-25.
 
-Referencias:
-- Seccion 18.10.3.3: Amplificacion de cortante
+Este módulo implementa la amplificación de cortante sísmico para muros
+especiales que no son wall piers ni segmentos horizontales.
+
+Referencias ACI 318-25:
+- §18.10.3.3: Amplificación de cortante (Ve = Omega_v * omega_v * Vu)
 - Tabla 18.10.3.3.3: Factores Omega_v y omega_v
-- Seccion 18.10.2: Requisitos de refuerzo para muros especiales
+- §18.10.2: Requisitos de refuerzo para muros especiales
 """
 import math
 from dataclasses import dataclass, field
@@ -21,6 +24,7 @@ from ..constants.shear import (
     WALL_PIER_HW_LW_LIMIT,
 )
 from ..constants.seismic import SeismicDesignCategory, WallCategory
+from ..constants.units import N_TO_TONF
 
 
 @dataclass
@@ -373,8 +377,8 @@ class ShearAmplificationService:
         rho_t_min = self.RHO_T_MIN_SPECIAL
 
         Acv = lw * tw
-        N_TO_TONF = 1e-4
-        threshold = lambda_factor * math.sqrt(fc) * Acv * N_TO_TONF
+        # Umbral: lambda * sqrt(f'c) * Acv en N, convertido a tonf
+        threshold = lambda_factor * math.sqrt(fc) * Acv / N_TO_TONF
 
         if Vu <= threshold:
             warnings.append(f"Vu={Vu:.1f} <= {threshold:.1f} tonf: Se permite rho_t segun 11.6")
@@ -385,7 +389,7 @@ class ShearAmplificationService:
         if spacing_h > spacing_max:
             warnings.append(f"Espaciamiento horizontal {spacing_h:.0f}mm > {spacing_max:.0f}mm maximo")
 
-        threshold_double = 2 * lambda_factor * math.sqrt(fc) * Acv * N_TO_TONF
+        threshold_double = 2 * lambda_factor * math.sqrt(fc) * Acv / N_TO_TONF
         hw_lw = hw / lw if lw > 0 else 0
 
         requires_double = (Vu > threshold_double) or (hw_lw >= 2.0)

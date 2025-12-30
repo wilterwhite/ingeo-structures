@@ -119,8 +119,8 @@ DEFAULT_COVER_MM = 40  # Recubrimiento por defecto (mm)
 # CONVERSION DE UNIDADES
 # =============================================================================
 
-# Factor de conversion: 1 tonf = 9806.65 N (g x 1000 kg)
-N_TO_TONF = 9806.65
+# Re-exportar desde units.py para compatibilidad
+from .units import N_TO_TONF
 
 
 # =============================================================================

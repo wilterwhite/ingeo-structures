@@ -1,4 +1,4 @@
-# app/structural/domain/wall_limits.py
+# app/domain/walls/limits.py
 """
 Verificacion de limites de diseno para muros segun ACI 318-25 Capitulo 11.
 
@@ -18,7 +18,7 @@ from typing import List, Optional, TYPE_CHECKING
 from enum import Enum
 
 if TYPE_CHECKING:
-    from .entities.pier import Pier
+    from ..entities.pier import Pier
 
 
 class WallType(Enum):

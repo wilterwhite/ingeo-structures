@@ -3,7 +3,6 @@
 Verificacion de pilares de muro (wall piers) segun ACI 318-25 Seccion 18.10.8.
 
 Implementa:
-- Clasificacion de pilares por geometria (lw/bw)
 - Requisitos de columna especial vs alternativo
 - Refuerzo transversal
 - Cortante de diseno
@@ -11,19 +10,20 @@ Implementa:
 Referencias ACI 318-25:
 - 18.10.8.1: Requisitos generales
 - 18.10.8.2: Pilares en borde de muro
-- Tabla R18.10.1: Clasificacion por hw/lw y lw/bw
 
-Definicion:
-Un "pilar de muro" (wall pier) es un segmento vertical estrecho de muro,
-tipicamente creado por aberturas como puertas o ventanas.
+Nota: La clasificacion por geometria (Tabla R18.10.1) se realiza en
+shear/classification.py mediante WallClassificationService.
 """
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, List, TYPE_CHECKING
-import math
+
+from ..shear.verification import ShearVerificationService
+from ..constants.shear import PHI_SHEAR
+from .boundary_elements import BoundaryElementService
 
 if TYPE_CHECKING:
-    from .entities.pier import Pier
+    from ..entities.pier import Pier
 
 
 class WallPierCategory(Enum):
@@ -114,6 +114,13 @@ class WallPierService:
     Proporciona clasificacion, diseno por cortante, y requisitos
     de detallado para pilares de muro (segmentos verticales estrechos).
 
+    Usa servicios existentes para evitar duplicacion:
+    - ShearVerificationService: Verificacion de cortante
+    - BoundaryElementService: Verificacion de elementos de borde
+
+    Nota: La clasificacion por Tabla R18.10.1 se mantiene local
+    porque difiere de la clasificacion de shear/classification.py.
+
     Unidades:
     - Longitudes: mm
     - Esfuerzos: MPa
@@ -122,6 +129,11 @@ class WallPierService:
 
     # Constantes
     EXTENSION_MIN_MM = 304.8  # 12" en mm
+
+    def __init__(self):
+        """Inicializa los servicios dependientes."""
+        self._shear_service = ShearVerificationService()
+        self._boundary_service = BoundaryElementService()
 
     # =========================================================================
     # CLASIFICACION DEL PILAR (TABLA R18.10.1)
@@ -142,6 +154,9 @@ class WallPierService:
         |-------|--------------|--------------------|-----------  |
         | < 2.0 | Muro         | Muro               | Muro        |
         | >= 2.0| Pilar(col)   | Pilar(col o alt)   | Muro        |
+
+        Nota: Esta clasificacion es especifica para detallado de pilares
+        (18.10.8) y difiere de la clasificacion de cortante en shear/.
 
         Args:
             hw: Altura del segmento (mm)
@@ -165,30 +180,30 @@ class WallPierService:
         hw_lw = hw / lw
         lw_bw = lw / bw
 
-        # Determinar categoria y metodo
+        # Aplicar Tabla R18.10.1
         if hw_lw < 2.0:
-            # Siempre disenar como muro
+            # Primera fila: siempre disenar como muro
             category = WallPierCategory.WALL
             design_method = DesignMethod.WALL
             requires_column = False
             alternative_ok = False
 
         elif lw_bw <= 2.5:
-            # Pilar esbelto - requisitos de columna
+            # Segunda fila, primera columna: pilar con requisitos de columna
             category = WallPierCategory.COLUMN
             design_method = DesignMethod.SPECIAL_COLUMN
             requires_column = True
             alternative_ok = False
 
         elif lw_bw <= 6.0:
-            # Pilar intermedio - columna o alternativo
+            # Segunda fila, segunda columna: pilar con metodo alternativo
             category = WallPierCategory.ALTERNATIVE
             design_method = DesignMethod.ALTERNATIVE
             requires_column = True
             alternative_ok = True
 
         else:
-            # lw/bw > 6.0 - disenar como muro
+            # Segunda fila, tercera columna: disenar como muro
             category = WallPierCategory.WALL
             design_method = DesignMethod.WALL
             requires_column = False
@@ -270,12 +285,12 @@ class WallPierService:
         fc: float,
         rho_h: float,
         fyt: float,
-        lambda_factor: float = 1.0
+        hw: float = 0
     ) -> WallPierShearDesign:
         """
         Verifica la resistencia al cortante del pilar.
 
-        Usa formulas de 18.10.4 para Vn.
+        Delega a ShearVerificationService para el calculo de Vn.
 
         Args:
             Ve: Cortante de diseno (tonf)
@@ -284,29 +299,22 @@ class WallPierService:
             fc: f'c del hormigon (MPa)
             rho_h: Cuantia horizontal
             fyt: Fluencia del refuerzo horizontal (MPa)
-            lambda_factor: Factor para concreto liviano
+            hw: Altura del pilar (mm)
 
         Returns:
             WallPierShearDesign actualizado con capacidad
         """
-        # Calcular Vn segun 18.10.4.1
-        # Vn = (alpha_c * lambda * sqrt(f'c) + rho_t * fyt) * Acv
-        Acv = lw * bw
+        # Usar ShearVerificationService para calcular Vn
+        _Vc, _Vs, Vn, _Vn_max, _alpha_c = self._shear_service.calculate_Vn_wall(
+            lw=lw,
+            tw=bw,
+            hw=hw if hw > 0 else lw,  # Usar lw si no se proporciona hw
+            fc=fc,
+            fy=fyt,
+            rho_h=rho_h
+        )
 
-        # Para pilar, usar alpha_c conservador
-        alpha_c = 0.17  # Conservador
-
-        Vn_N = (alpha_c * lambda_factor * math.sqrt(fc) + rho_h * fyt) * Acv
-
-        # Limites de 18.10.4.4
-        # Vn <= 0.83 * sqrt(f'c) * Acv para segmento individual
-        Vn_max_N = 0.83 * math.sqrt(fc) * Acv
-        Vn_N = min(Vn_N, Vn_max_N)
-
-        # Convertir a tonf
-        N_TO_TONF = 9806.65
-        Vn = Vn_N / N_TO_TONF
-        phi_Vn = 0.75 * Vn
+        phi_Vn = PHI_SHEAR * Vn
 
         dcr = Ve / phi_Vn if phi_Vn > 0 else float('inf')
         is_ok = dcr <= 1.0
@@ -401,6 +409,8 @@ class WallPierService:
         """
         Verifica si se requieren elementos de borde para el pilar.
 
+        Delega a BoundaryElementService para el metodo de esfuerzos.
+
         Segun 18.10.8.1(f):
         Si se requiere por 18.10.6.3 (metodo de esfuerzos)
 
@@ -411,14 +421,14 @@ class WallPierService:
         Returns:
             WallPierBoundaryCheck con resultado
         """
-        sigma_limit = 0.2 * fc
-        requires_boundary = sigma_max >= sigma_limit
+        # Usar BoundaryElementService para la verificacion
+        stress_result = self._boundary_service.check_stress_method(sigma_max, fc)
 
         return WallPierBoundaryCheck(
-            requires_boundary=requires_boundary,
+            requires_boundary=stress_result.requires_special,
             method_used="stress (18.10.6.3)",
-            sigma_max=sigma_max,
-            sigma_limit=sigma_limit,
+            sigma_max=stress_result.sigma_max,
+            sigma_limit=stress_result.limit_require,
             aci_reference="ACI 318-25 18.10.8.1(f), 18.10.6.3"
         )
 
@@ -515,7 +525,7 @@ class WallPierService:
         # Verificar resistencia al cortante
         Ve = shear_design.Ve
         shear_result = self.verify_shear_strength(
-            Ve, lw, bw, fc, rho_h, fyt, lambda_factor
+            Ve, lw, bw, fc, rho_h, fyt, hw
         )
 
         # Actualizar shear_design con resultados

@@ -392,30 +392,43 @@ class PlotGenerator:
             )
             ax.add_patch(boundary_right)
 
-            # 4. Dibujar estribos de confinamiento
-            stirrup_width = boundary_length - stirrup_d
-            stirrup_height = tw - 2 * cover + stirrup_d
+            # 4. Dibujar estribos de confinamiento con esquinas redondeadas
+            # El estribo envuelve las barras con un pequeño margen
+            stirrup_clearance = stirrup_d  # Espacio entre barra y estribo
+
+            # Ancho del estribo: desde la primera a la última barra + clearance
+            stirrup_width = (bars_per_row - 1) * bar_spacing_x + edge_bar_d + 2 * stirrup_clearance
+            stirrup_height = tw - 2 * cover
+
+            # Posición X del estribo izquierdo
+            stirrup_left_x = x0 + cover - stirrup_clearance
+            stirrup_y = y0 + cover
+
+            # Radio de esquina para los estribos
+            corner_radius = min(stirrup_d * 2, stirrup_width * 0.2, stirrup_height * 0.2)
 
             # Estribo izquierdo
-            stirrup_left = Rectangle(
-                (x0 + cover - stirrup_d/2, y0 + cover - stirrup_d/2),
+            stirrup_left = FancyBboxPatch(
+                (stirrup_left_x, stirrup_y),
                 stirrup_width, stirrup_height,
+                boxstyle=f"round,pad=0,rounding_size={corner_radius}",
                 facecolor='none',
                 edgecolor=self.COLOR_STIRRUP,
                 linewidth=1.5,
-                linestyle='-',
                 zorder=4
             )
             ax.add_patch(stirrup_left)
 
             # Estribo derecho
-            stirrup_right = Rectangle(
-                (x0 + lw - boundary_length + stirrup_d/2, y0 + cover - stirrup_d/2),
+            stirrup_right_x = x0 + lw - cover - (bars_per_row - 1) * bar_spacing_x - edge_bar_d - stirrup_clearance
+
+            stirrup_right = FancyBboxPatch(
+                (stirrup_right_x, stirrup_y),
                 stirrup_width, stirrup_height,
+                boxstyle=f"round,pad=0,rounding_size={corner_radius}",
                 facecolor='none',
                 edgecolor=self.COLOR_STIRRUP,
                 linewidth=1.5,
-                linestyle='-',
                 zorder=4
             )
             ax.add_patch(stirrup_right)

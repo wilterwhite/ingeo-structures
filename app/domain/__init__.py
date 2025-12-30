@@ -1,4 +1,4 @@
-# app/structural/domain/__init__.py
+# app/domain/__init__.py
 """
 Capa de dominio del módulo estructural.
 Contiene entidades y lógica de cálculo estructural según ACI 318-25.
@@ -7,13 +7,14 @@ Estructura de subcarpetas:
 - entities/: Entidades de datos (Pier, PierForces, etc.)
 - calculations/: Cálculos auxiliares
 - constants/: Constantes ACI (shear, reinforcement)
-- flexure/: Verificación de flexión
-- shear/: Verificación de cortante
-- detailing/: Requisitos de detallado (Cap. 18)
+- flexure/: Verificación de capacidad a flexión
+- shear/: Verificación de capacidad al corte
+- chapter11/: Requisitos generales (Cap. 11)
+- chapter18/: Requisitos sísmicos (Cap. 18)
 """
 from .entities import Pier, LoadCombination, VerificationResult, PierForces
 
-# Re-export desde subcarpetas
+# Re-export desde subcarpetas - Verificación de capacidad
 from .flexure import (
     InteractionDiagramService,
     SlendernessService,
@@ -22,15 +23,21 @@ from .flexure import (
 
 from .shear import (
     ShearVerificationService,
-    ShearAmplificationService,
     WallClassificationService,
     ShearResult,
-    ShearAmplificationResult,
     WallClassification,
     ElementType,
 )
 
-from .detailing import (
+# Re-export desde subcarpetas - Requisitos de código
+from .chapter11 import (
+    WallLimitsService,
+    ReinforcementLimitsService,
+)
+
+from .chapter18 import (
+    ShearAmplificationService,
+    ShearAmplificationResult,
     BoundaryElementService,
     BoundaryElementMethod,
     BoundaryElementResult,
@@ -47,19 +54,22 @@ __all__ = [
     'LoadCombination',
     'VerificationResult',
     'PierForces',
-    # Flexure
+    # Flexure (capacity verification)
     'InteractionDiagramService',
     'SlendernessService',
     'FlexureChecker',
-    # Shear
+    # Shear (capacity verification)
     'ShearVerificationService',
-    'ShearAmplificationService',
     'WallClassificationService',
     'ShearResult',
-    'ShearAmplificationResult',
     'WallClassification',
     'ElementType',
-    # Detailing
+    # Chapter 11 (general requirements)
+    'WallLimitsService',
+    'ReinforcementLimitsService',
+    # Chapter 18 (seismic requirements)
+    'ShearAmplificationService',
+    'ShearAmplificationResult',
     'BoundaryElementService',
     'BoundaryElementMethod',
     'BoundaryElementResult',

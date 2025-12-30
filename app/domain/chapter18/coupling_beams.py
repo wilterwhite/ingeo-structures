@@ -23,6 +23,7 @@ import math
 
 from ..constants.materials import SteelGrade
 from ..constants.shear import PHI_SHEAR
+from ..constants.units import N_TO_TONF
 
 
 class CouplingBeamType(Enum):
@@ -161,8 +162,6 @@ class CouplingBeamService:
         # Calcular umbral de cortante alto
         # 4 * lambda * sqrt(f'c) * Acw
         Acw = ln * bw  # Area de corte
-        # Convertir a tonf
-        N_TO_TONF = 9806.65
         # Coeficiente SI: 4 -> 0.33 aproximadamente
         shear_threshold = 0.33 * lambda_factor * math.sqrt(fc) * Acw / N_TO_TONF
 
@@ -230,7 +229,6 @@ class CouplingBeamService:
         Vn_N = min(Vn_calc_N, Vn_max_N)
 
         # Convertir a tonf
-        N_TO_TONF = 9806.65
         Vn_calc = Vn_calc_N / N_TO_TONF
         Vn_max = Vn_max_N / N_TO_TONF
         Vn = Vn_N / N_TO_TONF
