@@ -9,6 +9,13 @@ from dataclasses import dataclass
 
 from ..calculations.steel_layer_calculator import SteelLayer, SteelLayerCalculator
 from ..constants.units import N_TO_TONF, NMM_TO_TONFM
+from ..constants.phi_chapter21 import (
+    PHI_COMPRESSION,
+    PHI_TENSION,
+    EPSILON_TY,
+    EPSILON_T_LIMIT,
+    calculate_phi_flexure,
+)
 from .checker import FlexureChecker
 
 
@@ -36,13 +43,9 @@ class InteractionDiagramService:
     Unidades de salida: tonf y tonf-m (compatibles con ETABS)
     """
 
-    # Constantes
+    # Constantes de deformación
     EPSILON_CU = 0.003      # Deformación última del hormigón
     ES = 200000             # Módulo de elasticidad del acero (MPa)
-    PHI_COMPRESSION = 0.65  # Factor para compresión controlada
-    PHI_TENSION = 0.90      # Factor para tracción controlada
-    EPSILON_TY = 0.002      # Deformación de fluencia típica (fy=400MPa)
-    EPSILON_T_LIMIT = 0.005 # Límite para tracción controlada
 
     def __init__(self):
         pass
@@ -68,24 +71,15 @@ class InteractionDiagramService:
         """
         Calcula el factor de reducción φ según la deformación del acero.
 
+        Delega a calculate_phi_flexure() de constants/phi.py (§21.2.2).
+
         Args:
             epsilon_t: Deformación del acero en tracción
 
         Returns:
             φ: Factor de reducción
         """
-        epsilon_t = abs(epsilon_t)
-
-        if epsilon_t >= self.EPSILON_T_LIMIT:
-            # Sección controlada por tracción
-            return self.PHI_TENSION
-        elif epsilon_t <= self.EPSILON_TY:
-            # Sección controlada por compresión
-            return self.PHI_COMPRESSION
-        else:
-            # Zona de transición
-            return self.PHI_COMPRESSION + (self.PHI_TENSION - self.PHI_COMPRESSION) * \
-                   (epsilon_t - self.EPSILON_TY) / (self.EPSILON_T_LIMIT - self.EPSILON_TY)
+        return calculate_phi_flexure(epsilon_t)
 
     def generate_steel_layers(
         self,
@@ -179,7 +173,7 @@ class InteractionDiagramService:
         P0 = 0.85 * fc * (Ag - As_total_calc) + fy * As_total_calc
         P0_max = 0.80 * P0  # Límite ACI 318
 
-        phi_P0 = self.PHI_COMPRESSION
+        phi_P0 = PHI_COMPRESSION
         points.append(InteractionPoint(
             Pn=P0_max / N_TO_TONF,
             Mn=0,
@@ -299,7 +293,7 @@ class InteractionDiagramService:
 
         # 3. Punto de tracción pura
         Pt = -As_total_calc * fy  # N (negativo)
-        phi_Pt = self.PHI_TENSION
+        phi_Pt = PHI_TENSION
 
         points.append(InteractionPoint(
             Pn=Pt / N_TO_TONF,

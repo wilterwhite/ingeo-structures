@@ -47,7 +47,8 @@ FACTORES DE REDUCCION (Seccion 21.2):
 # FACTORES DE REDUCCION DE RESISTENCIA (ACI 318-25 Tabla 21.2.1)
 # =============================================================================
 
-PHI_SHEAR = 0.75  # Factor phi para corte y torsion
+# Re-exportar desde phi.py para compatibilidad
+from .phi_chapter21 import PHI_SHEAR
 
 
 # =============================================================================

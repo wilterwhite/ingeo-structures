@@ -19,6 +19,7 @@ from enum import Enum
 import math
 
 from ..constants.units import N_TO_TONF
+from ..constants.phi_chapter21 import PHI_COMPRESSION, PHI_TENSION
 
 if TYPE_CHECKING:
     from ..entities.pier import Pier
@@ -101,10 +102,6 @@ class WallDesignMethodsService:
     - Fuerzas: N (internamente), tonf (salida)
     - Momentos: N-mm (internamente), tonf-m (salida)
     """
-
-    # Factores de reduccion (ACI 318-25 21.2.2)
-    PHI_COMPRESSION = 0.65
-    PHI_TENSION = 0.90
 
     # Modulo de elasticidad del acero
     ES_MPA = 200000
@@ -205,7 +202,7 @@ class WallDesignMethodsService:
         Pn_N = 0.55 * fc_mpa * Ag_mm2 * slenderness_term
 
         # Resistencia de diseno (phi para compresion)
-        phi_Pn_N = self.PHI_COMPRESSION * Pn_N
+        phi_Pn_N = PHI_COMPRESSION * Pn_N
 
         return SimplifiedMethodResult(
             fc_mpa=fc_mpa,
@@ -634,7 +631,7 @@ class WallDesignMethodsService:
         # Esto es una aproximacion; el valor exacto viene del diagrama P-M
         a = As_tension_mm2 * fy / (0.85 * fc * lw)
         Mn = As_tension_mm2 * fy * (d - a / 2)
-        phi_Mn = self.PHI_TENSION * Mn
+        phi_Mn = PHI_TENSION * Mn
 
         # Verificar aplicabilidad
         is_applicable, checks = self.check_slender_wall_applicability(
