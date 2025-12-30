@@ -123,17 +123,18 @@ class FlexureService:
 
         # Verificar
         if demand_points:
-            sf, status, critical, phi_Mn, critical_Pu, critical_Mu = \
+            sf, status, critical, phi_Mn_0, phi_Mn_at_Pu, critical_Pu, critical_Mu = \
                 self._interaction_service.check_flexure(interaction_points, demand_points)
         else:
             sf, status, critical = float('inf'), "OK", "N/A"
-            phi_Mn, critical_Pu, critical_Mu = 0.0, 0.0, 0.0
+            phi_Mn_0, phi_Mn_at_Pu, critical_Pu, critical_Mu = 0.0, 0.0, 0.0, 0.0
 
         return {
             'sf': sf,
             'status': status,
             'critical_combo': critical,
-            'phi_Mn': phi_Mn,
+            'phi_Mn_0': phi_Mn_0,           # Capacidad a P=0 (flexión pura)
+            'phi_Mn_at_Pu': phi_Mn_at_Pu,   # Capacidad a Pu crítico
             'Pu': critical_Pu,
             'Mu': critical_Mu,
             'design_curve': design_curve,

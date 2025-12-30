@@ -36,7 +36,8 @@ class VerificationResult:
     flexure_sf: float           # Factor de seguridad (>=1 OK)
     flexure_status: str         # "OK" o "NO OK"
     critical_combo_flexure: str # Combinación crítica
-    flexure_phi_Mn: float       # Capacidad φMn en el punto crítico (tonf-m)
+    flexure_phi_Mn_0: float     # Capacidad φMn a P=0, flexión pura (tonf-m)
+    flexure_phi_Mn_at_Pu: float # Capacidad φMn a Pu crítico (tonf-m)
     flexure_Pu: float           # Carga axial crítica (tonf)
     flexure_Mu: float           # Momento crítico (tonf-m)
 
@@ -152,7 +153,8 @@ class VerificationResult:
                 'sf': self._format_sf(self.flexure_sf),
                 'status': self.flexure_status,
                 'critical_combo': self.critical_combo_flexure,
-                'phi_Mn': round(self.flexure_phi_Mn, 1),
+                'phi_Mn_0': round(self.flexure_phi_Mn_0, 1),       # Capacidad a P=0
+                'phi_Mn_at_Pu': round(self.flexure_phi_Mn_at_Pu, 1),  # Capacidad a Pu crítico
                 'Pu': round(self.flexure_Pu, 1),
                 'Mu': round(self.flexure_Mu, 1)
             },

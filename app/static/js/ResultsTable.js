@@ -266,8 +266,9 @@ class ResultsTable {
                 <span class="critical-combo">${this.truncateCombo(result.flexure.critical_combo)}</span>
             </td>
             <td class="capacity-cell">
-                <span class="capacity-line">φMn=${result.flexure.phi_Mn}t-m</span>
+                <span class="capacity-line" title="Capacidad a Pu=${result.flexure.Pu}t">φMn(Pu)=${result.flexure.phi_Mn_at_Pu}t-m</span>
                 <span class="capacity-line">Mu=${result.flexure.Mu}t-m</span>
+                <span class="capacity-line capacity-ref" title="Capacidad a P=0 (flexión pura)">φMn₀=${result.flexure.phi_Mn_0}t-m</span>
                 <span class="slenderness-info ${slenderClass}" title="Esbeltez">${slenderInfo}</span>
             </td>
             <td class="fs-value ${this.getFsClass(result.shear.sf)}">

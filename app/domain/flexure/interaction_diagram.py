@@ -348,7 +348,7 @@ class InteractionDiagramService:
         self,
         points: List[InteractionPoint],
         demand_points: List[Tuple[float, float, str]]
-    ) -> Tuple[float, str, str, float, float, float]:
+    ) -> Tuple[float, str, str, float, float, float, float]:
         """
         Verifica flexocompresión para múltiples puntos de demanda.
 
@@ -359,8 +359,9 @@ class InteractionDiagramService:
             demand_points: Lista de (Pu, Mu, combo_name)
 
         Returns:
-            Tuple (min_sf, status, critical_combo, phi_Mn_0, critical_Pu, critical_Mu)
+            Tuple (min_sf, status, critical_combo, phi_Mn_0, phi_Mn_at_Pu, critical_Pu, critical_Mu)
             - phi_Mn_0: Capacidad de momento a P=0 (flexión pura)
+            - phi_Mn_at_Pu: Capacidad de momento a Pu crítico
         """
         result = FlexureChecker.check_flexure(points, demand_points)
         return (
@@ -368,6 +369,7 @@ class InteractionDiagramService:
             result.status,
             result.critical_combo,
             result.phi_Mn_0,
+            result.phi_Mn_at_Pu,
             result.critical_Pu,
             result.critical_Mu
         )

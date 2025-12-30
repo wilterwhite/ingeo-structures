@@ -184,6 +184,13 @@
     color: var(--primary-color);
 }
 
+/* Referencia de capacidad (φMn₀) - más sutil */
+.capacity-line.capacity-ref {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    opacity: 0.8;
+}
+
 /* Tag de tipo de fórmula de corte */
 .formula-tag {
     display: inline-block;

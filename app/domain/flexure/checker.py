@@ -18,6 +18,7 @@ class FlexureCheckResult:
     status: str               # "OK" o "NO OK"
     critical_combo: str       # Combinación crítica
     phi_Mn_0: float          # Capacidad de momento a P=0 (tonf-m)
+    phi_Mn_at_Pu: float      # Capacidad de momento a Pu crítico (tonf-m)
     critical_Pu: float       # Carga axial crítica (tonf)
     critical_Mu: float       # Momento crítico (tonf-m)
     is_inside: bool          # Si el punto crítico está dentro de la curva
@@ -193,6 +194,44 @@ class FlexureChecker:
         return best_point.phi_Mn if best_point else 0.0
 
     @staticmethod
+    def get_phi_Mn_at_P(points: List['InteractionPoint'], Pu: float) -> float:
+        """
+        Obtiene la capacidad de momento φMn a un P dado, interpolando en la curva.
+
+        Args:
+            points: Puntos del diagrama de interacción
+            Pu: Carga axial (tonf), positivo = compresión
+
+        Returns:
+            φMn en tonf-m al nivel de P dado
+        """
+        # Buscar los dos puntos que encierran el P dado
+        curve_points = [(p.phi_Mn, p.phi_Pn) for p in points]
+
+        # Separar por zona (compresión vs tracción)
+        above_points = [(M, P) for M, P in curve_points if P >= Pu]
+        below_points = [(M, P) for M, P in curve_points if P <= Pu]
+
+        if not above_points or not below_points:
+            # P está fuera del rango - buscar el más cercano
+            closest = min(curve_points, key=lambda mp: abs(mp[1] - Pu))
+            return closest[0]
+
+        # Encontrar el punto más cercano por arriba y por abajo
+        point_above = min(above_points, key=lambda mp: mp[1])  # Menor P >= Pu
+        point_below = max(below_points, key=lambda mp: mp[1])  # Mayor P <= Pu
+
+        M1, P1 = point_below
+        M2, P2 = point_above
+
+        if abs(P2 - P1) < 1e-6:
+            return M1
+
+        # Interpolar linealmente
+        phi_Mn = M1 + (M2 - M1) * (Pu - P1) / (P2 - P1)
+        return max(0.0, phi_Mn)
+
+    @staticmethod
     def check_flexure(
         points: List['InteractionPoint'],
         demand_points: List[Tuple[float, float, str]]
@@ -224,12 +263,14 @@ class FlexureChecker:
 
         status = "OK" if min_sf >= 1.0 else "NO OK"
         phi_Mn_0 = FlexureChecker.get_phi_Mn_at_P0(points)
+        phi_Mn_at_Pu = FlexureChecker.get_phi_Mn_at_P(points, critical_Pu)
 
         return FlexureCheckResult(
             safety_factor=min_sf,
             status=status,
             critical_combo=critical_combo,
             phi_Mn_0=phi_Mn_0,
+            phi_Mn_at_Pu=phi_Mn_at_Pu,
             critical_Pu=critical_Pu,
             critical_Mu=critical_Mu,
             is_inside=critical_is_inside
