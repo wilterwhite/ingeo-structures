@@ -16,6 +16,8 @@ from typing import Optional, TYPE_CHECKING
 from enum import Enum
 import math
 
+from .constants.materials import SteelGrade
+
 if TYPE_CHECKING:
     from .entities.pier import Pier
 
@@ -26,10 +28,7 @@ class BarSize(Enum):
     LARGE = "large"       # > No.5 (16mm)
 
 
-class SteelGrade(Enum):
-    """Grado del acero."""
-    GRADE_60 = "grade_60"   # fy >= 60 ksi (420 MPa)
-    GRADE_40 = "grade_40"   # fy < 60 ksi (280-420 MPa)
+# SteelGrade importado desde constants.materials
 
 
 @dataclass
@@ -116,10 +115,26 @@ class ReinforcementLimitsService:
         return BarSize.LARGE
 
     def classify_steel_grade(self, fy_mpa: float) -> SteelGrade:
-        """Clasifica el grado de acero segun fluencia."""
-        if fy_mpa >= self.FY_HIGH_LIMIT_MPA:
+        """
+        Clasifica el grado de acero segun fluencia.
+
+        Retorna el grado mas cercano basado en fy:
+        - fy >= 690 MPa: GRADE_100
+        - fy >= 550 MPa: GRADE_80
+        - fy >= 420 MPa: GRADE_60
+        - else: GRADE_40
+        """
+        if fy_mpa >= 690:
+            return SteelGrade.GRADE_100
+        elif fy_mpa >= 550:
+            return SteelGrade.GRADE_80
+        elif fy_mpa >= self.FY_HIGH_LIMIT_MPA:  # 420 MPa
             return SteelGrade.GRADE_60
         return SteelGrade.GRADE_40
+
+    def is_high_strength_steel(self, fy_mpa: float) -> bool:
+        """Verifica si el acero es de alta resistencia (fy >= 420 MPa)."""
+        return fy_mpa >= self.FY_HIGH_LIMIT_MPA
 
     # =========================================================================
     # CUANTIAS MINIMAS PARA CORTANTE BAJO (11.6.1)
@@ -157,9 +172,12 @@ class ReinforcementLimitsService:
         steel_grade = self.classify_steel_grade(fy_mpa)
 
         # Longitudinal (vertical) - segun barra vertical
+        # "High fy" significa fy >= 420 MPa (GRADE_60 o superior)
+        is_high_fy = steel_grade.value >= 60
+
         if bar_size_v == BarSize.LARGE:
             rho_l_min = self.RHO_L_MIN_LARGE
-        elif steel_grade == SteelGrade.GRADE_60:
+        elif is_high_fy:
             rho_l_min = self.RHO_L_MIN_SMALL_HIGH_FY
         else:
             rho_l_min = self.RHO_L_MIN_SMALL_LOW_FY
@@ -167,7 +185,7 @@ class ReinforcementLimitsService:
         # Transversal (horizontal) - segun barra horizontal
         if bar_size_h == BarSize.LARGE:
             rho_t_min = self.RHO_T_MIN_LARGE
-        elif steel_grade == SteelGrade.GRADE_60:
+        elif is_high_fy:
             rho_t_min = self.RHO_T_MIN_SMALL_HIGH_FY
         else:
             rho_t_min = self.RHO_T_MIN_SMALL_LOW_FY

@@ -24,7 +24,7 @@ from ...domain.shear import (
     WallGroupShearResult,
     WallClassificationService,
     WallClassification,
-    WallType,
+    ElementType,
     ShearAmplificationService,
     ShearAmplificationResult,
 )

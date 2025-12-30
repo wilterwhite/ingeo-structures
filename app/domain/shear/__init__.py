@@ -9,8 +9,14 @@ Módulos:
 - results: Dataclasses para resultados de verificación
 """
 from .verification import ShearVerificationService
-from .amplification import ShearAmplificationService, ShearAmplificationResult
-from .classification import WallClassificationService, WallClassification, WallType
+from .amplification import (
+    ShearAmplificationService,
+    ShearAmplificationResult,
+    ShearAmplificationFactors,
+    DesignShearResult,
+    SpecialWallRequirements,
+)
+from .classification import WallClassificationService, WallClassification, ElementType
 from .results import ShearResult, CombinedShearResult, WallGroupShearResult
 
 __all__ = [
@@ -23,8 +29,11 @@ __all__ = [
     # amplification
     'ShearAmplificationService',
     'ShearAmplificationResult',
+    'ShearAmplificationFactors',
+    'DesignShearResult',
+    'SpecialWallRequirements',
     # classification
     'WallClassificationService',
     'WallClassification',
-    'WallType',
+    'ElementType',
 ]

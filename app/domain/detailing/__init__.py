@@ -9,6 +9,7 @@ Módulos:
 - limits: Límites de diseño de muros (§11.3, §11.7)
 - design_methods: Métodos de diseño (§11.5.3, §11.8)
 """
+from ..constants.materials import SteelGrade
 from .boundary_elements import (
     BoundaryElementService,
     BoundaryElementMethod,
@@ -17,7 +18,6 @@ from .boundary_elements import (
     DisplacementCheckResult,
     BoundaryElementDimensions,
     BoundaryTransverseReinforcement,
-    SteelGrade,
 )
 from .piers import (
     WallPierService,
@@ -53,12 +53,6 @@ from .design_methods import (
     SimplifiedMethodResult,
     SlenderWallResult,
     BoundaryCondition,
-)
-from .seismic import (
-    SeismicDesignService,
-    ShearAmplificationFactors,
-    SpecialWallRequirements,
-    DesignShearResult,
 )
 
 __all__ = [
@@ -102,9 +96,4 @@ __all__ = [
     'SimplifiedMethodResult',
     'SlenderWallResult',
     'BoundaryCondition',
-    # seismic
-    'SeismicDesignService',
-    'ShearAmplificationFactors',
-    'SpecialWallRequirements',
-    'DesignShearResult',
 ]

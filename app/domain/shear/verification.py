@@ -19,6 +19,7 @@ from ..constants.shear import (
     ALPHA_C_SLENDER,
     HW_LW_SQUAT_LIMIT,
     HW_LW_SLENDER_LIMIT,
+    ALPHA_C_TENSION_STRESS_MPA,
     VN_MAX_INDIVIDUAL_COEF,
     VN_MAX_GROUP_COEF,
     VC_COEF_COLUMN,
@@ -55,26 +56,45 @@ class ShearVerificationService:
         self,
         hw: float,
         lw: float,
-        hw_wall_total: Optional[float] = None
+        hw_wall_total: Optional[float] = None,
+        Nu: float = 0,
+        Ag: float = 0
     ) -> float:
         """
-        Calcula el coeficiente alpha_c segun Tabla 18.10.4.1.
+        Calcula el coeficiente alpha_c segun Tabla 18.10.4.1 y Ec. 11.5.4.4.
 
+        Para muros sin tension axial neta:
         - alpha_c = 0.25 si hw/lw <= 1.5 (muros rechonchos)
         - alpha_c = 0.17 si hw/lw >= 2.0 (muros esbeltos)
         - Interpolacion lineal entre 1.5 y 2.0
+
+        Para muros con tension axial neta (Nu < 0):
+        - alpha_c = 2 * (1 + Nu/(3.45*Ag)) >= 0  [Ec. 11.5.4.4]
+        - Donde 3.45 MPa = 500 psi
 
         Args:
             hw: Altura del segmento/piso (mm)
             lw: Largo del muro (mm)
             hw_wall_total: Altura total del muro (opcional, para segmentos)
+            Nu: Carga axial factorada (N, negativo para tension)
+            Ag: Area bruta de la seccion (mm²)
         """
         if lw <= 0:
             return ALPHA_C_SLENDER
 
+        # Ecuacion 11.5.4.4: Muros con tension axial neta
+        # Nu es negativo para tension
+        # US: alpha_c = 2 * (1 + Nu/(500*Ag)) >= 0
+        # SI: alpha_c = 0.17 * (1 + (Nu/Ag)/3.45) >= 0
+        # Donde 2 (US) = 0.17 (SI) y 500 psi = 3.45 MPa
+        if Nu < 0 and Ag > 0:
+            sigma_u = Nu / Ag  # Esfuerzo axial en MPa (negativo para tension)
+            alpha_c_tension = ALPHA_C_SLENDER * (1.0 + sigma_u / ALPHA_C_TENSION_STRESS_MPA)
+            return max(0.0, alpha_c_tension)
+
+        # Caso normal: usar Tabla 18.10.4.1 basada en hw/lw
         ratio = hw / lw
 
-        # TODO: Usar MAX(hw/lw_muro, hw/lw_segmento) cuando se disponga de hw_wall_total
         if hw_wall_total is not None and hw_wall_total > 0:
             ratio = max(ratio, hw_wall_total / lw)
 
@@ -125,19 +145,35 @@ class ShearVerificationService:
         hw: float,
         fc: float,
         fy: float,
-        rho_h: float
+        rho_h: float,
+        Nu: float = 0
     ) -> Tuple[float, float, float, float, float]:
         """
-        Calcula Vn para MUROS segun Ec. 18.10.4.1.
+        Calcula Vn para MUROS segun Ec. 18.10.4.1 y 11.5.4.4.
 
         Vn = Acv x (alpha_c x lambda x sqrt(f'c) + rho_t x fy)
         Limite: Vn <= 0.83 x sqrt(f'c) x Acv
+
+        Para tension axial neta (Nu < 0):
+        alpha_c = 2 * (1 + Nu/(3.45*Ag)) >= 0  [Ec. 11.5.4.4]
+
+        Args:
+            lw: Largo del muro (mm)
+            tw: Espesor del muro (mm)
+            hw: Altura del muro (mm)
+            fc: Resistencia del concreto (MPa)
+            fy: Resistencia del acero (MPa)
+            rho_h: Cuantia de refuerzo horizontal
+            Nu: Carga axial factorada (N, negativo para tension)
 
         Returns:
             Tuple (Vc, Vs, Vn, Vn_max, alpha_c) en tonf
         """
         Acv = lw * tw
-        alpha_c = self.calculate_alpha_c(hw, lw)
+        Ag = Acv  # Para muros, Ag = Acv
+
+        # Calcula alpha_c considerando tension axial si aplica
+        alpha_c = self.calculate_alpha_c(hw, lw, Nu=Nu, Ag=Ag)
 
         Vc = Acv * alpha_c * LAMBDA_NORMAL * math.sqrt(fc)
         Vs = Acv * rho_h * fy
@@ -221,13 +257,24 @@ class ShearVerificationService:
         Selecciona automaticamente la formula segun lw/tw:
         - >= 4: MUROS (18.10.4)
         - < 4:  COLUMNAS (22.5)
+
+        Para muros con tension axial neta (Nu < 0), aplica Ec. 11.5.4.4.
+
+        Args:
+            Nu: Carga axial factorada (tonf, negativo para tension)
         """
+        # Convertir Nu de tonf a N para calculo interno
+        Nu_N = Nu * N_TO_TONF
+
         if self.is_wall(lw, tw):
             Vc, Vs, Vn, Vn_max, alpha_c = self.calculate_Vn_wall(
-                lw, tw, hw, fc, fy, rho_h
+                lw, tw, hw, fc, fy, rho_h, Nu=Nu_N
             )
             formula_type = "wall"
             aci_reference = "ACI 318-25 11.5.4.3, 18.10.4.1"
+            # Agregar referencia a 11.5.4.4 si hay tension
+            if Nu < 0:
+                aci_reference += ", 11.5.4.4"
         else:
             Vc, Vs, Vn, Vn_max, alpha_c = self.calculate_Vn_column(
                 lw, tw, fc, fy, rho_h

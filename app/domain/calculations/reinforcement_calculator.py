@@ -136,14 +136,14 @@ class ReinforcementCalculator:
         As_horizontal = pier.n_meshes * (pier._bar_area_h / pier.spacing_h) * 1000
         As_vertical_per_m = pier.n_meshes * (pier._bar_area_v / pier.spacing_v) * 1000
 
-        # Bordes
-        As_edge_total = pier.n_meshes * 2 * pier._bar_area_edge
-        As_edge_per_end = pier.n_meshes * pier._bar_area_edge
-        n_edge_bars_per_end = pier.n_meshes
+        # Bordes (usando n_edge_bars del pier)
+        As_edge_total = pier.n_edge_bars * 2 * pier._bar_area_edge
+        As_edge_per_end = pier.n_edge_bars * pier._bar_area_edge
+        n_edge_bars_per_end = pier.n_edge_bars
 
         # Totales
         As_flexure_total = As_edge_total + As_vertical
-        n_total_vertical_bars = (pier.n_meshes * 2) + (n_intermediate * pier.n_meshes)
+        n_total_vertical_bars = (pier.n_edge_bars * 2) + (n_intermediate * pier.n_meshes)
 
         # Cuantías
         Ag = pier.width * pier.thickness

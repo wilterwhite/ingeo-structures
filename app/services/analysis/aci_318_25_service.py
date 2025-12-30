@@ -32,7 +32,9 @@ from ...domain.detailing import (
     WallPierService,
     WallPierDesignResult,
     WallPierCategory,
-    SeismicDesignService,
+)
+from ...domain.shear import (
+    ShearAmplificationService,
     ShearAmplificationFactors,
     SpecialWallRequirements,
     DesignShearResult,
@@ -118,7 +120,7 @@ class ACI318_25_Service:
         self._slenderness = SlendernessService()
 
         # Chapter 18 services
-        self._seismic_design = SeismicDesignService()
+        self._shear_amplification = ShearAmplificationService()
         self._boundary_elements = BoundaryElementService()
         self._wall_piers = WallPierService()
 
@@ -500,7 +502,7 @@ class ACI318_25_Service:
         warnings = []
 
         # Determinar categoria del muro
-        wall_category = self._seismic_design.determine_wall_category(
+        wall_category = self._shear_amplification.determine_wall_category(
             sdc, is_sfrs=True, is_precast=False
         )
 
@@ -519,14 +521,14 @@ class ACI318_25_Service:
             if hwcs <= 0:
                 hwcs = pier.height
 
-            shear_amplification = self._seismic_design.calculate_amplification_factors(
+            shear_amplification = self._shear_amplification.calculate_amplification_factors(
                 hwcs=hwcs,
                 lw=pier.width,
                 hn_ft=hn_ft
             )
 
             # Calcular cortante de diseno amplificado
-            design_shear = self._seismic_design.calculate_design_shear(
+            design_shear = self._shear_amplification.calculate_design_shear(
                 Vu_Eh=Vu_Eh,
                 hwcs=hwcs,
                 lw=pier.width,
@@ -544,7 +546,7 @@ class ACI318_25_Service:
         # =====================================================================
 
         if wall_category == WallCategory.SPECIAL:
-            special_wall = self._seismic_design.check_special_wall_requirements(
+            special_wall = self._shear_amplification.check_special_wall_requirements(
                 hw=pier.height,
                 lw=pier.width,
                 tw=pier.thickness,

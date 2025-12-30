@@ -2,6 +2,8 @@
 """
 Módulo de cálculos del dominio.
 Contiene calculadores puros sin dependencias de servicios.
+
+Nota: FlexureChecker está en domain/flexure/checker.py
 """
 from .steel_layer_calculator import SteelLayer, SteelLayerCalculator
 from .reinforcement_calculator import (
@@ -9,7 +11,6 @@ from .reinforcement_calculator import (
     ReinforcementProperties,
     BAR_AREAS
 )
-from .flexure_checker import FlexureChecker, FlexureCheckResult
 
 __all__ = [
     'SteelLayer',
@@ -17,6 +18,4 @@ __all__ = [
     'ReinforcementCalculator',
     'ReinforcementProperties',
     'BAR_AREAS',
-    'FlexureChecker',
-    'FlexureCheckResult'
 ]

@@ -257,6 +257,11 @@ class EtabsExcelParser:
                     'diameter_h': pier.diameter_h,
                     'spacing_h': pier.spacing_h,
                     'diameter_edge': pier.diameter_edge,
+                    # Elemento de borde
+                    'n_edge_bars': pier.n_edge_bars,
+                    'stirrup_diameter': pier.stirrup_diameter,
+                    'stirrup_spacing': pier.stirrup_spacing,
+                    'cover': pier.cover,
                     # Valores calculados
                     'As_vertical_mm2': pier.As_vertical,
                     'As_horizontal_mm2': pier.As_horizontal,

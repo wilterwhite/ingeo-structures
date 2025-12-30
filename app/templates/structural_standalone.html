@@ -167,7 +167,7 @@
                     </div>
                 </div>
 
-                <!-- Filters -->
+                <!-- Filters (cerca de la tabla) -->
                 <div class="filters-bar">
                     <div class="filter-group">
                         <label>Filtrar por Piso:</label>
@@ -181,14 +181,16 @@
                             <option value="">Todos los ejes</option>
                         </select>
                     </div>
+                    <div class="filter-group">
+                        <button class="btn btn-sm" id="toggle-all-combos-btn" title="Expandir/Colapsar todas las combinaciones">
+                            <span id="toggle-combos-icon">▶</span> Combos
+                        </button>
+                    </div>
                     <div class="plane-indicator">
                         <span>Plano actual: </span>
                         <span id="current-plane-label">M3</span>
                     </div>
                 </div>
-
-                <!-- Summary Plot -->
-                <div class="summary-plot" id="summary-plot-container"></div>
 
                 <!-- Results Table -->
                 <div class="table-wrapper">
@@ -199,8 +201,10 @@
                                 <th>Pier</th>
                                 <th>Dimensiones</th>
                                 <th>Armadura</th>
-                                <th>FS Flexo-compresión</th>
+                                <th>FS Flexión</th>
+                                <th>Capacidad Flexión</th>
                                 <th>FS Corte</th>
+                                <th>Capacidad Corte</th>
                                 <th>Estado</th>
                                 <th>Acciones</th>
                             </tr>
@@ -209,8 +213,10 @@
                     </table>
                 </div>
 
+                <!-- Summary Plot (below table) -->
+                <div class="summary-plot" id="summary-plot-container"></div>
+
                 <div class="action-bar">
-                    <button class="btn btn-secondary" id="back-to-piers-btn">Modificar Armaduras</button>
                     <button class="btn btn-secondary" id="new-analysis-btn">Nuevo Análisis</button>
                 </div>
             </div>
@@ -376,6 +382,19 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal for Section Diagram -->
+    <div class="modal" id="section-modal">
+        <button class="modal-close">×</button>
+        <div class="modal-content section-diagram-content">
+            <h3 id="section-modal-title">Sección Transversal</h3>
+            <div id="section-modal-loading" class="loading">
+                <div class="spinner"></div>
+                <p>Generando diagrama...</p>
+            </div>
+            <img id="section-modal-img" src="" alt="Sección Transversal">
         </div>
     </div>
 

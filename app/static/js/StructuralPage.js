@@ -65,6 +65,8 @@ class StructuralPage {
             summaryPlotContainer: document.getElementById('summary-plot-container'),
             storyFilter: document.getElementById('story-filter'),
             axisFilter: document.getElementById('axis-filter'),
+            toggleAllCombosBtn: document.getElementById('toggle-all-combos-btn'),
+            toggleCombosIcon: document.getElementById('toggle-combos-icon'),
 
             // Stats
             statTotal: document.getElementById('stat-total'),
@@ -76,7 +78,13 @@ class StructuralPage {
             pierDetailsModal: document.getElementById('pier-details-modal'),
             pierDetailsTitle: document.getElementById('pier-details-title'),
             pierDetailsLoading: document.getElementById('pier-details-loading'),
-            pierDetailsBody: document.getElementById('pier-details-body')
+            pierDetailsBody: document.getElementById('pier-details-body'),
+
+            // Section Diagram Modal
+            sectionModal: document.getElementById('section-modal'),
+            sectionModalTitle: document.getElementById('section-modal-title'),
+            sectionModalLoading: document.getElementById('section-modal-loading'),
+            sectionModalImg: document.getElementById('section-modal-img')
         };
     }
 
@@ -86,6 +94,7 @@ class StructuralPage {
         this.plotModal = new PlotModal(this);
         this.plotModal.init();
         this.initPierDetailsModal();
+        this.initSectionModal();
     }
 
     initPierDetailsModal() {
@@ -147,14 +156,11 @@ class StructuralPage {
         this.elements.reanalyzeBtn?.addEventListener('click', () => this.reanalyze());
         this.elements.storyFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.axisFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
+        this.elements.toggleAllCombosBtn?.addEventListener('click', () => this.toggleAllCombinations());
 
         // Botones de navegación
         document.getElementById('new-file-btn')?.addEventListener('click', () => {
             this.showSection('upload');
-        });
-
-        document.getElementById('back-to-piers-btn')?.addEventListener('click', () => {
-            this.showSection('piers');
         });
 
         document.getElementById('new-analysis-btn')?.addEventListener('click', () => {
@@ -304,11 +310,14 @@ class StructuralPage {
     // Acciones de Pier
     // =========================================================================
 
-    editPierArmadura(pierKey) {
-        this.showSection('piers');
-        setTimeout(() => {
-            this.piersTable.scrollToPier(pierKey);
-        }, 100);
+    toggleAllCombinations() {
+        const { toggleCombosIcon } = this.elements;
+        const allExpanded = this.resultsTable.toggleAllExpand();
+
+        // Actualizar ícono
+        if (toggleCombosIcon) {
+            toggleCombosIcon.textContent = allExpanded ? '▼' : '▶';
+        }
     }
 
     // =========================================================================
@@ -401,6 +410,68 @@ class StructuralPage {
     closePierDetailsModal() {
         const { pierDetailsModal } = this.elements;
         pierDetailsModal?.classList.remove('active');
+    }
+
+    // =========================================================================
+    // Section Diagram Modal
+    // =========================================================================
+
+    initSectionModal() {
+        const modal = this.elements.sectionModal;
+        if (!modal) return;
+
+        // Cerrar al hacer clic en el botón X
+        const closeBtn = modal.querySelector('.modal-close');
+        closeBtn?.addEventListener('click', () => this.closeSectionModal());
+
+        // Cerrar al hacer clic fuera del contenido
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.closeSectionModal();
+            }
+        });
+
+        // Cerrar con Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.classList.contains('active')) {
+                this.closeSectionModal();
+            }
+        });
+    }
+
+    async showSectionDiagram(pierKey, pierLabel) {
+        const { sectionModal, sectionModalTitle, sectionModalLoading, sectionModalImg } = this.elements;
+
+        if (!sectionModal) return;
+
+        // Abrir modal y mostrar loading
+        sectionModal.classList.add('active');
+        sectionModalTitle.textContent = `Sección - ${pierLabel}`;
+        sectionModalLoading.classList.add('active');
+        sectionModalImg.style.display = 'none';
+
+        try {
+            const data = await structuralAPI.getSectionDiagram(this.sessionId, pierKey);
+
+            if (data.success && data.section_diagram) {
+                sectionModalImg.src = `data:image/png;base64,${data.section_diagram}`;
+                sectionModalImg.style.display = 'block';
+            } else {
+                alert('Error: ' + (data.error || 'No se pudo generar el diagrama'));
+                this.closeSectionModal();
+            }
+        } catch (error) {
+            console.error('Error getting section diagram:', error);
+            alert('Error: ' + error.message);
+            this.closeSectionModal();
+        } finally {
+            sectionModalLoading.classList.remove('active');
+        }
+    }
+
+    closeSectionModal() {
+        const { sectionModal } = this.elements;
+        sectionModal?.classList.remove('active');
     }
 }
 

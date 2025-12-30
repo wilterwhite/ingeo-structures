@@ -599,6 +599,33 @@ class PierAnalysisService:
     # Capacidades Puras del Pier
     # =========================================================================
 
+    def get_section_diagram(self, session_id: str, pier_key: str) -> Dict[str, Any]:
+        """
+        Genera un diagrama de la sección transversal del pier.
+
+        Args:
+            session_id: ID de sesión
+            pier_key: Clave del pier (Story_Label)
+
+        Returns:
+            Dict con section_diagram en base64
+        """
+        # Validar pier
+        error = self._validate_pier(session_id, pier_key)
+        if error:
+            return error
+
+        pier = self._session_manager.get_pier(session_id, pier_key)
+
+        # Generar diagrama
+        section_diagram = self._plot_generator.generate_section_diagram(pier)
+
+        return {
+            'success': True,
+            'pier_key': pier_key,
+            'section_diagram': section_diagram
+        }
+
     def get_pier_capacities(self, session_id: str, pier_key: str) -> Dict[str, Any]:
         """
         Calcula las capacidades puras del pier (sin interacción).

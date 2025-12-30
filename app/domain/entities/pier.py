@@ -40,9 +40,13 @@ class Pier:
     diameter_h: int = 8         # Diámetro barra horizontal (mm)
     spacing_h: int = 200        # Espaciamiento horizontal (mm)
 
-    # Fierros de borde (barras adicionales en los extremos del muro)
-    # n_edge_bars = n_meshes (1 barra por lado si malla simple, 2 si doble)
-    diameter_edge: int = 10     # Diámetro barra de borde (mm)
+    # Elemento de borde (barras adicionales en los extremos del muro)
+    n_edge_bars: int = 2        # Número de barras de borde por extremo
+    diameter_edge: int = 12     # Diámetro barra de borde (mm)
+
+    # Estribos de confinamiento en elemento de borde
+    stirrup_diameter: int = 10  # Diámetro estribo (mm)
+    stirrup_spacing: int = 150  # Espaciamiento estribos (mm)
 
     # Otros
     cover: float = 25.0     # Recubrimiento (mm) - 2.5cm default
@@ -157,21 +161,20 @@ class Pier:
         """
         Área de acero de borde TOTAL (mm²).
 
-        Cálculo: n_meshes barras × 2 extremos × área_barra
-        - Malla simple (n_meshes=1): 1 barra por extremo × 2 extremos = 2 barras
-        - Malla doble (n_meshes=2): 2 barras por extremo × 2 extremos = 4 barras
+        Cálculo: n_edge_bars barras × 2 extremos × área_barra
+        Ejemplo: 4 barras por extremo × 2 extremos = 8 barras total
         """
-        return self.n_meshes * 2 * self._bar_area_edge
+        return self.n_edge_bars * 2 * self._bar_area_edge
 
     @property
     def As_edge_per_end(self) -> float:
         """Área de acero de borde en cada extremo del muro (mm²)."""
-        return self.n_meshes * self._bar_area_edge
+        return self.n_edge_bars * self._bar_area_edge
 
     @property
     def n_edge_bars_per_end(self) -> int:
         """Número de barras de borde en cada extremo del muro."""
-        return self.n_meshes
+        return self.n_edge_bars
 
     @property
     def As_flexure_total(self) -> float:
@@ -224,8 +227,9 @@ class Pier:
     def reinforcement_description(self) -> str:
         """Descripción legible de la armadura."""
         mesh_text = "1M" if self.n_meshes == 1 else "2M"
-        edge_text = f"+{self.n_edge_bars_per_end}φ{self.diameter_edge}"
-        return f"{mesh_text} φ{self.diameter_v}@{self.spacing_v} {edge_text}"
+        edge_text = f"+{self.n_edge_bars}φ{self.diameter_edge}"
+        stirrup_text = f"E{self.stirrup_diameter}@{self.stirrup_spacing}"
+        return f"{mesh_text} φ{self.diameter_v}@{self.spacing_v} {edge_text} {stirrup_text}"
 
     # =========================================================================
     # Propiedades Geométricas
@@ -271,6 +275,9 @@ class Pier:
         diameter_h: Optional[int] = None,
         spacing_h: Optional[int] = None,
         diameter_edge: Optional[int] = None,
+        n_edge_bars: Optional[int] = None,
+        stirrup_diameter: Optional[int] = None,
+        stirrup_spacing: Optional[int] = None,
         fy: Optional[float] = None,
         cover: Optional[float] = None
     ):
@@ -284,6 +291,9 @@ class Pier:
             diameter_h: Diámetro barra horizontal (mm)
             spacing_h: Espaciamiento horizontal (mm)
             diameter_edge: Diámetro barra de borde (mm)
+            n_edge_bars: Número de barras de borde por extremo
+            stirrup_diameter: Diámetro estribo confinamiento (mm)
+            stirrup_spacing: Espaciamiento estribos (mm)
             fy: Límite de fluencia (MPa)
             cover: Recubrimiento (mm)
         """
@@ -302,6 +312,12 @@ class Pier:
         if diameter_edge is not None:
             self.diameter_edge = diameter_edge
             self._bar_area_edge = self.BAR_AREAS.get(diameter_edge, 78.5)
+        if n_edge_bars is not None:
+            self.n_edge_bars = n_edge_bars
+        if stirrup_diameter is not None:
+            self.stirrup_diameter = stirrup_diameter
+        if stirrup_spacing is not None:
+            self.stirrup_spacing = stirrup_spacing
         if fy is not None:
             self.fy = fy
         if cover is not None:

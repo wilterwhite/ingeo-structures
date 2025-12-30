@@ -414,6 +414,49 @@ def get_pier_capacities():
         }), 500
 
 
+@bp.route('/section-diagram', methods=['POST'])
+def get_section_diagram():
+    """
+    Genera un diagrama de la sección transversal del pier.
+
+    Request:
+        {
+            "session_id": "uuid-xxx",
+            "pier_key": "Story_PierLabel"
+        }
+
+    Response:
+        {
+            "success": true,
+            "section_diagram": "base64..."
+        }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+        session_id = data.get('session_id')
+        pier_key = data.get('pier_key')
+
+        if not session_id or not pier_key:
+            return jsonify({
+                'success': False,
+                'error': 'session_id and pier_key are required'
+            }), 400
+
+        service = get_analysis_service()
+        result = service.get_section_diagram(session_id, pier_key)
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error: {str(e)}'
+        }), 500
+
+
 @bp.route('/health', methods=['GET'])
 def health_check():
     """

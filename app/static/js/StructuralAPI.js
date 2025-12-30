@@ -165,6 +165,22 @@ class StructuralAPI {
         });
     }
 
+    /**
+     * Obtiene el diagrama de sección transversal de un pier.
+     * @param {string} sessionId - ID de sesión
+     * @param {string} pierKey - Clave del pier (Story_Label)
+     * @returns {Promise<Object>} Diagrama en base64
+     */
+    async getSectionDiagram(sessionId, pierKey) {
+        return this.request('/section-diagram', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                pier_key: pierKey
+            })
+        });
+    }
+
     // =========================================================================
     // Health Check
     // =========================================================================

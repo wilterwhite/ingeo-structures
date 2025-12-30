@@ -20,8 +20,20 @@ from ..constants.shear import (
 )
 
 
-class WallType(Enum):
-    """Tipos de elementos segun ACI 318-25."""
+class ElementType(Enum):
+    """
+    Clasificacion de elementos verticales segun geometria ACI 318-25.
+
+    Esta clasificacion determina el metodo de diseno a usar:
+    - COLUMN: Elemento con lw/tw < 4, usa Capitulo 22
+    - WALL: Muro esbelto, usa S18.10.4
+    - WALL_PIER_COLUMN: Pilar de muro con requisitos de columna
+    - WALL_PIER_ALTERNATE: Pilar de muro con metodo alternativo
+    - WALL_SQUAT: Muro rechoncho
+
+    Nota: No confundir con WallType de limits.py que clasifica
+    por funcion (carga, sin carga, sotano, cimentacion).
+    """
     COLUMN = "column"           # lw/tw < 4, usa S22.5
     WALL = "wall"               # lw/tw >= 4, hw/lw >= 2.0, usa S18.10.4
     WALL_PIER_COLUMN = "wall_pier_column"  # hw/lw < 2.0, lw/bw <= 2.5, usa S18.7
@@ -32,7 +44,7 @@ class WallType(Enum):
 @dataclass
 class WallClassification:
     """Resultado de la clasificacion de un muro."""
-    wall_type: WallType
+    element_type: ElementType
     lw: float               # Largo del muro (mm)
     tw: float               # Espesor del muro (mm)
     hw: float               # Altura del muro (mm)
@@ -81,7 +93,7 @@ class WallClassificationService:
         # Primero verificar si es columna (lw/tw < 4)
         if lw_tw < ASPECT_RATIO_WALL_LIMIT:
             return WallClassification(
-                wall_type=WallType.COLUMN,
+                element_type=ElementType.COLUMN,
                 lw=lw, tw=tw, hw=hw,
                 lw_tw=lw_tw, hw_lw=hw_lw,
                 aci_section="22.5",
@@ -93,7 +105,7 @@ class WallClassificationService:
         if hw_lw >= WALL_PIER_HW_LW_LIMIT:
             # Muro esbelto (comportamiento controlado por flexion)
             return WallClassification(
-                wall_type=WallType.WALL,
+                element_type=ElementType.WALL,
                 lw=lw, tw=tw, hw=hw,
                 lw_tw=lw_tw, hw_lw=hw_lw,
                 aci_section="18.10.4",
@@ -105,7 +117,7 @@ class WallClassificationService:
         if lw_tw <= WALL_PIER_COLUMN_LIMIT:
             # Pilar con requisitos de columna
             return WallClassification(
-                wall_type=WallType.WALL_PIER_COLUMN,
+                element_type=ElementType.WALL_PIER_COLUMN,
                 lw=lw, tw=tw, hw=hw,
                 lw_tw=lw_tw, hw_lw=hw_lw,
                 aci_section="18.10.8.1 -> 18.7",
@@ -118,7 +130,7 @@ class WallClassificationService:
         elif lw_tw <= WALL_PIER_ALTERNATE_LIMIT:
             # Pilar con metodo alternativo
             return WallClassification(
-                wall_type=WallType.WALL_PIER_ALTERNATE,
+                element_type=ElementType.WALL_PIER_ALTERNATE,
                 lw=lw, tw=tw, hw=hw,
                 lw_tw=lw_tw, hw_lw=hw_lw,
                 aci_section="18.10.8.1(a)-(f)",
@@ -133,7 +145,7 @@ class WallClassificationService:
         else:
             # lw/bw > 6.0: Muro rechoncho
             return WallClassification(
-                wall_type=WallType.WALL_SQUAT,
+                element_type=ElementType.WALL_SQUAT,
                 lw=lw, tw=tw, hw=hw,
                 lw_tw=lw_tw, hw_lw=hw_lw,
                 aci_section="18.10.4",
@@ -147,16 +159,16 @@ class WallClassificationService:
 
     def is_wall_pier(self, classification: WallClassification) -> bool:
         """Verifica si la clasificacion corresponde a un wall pier."""
-        return classification.wall_type in (
-            WallType.WALL_PIER_COLUMN,
-            WallType.WALL_PIER_ALTERNATE
+        return classification.element_type in (
+            ElementType.WALL_PIER_COLUMN,
+            ElementType.WALL_PIER_ALTERNATE
         )
 
     def requires_column_detailing(self, classification: WallClassification) -> bool:
         """Verifica si requiere detallado de columna."""
-        return classification.wall_type in (
-            WallType.COLUMN,
-            WallType.WALL_PIER_COLUMN
+        return classification.element_type in (
+            ElementType.COLUMN,
+            ElementType.WALL_PIER_COLUMN
         )
 
     def is_squat_wall(self, classification: WallClassification) -> bool:

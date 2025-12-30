@@ -20,6 +20,8 @@ from enum import Enum
 from typing import Optional, Tuple, List
 import math
 
+from ..constants.materials import SteelGrade
+
 
 class BoundaryElementMethod(Enum):
     """Metodo de verificacion de elementos de borde."""
@@ -27,11 +29,7 @@ class BoundaryElementMethod(Enum):
     STRESS = "stress"              # 18.10.6.3
 
 
-class SteelGrade(Enum):
-    """Grado del acero de refuerzo."""
-    GRADE_60 = 60
-    GRADE_80 = 80
-    GRADE_100 = 100
+# SteelGrade importado desde constants.materials
 
 
 @dataclass

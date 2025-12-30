@@ -42,6 +42,7 @@ class SteelLayerCalculator:
             width=pier.width,
             cover=pier.cover,
             n_meshes=pier.n_meshes,
+            n_edge_bars=pier.n_edge_bars,
             bar_area_edge=pier._bar_area_edge,
             bar_area_v=pier._bar_area_v,
             spacing_v=pier.spacing_v
@@ -52,6 +53,7 @@ class SteelLayerCalculator:
         width: float,
         cover: float,
         n_meshes: int,
+        n_edge_bars: int,
         bar_area_edge: float,
         bar_area_v: float,
         spacing_v: float
@@ -63,6 +65,7 @@ class SteelLayerCalculator:
             width: Largo del muro en la dirección del momento (mm)
             cover: Recubrimiento al centro de la barra (mm)
             n_meshes: Número de mallas (1 o 2)
+            n_edge_bars: Número de barras de borde por extremo
             bar_area_edge: Área de cada barra de borde (mm²)
             bar_area_v: Área de cada barra de malla vertical (mm²)
             spacing_v: Espaciamiento de la malla vertical (mm)
@@ -73,9 +76,10 @@ class SteelLayerCalculator:
         layers = []
 
         # Capa 1: Barras de borde en el extremo superior (compresión)
+        # Todas las barras de borde se agrupan en una capa (simplificación conservadora)
         layers.append(SteelLayer(
             position=cover,
-            area=n_meshes * bar_area_edge
+            area=n_edge_bars * bar_area_edge
         ))
 
         # Capas intermedias: barras de malla
@@ -94,7 +98,7 @@ class SteelLayerCalculator:
         # Capa final: Barras de borde en el extremo inferior (tracción)
         layers.append(SteelLayer(
             position=width - cover,
-            area=n_meshes * bar_area_edge
+            area=n_edge_bars * bar_area_edge
         ))
 
         return layers

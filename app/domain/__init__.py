@@ -27,7 +27,7 @@ from .shear import (
     ShearResult,
     ShearAmplificationResult,
     WallClassification,
-    WallType,
+    ElementType,
 )
 
 from .detailing import (
@@ -58,7 +58,7 @@ __all__ = [
     'ShearResult',
     'ShearAmplificationResult',
     'WallClassification',
-    'WallType',
+    'ElementType',
     # Detailing
     'BoundaryElementService',
     'BoundaryElementMethod',

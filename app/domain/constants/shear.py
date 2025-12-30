@@ -69,6 +69,12 @@ ALPHA_C_SLENDER = 0.17  # alpha_c para muros esbeltos (hw/lw >= 2.0)
 HW_LW_SQUAT_LIMIT = 1.5    # Limite inferior (muros rechonchos)
 HW_LW_SLENDER_LIMIT = 2.0  # Limite superior (muros esbeltos)
 
+# Ecuacion 11.5.4.4 - Tension axial neta
+# alpha_c = 2 * (1 + Nu/(500*Ag)) >= 0  [US: psi]
+# alpha_c = 2 * (1 + Nu/(3.45*Ag)) >= 0 [SI: MPa]
+# 500 psi = 3.45 MPa (constante de conversion)
+ALPHA_C_TENSION_STRESS_MPA = 3.45  # 500 psi en MPa
+
 
 # =============================================================================
 # LIMITES MAXIMOS DE Vn (ACI 318-14 Seccion 18.10.4.4)

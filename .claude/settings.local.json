@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(venv\\\\Scripts\\\\python.exe:*)",
+      "Bash(./venv/Scripts/python.exe:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(.\\\\venv\\\\Scripts\\\\python.exe -m pytest:*)",
+      "Bash(venv/Scripts/python.exe -m pytest:*)",
+      "Bash(venv/Scripts/python.exe:*)",
+      "Bash(venv\\\\Scripts\\\\python.exe -m pytest:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

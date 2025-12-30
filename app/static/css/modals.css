@@ -324,6 +324,48 @@
 }
 
 /* ==========================================================================
+   SECTION DIAGRAM MODAL
+   ========================================================================== */
+
+.section-diagram-content {
+    max-width: 900px;
+    padding: 24px;
+    text-align: center;
+}
+
+.section-diagram-content h3 {
+    margin: 0 0 20px 0;
+    color: var(--primary-color);
+    font-size: 1.25rem;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 10px;
+}
+
+#section-modal-img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: white;
+}
+
+#section-modal-loading {
+    display: none;
+    padding: 60px;
+    text-align: center;
+}
+
+#section-modal-loading.active {
+    display: block;
+}
+
+#section-modal-loading.active + #section-modal-img {
+    display: none;
+}
+
+/* ==========================================================================
    RESPONSIVE
    ========================================================================== */
 

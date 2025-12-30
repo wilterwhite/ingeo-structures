@@ -21,6 +21,9 @@ from enum import Enum
 from typing import Optional, List
 import math
 
+from ..constants.materials import SteelGrade
+from ..constants.shear import PHI_SHEAR
+
 
 class CouplingBeamType(Enum):
     """Tipo de viga de acoplamiento segun relacion ln/h."""
@@ -41,11 +44,7 @@ class ConfinementOption(Enum):
     FULL_SECTION = "full_section"  # Opcion (d) - Confinamiento de seccion completa
 
 
-class SteelGrade(Enum):
-    """Grado del acero diagonal."""
-    GRADE_60 = 60
-    GRADE_80 = 80
-    GRADE_100 = 100
+# SteelGrade importado desde constants.materials
 
 
 @dataclass
@@ -123,8 +122,7 @@ class CouplingBeamService:
     - Fuerzas: tonf
     """
 
-    # Factor de reduccion para cortante
-    PHI_SHEAR = 0.75
+    # PHI_SHEAR importado desde constants.shear
 
     # =========================================================================
     # CLASIFICACION DE VIGA (18.10.7.1-18.10.7.3)
@@ -244,7 +242,7 @@ class CouplingBeamService:
             Vn_calc=round(Vn_calc, 2),
             Vn_max=round(Vn_max, 2),
             Vn=round(Vn, 2),
-            phi_Vn=round(self.PHI_SHEAR * Vn, 2),
+            phi_Vn=round(PHI_SHEAR * Vn, 2),
             aci_reference="ACI 318-25 Ec. 18.10.7.4"
         )
 

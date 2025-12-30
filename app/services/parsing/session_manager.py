@@ -71,7 +71,9 @@ class SessionManager:
             updates: Lista de actualizaciones con configuración de malla
                      [{'key': 'Story_Pier', 'n_meshes': 2, 'diameter_v': 10,
                        'spacing_v': 150, 'diameter_h': 8, 'spacing_h': 200,
-                       'diameter_edge': 10, 'fy': 420}]
+                       'diameter_edge': 10, 'n_edge_bars': 4,
+                       'stirrup_diameter': 10, 'stirrup_spacing': 150,
+                       'fy': 420}]
 
         Returns:
             True si se aplicaron las actualizaciones
@@ -87,7 +89,7 @@ class SessionManager:
 
             pier = parsed_data.piers[key]
 
-            # Aplicar configuración de armadura
+            # Aplicar configuración de armadura (incluye elemento de borde)
             pier.update_reinforcement(
                 n_meshes=update.get('n_meshes'),
                 diameter_v=update.get('diameter_v'),
@@ -95,6 +97,9 @@ class SessionManager:
                 diameter_h=update.get('diameter_h'),
                 spacing_h=update.get('spacing_h'),
                 diameter_edge=update.get('diameter_edge'),
+                n_edge_bars=update.get('n_edge_bars'),
+                stirrup_diameter=update.get('stirrup_diameter'),
+                stirrup_spacing=update.get('stirrup_spacing'),
                 fy=update.get('fy'),
                 cover=update.get('cover')
             )
