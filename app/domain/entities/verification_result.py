@@ -95,6 +95,15 @@ class VerificationResult:
     boundary_length_mm: float = 0.0         # Extensión horizontal (mm)
     boundary_aci_reference: str = ""        # Referencia ACI
 
+    # ==========================================================================
+    # Continuidad del muro (para §18.10.3.3 y §18.10.6)
+    # ==========================================================================
+    continuity_hwcs_m: float = 0.0          # hwcs en metros
+    continuity_n_stories: int = 1           # Número de pisos del muro continuo
+    continuity_is_continuous: bool = False  # Si el muro continúa a otros pisos
+    continuity_is_base: bool = True         # Si es la base del muro continuo
+    continuity_hwcs_lw: float = 0.0         # Relación hwcs/lw
+
     @property
     def is_ok(self) -> bool:
         return self.overall_status == "OK"
@@ -179,6 +188,14 @@ class VerificationResult:
                 'limit_MPa': round(self.boundary_limit, 2),
                 'length_mm': round(self.boundary_length_mm, 0),
                 'aci_reference': self.boundary_aci_reference
+            },
+            # Continuidad del muro
+            'wall_continuity': {
+                'hwcs_m': round(self.continuity_hwcs_m, 2),
+                'hwcs_lw': round(self.continuity_hwcs_lw, 2),
+                'n_stories': self.continuity_n_stories,
+                'is_continuous': self.continuity_is_continuous,
+                'is_base': self.continuity_is_base
             },
             'overall_status': self.overall_status,
             'pm_plot': self.pm_plot_base64

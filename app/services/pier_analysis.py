@@ -174,10 +174,12 @@ class PierAnalysisService:
         for key, pier in parsed_data.piers.items():
             pier_forces = parsed_data.pier_forces.get(key)
 
-            # Obtener hwcs para este pier desde la info de continuidad
+            # Obtener hwcs y continuity_info para este pier
             hwcs = None
+            continuity_info = None
             if parsed_data.continuity_info and key in parsed_data.continuity_info:
-                hwcs = parsed_data.continuity_info[key].hwcs
+                continuity_info = parsed_data.continuity_info[key]
+                hwcs = continuity_info.hwcs
 
             result = self._analyze_pier(
                 pier=pier,
@@ -186,7 +188,8 @@ class PierAnalysisService:
                 moment_axis=moment_axis,
                 angle_deg=angle_deg,
                 hwcs=hwcs,
-                hn_ft=hn_ft
+                hn_ft=hn_ft,
+                continuity_info=continuity_info
             )
             results.append(result)
 
@@ -411,7 +414,8 @@ class PierAnalysisService:
         moment_axis: str,
         angle_deg: float,
         hwcs: Optional[float] = None,
-        hn_ft: Optional[float] = None
+        hn_ft: Optional[float] = None,
+        continuity_info: Optional[Any] = None
     ) -> VerificationResult:
         """
         Ejecuta el análisis estructural de un pier individual.
@@ -431,6 +435,7 @@ class PierAnalysisService:
             angle_deg: Ángulo para vista combinada
             hwcs: Altura desde sección crítica (mm), opcional
             hn_ft: Altura total del edificio (pies), opcional
+            continuity_info: WallContinuityInfo para este pier, opcional
         """
 
         # 1. Flexocompresión (delegado a FlexureService)
@@ -548,7 +553,13 @@ class PierAnalysisService:
             boundary_sigma_max=boundary_sigma_max,
             boundary_limit=boundary_limit,
             boundary_length_mm=boundary_length,
-            boundary_aci_reference=boundary.get('aci_reference', '')
+            boundary_aci_reference=boundary.get('aci_reference', ''),
+            # Continuidad del muro
+            continuity_hwcs_m=(hwcs / 1000) if hwcs else pier.height / 1000,
+            continuity_n_stories=continuity_info.n_stories if continuity_info else 1,
+            continuity_is_continuous=continuity_info.is_continuous if continuity_info else False,
+            continuity_is_base=continuity_info.is_base if continuity_info else True,
+            continuity_hwcs_lw=(hwcs / pier.width) if hwcs and pier.width > 0 else (pier.height / pier.width if pier.width > 0 else 0)
         )
 
     # =========================================================================
@@ -608,10 +619,12 @@ class PierAnalysisService:
         for key, pier in filtered_piers.items():
             pier_forces = parsed_data.pier_forces.get(key)
 
-            # Obtener hwcs para este pier
+            # Obtener hwcs y continuity_info para este pier
             hwcs = None
+            continuity_info = None
             if parsed_data.continuity_info and key in parsed_data.continuity_info:
-                hwcs = parsed_data.continuity_info[key].hwcs
+                continuity_info = parsed_data.continuity_info[key]
+                hwcs = continuity_info.hwcs
 
             result = self._analyze_pier(
                 pier=pier,
@@ -620,7 +633,8 @@ class PierAnalysisService:
                 moment_axis='M3',
                 angle_deg=0,
                 hwcs=hwcs,
-                hn_ft=hn_ft
+                hn_ft=hn_ft,
+                continuity_info=continuity_info
             )
             results.append(result)
 
