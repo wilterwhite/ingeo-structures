@@ -216,10 +216,23 @@ class ResultsTable {
             ? 'Fórmula COLUMNA (ACI 22.5): Vc=0.17√fc·bw·d'
             : 'Fórmula MURO (ACI 18.10.4): Vc=αc√fc·Acv';
 
+        // Wall continuity info
+        const continuity = result.wall_continuity || {};
+        const hwcsM = continuity.hwcs_m || result.geometry.height_m || 0;
+        const hwcsLw = continuity.hwcs_lw || 0;
+        const nStories = continuity.n_stories || 1;
+        const isContinuous = continuity.is_continuous || false;
+        const storiesText = isContinuous ? `${nStories} pisos` : '1 piso';
+
         row.innerHTML = `
             <td>${result.story}</td>
             <td>${result.pier_label}</td>
-            <td>${result.geometry.width_m.toFixed(2)}m × ${result.geometry.thickness_m.toFixed(2)}m</td>
+            <td>${result.geometry.width_m.toFixed(2)}×${result.geometry.thickness_m.toFixed(2)}</td>
+            <td class="hwcs-cell" title="hwcs/lw = ${hwcsLw.toFixed(2)}">
+                <span class="hwcs-value">${hwcsM.toFixed(1)}m</span>
+                <span class="hwcs-ratio">hwcs/lw=${hwcsLw.toFixed(1)}</span>
+                <span class="hwcs-stories">${storiesText}</span>
+            </td>
             <td class="armadura-cell" data-pier-key="${pierKey}">
                 <div class="armadura-row">
                     <select class="edit-meshes" title="Mallas">
@@ -325,7 +338,7 @@ class ResultsTable {
             loadingRow.className = 'combo-row';
             loadingRow.dataset.pierKey = pierKey;
             loadingRow.style.cssText = displayStyle;
-            loadingRow.innerHTML = '<td colspan="10" style="text-align:center; color: #6b7280;">Cargando combinaciones...</td>';
+            loadingRow.innerHTML = '<td colspan="11" style="text-align:center; color: #6b7280;">Cargando combinaciones...</td>';
             container.appendChild(loadingRow);
         }
     }
@@ -352,7 +365,7 @@ class ResultsTable {
 
         tr.innerHTML = `
             <td class="combo-indent"></td>
-            <td class="combo-name" colspan="2">
+            <td class="combo-name" colspan="3">
                 ${combo.full_name || combo.name}
             </td>
             <td class="combo-forces-cell">P=${combo.P} | M2=${combo.M2} | M3=${combo.M3}</td>

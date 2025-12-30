@@ -80,17 +80,42 @@
     table-layout: fixed;
 }
 
-/* Columnas: Piso | Pier | Dimensiones | Armadura | FS Flexión | Cap. Flexión | FS Corte | Cap. Corte | Estado | Acciones */
-.results-table th:nth-child(1), .results-table td:nth-child(1) { width: 60px; }   /* Piso */
-.results-table th:nth-child(2), .results-table td:nth-child(2) { width: 90px; }   /* Pier */
-.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 100px; }  /* Dimensiones */
-.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 180px; }  /* Armadura */
-.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 85px; }   /* FS Flexión */
-.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 120px; }  /* Cap. Flexión */
-.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 85px; }   /* FS Corte */
-.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 160px; }  /* Cap. Corte */
-.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 55px; }   /* Estado */
-.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 80px; } /* Acciones */
+/* Columnas: Piso | Pier | Dim | hwcs | Armadura | FS Flex | Cap Flex | FS Corte | Cap Corte | Estado | Acciones */
+.results-table th:nth-child(1), .results-table td:nth-child(1) { width: 70px; }   /* Piso */
+.results-table th:nth-child(2), .results-table td:nth-child(2) { width: 100px; }  /* Pier */
+.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 90px; }   /* Dimensiones */
+.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 70px; }   /* hwcs */
+.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 190px; }  /* Armadura */
+.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 80px; }   /* FS Flexión */
+.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 115px; }  /* Cap. Flexión */
+.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 80px; }   /* FS Corte */
+.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 155px; }  /* Cap. Corte */
+.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 55px; } /* Estado */
+.results-table th:nth-child(11), .results-table td:nth-child(11) { width: 120px; } /* Acciones */
+
+/* hwcs cell styling */
+.hwcs-cell {
+    font-family: 'Consolas', monospace;
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.hwcs-value {
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.hwcs-ratio {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: block;
+}
+
+.hwcs-stories {
+    font-size: 0.65rem;
+    color: var(--primary-color);
+    display: block;
+}
 
 /* Safety Factor Values */
 .fs-value { font-weight: 600; text-align: center; }
