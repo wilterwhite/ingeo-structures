@@ -1,0 +1,7 @@
+/* app/structural/static/css/structural.css */
+/* Modulo estructural - Solo imports */
+
+@import './variables.css';
+@import './base.css';
+@import './tables.css';
+@import './modals.css';

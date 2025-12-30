@@ -1,0 +1,339 @@
+/* app/structural/static/css/modals.css */
+/* Modales: P-M Diagram y Pier Details */
+
+/* ==========================================================================
+   BASE
+   ========================================================================== */
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.modal.active {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.modal-close {
+    position: fixed;
+    top: 15px;
+    right: 20px;
+    background: white;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    cursor: pointer;
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-lg);
+}
+
+.modal-close:hover {
+    background: var(--bg-color);
+}
+
+.modal-content {
+    background: white;
+    border-radius: var(--border-radius);
+    max-width: 1200px;
+    width: 100%;
+    margin-top: 40px;
+    box-shadow: var(--shadow-lg);
+}
+
+/* ==========================================================================
+   P-M DIAGRAM MODAL
+   ========================================================================== */
+
+.modal-layout {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+}
+
+.modal-plot-section {
+    padding: 20px;
+    border-right: 1px solid var(--border-color);
+    position: relative;
+}
+
+.modal-plot-section h3 {
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+}
+
+.modal-plot-section .loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.9);
+    padding: 20px;
+    border-radius: var(--border-radius);
+}
+
+#modal-plot-img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    transition: opacity 0.2s;
+}
+
+.combo-info {
+    background: var(--bg-color);
+    padding: 12px 15px;
+    border-radius: var(--border-radius);
+    margin-top: 15px;
+    font-size: 0.9rem;
+}
+
+.combo-info > div {
+    margin-bottom: 5px;
+}
+
+.combo-info > div:last-child {
+    margin-bottom: 0;
+}
+
+/* Combination Navigator */
+.combination-navigator {
+    padding: 20px;
+    background: var(--bg-color);
+    display: flex;
+    flex-direction: column;
+    max-height: 600px;
+}
+
+.combination-navigator h4 {
+    margin-bottom: 8px;
+}
+
+.nav-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 15px;
+}
+
+.combo-list {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: white;
+    margin-bottom: 15px;
+}
+
+.combo-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.15s;
+}
+
+.combo-item:last-child {
+    border-bottom: none;
+}
+
+.combo-item:hover {
+    background: var(--bg-color);
+}
+
+.combo-item.active {
+    background: rgba(37, 99, 235, 0.1);
+    border-left: 3px solid var(--primary-color);
+}
+
+.combo-item .combo-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.combo-moment,
+.combo-angle {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.combo-nav-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.combo-nav-btn {
+    padding: 8px 15px;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.combo-nav-btn:hover {
+    background: var(--border-color);
+}
+
+.combo-current {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+/* ==========================================================================
+   PIER DETAILS MODAL
+   ========================================================================== */
+
+.pier-details-content {
+    max-width: 600px;
+    padding: 24px;
+}
+
+.pier-details-content h3 {
+    margin: 0 0 20px 0;
+    color: var(--primary-color);
+    font-size: 1.25rem;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 10px;
+}
+
+.pier-details-body {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.details-section {
+    background: var(--bg-color);
+    padding: 16px;
+    border-radius: var(--border-radius);
+}
+
+.details-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.detail-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.detail-value {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/* Slenderness Section */
+#slenderness-section {
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    border: 1px solid #fcd34d;
+}
+
+#slenderness-section .detail-value {
+    font-family: 'Consolas', monospace;
+}
+
+/* Capacities Section */
+.capacities-section {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border: 1px solid #bae6fd;
+}
+
+.capacities-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 16px;
+}
+
+.capacity-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 12px;
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+}
+
+.capacity-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.capacity-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.capacity-unit {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+#pier-details-loading {
+    display: none;
+    padding: 40px;
+    text-align: center;
+}
+
+#pier-details-loading.active {
+    display: block;
+}
+
+#pier-details-loading.active + #pier-details-body {
+    display: none;
+}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+
+@media (max-width: 900px) {
+    .modal-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-plot-section {
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+}

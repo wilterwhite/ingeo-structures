@@ -1,0 +1,335 @@
+# app/structural/domain/entities/pier.py
+"""
+Entidad Pier: representa un muro de hormigón armado desde ETABS.
+"""
+from dataclasses import dataclass, field
+from typing import Optional, List, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ...services.parsing.reinforcement_config import ReinforcementConfig
+    from ..calculations.steel_layer_calculator import SteelLayer
+    from ..calculations.reinforcement_calculator import ReinforcementProperties
+
+
+@dataclass
+class Pier:
+    """
+    Representa un pier/muro de hormigón armado desde ETABS.
+
+    Unidades:
+    - Dimensiones: mm
+    - Esfuerzos: MPa
+    - Áreas: mm²
+    """
+    label: str              # "PMar-C4-1" (Grilla-Eje-id)
+    story: str              # "Cielo P2"
+
+    # Geometría (mm)
+    width: float            # Largo del muro (Width en ETABS)
+    thickness: float        # Espesor del muro
+    height: float           # Altura del piso
+
+    # Propiedades del material (MPa)
+    fc: float               # f'c del hormigón
+    fy: float = 420.0       # fy del acero (default A630-420H)
+
+    # Configuración de armadura (malla, diámetro, espaciamiento)
+    n_meshes: int = 2           # 1=malla central, 2=doble cara
+    diameter_v: int = 8         # Diámetro barra vertical (mm)
+    spacing_v: int = 200        # Espaciamiento vertical (mm)
+    diameter_h: int = 8         # Diámetro barra horizontal (mm)
+    spacing_h: int = 200        # Espaciamiento horizontal (mm)
+
+    # Fierros de borde (barras adicionales en los extremos del muro)
+    # n_edge_bars = n_meshes (1 barra por lado si malla simple, 2 si doble)
+    diameter_edge: int = 10     # Diámetro barra de borde (mm)
+
+    # Otros
+    cover: float = 25.0     # Recubrimiento (mm) - 2.5cm default
+    axis_angle: float = 0.0 # Ángulo del eje local
+
+    # Áreas de barra precalculadas (se calculan en __post_init__)
+    _bar_area_v: float = field(default=50.3, repr=False)  # φ8 por defecto
+    _bar_area_h: float = field(default=50.3, repr=False)
+    _bar_area_edge: float = field(default=78.5, repr=False)  # φ10 por defecto
+
+    # Áreas de barras estándar
+    BAR_AREAS = {
+        6: 28.3, 8: 50.3, 10: 78.5, 12: 113.1,
+        16: 201.1, 18: 254.5, 20: 314.2, 22: 380.1,
+        25: 490.9, 28: 615.8, 32: 804.2, 36: 1017.9,
+    }
+
+    def __post_init__(self):
+        """Calcula áreas de barra según diámetros."""
+        self._bar_area_v = self.BAR_AREAS.get(self.diameter_v, 50.3)
+        self._bar_area_h = self.BAR_AREAS.get(self.diameter_h, 50.3)
+        self._bar_area_edge = self.BAR_AREAS.get(self.diameter_edge, 78.5)
+
+        # Si no se especificó armadura, usar mínima
+        if self.spacing_v == 0:
+            self.spacing_v = self._calculate_min_spacing()
+        if self.spacing_h == 0:
+            self.spacing_h = self._calculate_min_spacing()
+
+    def _calculate_min_spacing(self) -> int:
+        """Calcula espaciamiento para armadura mínima (ρ=0.25%)."""
+        RHO_MIN = 0.0025
+        As_min_per_m = RHO_MIN * self.thickness * 1000
+        spacing = self.n_meshes * self._bar_area_v * 1000 / As_min_per_m
+        # Redondear a espaciamiento típico
+        typical = [100, 150, 200, 250, 300]
+        for s in typical:
+            if s >= spacing:
+                return s
+        return 200
+
+    # =========================================================================
+    # Propiedades de Armadura
+    # =========================================================================
+
+    @property
+    def n_intermediate_bars(self) -> int:
+        """
+        Número de barras intermedias de malla (sin contar las de borde).
+
+        Cálculo:
+        - Distancia disponible = width - 2×cover (restamos recubrimiento de cada lado)
+        - Espacios que caben = distancia_disponible / espaciamiento
+        - Barras = floor(espacios) - estas son las barras entre las de borde
+
+        Ejemplo 50cm con cover=2.5cm, spacing=20cm:
+        - Disponible = 500 - 50 = 450mm
+        - Espacios = 450/200 = 2.25
+        - Barras = floor(2.25) = 2 barras intermedias por cara
+
+        Ejemplo 20cm con cover=2.5cm, spacing=20cm:
+        - Disponible = 200 - 50 = 150mm
+        - Espacios = 150/200 = 0.75
+        - Barras = floor(0.75) = 0 barras (solo quedan las de esquina)
+        """
+        # Distancia entre las barras de borde (restamos recubrimiento de cada lado)
+        available_length = self.width - 2 * self.cover
+        if available_length <= 0:
+            return 0
+        # Número de espacios que caben
+        n_spaces = available_length / self.spacing_v
+        # Número de barras intermedias (truncamos)
+        return max(0, int(n_spaces))
+
+    @property
+    def As_vertical(self) -> float:
+        """
+        Área de acero vertical de malla intermedia (mm²).
+
+        Solo cuenta las barras intermedias (entre las de borde).
+        Para cada cara de malla: n_intermediate_bars × área_barra
+        Total: n_intermediate_bars × n_meshes × área_barra
+        """
+        return self.n_intermediate_bars * self.n_meshes * self._bar_area_v
+
+    @property
+    def As_horizontal(self) -> float:
+        """
+        Área de acero horizontal por metro de altura (mm²/m).
+
+        Cálculo: n_meshes × (área_barra / espaciamiento) × 1000
+        """
+        return self.n_meshes * (self._bar_area_h / self.spacing_h) * 1000
+
+    @property
+    def As_vertical_per_m(self) -> float:
+        """Área de acero vertical por metro de longitud (mm²/m)."""
+        return self.n_meshes * (self._bar_area_v / self.spacing_v) * 1000
+
+    @property
+    def rho_vertical(self) -> float:
+        """Cuantía de acero vertical."""
+        return (self.As_vertical + self.As_edge_total) / self.Ag
+
+    @property
+    def rho_horizontal(self) -> float:
+        """Cuantía de acero horizontal."""
+        return self.As_horizontal / (self.thickness * 1000)
+
+    @property
+    def As_edge_total(self) -> float:
+        """
+        Área de acero de borde TOTAL (mm²).
+
+        Cálculo: n_meshes barras × 2 extremos × área_barra
+        - Malla simple (n_meshes=1): 1 barra por extremo × 2 extremos = 2 barras
+        - Malla doble (n_meshes=2): 2 barras por extremo × 2 extremos = 4 barras
+        """
+        return self.n_meshes * 2 * self._bar_area_edge
+
+    @property
+    def As_edge_per_end(self) -> float:
+        """Área de acero de borde en cada extremo del muro (mm²)."""
+        return self.n_meshes * self._bar_area_edge
+
+    @property
+    def n_edge_bars_per_end(self) -> int:
+        """Número de barras de borde en cada extremo del muro."""
+        return self.n_meshes
+
+    @property
+    def As_flexure_total(self) -> float:
+        """
+        Área de acero total para flexión (mm²).
+
+        Total = As_edge_total + As_vertical
+        - As_edge_total: barras en los extremos (esquinas)
+        - As_vertical: barras intermedias de malla (puede ser 0 si no caben)
+        """
+        return self.As_edge_total + self.As_vertical
+
+    @property
+    def n_total_vertical_bars(self) -> int:
+        """Número total de barras verticales (borde + intermedias)."""
+        n_edge = self.n_meshes * 2  # 2 extremos
+        n_intermediate = self.n_intermediate_bars * self.n_meshes
+        return n_edge + n_intermediate
+
+    def get_steel_layers(self) -> List[Tuple[float, float]]:
+        """
+        Genera las capas de acero con sus posiciones reales para el diagrama P-M.
+
+        Returns:
+            Lista de tuplas (position_mm, area_mm2) para cada capa de acero.
+            - position: distancia desde el borde comprimido (mm)
+            - area: área de acero en esa capa (mm²)
+
+        Ejemplo para columna 20×20 con 4φ10:
+            [(40, 157), (160, 157)]  # Solo 2 capas en los extremos
+
+        Ejemplo para muro 2m×0.2m con 2M φ8@200 +2φ10:
+            [(40, 157), (240, 100.6), (440, 100.6), ..., (1960, 157)]
+        """
+        from ..calculations.steel_layer_calculator import SteelLayerCalculator
+        layers = SteelLayerCalculator.calculate_from_pier(self)
+        return SteelLayerCalculator.to_tuples(layers)
+
+    def get_steel_layers_objects(self) -> List['SteelLayer']:
+        """
+        Genera las capas de acero como objetos SteelLayer.
+
+        Returns:
+            Lista de SteelLayer ordenadas por posición.
+        """
+        from ..calculations.steel_layer_calculator import SteelLayerCalculator
+        return SteelLayerCalculator.calculate_from_pier(self)
+
+    @property
+    def reinforcement_description(self) -> str:
+        """Descripción legible de la armadura."""
+        mesh_text = "1M" if self.n_meshes == 1 else "2M"
+        edge_text = f"+{self.n_edge_bars_per_end}φ{self.diameter_edge}"
+        return f"{mesh_text} φ{self.diameter_v}@{self.spacing_v} {edge_text}"
+
+    # =========================================================================
+    # Propiedades Geométricas
+    # =========================================================================
+
+    @property
+    def grilla(self) -> str:
+        """Extrae la grilla del label (ej: 'PMar' de 'PMar-C4-1')."""
+        parts = self.label.split('-')
+        return parts[0] if parts else ''
+
+    @property
+    def eje(self) -> str:
+        """Extrae el eje del label (ej: 'C4' de 'PMar-C4-1')."""
+        parts = self.label.split('-')
+        return parts[1] if len(parts) > 1 else ''
+
+    @property
+    def pier_id(self) -> str:
+        """Extrae el id del pier del label (ej: '1' de 'PMar-C4-1')."""
+        parts = self.label.split('-')
+        return parts[2] if len(parts) > 2 else '1'
+
+    @property
+    def Ag(self) -> float:
+        """Área bruta del muro (mm²)."""
+        return self.width * self.thickness
+
+    @property
+    def d(self) -> float:
+        """Profundidad efectiva (mm)."""
+        return self.width - self.cover
+
+    # =========================================================================
+    # Métodos de Actualización
+    # =========================================================================
+
+    def update_reinforcement(
+        self,
+        n_meshes: Optional[int] = None,
+        diameter_v: Optional[int] = None,
+        spacing_v: Optional[int] = None,
+        diameter_h: Optional[int] = None,
+        spacing_h: Optional[int] = None,
+        diameter_edge: Optional[int] = None,
+        fy: Optional[float] = None,
+        cover: Optional[float] = None
+    ):
+        """
+        Actualiza la configuración de armadura.
+
+        Args:
+            n_meshes: Número de mallas (1 o 2)
+            diameter_v: Diámetro barra vertical (mm)
+            spacing_v: Espaciamiento vertical (mm)
+            diameter_h: Diámetro barra horizontal (mm)
+            spacing_h: Espaciamiento horizontal (mm)
+            diameter_edge: Diámetro barra de borde (mm)
+            fy: Límite de fluencia (MPa)
+            cover: Recubrimiento (mm)
+        """
+        if n_meshes is not None:
+            self.n_meshes = n_meshes
+        if diameter_v is not None:
+            self.diameter_v = diameter_v
+            self._bar_area_v = self.BAR_AREAS.get(diameter_v, 50.3)
+        if spacing_v is not None:
+            self.spacing_v = spacing_v
+        if diameter_h is not None:
+            self.diameter_h = diameter_h
+            self._bar_area_h = self.BAR_AREAS.get(diameter_h, 50.3)
+        if spacing_h is not None:
+            self.spacing_h = spacing_h
+        if diameter_edge is not None:
+            self.diameter_edge = diameter_edge
+            self._bar_area_edge = self.BAR_AREAS.get(diameter_edge, 78.5)
+        if fy is not None:
+            self.fy = fy
+        if cover is not None:
+            self.cover = cover
+
+    def set_minimum_reinforcement(self, diameter: int = 8):
+        """
+        Configura armadura mínima con el diámetro especificado.
+
+        Args:
+            diameter: Diámetro de barra (mm), default 8
+        """
+        self.diameter_v = diameter
+        self.diameter_h = diameter
+        self._bar_area_v = self.BAR_AREAS.get(diameter, 50.3)
+        self._bar_area_h = self._bar_area_v
+        self.spacing_v = self._calculate_min_spacing()
+        self.spacing_h = self.spacing_v
+
+    def get_reinforcement_properties(self) -> 'ReinforcementProperties':
+        """
+        Obtiene todas las propiedades de armadura calculadas.
+
+        Usa ReinforcementCalculator para calcular todas las propiedades
+        de armadura de una sola vez.
+
+        Returns:
+            ReinforcementProperties con todos los valores calculados
+        """
+        from ..calculations.reinforcement_calculator import ReinforcementCalculator
+        return ReinforcementCalculator.calculate_from_pier(self)

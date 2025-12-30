@@ -1,0 +1,26 @@
+/* app/structural/static/css/variables.css */
+
+:root {
+    /* Colores */
+    --primary-color: #2563eb;
+    --primary-hover: #1d4ed8;
+    --success-color: #16a34a;
+    --warning-color: #ca8a04;
+    --danger-color: #dc2626;
+
+    /* Texto */
+    --text-color: #1f2937;
+    --text-muted: #6b7280;
+
+    /* Fondos */
+    --bg-color: #f3f4f6;
+    --card-bg: #ffffff;
+
+    /* Bordes */
+    --border-color: #e5e7eb;
+    --border-radius: 8px;
+
+    /* Sombras */
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.1);
+}

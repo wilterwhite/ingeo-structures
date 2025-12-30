@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis Estructural de Muros - ETABS</title>
+    <link rel="stylesheet" href="{{ url_for('structural_static', filename='css/structural.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Análisis Estructural de Muros</h1>
+            <p>Verificación de flexocompresión y corte según ACI 318-19</p>
+        </header>
+
+        <!-- Step 1: Upload -->
+        <div class="card" id="upload-section">
+            <div class="card-header">1. Cargar archivo Excel de ETABS</div>
+            <div class="card-body">
+                <div class="upload-area" id="upload-area">
+                    <div class="icon">📄</div>
+                    <p>Arrastra tu archivo Excel aquí o haz clic para seleccionar</p>
+                    <p class="hint">Debe contener las tablas: Pier Section Properties y Pier Forces</p>
+                    <input type="file" id="file-input" accept=".xlsx">
+                </div>
+                <div class="loading" id="upload-loading">
+                    <div class="spinner"></div>
+                    <p>Procesando archivo...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Review Piers -->
+        <div class="card hidden" id="piers-section">
+            <div class="card-header">2. Revisar Piers y Armaduras</div>
+            <div class="card-body">
+                <p class="section-info">
+                    Se encontraron <strong id="pier-count">0</strong> piers.
+                    Por defecto se usa armadura mínima (ρ = 0.25%) con barras φ8.
+                </p>
+
+                <!-- Filters for Piers -->
+                <div class="filters-bar" id="piers-filters">
+                    <div class="filter-group">
+                        <label>Filtrar por Piso:</label>
+                        <select id="piers-story-filter">
+                            <option value="">Todos los pisos</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Filtrar por Eje:</label>
+                        <select id="piers-axis-filter">
+                            <option value="">Todos los ejes</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Global Reinforcement Config -->
+                <div class="global-config">
+                    <h4>Configuración Global de Armadura</h4>
+                    <div class="config-controls">
+                        <div class="control-group">
+                            <label>Mallas:</label>
+                            <select id="global-meshes">
+                                <option value="1">1 (central)</option>
+                                <option value="2" selected>2 (doble cara)</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Diámetro:</label>
+                            <select id="global-diameter">
+                                <option value="6">φ6</option>
+                                <option value="8" selected>φ8</option>
+                                <option value="10">φ10</option>
+                                <option value="12">φ12</option>
+                                <option value="16">φ16</option>
+                                <option value="20">φ20</option>
+                                <option value="22">φ22</option>
+                                <option value="25">φ25</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Espaciamiento:</label>
+                            <select id="global-spacing">
+                                <option value="100">@100</option>
+                                <option value="150">@150</option>
+                                <option value="200" selected>@200</option>
+                                <option value="250">@250</option>
+                                <option value="300">@300</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>φ Borde:</label>
+                            <select id="global-edge-diameter">
+                                <option value="10" selected>φ10</option>
+                                <option value="12">φ12</option>
+                                <option value="16">φ16</option>
+                                <option value="20">φ20</option>
+                                <option value="22">φ22</option>
+                                <option value="25">φ25</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Recub. (mm):</label>
+                            <select id="global-cover">
+                                <option value="20">20</option>
+                                <option value="25" selected>25</option>
+                                <option value="30">30</option>
+                                <option value="40">40</option>
+                                <option value="50">50</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" id="apply-global-btn">Aplicar a todos</button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="pier-edit-table" id="piers-table">
+                        <thead>
+                            <tr>
+                                <th>Piso</th>
+                                <th>Pier</th>
+                                <th>Largo (m)</th>
+                                <th>Espesor (m)</th>
+                                <th>f'c (MPa)</th>
+                                <th>Mallas</th>
+                                <th>φ Vert</th>
+                                <th>@ Vert</th>
+                                <th>φ Horiz</th>
+                                <th>@ Horiz</th>
+                                <th>φ Borde</th>
+                                <th title="Recubrimiento (mm)">Rec.</th>
+                                <th>As (mm²/m)</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <div class="action-bar">
+                    <button class="btn btn-secondary" id="new-file-btn">Cargar otro archivo</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Results -->
+        <div class="card hidden" id="results-section">
+            <div class="card-header">3. Resultados del Análisis</div>
+            <div class="card-body">
+                <!-- Statistics -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-total">0</div>
+                        <div class="stat-label">Total Piers</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value stat-ok" id="stat-ok">0</div>
+                        <div class="stat-label">OK</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value stat-fail" id="stat-fail">0</div>
+                        <div class="stat-label">NO OK</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-rate">0%</div>
+                        <div class="stat-label">Tasa de Aprobación</div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="filters-bar">
+                    <div class="filter-group">
+                        <label>Filtrar por Piso:</label>
+                        <select id="story-filter">
+                            <option value="">Todos los pisos</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Filtrar por Eje:</label>
+                        <select id="axis-filter">
+                            <option value="">Todos los ejes</option>
+                        </select>
+                    </div>
+                    <div class="plane-indicator">
+                        <span>Plano actual: </span>
+                        <span id="current-plane-label">M3</span>
+                    </div>
+                </div>
+
+                <!-- Summary Plot -->
+                <div class="summary-plot" id="summary-plot-container"></div>
+
+                <!-- Results Table -->
+                <div class="table-wrapper">
+                    <table class="results-table" id="results-table">
+                        <thead>
+                            <tr>
+                                <th>Piso</th>
+                                <th>Pier</th>
+                                <th>Dimensiones</th>
+                                <th>Armadura</th>
+                                <th>FS Flexo-compresión</th>
+                                <th>FS Corte</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <div class="action-bar">
+                    <button class="btn btn-secondary" id="back-to-piers-btn">Modificar Armaduras</button>
+                    <button class="btn btn-secondary" id="new-analysis-btn">Nuevo Análisis</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for PM Diagram with Combination Navigator -->
+    <div class="modal" id="plot-modal">
+        <button class="modal-close">×</button>
+        <div class="modal-content">
+            <div class="modal-layout">
+                <!-- Plot Section -->
+                <div class="modal-plot-section">
+                    <h3 id="modal-pier-title">Diagrama P-M</h3>
+                    <div id="modal-plot-loading" class="loading">
+                        <div class="spinner"></div>
+                        <p>Actualizando diagrama...</p>
+                    </div>
+                    <img id="modal-plot-img" src="" alt="Diagrama P-M">
+                    <div id="modal-combo-info" class="combo-info">
+                        <div><strong>Combinación:</strong> <span id="modal-combo-name">-</span></div>
+                        <div>
+                            <strong>P:</strong> <span id="modal-combo-P">-</span> tonf |
+                            <strong>M2:</strong> <span id="modal-combo-M2">-</span> tonf-m |
+                            <strong>M3:</strong> <span id="modal-combo-M3">-</span> tonf-m
+                        </div>
+                        <div>
+                            <strong>M resultante:</strong> <span id="modal-combo-M">-</span> tonf-m |
+                            <strong>Plano:</strong> <span id="modal-combo-angle">-</span>°
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Combination Navigator -->
+                <div class="combination-navigator">
+                    <h4>Navegar Combinaciones</h4>
+                    <p class="nav-hint">Selecciona una combinación para ver el diagrama P-M en su plano real.</p>
+                    <div class="combo-list" id="modal-combo-list"></div>
+                    <div class="combo-nav-controls">
+                        <button class="combo-nav-btn" id="combo-prev-btn">← Anterior</button>
+                        <span class="combo-current">
+                            <span id="combo-current-index">1</span> / <span id="combo-total">1</span>
+                        </span>
+                        <button class="combo-nav-btn" id="combo-next-btn">Siguiente →</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Pier Details/Capacities -->
+    <div class="modal" id="pier-details-modal">
+        <button class="modal-close">×</button>
+        <div class="modal-content pier-details-content">
+            <h3 id="pier-details-title">Detalles del Pier</h3>
+            <div id="pier-details-loading" class="loading">
+                <div class="spinner"></div>
+                <p>Cargando datos...</p>
+            </div>
+            <div id="pier-details-body" class="pier-details-body">
+                <!-- Información Geométrica -->
+                <div class="details-section">
+                    <h4>Geometría</h4>
+                    <div class="details-grid">
+                        <div class="detail-item">
+                            <span class="detail-label">Largo (lw)</span>
+                            <span class="detail-value" id="detail-width">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Espesor (tw)</span>
+                            <span class="detail-value" id="detail-thickness">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Altura (hw)</span>
+                            <span class="detail-value" id="detail-height">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">f'c</span>
+                            <span class="detail-value" id="detail-fc">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">fy</span>
+                            <span class="detail-value" id="detail-fy">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Armadura -->
+                <div class="details-section">
+                    <h4>Armadura</h4>
+                    <div class="details-grid">
+                        <div class="detail-item">
+                            <span class="detail-label">Configuración</span>
+                            <span class="detail-value" id="detail-reinf-desc">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">As vertical</span>
+                            <span class="detail-value" id="detail-as-vertical">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">As borde</span>
+                            <span class="detail-value" id="detail-as-edge">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">As total flexión</span>
+                            <span class="detail-value" id="detail-as-total">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Esbeltez -->
+                <div class="details-section" id="slenderness-section">
+                    <h4>Esbeltez (ACI 318-19)</h4>
+                    <div class="details-grid">
+                        <div class="detail-item">
+                            <span class="detail-label">Lambda (k*lu/r)</span>
+                            <span class="detail-value" id="detail-lambda">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Limite</span>
+                            <span class="detail-value" id="detail-lambda-limit">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Estado</span>
+                            <span class="detail-value" id="detail-slender-status">-</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Reducción</span>
+                            <span class="detail-value" id="detail-slender-reduction">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Capacidades -->
+                <div class="details-section capacities-section">
+                    <h4>Capacidades Puras (sin interacción)</h4>
+                    <div class="capacities-grid">
+                        <div class="capacity-item">
+                            <span class="capacity-label">Compresión</span>
+                            <span class="capacity-value" id="detail-phi-pn">-</span>
+                            <span class="capacity-unit">tonf</span>
+                        </div>
+                        <div class="capacity-item">
+                            <span class="capacity-label">Momento M3</span>
+                            <span class="capacity-value" id="detail-phi-mn3">-</span>
+                            <span class="capacity-unit">tonf-m</span>
+                        </div>
+                        <div class="capacity-item">
+                            <span class="capacity-label">Momento M2</span>
+                            <span class="capacity-value" id="detail-phi-mn2">-</span>
+                            <span class="capacity-unit">tonf-m</span>
+                        </div>
+                        <div class="capacity-item">
+                            <span class="capacity-label">Corte V2</span>
+                            <span class="capacity-value" id="detail-phi-vn2">-</span>
+                            <span class="capacity-unit">tonf</span>
+                        </div>
+                        <div class="capacity-item">
+                            <span class="capacity-label">Corte V3</span>
+                            <span class="capacity-value" id="detail-phi-vn3">-</span>
+                            <span class="capacity-unit">tonf</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Modules -->
+    <script src="{{ url_for('structural_static', filename='js/StructuralAPI.js') }}"></script>
+    <script src="{{ url_for('structural_static', filename='js/PlotModal.js') }}"></script>
+    <script src="{{ url_for('structural_static', filename='js/PiersTable.js') }}"></script>
+    <script src="{{ url_for('structural_static', filename='js/ResultsTable.js') }}"></script>
+    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}"></script>
+    <script>
+        // Inicializar la página cuando el DOM esté listo
+        document.addEventListener('DOMContentLoaded', () => {
+            structuralPage.init();
+        });
+    </script>
+</body>
+</html>

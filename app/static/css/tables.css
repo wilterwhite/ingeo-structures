@@ -1,0 +1,261 @@
+/* app/structural/static/css/tables.css */
+/* Tablas de piers y resultados */
+
+/* ==========================================================================
+   COMMON
+   ========================================================================== */
+
+.table-wrapper {
+    overflow-x: auto;
+    margin: 20px 0;
+}
+
+.pier-edit-table,
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.pier-edit-table th,
+.pier-edit-table td,
+.results-table th,
+.results-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.pier-edit-table th,
+.results-table th {
+    background: var(--bg-color);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* ==========================================================================
+   PIER EDIT TABLE
+   ========================================================================== */
+
+.pier-edit-table select {
+    padding: 4px 6px;
+    font-size: 0.85rem;
+    min-width: 60px;
+}
+
+.pier-edit-table input {
+    width: 80px;
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.pier-edit-table input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.pier-edit-table .as-display {
+    font-weight: 500;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.pier-edit-table tr.highlight {
+    animation: highlight-fade 2s ease-out;
+}
+
+@keyframes highlight-fade {
+    0% { background: rgba(37, 99, 235, 0.3); }
+    100% { background: transparent; }
+}
+
+/* ==========================================================================
+   RESULTS TABLE
+   ========================================================================== */
+
+.results-table {
+    table-layout: fixed;
+}
+
+/* Columnas: Piso | Pier | Dimensiones | Armadura | FS Flexión | FS Corte | Estado | Acciones */
+.results-table th:nth-child(1), .results-table td:nth-child(1) { width: 80px; }
+.results-table th:nth-child(2), .results-table td:nth-child(2) { width: 120px; }
+.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 130px; }
+.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 140px; }
+.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 120px; }
+.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 120px; }
+.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 70px; }
+.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 100px; }
+
+/* Safety Factor Values */
+.fs-value { font-weight: 600; text-align: center; }
+.fs-ok { color: var(--success-color); }
+.fs-warn { color: var(--warning-color); }
+.fs-fail { color: var(--danger-color); }
+
+.status-ok { color: var(--success-color); font-weight: 600; }
+.status-fail { color: var(--danger-color); font-weight: 600; }
+
+.armadura-cell {
+    font-family: monospace;
+    font-size: 0.85rem;
+}
+
+.critical-combo {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    display: block;
+}
+
+.slenderness-info {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: block;
+    font-family: 'Consolas', monospace;
+    margin-top: 2px;
+}
+
+.slenderness-info.slender-warn {
+    color: var(--warning-color);
+    font-weight: 500;
+}
+
+.capacity-info {
+    font-size: 0.7rem;
+    color: var(--primary-color);
+    display: block;
+    font-family: 'Consolas', monospace;
+    margin-top: 2px;
+}
+
+/* Indicador de tipo de fórmula de corte */
+.capacity-info.formula-column {
+    color: #7c3aed;  /* Violeta para columnas */
+}
+
+.capacity-info.formula-wall {
+    color: #0369a1;  /* Azul para muros */
+}
+
+.dcr-info {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: block;
+    font-family: 'Consolas', monospace;
+    margin-top: 2px;
+}
+
+.dcr-info.dcr-warn {
+    color: var(--warning-color);
+    font-weight: 500;
+}
+
+.combo-dir {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+/* ==========================================================================
+   EXPANDABLE PIER ROWS
+   ========================================================================== */
+
+.results-table .pier-row {
+    cursor: pointer;
+}
+
+.results-table .pier-row:hover {
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.expand-icon {
+    display: inline-block;
+    width: 16px;
+    transition: transform 0.2s;
+}
+
+.pier-row.expanded .expand-icon {
+    transform: rotate(90deg);
+}
+
+/* ==========================================================================
+   COMBINATION ROWS
+   ========================================================================== */
+
+.results-table .combo-row {
+    background: #f8fafc;
+    font-size: 0.85rem;
+}
+
+.results-table .combo-row:hover {
+    background: #f1f5f9;
+}
+
+.results-table .combo-row td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: middle;
+}
+
+.results-table .combo-row .combo-indent {
+    width: 30px;
+    border-left: 3px solid var(--primary-color);
+    background: linear-gradient(90deg, rgba(37, 99, 235, 0.05) 0%, transparent 100%);
+}
+
+.results-table .combo-row .combo-name {
+    font-weight: 500;
+}
+
+.results-table .combo-row .combo-details {
+    display: block;
+    font-size: 0.75rem;
+    font-family: 'Consolas', monospace;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.results-table .combo-row .combo-forces-cell {
+    font-family: 'Consolas', monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.results-table .combo-row .action-btn {
+    padding: 2px 6px;
+    font-size: 0.8rem;
+}
+
+/* ==========================================================================
+   ACTION BUTTONS
+   ========================================================================== */
+
+.actions-cell {
+    white-space: nowrap;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+}
+
+.action-btn {
+    padding: 4px 8px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 0.9rem;
+}
+
+.action-btn:hover,
+.action-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+}
