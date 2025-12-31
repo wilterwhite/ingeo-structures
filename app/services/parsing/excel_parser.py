@@ -1,4 +1,4 @@
-# app/structural/services/parsing/excel_parser.py
+# app/services/parsing/excel_parser.py
 """
 Parser de archivos Excel exportados de ETABS.
 
