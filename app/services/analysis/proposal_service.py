@@ -373,97 +373,132 @@ class ProposalService:
         """
         Propone solución para falla combinada (flexión + corte).
 
-        Estrategia incremental:
-        1. Aumentar barras de borde progresivamente
-        2. Simultáneamente mejorar malla si DCR > 1.0
-        3. Si aún no alcanza, aumentar espesor de a poco
-        4. Detenerse cuando SF >= 1.0 y DCR <= 1.0
+        Estrategia: búsqueda exhaustiva por espesor creciente.
+        Para cada espesor, prueba combinaciones de refuerzo hasta encontrar SF >= 1.0.
+        Se detiene en la primera solución viable (la más económica).
         """
-        proposed_config = deepcopy(original_config)
-
-        # Encontrar posiciones actuales en secuencias
-        current_as = original_config.As_edge
-        boundary_start_idx = 0
-        for i, (n, d) in enumerate(BOUNDARY_BAR_SEQUENCE):
-            bar_area = get_bar_area(d, 78.5)
-            seq_as = n * 2 * bar_area
-            if seq_as > current_as:
-                boundary_start_idx = i
-                break
-
-        current_spacing_idx = MESH_SPACING_SEQUENCE.index(proposed_config.spacing_h) \
-            if proposed_config.spacing_h in MESH_SPACING_SEQUENCE else 0
-        current_diameter_idx = MESH_DIAMETER_SEQUENCE.index(proposed_config.diameter_h) \
-            if proposed_config.diameter_h in MESH_DIAMETER_SEQUENCE else 0
-
-        # Encontrar índice de espesor actual
-        thickness_start_idx = 0
-        for i, t in enumerate(THICKNESS_SEQUENCE):
-            if t > pier.thickness:
-                thickness_start_idx = i
-                break
-
-        iteration = 0
-        best_config = None
+        best_config = deepcopy(original_config)
         best_sf = original_sf
         best_dcr = original_dcr
 
-        # Iterar incrementalmente sobre todas las combinaciones
-        for boundary_offset in range(len(BOUNDARY_BAR_SEQUENCE) - boundary_start_idx):
-            boundary_idx = boundary_start_idx + boundary_offset
-            n_bars, diameter = BOUNDARY_BAR_SEQUENCE[boundary_idx]
+        # Iterar espesores desde el actual
+        for thickness in THICKNESS_SEQUENCE:
+            if thickness < pier.thickness:
+                continue
+
+            # Calcular máximo de ramas para este espesor
+            max_legs = min(int(thickness // 100), STIRRUP_LEGS_SEQUENCE[-1])
+
+            # Probar combinaciones de refuerzo para este espesor
+            result = self._find_solution_for_thickness(
+                pier, pier_forces, original_config, thickness, max_legs,
+                original_sf, original_dcr
+            )
+
+            if result is not None:
+                return result
+
+            # Actualizar mejor configuración si mejoró
+            test_config = self._get_max_config_for_thickness(original_config, thickness, max_legs)
+            test_pier = self._apply_config_to_pier(pier, test_config)
+            test_pier.thickness = thickness
+            test_sf = self._verify_flexure(test_pier, pier_forces)
+            test_dcr = self._verify_shear(test_pier, pier_forces)
+
+            if test_sf > best_sf:
+                best_config = test_config
+                best_sf = test_sf
+                best_dcr = test_dcr
+
+        # No se encontró solución, retornar mejor esfuerzo con success=False
+        changes = self._build_changes(original_config, best_config)
+        changes.append("⚠️ Requiere rediseño")
+
+        return DesignProposal(
+            pier_key=f"{pier.story}_{pier.label}",
+            failure_mode=FailureMode.COMBINED,
+            proposal_type=ProposalType.COMBINED,
+            original_config=original_config,
+            proposed_config=best_config,
+            original_sf_flexure=original_sf,
+            proposed_sf_flexure=best_sf,
+            original_dcr_shear=original_dcr,
+            proposed_dcr_shear=best_dcr,
+            iterations=len(THICKNESS_SEQUENCE),
+            success=False,
+            changes=changes
+        )
+
+    def _find_solution_for_thickness(
+        self,
+        pier: Pier,
+        pier_forces: Optional[PierForces],
+        original_config: ReinforcementConfig,
+        thickness: float,
+        max_legs: int,
+        original_sf: float,
+        original_dcr: float
+    ) -> Optional[DesignProposal]:
+        """
+        Busca la solución mínima para un espesor dado.
+        Itera borde → malla → ramas hasta encontrar SF >= 1.0.
+        """
+        proposed_config = deepcopy(original_config)
+        proposed_config.thickness = thickness
+
+        # Iterar barras de borde (ordenadas por área creciente)
+        for n_bars, diameter in BOUNDARY_BAR_SEQUENCE:
             proposed_config.n_edge_bars = n_bars
             proposed_config.diameter_edge = diameter
 
-            for spacing_offset in range(len(MESH_SPACING_SEQUENCE) - current_spacing_idx):
-                spacing_idx = current_spacing_idx + spacing_offset
-                proposed_config.spacing_h = MESH_SPACING_SEQUENCE[spacing_idx]
-                proposed_config.spacing_v = MESH_SPACING_SEQUENCE[spacing_idx]
+            # Iterar espaciamiento de malla (de mayor a menor = menos acero primero)
+            for spacing in MESH_SPACING_SEQUENCE:
+                proposed_config.spacing_h = spacing
+                proposed_config.spacing_v = spacing
 
-                # También aumentar diámetro de malla si hace falta
-                for diameter_offset in range(len(MESH_DIAMETER_SEQUENCE) - current_diameter_idx):
-                    diameter_idx = current_diameter_idx + diameter_offset
-                    proposed_config.diameter_h = MESH_DIAMETER_SEQUENCE[diameter_idx]
-                    proposed_config.diameter_v = MESH_DIAMETER_SEQUENCE[diameter_idx]
+                # Iterar diámetro de malla
+                for mesh_diameter in MESH_DIAMETER_SEQUENCE:
+                    proposed_config.diameter_h = mesh_diameter
+                    proposed_config.diameter_v = mesh_diameter
 
-                    iteration += 1
-                    if iteration > self.MAX_ITERATIONS:
-                        break
+                    # Iterar ramas de estribos
+                    for n_legs in STIRRUP_LEGS_SEQUENCE:
+                        if n_legs > max_legs:
+                            continue
 
-                    test_pier = self._apply_config_to_pier(pier, proposed_config)
-                    new_sf = self._verify_flexure(test_pier, pier_forces)
-                    new_dcr = self._verify_shear(test_pier, pier_forces)
+                        proposed_config.n_stirrup_legs = n_legs
 
-                    # Guardar mejor resultado encontrado
-                    if new_sf > best_sf or new_dcr < best_dcr:
-                        best_config = deepcopy(proposed_config)
-                        best_sf = new_sf
-                        best_dcr = new_dcr
+                        test_pier = self._apply_config_to_pier(pier, proposed_config)
+                        test_pier.thickness = thickness
+                        new_sf = self._verify_flexure(test_pier, pier_forces)
+                        new_dcr = self._verify_shear(test_pier, pier_forces)
 
-                    if new_sf >= self.TARGET_SF and new_dcr <= 1.0:
-                        changes = []
-                        if n_bars != original_config.n_edge_bars or diameter != original_config.diameter_edge:
-                            changes.append(f"Borde: {n_bars}φ{diameter}")
-                        if proposed_config.spacing_h != original_config.spacing_h:
-                            changes.append(f"Malla @{proposed_config.spacing_h}")
-                        if proposed_config.diameter_h != original_config.diameter_h:
-                            changes.append(f"φ{proposed_config.diameter_h}")
-                        return self._create_proposal(
-                            pier, FailureMode.COMBINED, ProposalType.COMBINED,
-                            original_config, proposed_config, original_sf, new_sf,
-                            original_dcr, new_dcr, iteration, changes
-                        )
+                        if new_sf >= self.TARGET_SF and new_dcr <= 1.0:
+                            changes = self._build_changes(original_config, proposed_config)
+                            return self._create_proposal(
+                                pier, FailureMode.COMBINED, ProposalType.COMBINED,
+                                original_config, proposed_config, original_sf, new_sf,
+                                original_dcr, new_dcr, 1, changes
+                            )
 
-                if iteration > self.MAX_ITERATIONS:
-                    break
-            if iteration > self.MAX_ITERATIONS:
-                break
+        return None
 
-        # Si no se resolvió sin espesor, probar incrementos de espesor
-        return self._propose_combined_with_thickness(
-            pier, pier_forces, original_config, original_sf, original_dcr,
-            best_config, best_sf, best_dcr
-        )
+    def _get_max_config_for_thickness(
+        self,
+        original_config: ReinforcementConfig,
+        thickness: float,
+        max_legs: int
+    ) -> ReinforcementConfig:
+        """Retorna configuración máxima para un espesor dado."""
+        config = deepcopy(original_config)
+        config.thickness = thickness
+        config.n_edge_bars, config.diameter_edge = BOUNDARY_BAR_SEQUENCE[-1]
+        config.spacing_h = MESH_SPACING_SEQUENCE[-1]
+        config.spacing_v = MESH_SPACING_SEQUENCE[-1]
+        config.diameter_h = MESH_DIAMETER_SEQUENCE[-1]
+        config.diameter_v = MESH_DIAMETER_SEQUENCE[-1]
+        config.n_stirrup_legs = max_legs
+        return config
 
     def _propose_combined_with_thickness(
         self,
