@@ -10,7 +10,8 @@ class StructuralPage {
         this.sessionId = null;
         this.piersData = [];
         this.results = [];
-        this.filters = { story: '', axis: '' };
+        this.filters = { grilla: '', story: '', axis: '' };
+        this.uniqueGrillas = [];
         this.uniqueStories = [];
         this.uniqueAxes = [];
 
@@ -48,6 +49,7 @@ class StructuralPage {
             // Piers
             piersTable: document.getElementById('piers-table')?.querySelector('tbody'),
             pierCount: document.getElementById('pier-count'),
+            piersGrillaFilter: document.getElementById('piers-grilla-filter'),
             piersStoryFilter: document.getElementById('piers-story-filter'),
             piersAxisFilter: document.getElementById('piers-axis-filter'),
 
@@ -63,6 +65,7 @@ class StructuralPage {
             // Resultados
             resultsTable: document.getElementById('results-table')?.querySelector('tbody'),
             summaryPlotContainer: document.getElementById('summary-plot-container'),
+            grillaFilter: document.getElementById('grilla-filter'),
             storyFilter: document.getElementById('story-filter'),
             axisFilter: document.getElementById('axis-filter'),
             toggleAllCombosBtn: document.getElementById('toggle-all-combos-btn'),
@@ -150,10 +153,12 @@ class StructuralPage {
         });
 
         // Delegación a componentes
+        this.elements.piersGrillaFilter?.addEventListener('change', () => this.piersTable.filter());
         this.elements.piersStoryFilter?.addEventListener('change', () => this.piersTable.filter());
         this.elements.piersAxisFilter?.addEventListener('change', () => this.piersTable.filter());
         this.elements.applyGlobalBtn?.addEventListener('click', () => this.piersTable.applyGlobalConfig());
         this.elements.reanalyzeBtn?.addEventListener('click', () => this.reanalyze());
+        this.elements.grillaFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.storyFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.axisFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.toggleAllCombosBtn?.addEventListener('click', () => this.toggleAllCombinations());
@@ -195,7 +200,8 @@ class StructuralPage {
         this.sessionId = null;
         this.piersData = [];
         this.results = [];
-        this.filters = { story: '', axis: '' };
+        this.filters = { grilla: '', story: '', axis: '' };
+        this.uniqueGrillas = [];
         this.uniqueStories = [];
         this.uniqueAxes = [];
         this.resultsTable.reset();
@@ -239,11 +245,15 @@ class StructuralPage {
 
             this.sessionId = uploadData.session_id;
             this.piersData = uploadData.summary.piers_list;
+            this.uniqueGrillas = uploadData.summary.grillas || [];
             this.uniqueStories = uploadData.summary.stories || [];
             this.uniqueAxes = uploadData.summary.axes || [];
 
-            // Análisis automático
-            const analyzeData = await structuralAPI.analyze({
+            // Mostrar progreso
+            this.showProgressModal();
+
+            // Análisis con progreso
+            await this.runAnalysisWithProgress({
                 session_id: this.sessionId,
                 pier_updates: [],
                 generate_plots: true,
@@ -251,23 +261,73 @@ class StructuralPage {
                 angle_deg: 0
             });
 
-            if (!analyzeData.success) throw new Error(analyzeData.error);
-
-            this.results = analyzeData.results;
-
-            // Renderizar
-            this.resultsTable.populateFilters();
-            this.resultsTable.render(analyzeData);
-            this.showSection('results');
-
-            this.piersTable.populateFilters();
-            this.piersTable.render();
-
         } catch (error) {
             console.error('Error:', error);
             alert('Error: ' + error.message);
+            this.hideProgressModal();
             this.resetUploadArea();
         }
+    }
+
+    showProgressModal() {
+        const modal = document.getElementById('progress-modal');
+        if (modal) {
+            modal.classList.add('active');
+            this.updateProgress(0, 0, 'Iniciando análisis...');
+        }
+    }
+
+    hideProgressModal() {
+        const modal = document.getElementById('progress-modal');
+        if (modal) modal.classList.remove('active');
+    }
+
+    updateProgress(current, total, pier) {
+        const progressText = document.getElementById('progress-text');
+        const progressBar = document.getElementById('progress-bar');
+        const progressPier = document.getElementById('progress-pier');
+
+        if (progressText) {
+            progressText.textContent = total > 0 ? `Procesando pier ${current} de ${total}` : pier;
+        }
+        if (progressBar && total > 0) {
+            progressBar.style.width = `${(current / total) * 100}%`;
+        }
+        if (progressPier) {
+            progressPier.textContent = pier;
+        }
+    }
+
+    runAnalysisWithProgress(params) {
+        return new Promise((resolve, reject) => {
+            structuralAPI.analyzeWithProgress(
+                params,
+                // onProgress
+                (current, total, pier) => {
+                    this.updateProgress(current, total, pier);
+                },
+                // onComplete
+                (data) => {
+                    this.hideProgressModal();
+                    if (data.success) {
+                        this.results = data.results;
+                        this.resultsTable.populateFilters();
+                        this.resultsTable.render(data);
+                        this.showSection('results');
+                        this.piersTable.populateFilters();
+                        this.piersTable.render();
+                        resolve(data);
+                    } else {
+                        reject(new Error(data.error || 'Error en análisis'));
+                    }
+                },
+                // onError
+                (error) => {
+                    this.hideProgressModal();
+                    reject(error);
+                }
+            );
+        });
     }
 
     async reanalyze() {
@@ -278,24 +338,16 @@ class StructuralPage {
         }
 
         const updates = this.piersTable.getUpdates();
+        this.showProgressModal();
 
         try {
-            const data = await structuralAPI.analyze({
+            await this.runAnalysisWithProgress({
                 session_id: this.sessionId,
                 pier_updates: updates,
                 generate_plots: true,
                 moment_axis: 'M3',
                 angle_deg: 0
             });
-
-            if (data.success) {
-                this.results = data.results;
-                this.resultsTable.reset();
-                this.resultsTable.render(data);
-                this.showSection('results');
-            } else {
-                alert('Error: ' + data.error);
-            }
         } catch (error) {
             alert('Error: ' + error.message);
         } finally {
@@ -474,6 +526,40 @@ class StructuralPage {
     closeSectionModal() {
         const { sectionModal } = this.elements;
         sectionModal?.classList.remove('active');
+    }
+
+    async showProposedSectionDiagram(pierKey, pierLabel, proposedConfig) {
+        const { sectionModal, sectionModalTitle, sectionModalLoading, sectionModalImg } = this.elements;
+
+        if (!sectionModal) return;
+
+        // Abrir modal y mostrar loading
+        sectionModal.classList.add('active');
+        sectionModalTitle.textContent = `Sección Propuesta - ${pierLabel}`;
+        sectionModalLoading.classList.add('active');
+        sectionModalImg.style.display = 'none';
+
+        try {
+            const data = await structuralAPI.getSectionDiagram(
+                this.sessionId,
+                pierKey,
+                proposedConfig
+            );
+
+            if (data.success && data.section_diagram) {
+                sectionModalImg.src = `data:image/png;base64,${data.section_diagram}`;
+                sectionModalImg.style.display = 'block';
+            } else {
+                alert('Error: ' + (data.error || 'No se pudo generar el diagrama'));
+                this.closeSectionModal();
+            }
+        } catch (error) {
+            console.error('Error getting proposed section diagram:', error);
+            alert('Error: ' + error.message);
+            this.closeSectionModal();
+        } finally {
+            sectionModalLoading.classList.remove('active');
+        }
     }
 }
 

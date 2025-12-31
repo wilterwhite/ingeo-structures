@@ -32,10 +32,20 @@ class PiersTable {
     // =========================================================================
 
     populateFilters() {
-        const { piersStoryFilter, piersAxisFilter } = this.elements;
+        const { piersGrillaFilter, piersStoryFilter, piersAxisFilter } = this.elements;
+
+        if (piersGrillaFilter) {
+            piersGrillaFilter.innerHTML = '<option value="">Todas</option>';
+            this.page.uniqueGrillas.forEach(grilla => {
+                const option = document.createElement('option');
+                option.value = grilla;
+                option.textContent = grilla;
+                piersGrillaFilter.appendChild(option);
+            });
+        }
 
         if (piersStoryFilter) {
-            piersStoryFilter.innerHTML = '<option value="">Todos los pisos</option>';
+            piersStoryFilter.innerHTML = '<option value="">Todos</option>';
             this.page.uniqueStories.forEach(story => {
                 const option = document.createElement('option');
                 option.value = story;
@@ -45,7 +55,7 @@ class PiersTable {
         }
 
         if (piersAxisFilter) {
-            piersAxisFilter.innerHTML = '<option value="">Todos los ejes</option>';
+            piersAxisFilter.innerHTML = '<option value="">Todos</option>';
             this.page.uniqueAxes.forEach(axis => {
                 const option = document.createElement('option');
                 option.value = axis;
@@ -64,15 +74,17 @@ class PiersTable {
     // =========================================================================
 
     render() {
-        const { piersTable, piersStoryFilter, piersAxisFilter, pierCount } = this.elements;
+        const { piersTable, piersGrillaFilter, piersStoryFilter, piersAxisFilter, pierCount } = this.elements;
         if (!piersTable) return;
 
         piersTable.innerHTML = '';
 
+        const grillaFilter = piersGrillaFilter?.value || '';
         const storyFilter = piersStoryFilter?.value || '';
         const axisFilter = piersAxisFilter?.value || '';
 
         const filteredPiers = this.piersData.filter(pier => {
+            if (grillaFilter && pier.grilla !== grillaFilter) return false;
             if (storyFilter && pier.story !== storyFilter) return false;
             if (axisFilter && pier.eje !== axisFilter) return false;
             return true;

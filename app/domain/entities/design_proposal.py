@@ -20,6 +20,7 @@ class FailureMode(Enum):
     CONFINEMENT = "confinement"   # Elemento de borde requerido
     SLENDERNESS = "slenderness"   # Esbeltez excesiva
     COMBINED = "combined"         # Múltiples fallas
+    OVERDESIGNED = "overdesigned" # SF >> 1.0, se puede optimizar
 
 
 class ProposalType(Enum):
@@ -30,6 +31,7 @@ class ProposalType(Enum):
     STIRRUPS = "stirrups"               # Aumentar estribos
     THICKNESS = "thickness"             # Aumentar espesor
     COMBINED = "combined"               # Múltiples cambios
+    REDUCTION = "reduction"             # Reducir refuerzo (optimización)
 
 
 @dataclass
@@ -216,11 +218,11 @@ MESH_DIAMETER_SEQUENCE = [6, 8, 10, 12, 16]
 # Secuencia de espaciamientos de malla (mm)
 MESH_SPACING_SEQUENCE = [300, 250, 200, 150, 100]
 
-# Secuencia de espesores de muro (mm)
-THICKNESS_SEQUENCE = [150, 200, 250, 300, 350, 400, 450, 500]
+# Secuencia de espesores de muro (mm) - incrementos de 25mm
+THICKNESS_SEQUENCE = [150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500]
 
-# Secuencia de diámetros de estribo
-STIRRUP_DIAMETER_SEQUENCE = [8, 10, 12, 16]
+# Secuencia de diámetros de estribo (máx φ12)
+STIRRUP_DIAMETER_SEQUENCE = [8, 10, 12]
 
 # Secuencia de espaciamientos de estribo (mm)
 STIRRUP_SPACING_SEQUENCE = [150, 125, 100, 75]

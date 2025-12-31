@@ -46,15 +46,21 @@
                 <!-- Filters for Piers -->
                 <div class="filters-bar" id="piers-filters">
                     <div class="filter-group">
-                        <label>Filtrar por Piso:</label>
-                        <select id="piers-story-filter">
-                            <option value="">Todos los pisos</option>
+                        <label>Grilla:</label>
+                        <select id="piers-grilla-filter">
+                            <option value="">Todas</option>
                         </select>
                     </div>
                     <div class="filter-group">
-                        <label>Filtrar por Eje:</label>
+                        <label>Piso:</label>
+                        <select id="piers-story-filter">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Eje:</label>
                         <select id="piers-axis-filter">
-                            <option value="">Todos los ejes</option>
+                            <option value="">Todos</option>
                         </select>
                     </div>
                 </div>
@@ -160,6 +166,12 @@
                         <span class="stat-item"><strong id="stat-rate">0%</strong></span>
                     </div>
                     <div class="toolbar-divider"></div>
+                    <div class="filter-group">
+                        <label>Grilla:</label>
+                        <select id="grilla-filter">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
                     <div class="filter-group">
                         <label>Piso:</label>
                         <select id="story-filter">
@@ -384,6 +396,20 @@
                 <p>Generando diagrama...</p>
             </div>
             <img id="section-modal-img" src="" alt="Sección Transversal">
+        </div>
+    </div>
+
+    <!-- Modal for Analysis Progress -->
+    <div class="progress-modal" id="progress-modal">
+        <div class="progress-modal-content">
+            <div class="progress-icon">
+                <div class="spinner"></div>
+            </div>
+            <h3 id="progress-text">Procesando pier 0 de 0</h3>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <p class="progress-pier" id="progress-pier">Iniciando...</p>
         </div>
     </div>
 

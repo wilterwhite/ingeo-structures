@@ -26,10 +26,20 @@ class ResultsTable {
     // =========================================================================
 
     populateFilters() {
-        const { storyFilter, axisFilter } = this.elements;
+        const { grillaFilter, storyFilter, axisFilter } = this.elements;
+
+        if (grillaFilter) {
+            grillaFilter.innerHTML = '<option value="">Todas</option>';
+            this.page.uniqueGrillas.forEach(grilla => {
+                const option = document.createElement('option');
+                option.value = grilla;
+                option.textContent = grilla;
+                grillaFilter.appendChild(option);
+            });
+        }
 
         if (storyFilter) {
-            storyFilter.innerHTML = '<option value="">Todos los pisos</option>';
+            storyFilter.innerHTML = '<option value="">Todos</option>';
             this.page.uniqueStories.forEach(story => {
                 const option = document.createElement('option');
                 option.value = story;
@@ -39,7 +49,7 @@ class ResultsTable {
         }
 
         if (axisFilter) {
-            axisFilter.innerHTML = '<option value="">Todos los ejes</option>';
+            axisFilter.innerHTML = '<option value="">Todos</option>';
             this.page.uniqueAxes.forEach(axis => {
                 const option = document.createElement('option');
                 option.value = axis;
@@ -50,6 +60,7 @@ class ResultsTable {
     }
 
     applyFilters() {
+        this.page.filters.grilla = this.elements.grillaFilter?.value || '';
         this.page.filters.story = this.elements.storyFilter?.value || '';
         this.page.filters.axis = this.elements.axisFilter?.value || '';
 
@@ -61,6 +72,11 @@ class ResultsTable {
 
     getFilteredResults() {
         return this.page.results.filter(result => {
+            if (this.filters.grilla) {
+                const parts = result.pier_label.split('-');
+                const grilla = parts.length > 0 ? parts[0] : '';
+                if (grilla !== this.filters.grilla) return false;
+            }
             if (this.filters.story && result.story !== this.filters.story) return false;
             if (this.filters.axis) {
                 const parts = result.pier_label.split('-');
@@ -392,7 +408,10 @@ class ResultsTable {
                         SF: ${proposal.sf_original.toFixed(2)} → ${proposal.sf_proposed.toFixed(2)}
                     </span>
                 </div>
-                <button class="apply-proposal-btn" data-pier-key="${pierKey}">✓</button>
+                <div class="proposal-actions">
+                    <button class="view-proposal-btn" data-pier-key="${pierKey}" title="Ver sección propuesta">🔲</button>
+                    <button class="apply-proposal-btn" data-pier-key="${pierKey}" title="Aplicar propuesta">✓</button>
+                </div>
             `;
         } else {
             td.innerHTML = '<span class="no-proposal">-</span>';
@@ -455,6 +474,17 @@ class ResultsTable {
             select.addEventListener('change', () => this.saveInlineEdit(row, pierKey));
         });
 
+        // Ver sección propuesta
+        const viewProposalBtn = row.querySelector('.view-proposal-btn');
+        if (viewProposalBtn) {
+            viewProposalBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const pierLabel = `${result.story} - ${result.pier_label}`;
+                const proposedConfig = this.getProposedConfig(result.design_proposal);
+                this.page.showProposedSectionDiagram(pierKey, pierLabel, proposedConfig);
+            });
+        }
+
         // Aplicar propuesta
         const applyBtn = row.querySelector('.apply-proposal-btn');
         if (applyBtn) {
@@ -463,6 +493,24 @@ class ResultsTable {
                 this.applyProposal(pierKey, result.design_proposal);
             });
         }
+    }
+
+    getProposedConfig(proposal) {
+        if (!proposal || !proposal.proposed_config) return null;
+        const config = proposal.proposed_config;
+        return {
+            n_edge_bars: config.n_edge_bars,
+            diameter_edge: config.diameter_edge,
+            n_meshes: config.n_meshes,
+            diameter_v: config.diameter_v,
+            spacing_v: config.spacing_v,
+            diameter_h: config.diameter_h,
+            spacing_h: config.spacing_h,
+            stirrup_diameter: config.stirrup_diameter,
+            stirrup_spacing: config.stirrup_spacing,
+            n_stirrup_legs: config.n_stirrup_legs,
+            thickness: config.thickness
+        };
     }
 
     updateStirrupsState(row) {
@@ -655,7 +703,14 @@ class ResultsTable {
     }
 
     getFailureModeLabel(mode) {
-        return { flexure: 'Flexión', shear: 'Corte', combined: 'Combinado', slenderness: 'Esbeltez', confinement: 'Confinamiento' }[mode] || mode;
+        return {
+            flexure: 'Flexión',
+            shear: 'Corte',
+            combined: 'Combinado',
+            slenderness: 'Esbeltez',
+            confinement: 'Confinamiento',
+            overdesigned: 'Optimizar'
+        }[mode] || mode;
     }
 
     // =========================================================================

@@ -70,13 +70,19 @@ class PierCapacityService:
     # Capacidades y Diagramas
     # =========================================================================
 
-    def get_section_diagram(self, session_id: str, pier_key: str) -> Dict[str, Any]:
+    def get_section_diagram(
+        self,
+        session_id: str,
+        pier_key: str,
+        proposed_config: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
         Genera un diagrama de la sección transversal del pier.
 
         Args:
             session_id: ID de sesión
             pier_key: Clave del pier (Story_Label)
+            proposed_config: Configuración propuesta opcional (para preview)
 
         Returns:
             Dict con section_diagram en base64
@@ -86,13 +92,58 @@ class PierCapacityService:
             return error
 
         pier = self._session_manager.get_pier(session_id, pier_key)
+
+        # Si hay configuración propuesta, crear copia y aplicar cambios
+        if proposed_config:
+            pier = self._apply_proposed_config(pier, proposed_config)
+
         section_diagram = self._plot_generator.generate_section_diagram(pier)
 
         return {
             'success': True,
             'pier_key': pier_key,
-            'section_diagram': section_diagram
+            'section_diagram': section_diagram,
+            'is_proposed': proposed_config is not None
         }
+
+    def _apply_proposed_config(self, pier, config: Dict[str, Any]):
+        """
+        Crea una copia del pier con la configuración propuesta aplicada.
+
+        Args:
+            pier: Pier original
+            config: Configuración propuesta
+
+        Returns:
+            Copia del pier con los cambios aplicados
+        """
+        from copy import deepcopy
+        from ...domain.entities import Pier
+
+        # Crear copia del pier
+        pier_copy = Pier(
+            label=pier.label,
+            story=pier.story,
+            width=pier.width,  # Largo del muro no cambia
+            thickness=config.get('thickness', pier.thickness),
+            height=pier.height,
+            fc=pier.fc,
+            fy=pier.fy,
+            n_meshes=config.get('n_meshes', pier.n_meshes),
+            diameter_v=config.get('diameter_v', pier.diameter_v),
+            spacing_v=config.get('spacing_v', pier.spacing_v),
+            diameter_h=config.get('diameter_h', pier.diameter_h),
+            spacing_h=config.get('spacing_h', pier.spacing_h),
+            n_edge_bars=config.get('n_edge_bars', pier.n_edge_bars),
+            diameter_edge=config.get('diameter_edge', pier.diameter_edge),
+            stirrup_diameter=config.get('stirrup_diameter', pier.stirrup_diameter),
+            stirrup_spacing=config.get('stirrup_spacing', pier.stirrup_spacing),
+            n_stirrup_legs=config.get('n_stirrup_legs', getattr(pier, 'n_stirrup_legs', 2)),
+            cover=pier.cover,
+            axis_angle=pier.axis_angle
+        )
+
+        return pier_copy
 
     def get_pier_capacities(self, session_id: str, pier_key: str) -> Dict[str, Any]:
         """

@@ -224,17 +224,21 @@ class EtabsExcelParser:
 
     def get_summary(self, data: ParsedData) -> Dict[str, Any]:
         """Genera un resumen de los datos parseados."""
-        # Extraer ejes únicos
+        # Extraer ejes y grillas únicos
         axes = set()
+        grillas = set()
         for pier in data.piers.values():
             if pier.eje:
                 axes.add(pier.eje)
+            if pier.grilla:
+                grillas.add(pier.grilla)
 
         return {
             'total_piers': len(data.piers),
             'total_stories': len(data.stories),
             'stories': data.stories,
             'axes': sorted(list(axes)),
+            'grillas': sorted(list(grillas)),
             'total_combinations': sum(
                 len(pf.combinations) for pf in data.pier_forces.values()
             ),
@@ -244,6 +248,7 @@ class EtabsExcelParser:
                     'key': key,
                     'label': pier.label,
                     'story': pier.story,
+                    'grilla': pier.grilla,
                     'eje': pier.eje,
                     'width_m': pier.width / 1000,
                     'thickness_m': pier.thickness / 1000,

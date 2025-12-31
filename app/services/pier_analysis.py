@@ -355,6 +355,103 @@ class PierAnalysisService:
             'summary_plot': summary_plot
         }
 
+    def analyze_with_progress(
+        self,
+        session_id: str,
+        pier_updates: Optional[List[Dict]] = None,
+        generate_plots: bool = True,
+        moment_axis: str = 'M3',
+        angle_deg: float = 0
+    ):
+        """
+        Ejecuta el análisis estructural con progreso (generador para SSE).
+
+        Yields:
+            Dict con eventos de progreso:
+            - {"type": "progress", "current": 1, "total": 100, "pier": "P1-A1"}
+            - {"type": "complete", "result": {...}}
+            - {"type": "error", "message": "..."}
+        """
+        # Validar sesión
+        error = self._validate_session(session_id)
+        if error:
+            yield {"type": "error", "message": error.get('error', 'Error de sesión')}
+            return
+
+        # Aplicar actualizaciones de armadura
+        if pier_updates:
+            self._session_manager.apply_reinforcement_updates(session_id, pier_updates)
+
+        # Obtener datos de la sesión
+        parsed_data = self._session_manager.get_session(session_id)
+
+        # Analizar piers con progreso
+        piers = parsed_data.piers
+        total = len(piers)
+        results = []
+
+        # Obtener hn_ft del edificio
+        hn_ft = None
+        if parsed_data.building_info:
+            hn_ft = parsed_data.building_info.hn_ft
+
+        for i, (key, pier) in enumerate(piers.items(), 1):
+            # Enviar progreso
+            yield {
+                "type": "progress",
+                "current": i,
+                "total": total,
+                "pier": f"{pier.story} - {pier.label}"
+            }
+
+            # Obtener datos del pier
+            pier_forces = parsed_data.pier_forces.get(key)
+
+            # Obtener hwcs y continuity_info
+            hwcs = None
+            continuity_info = None
+            if parsed_data.continuity_info and key in parsed_data.continuity_info:
+                continuity_info = parsed_data.continuity_info[key]
+                hwcs = continuity_info.hwcs
+
+            # Analizar pier
+            result = self._analyze_pier(
+                pier=pier,
+                pier_forces=pier_forces,
+                generate_plot=generate_plots,
+                moment_axis=moment_axis,
+                angle_deg=angle_deg,
+                hwcs=hwcs,
+                hn_ft=hn_ft,
+                continuity_info=continuity_info
+            )
+            results.append(result)
+
+        # Calcular estadísticas
+        statistics = self._statistics_service.calculate_statistics(results)
+
+        # Generar gráfico resumen
+        summary_plot = None
+        if generate_plots and results:
+            yield {
+                "type": "progress",
+                "current": total,
+                "total": total,
+                "pier": "Generando resumen..."
+            }
+            summary_plot = self._statistics_service.generate_summary_plot(results)
+
+        # Enviar resultado completo
+        yield {
+            "type": "complete",
+            "result": {
+                'success': True,
+                'statistics': statistics,
+                'results': [r.to_dict() for r in results],
+                'summary_plot': summary_plot
+            }
+        }
+
     def analyze_direct(
         self,
         file_content: bytes,
@@ -624,14 +721,23 @@ class PierAnalysisService:
         # 7. Obtener datos de esbeltez (antes de propuesta)
         slenderness_data = flexure_result.get('slenderness', {})
 
-        # 8. Propuesta de diseño (si falla)
+        # 8. Propuesta de diseño (si falla O si está sobrediseñado)
         proposal = None
-        if overall_status != "OK":
+        flexure_sf = flexure_result['sf']
+        shear_dcr = shear_result['dcr_combined']
+
+        # Generar propuesta si falla O si está sobrediseñado (SF alto + DCR bajo)
+        needs_proposal = (
+            overall_status != "OK" or
+            (flexure_sf >= 1.5 and shear_dcr <= 0.7)  # Sobrediseñado
+        )
+
+        if needs_proposal:
             proposal = self._proposal_service.generate_proposal(
                 pier=pier,
                 pier_forces=pier_forces,
-                flexure_sf=flexure_result['sf'],
-                shear_dcr=shear_result['dcr_combined'],
+                flexure_sf=flexure_sf,
+                shear_dcr=shear_dcr,
                 boundary_required=boundary.get('required', False),
                 slenderness_reduction=slenderness_data.get('reduction', 1.0)
             )
@@ -650,6 +756,7 @@ class PierAnalysisService:
 
         # Preparar datos de propuesta (mostrar siempre que haya propuesta)
         has_proposal = proposal is not None
+        proposed_config_dict = None
         if has_proposal:
             original_thickness = proposal.original_config.thickness
             proposal_failure_mode = proposal.failure_mode.value
@@ -661,6 +768,8 @@ class PierAnalysisService:
             proposal_dcr_proposed = proposal.proposed_dcr_shear
             proposal_success = proposal.success  # Puede ser False si requiere rediseño
             proposal_changes = ", ".join(proposal.changes)
+            # Config para preview de sección
+            proposed_config_dict = proposal.proposed_config.to_dict()
         else:
             proposal_failure_mode = ""
             proposal_type = ""
@@ -747,7 +856,8 @@ class PierAnalysisService:
             proposal_dcr_original=proposal_dcr_original,
             proposal_dcr_proposed=proposal_dcr_proposed,
             proposal_success=proposal_success,
-            proposal_changes=proposal_changes
+            proposal_changes=proposal_changes,
+            proposed_config=proposed_config_dict
         )
 
     # =========================================================================
@@ -819,9 +929,16 @@ class PierAnalysisService:
     # Capacidades (delegado a PierCapacityService)
     # =========================================================================
 
-    def get_section_diagram(self, session_id: str, pier_key: str) -> Dict[str, Any]:
+    def get_section_diagram(
+        self,
+        session_id: str,
+        pier_key: str,
+        proposed_config: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """Genera un diagrama de la sección transversal del pier."""
-        return self._capacity_service.get_section_diagram(session_id, pier_key)
+        return self._capacity_service.get_section_diagram(
+            session_id, pier_key, proposed_config
+        )
 
     def get_pier_capacities(self, session_id: str, pier_key: str) -> Dict[str, Any]:
         """Calcula las capacidades puras del pier (sin interacción)."""

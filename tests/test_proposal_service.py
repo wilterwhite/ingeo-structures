@@ -70,14 +70,24 @@ class TestFailureModeDetection:
     """Tests para detección de modo de falla."""
 
     def test_no_failure_detected(self, proposal_service):
-        """Sin falla cuando SF >= 1.0 y DCR <= 1.0."""
+        """Sin falla cuando SF >= 1.0 y DCR <= 1.0 (sin sobrediseño)."""
         mode = proposal_service._determine_failure_mode(
-            flexure_sf=1.5,
-            shear_dcr=0.7,
+            flexure_sf=1.3,   # Menor que umbral de sobrediseño (1.5)
+            shear_dcr=0.8,    # Mayor que umbral de sobrediseño (0.7)
             boundary_required=False,
             slenderness_reduction=1.0
         )
         assert mode == FailureMode.NONE
+
+    def test_overdesigned_detected(self, proposal_service):
+        """Detecta sobrediseño cuando SF >> 1.0 y DCR muy bajo."""
+        mode = proposal_service._determine_failure_mode(
+            flexure_sf=2.0,   # Mayor que umbral (1.5)
+            shear_dcr=0.5,    # Menor que umbral (0.7)
+            boundary_required=False,
+            slenderness_reduction=1.0
+        )
+        assert mode == FailureMode.OVERDESIGNED
 
     def test_flexure_failure_detected(self, proposal_service):
         """Detecta falla por flexión."""

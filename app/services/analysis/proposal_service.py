@@ -39,10 +39,20 @@ class ProposalService:
 
     Analiza el modo de falla y propone correcciones específicas
     usando un enfoque iterativo para encontrar la solución mínima.
+
+    También detecta piers sobrediseñados (SF >> 1.0) y propone
+    reducción de armadura manteniendo la cuantía mínima.
     """
 
     # Factor de seguridad objetivo
     TARGET_SF = 1.05  # Pequeño margen sobre 1.0
+
+    # Umbrales para detección de sobrediseño
+    OVERDESIGNED_SF_MIN = 1.5   # SF mínimo para considerar sobrediseño
+    OVERDESIGNED_DCR_MAX = 0.7  # DCR máximo para considerar sobrediseño
+
+    # Cuantía mínima vertical según ACI 318-25 §11.6.1
+    RHO_MIN = 0.0025
 
     # Máximo de iteraciones por propuesta
     MAX_ITERATIONS = 30
@@ -106,6 +116,10 @@ class ProposalService:
             return self._propose_for_slenderness(
                 pier, pier_forces, original_config, flexure_sf, slenderness_reduction
             )
+        elif failure_mode == FailureMode.OVERDESIGNED:
+            return self._propose_for_reduction(
+                pier, pier_forces, original_config, flexure_sf, shear_dcr
+            )
 
         return None
 
@@ -114,9 +128,10 @@ class ProposalService:
         flexure_sf: float,
         shear_dcr: float,
         boundary_required: bool,
-        slenderness_reduction: float
+        slenderness_reduction: float,
+        check_overdesign: bool = True
     ) -> FailureMode:
-        """Determina el modo de falla principal."""
+        """Determina el modo de falla principal (o sobrediseño)."""
         flexure_fails = flexure_sf < 1.0
         shear_fails = shear_dcr > 1.0
         slenderness_issue = slenderness_reduction < 0.7  # Reducción significativa
@@ -131,6 +146,15 @@ class ProposalService:
             return FailureMode.SHEAR
         elif boundary_required:
             return FailureMode.CONFINEMENT
+
+        # Detectar sobrediseño: SF alto Y DCR bajo
+        if check_overdesign:
+            is_overdesigned = (
+                flexure_sf >= self.OVERDESIGNED_SF_MIN and
+                shear_dcr <= self.OVERDESIGNED_DCR_MAX
+            )
+            if is_overdesigned:
+                return FailureMode.OVERDESIGNED
 
         return FailureMode.NONE
 
@@ -625,6 +649,238 @@ class ProposalService:
             FailureMode.SLENDERNESS
         )
 
+    def _propose_for_reduction(
+        self,
+        pier: Pier,
+        pier_forces: Optional[PierForces],
+        original_config: ReinforcementConfig,
+        original_sf: float,
+        original_dcr: float
+    ) -> Optional[DesignProposal]:
+        """
+        Propone reducción de armadura para piers sobrediseñados.
+
+        Estrategia (mantiene SF >= 1.05 y ρ >= ρmin):
+        1. Reducir espesor (si hay margen suficiente)
+        2. Reducir barras de borde
+        3. Aumentar espaciamiento de malla
+        4. Reducir diámetro de malla
+
+        La reducción se detiene cuando:
+        - SF < 1.15 (cercano al objetivo)
+        - Se alcanza la cuantía mínima ρmin = 0.25%
+        - DCR > 0.85 (cercano al límite de corte)
+        """
+        proposed_config = deepcopy(original_config)
+
+        best_config = deepcopy(original_config)
+        best_sf = original_sf
+        best_dcr = original_dcr
+        iterations = 0
+
+        # =================================================================
+        # Estrategia 0: Reducir espesor primero (mayor ahorro de material)
+        # Solo si SF > 2.0 y hay espesores menores disponibles
+        # =================================================================
+        if original_sf > 2.0:
+            # Iterar espesores menores
+            for thickness in reversed(THICKNESS_SEQUENCE):
+                if thickness >= pier.thickness:
+                    continue  # Solo espesores menores
+
+                proposed_config = deepcopy(original_config)
+                proposed_config.thickness = thickness
+
+                test_pier = self._apply_config_to_pier(pier, proposed_config)
+                test_pier.thickness = thickness
+                iterations += 1
+
+                # Verificar cuantía mínima
+                if test_pier.rho_vertical < self.RHO_MIN:
+                    continue
+
+                new_sf = self._verify_flexure(test_pier, pier_forces)
+                new_dcr = self._verify_shear(test_pier, pier_forces)
+
+                # Verificar viabilidad
+                if new_sf >= self.TARGET_SF and new_dcr <= 1.0:
+                    best_config = deepcopy(proposed_config)
+                    best_sf = new_sf
+                    best_dcr = new_dcr
+
+                    # Si SF está en rango aceptable, usar esta configuración
+                    if new_sf < 1.5:
+                        break
+                else:
+                    # Espesor muy pequeño, no seguir reduciendo
+                    break
+
+        # Si ya encontramos una buena reducción con espesor, retornar
+        if best_sf < original_sf and best_sf < 1.5:
+            changes = self._build_reduction_changes(original_config, best_config)
+            return DesignProposal(
+                pier_key=f"{pier.story}_{pier.label}",
+                failure_mode=FailureMode.OVERDESIGNED,
+                proposal_type=ProposalType.REDUCTION,
+                original_config=original_config,
+                proposed_config=best_config,
+                original_sf_flexure=original_sf,
+                proposed_sf_flexure=best_sf,
+                original_dcr_shear=original_dcr,
+                proposed_dcr_shear=best_dcr,
+                iterations=iterations,
+                success=True,
+                changes=changes
+            )
+
+        # =================================================================
+        # Estrategia 1: Reducir barras de borde
+        # =================================================================
+        proposed_config = deepcopy(best_config)
+
+        current_as = proposed_config.As_edge
+        current_boundary_idx = 0
+        for i, (n, d) in enumerate(BOUNDARY_BAR_SEQUENCE):
+            bar_area = get_bar_area(d, 78.5)
+            seq_as = n * 2 * bar_area
+            if seq_as >= current_as:
+                current_boundary_idx = i
+                break
+
+        for boundary_idx in range(current_boundary_idx - 1, -1, -1):
+            n_bars, diameter = BOUNDARY_BAR_SEQUENCE[boundary_idx]
+            proposed_config.n_edge_bars = n_bars
+            proposed_config.diameter_edge = diameter
+
+            test_pier = self._apply_config_to_pier(pier, proposed_config)
+            if proposed_config.thickness:
+                test_pier.thickness = proposed_config.thickness
+            iterations += 1
+
+            if test_pier.rho_vertical < self.RHO_MIN:
+                break
+
+            new_sf = self._verify_flexure(test_pier, pier_forces)
+            new_dcr = self._verify_shear(test_pier, pier_forces)
+
+            if new_sf >= self.TARGET_SF and new_dcr <= 1.0:
+                best_config = deepcopy(proposed_config)
+                best_sf = new_sf
+                best_dcr = new_dcr
+
+                if new_sf < 1.15:
+                    break
+            else:
+                proposed_config = deepcopy(best_config)
+                break
+
+        # =================================================================
+        # Estrategia 2: Aumentar espaciamiento de malla
+        # =================================================================
+        current_spacing_idx = MESH_SPACING_SEQUENCE.index(proposed_config.spacing_v) \
+            if proposed_config.spacing_v in MESH_SPACING_SEQUENCE else len(MESH_SPACING_SEQUENCE) - 1
+
+        for spacing_idx in range(current_spacing_idx - 1, -1, -1):
+            proposed_config.spacing_v = MESH_SPACING_SEQUENCE[spacing_idx]
+            proposed_config.spacing_h = MESH_SPACING_SEQUENCE[spacing_idx]
+
+            test_pier = self._apply_config_to_pier(pier, proposed_config)
+            if proposed_config.thickness:
+                test_pier.thickness = proposed_config.thickness
+            iterations += 1
+
+            if test_pier.rho_vertical < self.RHO_MIN:
+                proposed_config.spacing_v = best_config.spacing_v
+                proposed_config.spacing_h = best_config.spacing_h
+                break
+
+            new_sf = self._verify_flexure(test_pier, pier_forces)
+            new_dcr = self._verify_shear(test_pier, pier_forces)
+
+            if new_sf >= self.TARGET_SF and new_dcr <= 1.0:
+                best_config = deepcopy(proposed_config)
+                best_sf = new_sf
+                best_dcr = new_dcr
+
+                if new_sf < 1.15:
+                    break
+            else:
+                proposed_config = deepcopy(best_config)
+                break
+
+        # =================================================================
+        # Estrategia 3: Reducir diámetro de malla
+        # =================================================================
+        current_diameter_idx = MESH_DIAMETER_SEQUENCE.index(proposed_config.diameter_v) \
+            if proposed_config.diameter_v in MESH_DIAMETER_SEQUENCE else 0
+
+        for diameter_idx in range(current_diameter_idx - 1, -1, -1):
+            proposed_config.diameter_v = MESH_DIAMETER_SEQUENCE[diameter_idx]
+            proposed_config.diameter_h = MESH_DIAMETER_SEQUENCE[diameter_idx]
+
+            test_pier = self._apply_config_to_pier(pier, proposed_config)
+            if proposed_config.thickness:
+                test_pier.thickness = proposed_config.thickness
+            iterations += 1
+
+            if test_pier.rho_vertical < self.RHO_MIN:
+                proposed_config.diameter_v = best_config.diameter_v
+                proposed_config.diameter_h = best_config.diameter_h
+                break
+
+            new_sf = self._verify_flexure(test_pier, pier_forces)
+            new_dcr = self._verify_shear(test_pier, pier_forces)
+
+            if new_sf >= self.TARGET_SF and new_dcr <= 1.0:
+                best_config = deepcopy(proposed_config)
+                best_sf = new_sf
+                best_dcr = new_dcr
+
+                if new_sf < 1.15:
+                    break
+            else:
+                proposed_config = deepcopy(best_config)
+                break
+
+        # Si se encontró una reducción válida, crear propuesta
+        if best_sf < original_sf:
+            changes = self._build_reduction_changes(original_config, best_config)
+            return DesignProposal(
+                pier_key=f"{pier.story}_{pier.label}",
+                failure_mode=FailureMode.OVERDESIGNED,
+                proposal_type=ProposalType.REDUCTION,
+                original_config=original_config,
+                proposed_config=best_config,
+                original_sf_flexure=original_sf,
+                proposed_sf_flexure=best_sf,
+                original_dcr_shear=original_dcr,
+                proposed_dcr_shear=best_dcr,
+                iterations=iterations,
+                success=True,
+                changes=changes
+            )
+
+        return None
+
+    def _build_reduction_changes(
+        self,
+        original: ReinforcementConfig,
+        proposed: ReinforcementConfig
+    ) -> List[str]:
+        """Construye lista de cambios de reducción."""
+        changes = []
+        # Mostrar cambio de espesor primero (es el más importante)
+        if proposed.thickness and proposed.thickness != original.thickness:
+            changes.append(f"e={int(proposed.thickness)}mm")
+        if proposed.n_edge_bars != original.n_edge_bars or proposed.diameter_edge != original.diameter_edge:
+            changes.append(f"Borde: {proposed.n_edge_bars}φ{proposed.diameter_edge}")
+        if proposed.spacing_h != original.spacing_h:
+            changes.append(f"Malla @{proposed.spacing_h}")
+        if proposed.diameter_h != original.diameter_h:
+            changes.append(f"φ{proposed.diameter_h}")
+        changes.append("↓ Optimizado")
+        return changes
+
     def _propose_with_thickness(
         self,
         pier: Pier,
@@ -839,9 +1095,14 @@ class ProposalService:
             'overall_ok': flexure_sf >= 1.0 and shear_dcr <= 1.0
         }
 
-        # Generar propuesta si falla
+        # Generar propuesta si falla O si está sobrediseñado
         proposal = None
-        if not verification['overall_ok']:
+        needs_proposal = (
+            not verification['overall_ok'] or  # Falla verificación
+            (flexure_sf >= self.OVERDESIGNED_SF_MIN and shear_dcr <= self.OVERDESIGNED_DCR_MAX)  # Sobrediseñado
+        )
+
+        if needs_proposal:
             proposal = self.generate_proposal(
                 pier=pier,
                 pier_forces=pier_forces,

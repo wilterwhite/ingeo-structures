@@ -105,6 +105,56 @@ class StructuralAPI {
         return response.json();
     }
 
+    /**
+     * Análisis con progreso en tiempo real (SSE).
+     * @param {Object} params - Parámetros del análisis
+     * @param {Function} onProgress - Callback para progreso (current, total, pier)
+     * @param {Function} onComplete - Callback cuando termina
+     * @param {Function} onError - Callback para errores
+     */
+    analyzeWithProgress(params, onProgress, onComplete, onError) {
+        fetch(`${this.baseUrl}/analyze-stream`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params)
+        }).then(response => {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            const processChunk = ({ done, value }) => {
+                if (done) return;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // Procesar líneas completas
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const event = JSON.parse(line.slice(6));
+                            if (event.type === 'progress') {
+                                onProgress(event.current, event.total, event.pier);
+                            } else if (event.type === 'complete') {
+                                onComplete(event.result);
+                            } else if (event.type === 'error') {
+                                onError(new Error(event.message));
+                            }
+                        } catch (e) {
+                            console.error('Error parsing SSE:', e);
+                        }
+                    }
+                }
+
+                reader.read().then(processChunk);
+            };
+
+            reader.read().then(processChunk);
+        }).catch(onError);
+    }
+
     // =========================================================================
     // Combinaciones de Carga
     // =========================================================================
@@ -169,15 +219,20 @@ class StructuralAPI {
      * Obtiene el diagrama de sección transversal de un pier.
      * @param {string} sessionId - ID de sesión
      * @param {string} pierKey - Clave del pier (Story_Label)
+     * @param {Object} [proposedConfig] - Configuración propuesta opcional
      * @returns {Promise<Object>} Diagrama en base64
      */
-    async getSectionDiagram(sessionId, pierKey) {
+    async getSectionDiagram(sessionId, pierKey, proposedConfig = null) {
+        const body = {
+            session_id: sessionId,
+            pier_key: pierKey
+        };
+        if (proposedConfig) {
+            body.proposed_config = proposedConfig;
+        }
         return this.request('/section-diagram', {
             method: 'POST',
-            body: JSON.stringify({
-                session_id: sessionId,
-                pier_key: pierKey
-            })
+            body: JSON.stringify(body)
         });
     }
 

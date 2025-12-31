@@ -9,8 +9,8 @@ Incluye verificaciones ACI 318-25:
 - Amplificación de cortante (§18.10.3.3)
 - Elementos de borde (§18.10.6)
 """
-from dataclasses import dataclass
-from typing import Any, Dict
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
 
 
 @dataclass
@@ -118,6 +118,7 @@ class VerificationResult:
     proposal_dcr_proposed: float = 0.0      # DCR propuesto (después de propuesta)
     proposal_success: bool = False          # Si la propuesta resuelve el problema
     proposal_changes: str = ""              # Cambios específicos (ej: "4φ16 borde")
+    proposed_config: Optional[Dict[str, Any]] = field(default=None)  # Config para preview
 
     # ==========================================================================
     # Exceso de capacidad axial (campos al final por orden de dataclass)
@@ -234,6 +235,7 @@ class VerificationResult:
                 'dcr_original': round(self.proposal_dcr_original, 3),
                 'dcr_proposed': round(self.proposal_dcr_proposed, 3),
                 'success': self.proposal_success,
-                'changes': self.proposal_changes
+                'changes': self.proposal_changes,
+                'proposed_config': self.proposed_config  # Config para preview de sección
             } if self.has_proposal else None
         }

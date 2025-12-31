@@ -3,7 +3,8 @@
 Endpoints API para el módulo de análisis estructural.
 """
 import uuid
-from flask import Blueprint, request, jsonify, current_app
+import json
+from flask import Blueprint, request, jsonify, current_app, Response
 
 from ..services.pier_analysis import PierAnalysisService
 
@@ -158,6 +159,67 @@ def analyze():
         )
 
         return jsonify(result)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error en el análisis: {str(e)}'
+        }), 500
+
+
+@bp.route('/analyze-stream', methods=['POST'])
+def analyze_stream():
+    """
+    Ejecuta el análisis estructural con progreso en tiempo real (SSE).
+
+    Request (JSON):
+        Igual que /analyze
+
+    Response:
+        Server-Sent Events con formato:
+        - data: {"type": "progress", "current": 5, "total": 100, "pier": "P1-A1"}
+        - data: {"type": "complete", "result": {...}}
+        - data: {"type": "error", "message": "..."}
+    """
+    try:
+        data = request.get_json() or {}
+
+        session_id = data.get('session_id')
+        if not session_id:
+            return jsonify({
+                'success': False,
+                'error': 'Se requiere session_id'
+            }), 400
+
+        pier_updates = data.get('pier_updates')
+        generate_plots = data.get('generate_plots', True)
+        moment_axis = data.get('moment_axis', 'M3')
+        angle_deg = data.get('angle_deg', 0)
+
+        service = get_analysis_service()
+
+        def generate():
+            try:
+                for event in service.analyze_with_progress(
+                    session_id=session_id,
+                    pier_updates=pier_updates,
+                    generate_plots=generate_plots,
+                    moment_axis=moment_axis,
+                    angle_deg=angle_deg
+                ):
+                    yield f"data: {json.dumps(event)}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+        return Response(
+            generate(),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no'
+            }
+        )
 
     except Exception as e:
         return jsonify({
@@ -441,13 +503,22 @@ def get_section_diagram():
     Request:
         {
             "session_id": "uuid-xxx",
-            "pier_key": "Story_PierLabel"
+            "pier_key": "Story_PierLabel",
+            "proposed_config": {  // Opcional - para preview de propuesta
+                "n_edge_bars": 6,
+                "diameter_edge": 16,
+                "n_meshes": 2,
+                "diameter_v": 10,
+                "spacing_v": 150,
+                "thickness": 250  // Si cambió el espesor
+            }
         }
 
     Response:
         {
             "success": true,
-            "section_diagram": "base64..."
+            "section_diagram": "base64...",
+            "is_proposed": false
         }
     """
     try:
@@ -457,6 +528,7 @@ def get_section_diagram():
 
         session_id = data.get('session_id')
         pier_key = data.get('pier_key')
+        proposed_config = data.get('proposed_config')  # Opcional
 
         if not session_id or not pier_key:
             return jsonify({
@@ -465,7 +537,7 @@ def get_section_diagram():
             }), 400
 
         service = get_analysis_service()
-        result = service.get_section_diagram(session_id, pier_key)
+        result = service.get_section_diagram(session_id, pier_key, proposed_config)
 
         return jsonify(result)
 
