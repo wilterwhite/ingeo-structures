@@ -1,4 +1,4 @@
-# app/structural/services/analysis/flexure_service.py
+# app/services/analysis/flexure_service.py
 """
 Servicio de análisis de flexocompresión para piers.
 Maneja la generación de curvas de interacción y verificación de capacidad.
