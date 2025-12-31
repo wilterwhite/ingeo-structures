@@ -1,4 +1,4 @@
-# app/structural/domain/entities/__init__.py
+# app/domain/entities/__init__.py
 """
 Entidades de dominio para el análisis estructural de muros.
 """

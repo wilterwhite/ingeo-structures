@@ -1,4 +1,4 @@
-# app/structural/domain/entities/load_combination.py
+# app/domain/entities/load_combination.py
 """
 Entidad LoadCombination: representa una combinación de carga para un pier.
 """
