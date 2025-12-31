@@ -10,7 +10,7 @@ class StructuralPage {
         this.sessionId = null;
         this.piersData = [];
         this.results = [];
-        this.filters = { grilla: '', story: '', axis: '' };
+        this.filters = { grilla: '', story: '', axis: '', status: '' };
         this.uniqueGrillas = [];
         this.uniqueStories = [];
         this.uniqueAxes = [];
@@ -68,6 +68,7 @@ class StructuralPage {
             grillaFilter: document.getElementById('grilla-filter'),
             storyFilter: document.getElementById('story-filter'),
             axisFilter: document.getElementById('axis-filter'),
+            statusFilter: document.getElementById('status-filter'),
             toggleAllCombosBtn: document.getElementById('toggle-all-combos-btn'),
             toggleCombosIcon: document.getElementById('toggle-combos-icon'),
 
@@ -161,6 +162,7 @@ class StructuralPage {
         this.elements.grillaFilter?.addEventListener('change', () => this.resultsTable.onGrillaChange());
         this.elements.storyFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.axisFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
+        this.elements.statusFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.toggleAllCombosBtn?.addEventListener('click', () => this.toggleAllCombinations());
 
         // Botones de navegación
@@ -200,7 +202,7 @@ class StructuralPage {
         this.sessionId = null;
         this.piersData = [];
         this.results = [];
-        this.filters = { grilla: '', story: '', axis: '' };
+        this.filters = { grilla: '', story: '', axis: '', status: '' };
         this.uniqueGrillas = [];
         this.uniqueStories = [];
         this.uniqueAxes = [];

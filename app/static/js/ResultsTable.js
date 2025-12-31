@@ -106,6 +106,7 @@ class ResultsTable {
         this.page.filters.grilla = this.elements.grillaFilter?.value || '';
         this.page.filters.story = this.elements.storyFilter?.value || '';
         this.page.filters.axis = this.elements.axisFilter?.value || '';
+        this.page.filters.status = this.elements.statusFilter?.value || '';
 
         const filtered = this.getFilteredResults();
         this.renderTable(filtered);
@@ -125,6 +126,11 @@ class ResultsTable {
                 const parts = result.pier_label.split('-');
                 const axis = parts.length > 1 ? parts[1] : '';
                 if (axis !== this.filters.axis) return false;
+            }
+            if (this.filters.status) {
+                const isOk = result.overall_status === 'OK';
+                if (this.filters.status === 'OK' && !isOk) return false;
+                if (this.filters.status === 'FAIL' && isOk) return false;
             }
             return true;
         });
