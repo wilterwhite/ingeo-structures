@@ -187,7 +187,7 @@ class PierAnalysisService:
                     point.Pn *= reduction
 
         # Obtener phi_Mn_0
-        _, _, _, phi_Mn_0, _, _, _ = self._interaction_service.check_flexure(
+        _, _, _, phi_Mn_0, _, _, _, _, _ = self._interaction_service.check_flexure(
             interaction_points, [(0, 1, "dummy")]
         )
 
