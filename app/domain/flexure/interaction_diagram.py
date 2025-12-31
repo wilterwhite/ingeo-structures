@@ -1,4 +1,4 @@
-# app/structural/domain/interaction_diagram.py
+# app/domain/flexure/interaction_diagram.py
 """
 Cálculo del diagrama de interacción P-M para muros rectangulares de hormigón armado.
 Implementa el método de compatibilidad de deformaciones según ACI 318.
@@ -52,7 +52,7 @@ class InteractionDiagramService:
 
     def calculate_beta1(self, fc: float) -> float:
         """
-        Calcula β1 según ACI 318-19.
+        Calcula β1 según ACI 318-25.
 
         Args:
             fc: Resistencia del hormigón (MPa)
