@@ -1,4 +1,4 @@
-# app/structural/domain/entities/pier_forces.py
+# app/domain/entities/pier_forces.py
 """
 Entidad PierForces: colección de combinaciones de carga para un pier.
 """
