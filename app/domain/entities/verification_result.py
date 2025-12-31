@@ -1,4 +1,4 @@
-# app/structural/domain/entities/verification_result.py
+# app/domain/entities/verification_result.py
 """
 Entidad VerificationResult: resultado de la verificación estructural de un pier.
 
@@ -9,8 +9,8 @@ Incluye verificaciones ACI 318-25:
 - Amplificación de cortante (§18.10.3.3)
 - Elementos de borde (§18.10.6)
 """
-from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+from dataclasses import dataclass
+from typing import Any, Dict
 
 
 @dataclass
