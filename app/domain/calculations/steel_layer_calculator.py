@@ -4,7 +4,7 @@ Calculador de capas de acero para secciones de hormigón armado.
 Unifica la lógica que antes estaba duplicada en pier.py e interaction_diagram.py.
 """
 from dataclasses import dataclass
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..entities.pier import Pier
@@ -102,44 +102,3 @@ class SteelLayerCalculator:
         ))
 
         return layers
-
-    @staticmethod
-    def to_tuples(layers: List[SteelLayer]) -> List[Tuple[float, float]]:
-        """
-        Convierte lista de SteelLayer a lista de tuplas (position, area).
-
-        Útil para compatibilidad con código existente que espera tuplas.
-
-        Args:
-            layers: Lista de SteelLayer
-
-        Returns:
-            Lista de tuplas (position_mm, area_mm2)
-        """
-        return [(layer.position, layer.area) for layer in layers]
-
-    @staticmethod
-    def from_tuples(tuples: List[Tuple[float, float]]) -> List[SteelLayer]:
-        """
-        Convierte lista de tuplas a lista de SteelLayer.
-
-        Args:
-            tuples: Lista de tuplas (position_mm, area_mm2)
-
-        Returns:
-            Lista de SteelLayer
-        """
-        return [SteelLayer(position=t[0], area=t[1]) for t in tuples]
-
-    @staticmethod
-    def calculate_total_area(layers: List[SteelLayer]) -> float:
-        """
-        Calcula el área total de acero en todas las capas.
-
-        Args:
-            layers: Lista de SteelLayer
-
-        Returns:
-            Área total (mm²)
-        """
-        return sum(layer.area for layer in layers)

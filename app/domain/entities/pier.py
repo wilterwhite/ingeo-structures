@@ -3,12 +3,12 @@
 Entidad Pier: representa un muro de hormigón armado desde ETABS.
 """
 from dataclasses import dataclass, field
-from typing import Optional, List, Tuple, TYPE_CHECKING
+from typing import Optional, List, TYPE_CHECKING
+
+from ..constants.materials import BAR_AREAS, get_bar_area
 
 if TYPE_CHECKING:
-    from ...services.parsing.reinforcement_config import ReinforcementConfig
     from ..calculations.steel_layer_calculator import SteelLayer
-    from ..calculations.reinforcement_calculator import ReinforcementProperties
 
 
 @dataclass
@@ -57,18 +57,11 @@ class Pier:
     _bar_area_h: float = field(default=50.3, repr=False)
     _bar_area_edge: float = field(default=78.5, repr=False)  # φ10 por defecto
 
-    # Áreas de barras estándar
-    BAR_AREAS = {
-        6: 28.3, 8: 50.3, 10: 78.5, 12: 113.1,
-        16: 201.1, 18: 254.5, 20: 314.2, 22: 380.1,
-        25: 490.9, 28: 615.8, 32: 804.2, 36: 1017.9,
-    }
-
     def __post_init__(self):
         """Calcula áreas de barra según diámetros."""
-        self._bar_area_v = self.BAR_AREAS.get(self.diameter_v, 50.3)
-        self._bar_area_h = self.BAR_AREAS.get(self.diameter_h, 50.3)
-        self._bar_area_edge = self.BAR_AREAS.get(self.diameter_edge, 78.5)
+        self._bar_area_v = get_bar_area(self.diameter_v, 50.3)
+        self._bar_area_h = get_bar_area(self.diameter_h, 50.3)
+        self._bar_area_edge = get_bar_area(self.diameter_edge, 78.5)
 
         # Si no se especificó armadura, usar mínima
         if self.spacing_v == 0:
@@ -194,31 +187,20 @@ class Pier:
         n_intermediate = self.n_intermediate_bars * self.n_meshes
         return n_edge + n_intermediate
 
-    def get_steel_layers(self) -> List[Tuple[float, float]]:
+    def get_steel_layers(self) -> List['SteelLayer']:
         """
         Genera las capas de acero con sus posiciones reales para el diagrama P-M.
 
         Returns:
-            Lista de tuplas (position_mm, area_mm2) para cada capa de acero.
+            Lista de SteelLayer ordenadas por posición.
             - position: distancia desde el borde comprimido (mm)
             - area: área de acero en esa capa (mm²)
 
         Ejemplo para columna 20×20 con 4φ10:
-            [(40, 157), (160, 157)]  # Solo 2 capas en los extremos
+            [SteelLayer(40, 157), SteelLayer(160, 157)]
 
         Ejemplo para muro 2m×0.2m con 2M φ8@200 +2φ10:
-            [(40, 157), (240, 100.6), (440, 100.6), ..., (1960, 157)]
-        """
-        from ..calculations.steel_layer_calculator import SteelLayerCalculator
-        layers = SteelLayerCalculator.calculate_from_pier(self)
-        return SteelLayerCalculator.to_tuples(layers)
-
-    def get_steel_layers_objects(self) -> List['SteelLayer']:
-        """
-        Genera las capas de acero como objetos SteelLayer.
-
-        Returns:
-            Lista de SteelLayer ordenadas por posición.
+            [SteelLayer(40, 157), SteelLayer(240, 100.6), ...]
         """
         from ..calculations.steel_layer_calculator import SteelLayerCalculator
         return SteelLayerCalculator.calculate_from_pier(self)
@@ -301,17 +283,17 @@ class Pier:
             self.n_meshes = n_meshes
         if diameter_v is not None:
             self.diameter_v = diameter_v
-            self._bar_area_v = self.BAR_AREAS.get(diameter_v, 50.3)
+            self._bar_area_v = get_bar_area(diameter_v, 50.3)
         if spacing_v is not None:
             self.spacing_v = spacing_v
         if diameter_h is not None:
             self.diameter_h = diameter_h
-            self._bar_area_h = self.BAR_AREAS.get(diameter_h, 50.3)
+            self._bar_area_h = get_bar_area(diameter_h, 50.3)
         if spacing_h is not None:
             self.spacing_h = spacing_h
         if diameter_edge is not None:
             self.diameter_edge = diameter_edge
-            self._bar_area_edge = self.BAR_AREAS.get(diameter_edge, 78.5)
+            self._bar_area_edge = get_bar_area(diameter_edge, 78.5)
         if n_edge_bars is not None:
             self.n_edge_bars = n_edge_bars
         if stirrup_diameter is not None:
@@ -332,20 +314,8 @@ class Pier:
         """
         self.diameter_v = diameter
         self.diameter_h = diameter
-        self._bar_area_v = self.BAR_AREAS.get(diameter, 50.3)
+        self._bar_area_v = get_bar_area(diameter, 50.3)
         self._bar_area_h = self._bar_area_v
         self.spacing_v = self._calculate_min_spacing()
         self.spacing_h = self.spacing_v
 
-    def get_reinforcement_properties(self) -> 'ReinforcementProperties':
-        """
-        Obtiene todas las propiedades de armadura calculadas.
-
-        Usa ReinforcementCalculator para calcular todas las propiedades
-        de armadura de una sola vez.
-
-        Returns:
-            ReinforcementProperties con todos los valores calculados
-        """
-        from ..calculations.reinforcement_calculator import ReinforcementCalculator
-        return ReinforcementCalculator.calculate_from_pier(self)

@@ -2,36 +2,12 @@
 """
 Configuración de armadura para muros de hormigón armado.
 
-Define diámetros de barras estándar y calcula áreas de acero
-a partir de malla, diámetro y espaciamiento.
+Calcula áreas de acero a partir de malla, diámetro y espaciamiento.
+Usa constantes centralizadas de domain/constants/materials.py.
 """
 from dataclasses import dataclass
-from typing import Dict
-import math
 
-
-# =============================================================================
-# Diámetros de Barras Estándar
-# =============================================================================
-
-# Área de barras en mm² por diámetro nominal (mm)
-BAR_AREAS: Dict[int, float] = {
-    6: 28.3,      # φ6
-    8: 50.3,      # φ8
-    10: 78.5,     # φ10
-    12: 113.1,    # φ12
-    16: 201.1,    # φ16
-    18: 254.5,    # φ18
-    20: 314.2,    # φ20
-    22: 380.1,    # φ22
-    25: 490.9,    # φ25
-    28: 615.8,    # φ28
-    32: 804.2,    # φ32
-    36: 1017.9,   # φ36
-}
-
-# Diámetros disponibles ordenados
-AVAILABLE_DIAMETERS = sorted(BAR_AREAS.keys())
+from app.domain.constants.materials import BAR_AREAS, AVAILABLE_DIAMETERS
 
 # Diámetro por defecto (más común para mínimo)
 DEFAULT_DIAMETER = 8

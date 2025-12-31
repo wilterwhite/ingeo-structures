@@ -26,7 +26,15 @@ from .phi_chapter21 import (
 )
 from .shear import *
 from .seismic import SeismicDesignCategory, WallCategory, SDC_REQUIREMENTS
-from .materials import SteelGrade, LAMBDA_NORMAL, LAMBDA_SAND_LIGHTWEIGHT, LAMBDA_ALL_LIGHTWEIGHT
+from .materials import (
+    SteelGrade,
+    LAMBDA_NORMAL,
+    LAMBDA_SAND_LIGHTWEIGHT,
+    LAMBDA_ALL_LIGHTWEIGHT,
+    BAR_AREAS,
+    AVAILABLE_DIAMETERS,
+    get_bar_area,
+)
 from .stiffness import (
     WALL_STIFFNESS_FACTOR,
     WALL_UNCRACKED_STIFFNESS_FACTOR,

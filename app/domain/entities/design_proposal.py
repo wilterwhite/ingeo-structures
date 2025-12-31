@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, Dict, Any, List
 
+from ..constants.materials import get_bar_area
+
 
 class FailureMode(Enum):
     """Modos de falla detectados en verificación."""
@@ -54,12 +56,7 @@ class ReinforcementConfig:
     @property
     def As_edge(self) -> float:
         """Área de acero de borde total (mm²)."""
-        BAR_AREAS = {
-            6: 28.3, 8: 50.3, 10: 78.5, 12: 113.1,
-            16: 201.1, 18: 254.5, 20: 314.2, 22: 380.1,
-            25: 490.9, 28: 615.8, 32: 804.2, 36: 1017.9,
-        }
-        bar_area = BAR_AREAS.get(self.diameter_edge, 78.5)
+        bar_area = get_bar_area(self.diameter_edge, 78.5)
         return self.n_edge_bars * 2 * bar_area  # 2 extremos
 
     def to_dict(self) -> Dict[str, Any]:

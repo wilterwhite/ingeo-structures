@@ -16,6 +16,7 @@ from copy import deepcopy
 from dataclasses import replace
 
 from ...domain.entities import Pier, PierForces
+from ...domain.constants.materials import get_bar_area
 from ...domain.entities.design_proposal import (
     DesignProposal,
     ReinforcementConfig,
@@ -197,7 +198,7 @@ class ProposalService:
         current_as = original_config.As_edge
         start_idx = 0
         for i, (n, d) in enumerate(BOUNDARY_BAR_SEQUENCE):
-            bar_area = pier.BAR_AREAS.get(d, 78.5)
+            bar_area = get_bar_area(d, 78.5)
             seq_as = n * 2 * bar_area
             if seq_as > current_as:
                 start_idx = i
@@ -384,7 +385,7 @@ class ProposalService:
         current_as = original_config.As_edge
         boundary_start_idx = 0
         for i, (n, d) in enumerate(BOUNDARY_BAR_SEQUENCE):
-            bar_area = pier.BAR_AREAS.get(d, 78.5)
+            bar_area = get_bar_area(d, 78.5)
             seq_as = n * 2 * bar_area
             if seq_as > current_as:
                 boundary_start_idx = i

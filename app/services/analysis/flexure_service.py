@@ -31,7 +31,7 @@ class FlexureService:
 
     def pier_to_steel_layers(self, pier: Pier) -> List[SteelLayer]:
         """
-        Convierte las capas de acero del pier a objetos SteelLayer.
+        Obtiene las capas de acero del pier.
 
         Args:
             pier: Pier con la configuración de armadura
@@ -39,10 +39,7 @@ class FlexureService:
         Returns:
             Lista de SteelLayer para usar en generate_interaction_curve
         """
-        return [
-            SteelLayer(position=pos, area=area)
-            for pos, area in pier.get_steel_layers()
-        ]
+        return pier.get_steel_layers()
 
     def generate_interaction_curve(
         self,
