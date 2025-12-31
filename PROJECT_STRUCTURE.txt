@@ -1,0 +1,135 @@
+======================================================================
+  INGEO STRUCTURES - Estructura del Proyecto
+  Generado: 2025-12-30 23:16:52
+======================================================================
+
+├── .gitignore                     (  32 líneas)  # Archivos ignorados por git
+├── README.md                      ( 243 líneas)  # Documentación del proyecto
+├── requirements.txt               (  16 líneas)  # Dependencias Python del proyecto
+└── run.py                         (  96 líneas)  # Punto de entrada de la aplicación
+├── app/
+│   └── __init__.py                    (   7 líneas)  # Inicialización del módulo
+│   ├── domain/
+│   │   ├── __init__.py                    (  79 líneas)  # Inicialización del módulo
+│   │   └── result.py                      (  51 líneas)  # Módulo Python
+│   │   ├── calculations/
+│   │   │   ├── __init__.py                    (  23 líneas)  # Inicialización del módulo
+│   │   │   ├── steel_layer_calculator.py      ( 104 líneas)  # Cálculo de capas de acero para P-M
+│   │   │   └── wall_continuity.py             ( 188 líneas)  # Cálculo de altura efectiva hwcs
+│   │   ├── chapter11/
+│   │   │   ├── __init__.py                    (  56 líneas)  # Inicialización del módulo
+│   │   │   ├── design_methods.py              ( 642 líneas)  # Módulo Python
+│   │   │   ├── limits.py                      ( 389 líneas)  # Módulo Python
+│   │   │   └── reinforcement.py               ( 366 líneas)  # Módulo Python
+│   │   ├── chapter18/
+│   │   │   ├── __init__.py                    ( 114 líneas)  # Inicialización del módulo
+│   │   │   ├── amplification.py               ( 464 líneas)  # Módulo Python
+│   │   │   ├── boundary_elements.py           ( 651 líneas)  # Módulo Python
+│   │   │   ├── coupling_beams.py              ( 651 líneas)  # Módulo Python
+│   │   │   └── piers.py                       ( 620 líneas)  # Módulo Python
+│   │   ├── constants/
+│   │   │   ├── __init__.py                    (  51 líneas)  # Inicialización del módulo
+│   │   │   ├── materials.py                   (  84 líneas)  # Constantes de materiales (barras, hormigón)
+│   │   │   ├── phi_chapter21.py               ( 103 líneas)  # Módulo Python
+│   │   │   ├── seismic.py                     (  67 líneas)  # Módulo Python
+│   │   │   ├── shear.py                       ( 237 líneas)  # Módulo Python
+│   │   │   ├── stiffness.py                   (  67 líneas)  # Módulo Python
+│   │   │   └── units.py                       (  99 líneas)  # Factores de conversión de unidades
+│   │   ├── entities/
+│   │   │   ├── __init__.py                    (  30 líneas)  # Inicialización del módulo
+│   │   │   ├── coupling_beam.py               ( 197 líneas)  # Configuración de vigas de acople
+│   │   │   ├── design_proposal.py             ( 224 líneas)  # Propuestas de diseño para piers que fallan
+│   │   │   ├── load_combination.py            (  50 líneas)  # Módulo Python
+│   │   │   ├── parsed_data.py                 (  40 líneas)  # Módulo Python
+│   │   │   ├── pier.py                        ( 352 líneas)  # Entidad Pier: muro de hormigón armado
+│   │   │   ├── pier_forces.py                 ( 159 líneas)  # Módulo Python
+│   │   │   └── verification_result.py         ( 231 líneas)  # Resultados de verificación estructural
+│   │   ├── flexure/
+│   │   │   ├── __init__.py                    (  23 líneas)  # Inicialización del módulo
+│   │   │   ├── checker.py                     ( 277 líneas)  # Módulo Python
+│   │   │   ├── interaction_diagram.py         ( 375 líneas)  # Módulo Python
+│   │   │   └── slenderness.py                 ( 598 líneas)  # Módulo Python
+│   │   ├── shear/
+│   │   │   ├── __init__.py                    (  42 líneas)  # Inicialización del módulo
+│   │   │   ├── classification.py              ( 176 líneas)  # Módulo Python
+│   │   │   ├── results.py                     (  97 líneas)  # Módulo Python
+│   │   │   ├── shear_friction.py              ( 498 líneas)  # Módulo Python
+│   │   │   └── verification.py                ( 432 líneas)  # Módulo Python
+│   ├── routes/
+│   │   ├── __init__.py                    (   4 líneas)  # Inicialización del módulo
+│   │   └── analysis.py                    ( 488 líneas)  # Módulo Python
+│   ├── services/
+│   │   ├── __init__.py                    (  30 líneas)  # Inicialización del módulo
+│   │   ├── factory.py                     (  70 líneas)  # Módulo Python
+│   │   └── pier_analysis.py               (1257 líneas)  # Servicio principal de análisis de piers
+│   │   ├── analysis/
+│   │   │   ├── __init__.py                    (  10 líneas)  # Inicialización del módulo
+│   │   │   ├── aci_318_25_service.py          ( 849 líneas)  # Módulo Python
+│   │   │   ├── flexure_service.py             ( 202 líneas)  # Verificación de flexión con diagrama P-M
+│   │   │   ├── proposal_service.py            ( 573 líneas)  # Generación de propuestas de diseño
+│   │   │   ├── shear_service.py               ( 646 líneas)  # Verificación de corte según ACI 318
+│   │   │   └── statistics_service.py          ( 192 líneas)  # Módulo Python
+│   │   ├── parsing/
+│   │   │   ├── __init__.py                    (  21 líneas)  # Inicialización del módulo
+│   │   │   ├── excel_parser.py                ( 275 líneas)  # Parser de archivos Excel de ETABS
+│   │   │   ├── material_mapper.py             ( 140 líneas)  # Módulo Python
+│   │   │   ├── reinforcement_config.py        ( 243 líneas)  # Configuración de armadura
+│   │   │   ├── session_manager.py             ( 355 líneas)  # Gestión de sesiones de análisis
+│   │   │   └── table_extractor.py             ( 148 líneas)  # Módulo Python
+│   │   ├── presentation/
+│   │   │   ├── __init__.py                    (   7 líneas)  # Inicialización del módulo
+│   │   │   └── plot_generator.py              ( 607 líneas)  # Módulo Python
+│   ├── static/
+│   │   ├── css/
+│   │   │   ├── base.css                       ( 413 líneas)  # Hoja de estilos
+│   │   │   ├── modals.css                     ( 381 líneas)  # Estilos de ventanas modales
+│   │   │   ├── structural.css                 (   7 líneas)  # Estilos principales de la aplicación
+│   │   │   ├── tables.css                     ( 620 líneas)  # Estilos de tablas de piers y resultados
+│   │   │   └── variables.css                  (  26 líneas)  # Hoja de estilos
+│   │   ├── js/
+│   │   │   ├── PiersTable.js                  ( 292 líneas)  # Renderizado de tabla de piers
+│   │   │   ├── PlotModal.js                   ( 234 líneas)  # Modal para diagrama P-M interactivo
+│   │   │   ├── ResultsTable.js                ( 831 líneas)  # Renderizado de tabla de resultados
+│   │   │   ├── StructuralAPI.js               ( 198 líneas)  # API client para comunicación con backend
+│   │   │   └── StructuralPage.js              ( 481 líneas)  # Controlador principal de la página
+│   ├── templates/
+│   │   └── structural_standalone.html     ( 419 líneas)  # Template HTML principal
+├── examples/
+│   ├── Pier results.xlsx              (3019 líneas)  # Archivo Excel
+│   ├── README.md                      (  44 líneas)  # Documentación del proyecto
+│   └── test_data_comprehensive.xlsx   ( 120 líneas)  # Archivo Excel
+├── scripts/
+│   ├── create_test_data.py            ( 172 líneas)  # Módulo Python
+│   ├── generate_project_tree.py       ( 219 líneas)  # Módulo Python
+│   ├── generate_test_data.py          ( 316 líneas)  # Módulo Python
+│   ├── run_test_analysis.py           ( 155 líneas)  # Módulo Python
+│   └── split_aci_pdf.py               ( 386 líneas)  # Módulo Python
+├── tests/
+│   ├── __init__.py                    (   1 líneas)  # Inicialización del módulo
+│   ├── test_coupling_beam.py          ( 214 líneas)  # Tests para coupling_beam
+│   └── test_proposal_service.py       ( 308 líneas)  # Tests para proposal_service
+│   ├── domain/
+│   │   └── __init__.py                    (   1 líneas)  # Inicialización del módulo
+│   │   ├── flexure/
+│   │   │   ├── __init__.py                    (   1 líneas)  # Inicialización del módulo
+│   │   │   └── test_slenderness.py            ( 550 líneas)  # Tests para slenderness
+│   │   ├── shear/
+│   │   │   ├── __init__.py                    (   1 líneas)  # Inicialización del módulo
+│   │   │   └── test_shear_friction.py         ( 353 líneas)  # Tests para shear_friction
+
+======================================================================
+  RESUMEN
+======================================================================
+  Total de archivos: 89
+  Total de líneas:   25,180
+
+  Líneas por tipo de archivo:
+    .py        17,804 líneas ( 70.7%)
+    .xlsx       3,139 líneas ( 12.5%)
+    .js         2,036 líneas (  8.1%)
+    .css        1,447 líneas (  5.7%)
+    .html         419 líneas (  1.7%)
+    .md           287 líneas (  1.1%)
+    other          32 líneas (  0.1%)
+    .txt           16 líneas (  0.1%)
+======================================================================
