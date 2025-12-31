@@ -12,6 +12,7 @@ from ...domain.flexure import (
     SteelLayer,
     InteractionPoint,
 )
+from ...domain.constants.phi_chapter21 import PHI_COMPRESSION
 
 
 class FlexureService:
@@ -156,12 +157,11 @@ class FlexureService:
         # Esbeltez
         slenderness = self._slenderness_service.analyze(pier, k=0.8, braced=True)
 
-        # 1. Compresión pura
-        phi_compression = 0.65
+        # 1. Compresión pura (§21.2.2 - controlado por compresión)
         Ag = pier.width * pier.thickness
         As_total = pier.As_flexure_total
         Pn_max = 0.80 * (0.85 * pier.fc * (Ag - As_total) + pier.fy * As_total)
-        phi_Pn_max = phi_compression * Pn_max / 9806.65  # tonf
+        phi_Pn_max = PHI_COMPRESSION * Pn_max / 9806.65  # tonf
 
         # 2. Momento M3 (eje fuerte)
         steel_layers_M3 = self.pier_to_steel_layers(pier)

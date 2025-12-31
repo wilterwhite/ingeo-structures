@@ -17,6 +17,7 @@ from dataclasses import replace
 
 from ...domain.entities import Pier, PierForces
 from ...domain.constants.materials import get_bar_area
+from ...domain.constants.phi_chapter21 import RHO_MAX
 from ...domain.entities.design_proposal import (
     DesignProposal,
     ReinforcementConfig,
@@ -45,11 +46,6 @@ class ProposalService:
 
     # Máximo de iteraciones por propuesta
     MAX_ITERATIONS = 30
-
-    # Cuantía máxima para asegurar falla dúctil
-    # ρmax = 0.04 (4%) es límite práctico común
-    # Si se excede, aumentar espesor en lugar de más acero
-    RHO_MAX = 0.04
 
     def __init__(
         self,
@@ -479,7 +475,7 @@ class ProposalService:
 
                         # Verificar cuantía máxima para asegurar ductilidad
                         # Si ρ > ρmax, saltar esta configuración (falla frágil)
-                        if test_pier.rho_vertical > self.RHO_MAX:
+                        if test_pier.rho_vertical > RHO_MAX:
                             continue
 
                         new_sf = self._verify_flexure(test_pier, pier_forces)
