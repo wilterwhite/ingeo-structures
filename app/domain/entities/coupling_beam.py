@@ -5,11 +5,10 @@ Configuracion de viga de acople generica para prediseno.
 Permite definir una viga estandar que se aplica a todos los piers,
 con posibilidad de sobre-escribir valores individuales.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
-import math
 
-from ..constants.materials import BAR_AREAS, get_bar_area
+from ..constants.materials import get_bar_area
 
 
 @dataclass
