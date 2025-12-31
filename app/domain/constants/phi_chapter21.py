@@ -1,4 +1,4 @@
-# app/domain/constants/phi.py
+# app/domain/constants/phi_chapter21.py
 """
 Factores de reducción de resistencia según ACI 318-25 Capítulo 21.
 
