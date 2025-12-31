@@ -26,6 +26,7 @@ from .analysis.aci_318_25_service import (
     ACI318_25_Service,
     Chapter18_VerificationResult
 )
+from .analysis.pier_verification_service import PierVerificationService
 from ..domain.entities import Pier, VerificationResult, PierForces
 from ..domain.flexure import InteractionDiagramService, SlendernessService, SteelLayer
 from ..domain.chapter11 import WallType, WallCastType
@@ -52,7 +53,8 @@ class PierAnalysisService:
         interaction_service: Optional[InteractionDiagramService] = None,
         plot_generator: Optional[PlotGenerator] = None,
         aci_318_25_service: Optional[ACI318_25_Service] = None,
-        proposal_service: Optional[ProposalService] = None
+        proposal_service: Optional[ProposalService] = None,
+        verification_service: Optional[PierVerificationService] = None
     ):
         """
         Inicializa el servicio de analisis.
@@ -67,6 +69,7 @@ class PierAnalysisService:
             plot_generator: Generador de graficos (opcional)
             aci_318_25_service: Servicio de verificacion ACI 318-25 (opcional)
             proposal_service: Servicio de propuestas de diseño (opcional)
+            verification_service: Servicio de verificacion de piers (opcional)
 
         Nota: Los servicios se crean por defecto si no se pasan.
               Pasar None explicito permite inyectar mocks para testing.
@@ -83,6 +86,153 @@ class PierAnalysisService:
             flexure_service=self._flexure_service,
             shear_service=self._shear_service
         )
+        self._verification_service = verification_service or PierVerificationService(
+            session_manager=self._session_manager,
+            aci_318_25_service=self._aci_318_25_service
+        )
+
+    # =========================================================================
+    # Helpers - Conversión de Enums
+    # =========================================================================
+
+    def _get_sdc_enum(self, sdc: str) -> SeismicDesignCategory:
+        """Convierte string SDC a enum."""
+        return {
+            'A': SeismicDesignCategory.A,
+            'B': SeismicDesignCategory.B,
+            'C': SeismicDesignCategory.C,
+            'D': SeismicDesignCategory.D,
+            'E': SeismicDesignCategory.E,
+            'F': SeismicDesignCategory.F
+        }.get(sdc.upper(), SeismicDesignCategory.D)
+
+    def _get_wall_type_enum(self, wall_type: str) -> WallType:
+        """Convierte string wall_type a enum."""
+        return {
+            'bearing': WallType.BEARING,
+            'nonbearing': WallType.NONBEARING,
+            'basement': WallType.BASEMENT,
+            'foundation': WallType.FOUNDATION
+        }.get(wall_type, WallType.BEARING)
+
+    # =========================================================================
+    # Helpers - Extracción de Datos
+    # =========================================================================
+
+    def _get_max_Vu(self, pier_forces: Optional[PierForces]) -> tuple:
+        """Obtiene el cortante máximo de las combinaciones."""
+        Vu = 0.0
+        Vu_Eh = 0.0
+        if pier_forces and pier_forces.combinations:
+            for combo in pier_forces.combinations:
+                Vu_combo = max(abs(combo.V2), abs(combo.V3))
+                if Vu_combo > Vu:
+                    Vu = Vu_combo
+                    Vu_Eh = Vu_combo
+        return Vu, Vu_Eh
+
+    def _get_hwcs_hn(
+        self,
+        session_id: str,
+        pier_key: str,
+        hwcs: Optional[float] = None,
+        hn_ft: Optional[float] = None
+    ) -> tuple:
+        """Obtiene hwcs y hn_ft, usando valores calculados si no se proporcionan."""
+        if hwcs is None or hwcs <= 0:
+            hwcs = self._session_manager.get_hwcs(session_id, pier_key)
+        if hn_ft is None or hn_ft <= 0:
+            hn_ft = self._session_manager.get_hn_ft(session_id)
+        return hwcs, hn_ft
+
+    def _generate_interaction_data(
+        self,
+        pier: Pier,
+        apply_slenderness: bool = False
+    ) -> tuple:
+        """
+        Genera steel_layers, interaction_points y phi_Mn_0.
+
+        Returns:
+            (steel_layers, interaction_points, phi_Mn_0)
+        """
+        steel_layers = self._flexure_service.pier_to_steel_layers(pier)
+        interaction_points = self._interaction_service.generate_interaction_curve(
+            width=pier.width,
+            thickness=pier.thickness,
+            fc=pier.fc,
+            fy=pier.fy,
+            As_total=pier.As_flexure_total,
+            cover=pier.cover,
+            steel_layers=steel_layers
+        )
+
+        # Aplicar reducción por esbeltez si se requiere
+        if apply_slenderness:
+            slenderness = self._slenderness_service.analyze(pier, k=0.8, braced=True)
+            if slenderness.is_slender:
+                reduction = slenderness.buckling_factor
+                for point in interaction_points:
+                    point.phi_Pn *= reduction
+                    point.Pn *= reduction
+
+        # Obtener phi_Mn_0
+        _, _, _, phi_Mn_0, _, _, _ = self._interaction_service.check_flexure(
+            interaction_points, [(0, 1, "dummy")]
+        )
+
+        return steel_layers, interaction_points, phi_Mn_0
+
+    def _analyze_piers_batch(
+        self,
+        piers: Dict[str, Pier],
+        parsed_data: Any,
+        generate_plots: bool = False,
+        moment_axis: str = 'M3',
+        angle_deg: float = 0
+    ) -> List[VerificationResult]:
+        """
+        Analiza un lote de piers y retorna los resultados.
+
+        Args:
+            piers: Diccionario de piers a analizar {key: Pier}
+            parsed_data: Datos parseados de la sesión
+            generate_plots: Generar gráficos P-M individuales
+            moment_axis: Eje de momento
+            angle_deg: Ángulo para vista combinada
+
+        Returns:
+            Lista de VerificationResult
+        """
+        # Obtener hn_ft del edificio
+        hn_ft = None
+        if parsed_data.building_info:
+            hn_ft = parsed_data.building_info.hn_ft
+
+        results: List[VerificationResult] = []
+        for key, pier in piers.items():
+            pier_forces = parsed_data.pier_forces.get(key)
+
+            # Obtener hwcs y continuity_info para este pier
+            hwcs = None
+            continuity_info = None
+            if parsed_data.continuity_info and key in parsed_data.continuity_info:
+                continuity_info = parsed_data.continuity_info[key]
+                hwcs = continuity_info.hwcs
+
+            result = self._analyze_pier(
+                pier=pier,
+                pier_forces=pier_forces,
+                generate_plot=generate_plots,
+                moment_axis=moment_axis,
+                angle_deg=angle_deg,
+                hwcs=hwcs,
+                hn_ft=hn_ft,
+                continuity_info=continuity_info
+            )
+            results.append(result)
+
+        return results
 
     # =========================================================================
     # Validación Centralizada
@@ -171,34 +321,14 @@ class PierAnalysisService:
         # Obtener datos de la sesión
         parsed_data = self._session_manager.get_session(session_id)
 
-        # Obtener hn_ft del edificio
-        hn_ft = None
-        if parsed_data.building_info:
-            hn_ft = parsed_data.building_info.hn_ft
-
-        # Analizar cada pier
-        results: List[VerificationResult] = []
-        for key, pier in parsed_data.piers.items():
-            pier_forces = parsed_data.pier_forces.get(key)
-
-            # Obtener hwcs y continuity_info para este pier
-            hwcs = None
-            continuity_info = None
-            if parsed_data.continuity_info and key in parsed_data.continuity_info:
-                continuity_info = parsed_data.continuity_info[key]
-                hwcs = continuity_info.hwcs
-
-            result = self._analyze_pier(
-                pier=pier,
-                pier_forces=pier_forces,
-                generate_plot=generate_plots,
-                moment_axis=moment_axis,
-                angle_deg=angle_deg,
-                hwcs=hwcs,
-                hn_ft=hn_ft,
-                continuity_info=continuity_info
-            )
-            results.append(result)
+        # Analizar todos los piers
+        results = self._analyze_piers_batch(
+            piers=parsed_data.piers,
+            parsed_data=parsed_data,
+            generate_plots=generate_plots,
+            moment_axis=moment_axis,
+            angle_deg=angle_deg
+        )
 
         # Calcular estadísticas (delegado a StatisticsService)
         statistics = self._statistics_service.calculate_statistics(results)
@@ -246,34 +376,9 @@ class PierAnalysisService:
         if pier_forces is None:
             return {'success': False, 'error': f'Forces not found for pier: {pier_key}'}
 
-        # Analizar esbeltez
-        slenderness = self._slenderness_service.analyze(pier, k=0.8, braced=True)
-
-        # Generar capas de acero con posiciones reales (delegado a FlexureService)
-        steel_layers = self._flexure_service.pier_to_steel_layers(pier)
-
-        # Generar curva de interacción con posiciones reales de barras
-        interaction_points = self._interaction_service.generate_interaction_curve(
-            width=pier.width,
-            thickness=pier.thickness,
-            fc=pier.fc,
-            fy=pier.fy,
-            As_total=pier.As_flexure_total,
-            cover=pier.cover,
-            steel_layers=steel_layers
-        )
-
-        # Aplicar reducción por esbeltez a la curva de capacidad
-        if slenderness.is_slender:
-            reduction = slenderness.buckling_factor
-            for point in interaction_points:
-                point.phi_Pn *= reduction
-                point.Pn *= reduction
-
-        # Obtener phi_Mn_0 (capacidad a flexión pura) para verificación de capacidad
-        # Usamos P=0, M=1 solo para obtener phi_Mn_0
-        _, _, _, phi_Mn_0, _, _, _ = self._interaction_service.check_flexure(
-            interaction_points, [(0, 1, "dummy")]
+        # Generar datos de interacción (con reducción por esbeltez)
+        _, interaction_points, phi_Mn_0 = self._generate_interaction_data(
+            pier, apply_slenderness=True
         )
 
         # Calcular FS para cada combinación
@@ -378,17 +483,8 @@ class PierAnalysisService:
         combo = pier_forces.combinations[combination_index]
         angle_deg = combo.moment_angle_deg
 
-        # Generar capas de acero y curva de interacción
-        steel_layers = self._flexure_service.pier_to_steel_layers(pier)
-        interaction_points = self._interaction_service.generate_interaction_curve(
-            width=pier.width,
-            thickness=pier.thickness,
-            fc=pier.fc,
-            fy=pier.fy,
-            As_total=pier.As_flexure_total,
-            cover=pier.cover,
-            steel_layers=steel_layers
-        )
+        # Generar datos de interacción
+        _, interaction_points, _ = self._generate_interaction_data(pier)
         design_curve = self._interaction_service.get_design_curve(interaction_points)
 
         # Calcular SF para esta combinación
@@ -689,34 +785,14 @@ class PierAnalysisService:
         if not filtered_piers:
             return {'success': True, 'summary_plot': None, 'count': 0}
 
-        # Obtener hn_ft del edificio
-        hn_ft = None
-        if parsed_data.building_info:
-            hn_ft = parsed_data.building_info.hn_ft
-
-        # Analizar piers filtrados
-        results: List[VerificationResult] = []
-        for key, pier in filtered_piers.items():
-            pier_forces = parsed_data.pier_forces.get(key)
-
-            # Obtener hwcs y continuity_info para este pier
-            hwcs = None
-            continuity_info = None
-            if parsed_data.continuity_info and key in parsed_data.continuity_info:
-                continuity_info = parsed_data.continuity_info[key]
-                hwcs = continuity_info.hwcs
-
-            result = self._analyze_pier(
-                pier=pier,
-                pier_forces=pier_forces,
-                generate_plot=False,  # No generar plots individuales
-                moment_axis='M3',
-                angle_deg=0,
-                hwcs=hwcs,
-                hn_ft=hn_ft,
-                continuity_info=continuity_info
-            )
-            results.append(result)
+        # Analizar piers filtrados (sin generar plots individuales)
+        results = self._analyze_piers_batch(
+            piers=filtered_piers,
+            parsed_data=parsed_data,
+            generate_plots=False,
+            moment_axis='M3',
+            angle_deg=0
+        )
 
         # Generar gráfico resumen (delegado a StatisticsService)
         summary_plot = self._statistics_service.generate_summary_plot(results)
@@ -836,7 +912,7 @@ class PierAnalysisService:
         }
 
     # =========================================================================
-    # Verificacion ACI 318-25
+    # Verificacion ACI 318-25 (delegado a PierVerificationService)
     # =========================================================================
 
     def verify_aci_318_25(
@@ -846,150 +922,20 @@ class PierAnalysisService:
         wall_type: str = 'bearing',
         cast_type: str = 'cast_in_place'
     ) -> Dict[str, Any]:
-        """
-        Verifica conformidad ACI 318-25 Capitulo 11 para un pier.
-
-        Incluye verificaciones de:
-        - Espesor minimo (11.3.1)
-        - Espaciamiento maximo de refuerzo (11.7)
-        - Doble cortina (11.7.2.3)
-        - Refuerzo minimo (11.6)
-        - Metodo simplificado (11.5.3)
-        - Muros esbeltos (11.8)
-
-        Args:
-            session_id: ID de sesion
-            pier_key: Clave del pier (Story_Label)
-            wall_type: Tipo de muro ('bearing', 'nonbearing', 'basement')
-            cast_type: Tipo de construccion ('cast_in_place', 'precast')
-
-        Returns:
-            Dict con resultados de verificacion ACI 318-25
-        """
-        # Validar pier
-        error = self._validate_pier(session_id, pier_key)
-        if error:
-            return error
-
-        pier = self._session_manager.get_pier(session_id, pier_key)
-        pier_forces = self._session_manager.get_pier_forces(session_id, pier_key)
-
-        # Convertir tipos
-        wall_type_enum = {
-            'bearing': WallType.BEARING,
-            'nonbearing': WallType.NONBEARING,
-            'basement': WallType.BASEMENT,
-            'foundation': WallType.FOUNDATION
-        }.get(wall_type, WallType.BEARING)
-
-        cast_type_enum = {
-            'cast_in_place': WallCastType.CAST_IN_PLACE,
-            'precast': WallCastType.PRECAST
-        }.get(cast_type, WallCastType.CAST_IN_PLACE)
-
-        # Ejecutar verificacion
-        if pier_forces:
-            result = self._aci_318_25_service.verify_from_pier_forces(
-                pier=pier,
-                pier_forces=pier_forces,
-                wall_type=wall_type_enum
-            )
-        else:
-            result = self._aci_318_25_service.verify_chapter_11(
-                pier=pier,
-                wall_type=wall_type_enum,
-                cast_type=cast_type_enum
-            )
-
-        # Obtener resumen
-        summary = self._aci_318_25_service.get_verification_summary(result)
-
-        return {
-            'success': True,
-            'pier_key': pier_key,
-            'aci_318_25': summary
-        }
+        """Verifica conformidad ACI 318-25 Capitulo 11 para un pier."""
+        return self._verification_service.verify_aci_318_25(
+            session_id, pier_key, wall_type, cast_type
+        )
 
     def verify_all_piers_aci_318_25(
         self,
         session_id: str,
         wall_type: str = 'bearing'
     ) -> Dict[str, Any]:
-        """
-        Verifica conformidad ACI 318-25 para todos los piers de la sesion.
-
-        Args:
-            session_id: ID de sesion
-            wall_type: Tipo de muro por defecto
-
-        Returns:
-            Dict con resultados de verificacion para todos los piers
-        """
-        error = self._validate_session(session_id)
-        if error:
-            return error
-
-        parsed_data = self._session_manager.get_session(session_id)
-
-        results = []
-        issues_count = 0
-        warnings_count = 0
-
-        wall_type_enum = {
-            'bearing': WallType.BEARING,
-            'nonbearing': WallType.NONBEARING,
-            'basement': WallType.BASEMENT
-        }.get(wall_type, WallType.BEARING)
-
-        for key, pier in parsed_data.piers.items():
-            pier_forces = parsed_data.pier_forces.get(key)
-
-            if pier_forces:
-                result = self._aci_318_25_service.verify_from_pier_forces(
-                    pier=pier,
-                    pier_forces=pier_forces,
-                    wall_type=wall_type_enum
-                )
-            else:
-                result = self._aci_318_25_service.verify_chapter_11(
-                    pier=pier,
-                    wall_type=wall_type_enum
-                )
-
-            summary = self._aci_318_25_service.get_verification_summary(result)
-            issues_count += len(result.critical_issues)
-            warnings_count += len(result.warnings)
-
-            results.append({
-                'pier_key': key,
-                'story': pier.story,
-                'label': pier.label,
-                'all_ok': result.all_ok,
-                'critical_issues': result.critical_issues,
-                'warnings': result.warnings
-            })
-
-        # Estadisticas
-        total = len(results)
-        ok_count = sum(1 for r in results if r['all_ok'])
-        not_ok_count = total - ok_count
-
-        return {
-            'success': True,
-            'statistics': {
-                'total_piers': total,
-                'ok': ok_count,
-                'not_ok': not_ok_count,
-                'total_issues': issues_count,
-                'total_warnings': warnings_count,
-                'compliance_rate': round(ok_count / total * 100, 1) if total > 0 else 0
-            },
-            'results': results
-        }
-
-    # =========================================================================
-    # Verificacion ACI 318-25 Capitulo 18 (Sismico)
-    # =========================================================================
+        """Verifica conformidad ACI 318-25 para todos los piers."""
+        return self._verification_service.verify_all_piers_aci_318_25(
+            session_id, wall_type
+        )
 
     def verify_seismic(
         self,
@@ -1002,85 +948,10 @@ class PierAnalysisService:
         sigma_max: float = 0,
         is_wall_pier: bool = False
     ) -> Dict[str, Any]:
-        """
-        Verifica conformidad ACI 318-25 Capitulo 18 para un pier.
-
-        Verifica requisitos sismicos para muros estructurales especiales:
-        - Amplificacion de cortante (18.10.3.3)
-        - Requisitos de muro especial (18.10.2)
-        - Elementos de borde (18.10.6)
-        - Pilar de muro (18.10.8)
-
-        Args:
-            session_id: ID de sesion
-            pier_key: Clave del pier (Story_Label)
-            sdc: Categoria de Diseno Sismico ('A', 'B', 'C', 'D', 'E', 'F')
-            delta_u: Desplazamiento de diseno en tope (mm)
-            hwcs: Altura del muro desde seccion critica (mm), None = usar calculado
-            hn_ft: Altura total del edificio (pies), None = usar calculado
-            sigma_max: Esfuerzo maximo de compresion (MPa)
-            is_wall_pier: Si es un pilar de muro (segmento estrecho)
-
-        Returns:
-            Dict con resultados de verificacion sismica
-        """
-        # Validar pier
-        error = self._validate_pier(session_id, pier_key)
-        if error:
-            return error
-
-        pier = self._session_manager.get_pier(session_id, pier_key)
-        pier_forces = self._session_manager.get_pier_forces(session_id, pier_key)
-
-        # Usar hwcs/hn_ft calculados si no se proporcionan
-        if hwcs is None or hwcs <= 0:
-            hwcs = self._session_manager.get_hwcs(session_id, pier_key)
-        if hn_ft is None or hn_ft <= 0:
-            hn_ft = self._session_manager.get_hn_ft(session_id)
-
-        # Convertir SDC
-        sdc_enum = {
-            'A': SeismicDesignCategory.A,
-            'B': SeismicDesignCategory.B,
-            'C': SeismicDesignCategory.C,
-            'D': SeismicDesignCategory.D,
-            'E': SeismicDesignCategory.E,
-            'F': SeismicDesignCategory.F
-        }.get(sdc.upper(), SeismicDesignCategory.D)
-
-        # Obtener cortante maximo
-        Vu = 0
-        Vu_Eh = 0
-        if pier_forces and pier_forces.combinations:
-            for combo in pier_forces.combinations:
-                V2 = abs(combo.V2)
-                V3 = abs(combo.V3)
-                Vu_combo = max(V2, V3)
-                if Vu_combo > Vu:
-                    Vu = Vu_combo
-                    Vu_Eh = Vu_combo
-
-        # Ejecutar verificacion (hwcs ya tiene valor calculado o de usuario)
-        result = self._aci_318_25_service.verify_chapter_18(
-            pier=pier,
-            sdc=sdc_enum,
-            Vu=Vu,
-            Vu_Eh=Vu_Eh,
-            delta_u=delta_u,
-            hwcs=hwcs if hwcs and hwcs > 0 else pier.height,
-            hn_ft=hn_ft if hn_ft else 0,
-            sigma_max=sigma_max,
-            is_wall_pier=is_wall_pier
+        """Verifica conformidad ACI 318-25 Capitulo 18 para un pier."""
+        return self._verification_service.verify_seismic(
+            session_id, pier_key, sdc, delta_u, hwcs, hn_ft, sigma_max, is_wall_pier
         )
-
-        # Obtener resumen
-        summary = self._aci_318_25_service.get_chapter_18_summary(result)
-
-        return {
-            'success': True,
-            'pier_key': pier_key,
-            'chapter_18': summary
-        }
 
     def verify_combined_aci(
         self,
@@ -1094,64 +965,11 @@ class PierAnalysisService:
         sigma_max: float = 0,
         is_wall_pier: bool = False
     ) -> Dict[str, Any]:
-        """
-        Verificacion combinada de Capitulos 11 y 18 para un pier.
-
-        Args:
-            session_id: ID de sesion
-            pier_key: Clave del pier
-            wall_type: Tipo de muro
-            sdc: Categoria de Diseno Sismico
-            delta_u: Desplazamiento de diseno (mm)
-            hwcs: Altura desde seccion critica (mm), None = usar calculado
-            hn_ft: Altura del edificio (pies), None = usar calculado
-            sigma_max: Esfuerzo maximo (MPa)
-            is_wall_pier: Si es pilar de muro
-
-        Returns:
-            Dict con resultados combinados
-        """
-        # Validar pier
-        error = self._validate_pier(session_id, pier_key)
-        if error:
-            return error
-
-        pier = self._session_manager.get_pier(session_id, pier_key)
-        pier_forces = self._session_manager.get_pier_forces(session_id, pier_key)
-
-        # Usar hwcs/hn_ft calculados si no se proporcionan
-        if hwcs is None or hwcs <= 0:
-            hwcs = self._session_manager.get_hwcs(session_id, pier_key)
-        if hn_ft is None or hn_ft <= 0:
-            hn_ft = self._session_manager.get_hn_ft(session_id)
-
-        # Convertir SDC
-        sdc_enum = {
-            'A': SeismicDesignCategory.A,
-            'B': SeismicDesignCategory.B,
-            'C': SeismicDesignCategory.C,
-            'D': SeismicDesignCategory.D,
-            'E': SeismicDesignCategory.E,
-            'F': SeismicDesignCategory.F
-        }.get(sdc.upper(), SeismicDesignCategory.D)
-
-        # Ejecutar verificacion combinada
-        result = self._aci_318_25_service.verify_combined(
-            pier=pier,
-            pier_forces=pier_forces,
-            sdc=sdc_enum,
-            delta_u=delta_u,
-            hwcs=hwcs if hwcs and hwcs > 0 else pier.height,
-            hn_ft=hn_ft if hn_ft else 0,
-            sigma_max=sigma_max,
-            is_wall_pier=is_wall_pier
+        """Verificacion combinada de Capitulos 11 y 18 para un pier."""
+        return self._verification_service.verify_combined_aci(
+            session_id, pier_key, wall_type, sdc, delta_u, hwcs, hn_ft,
+            sigma_max, is_wall_pier
         )
-
-        return {
-            'success': True,
-            'pier_key': pier_key,
-            **result
-        }
 
     def verify_all_piers_seismic(
         self,
@@ -1159,99 +977,7 @@ class PierAnalysisService:
         sdc: str = 'D',
         hn_ft: Optional[float] = None
     ) -> Dict[str, Any]:
-        """
-        Verifica conformidad sismica para todos los piers de la sesion.
-
-        Args:
-            session_id: ID de sesion
-            sdc: Categoria de Diseno Sismico
-            hn_ft: Altura del edificio (pies), None = usar calculado
-
-        Returns:
-            Dict con resultados para todos los piers
-        """
-        error = self._validate_session(session_id)
-        if error:
-            return error
-
-        parsed_data = self._session_manager.get_session(session_id)
-
-        # Usar hn_ft calculado si no se proporciona
-        if hn_ft is None or hn_ft <= 0:
-            hn_ft = self._session_manager.get_hn_ft(session_id)
-
-        # Convertir SDC
-        sdc_enum = {
-            'A': SeismicDesignCategory.A,
-            'B': SeismicDesignCategory.B,
-            'C': SeismicDesignCategory.C,
-            'D': SeismicDesignCategory.D,
-            'E': SeismicDesignCategory.E,
-            'F': SeismicDesignCategory.F
-        }.get(sdc.upper(), SeismicDesignCategory.D)
-
-        results = []
-        issues_count = 0
-        warnings_count = 0
-
-        for key, pier in parsed_data.piers.items():
-            pier_forces = parsed_data.pier_forces.get(key)
-
-            # Obtener hwcs para este pier
-            hwcs = pier.height  # default
-            if parsed_data.continuity_info and key in parsed_data.continuity_info:
-                hwcs = parsed_data.continuity_info[key].hwcs
-
-            # Obtener cortante maximo
-            Vu = 0
-            Vu_Eh = 0
-            if pier_forces and pier_forces.combinations:
-                for combo in pier_forces.combinations:
-                    V2 = abs(combo.V2)
-                    V3 = abs(combo.V3)
-                    Vu_combo = max(V2, V3)
-                    if Vu_combo > Vu:
-                        Vu = Vu_combo
-                        Vu_Eh = Vu_combo
-
-            result = self._aci_318_25_service.verify_chapter_18(
-                pier=pier,
-                sdc=sdc_enum,
-                Vu=Vu,
-                Vu_Eh=Vu_Eh,
-                hwcs=hwcs,
-                hn_ft=hn_ft if hn_ft else 0
-            )
-
-            issues_count += len(result.critical_issues)
-            warnings_count += len(result.warnings)
-
-            results.append({
-                'pier_key': key,
-                'story': pier.story,
-                'label': pier.label,
-                'sdc': result.sdc.value,
-                'wall_category': result.wall_category.value,
-                'all_ok': result.all_ok,
-                'critical_issues': result.critical_issues,
-                'warnings': result.warnings
-            })
-
-        # Estadisticas
-        total = len(results)
-        ok_count = sum(1 for r in results if r['all_ok'])
-        not_ok_count = total - ok_count
-
-        return {
-            'success': True,
-            'sdc': sdc,
-            'statistics': {
-                'total_piers': total,
-                'ok': ok_count,
-                'not_ok': not_ok_count,
-                'total_issues': issues_count,
-                'total_warnings': warnings_count,
-                'compliance_rate': round(ok_count / total * 100, 1) if total > 0 else 0
-            },
-            'results': results
-        }
+        """Verifica conformidad sismica para todos los piers."""
+        return self._verification_service.verify_all_piers_seismic(
+            session_id, sdc, hn_ft
+        )
