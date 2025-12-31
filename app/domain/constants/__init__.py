@@ -4,7 +4,7 @@ Constantes ACI 318-25 para diseño estructural.
 
 Módulos:
 - units: Constantes de conversión de unidades
-- phi: Factores de reducción de resistencia (Cap. 21)
+- phi_chapter21: Factores de reducción de resistencia (Cap. 21)
 - shear: Constantes para verificación de cortante
 - seismic: Categorías de diseño sísmico
 - materials: Grados de acero y propiedades de materiales
@@ -24,7 +24,51 @@ from .phi_chapter21 import (
     EPSILON_T_LIMIT,
     calculate_phi_flexure,
 )
-from .shear import *
+from .shear import (
+    # Coeficientes alpha_c para muros
+    ALPHA_C_SQUAT,
+    ALPHA_C_SLENDER,
+    HW_LW_SQUAT_LIMIT,
+    HW_LW_SLENDER_LIMIT,
+    ALPHA_C_TENSION_STRESS_MPA,
+    # Límites de Vn
+    VN_MAX_INDIVIDUAL_COEF,
+    VN_MAX_GROUP_COEF,
+    VC_COEF_COLUMN,
+    VS_MAX_COEF,
+    # Clasificación
+    ASPECT_RATIO_WALL_LIMIT,
+    DEFAULT_COVER_MM,
+    # Wall piers
+    WALL_PIER_HW_LW_LIMIT,
+    WALL_PIER_COLUMN_LIMIT,
+    WALL_PIER_ALTERNATE_LIMIT,
+    # Amplificación de cortante
+    OMEGA_V_MIN,
+    OMEGA_V_MAX,
+    OMEGA_V_DYN_COEF,
+    OMEGA_V_DYN_BASE,
+    OMEGA_V_DYN_MIN,
+    OMEGA_0_DEFAULT,
+    # Elementos de borde
+    BOUNDARY_STRESS_REQUIRED,
+    BOUNDARY_STRESS_DISCONTINUE,
+    BOUNDARY_DRIFT_MIN,
+    BOUNDARY_DRIFT_CAPACITY_MIN,
+    BOUNDARY_MIN_WIDTH_RATIO,
+    BOUNDARY_MIN_WIDTH_INCHES,
+    BOUNDARY_C_LW_THRESHOLD,
+    BOUNDARY_SPACING,
+    # Fricción por cortante
+    SHEAR_FRICTION_MU,
+    SHEAR_FRICTION_VN_MAX_COEF_1,
+    SHEAR_FRICTION_VN_MAX_COEF_2_BASE,
+    SHEAR_FRICTION_VN_MAX_COEF_2_FC,
+    SHEAR_FRICTION_VN_MAX_LIMIT_MPa,
+    SHEAR_FRICTION_VN_MAX_OTHER_MPa,
+    SHEAR_FRICTION_FY_LIMIT_MPa,
+    PHI_SHEAR_FRICTION,
+)
 from .seismic import SeismicDesignCategory, WallCategory, SDC_REQUIREMENTS
 from .materials import (
     SteelGrade,
