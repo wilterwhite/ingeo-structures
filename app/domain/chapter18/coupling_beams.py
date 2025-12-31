@@ -1,4 +1,4 @@
-# app/structural/domain/coupling_beams.py
+# app/domain/chapter18/coupling_beams.py
 """
 Verificacion de vigas de acoplamiento segun ACI 318-25 Seccion 18.10.7.
 
@@ -43,9 +43,6 @@ class ConfinementOption(Enum):
     """Opcion de confinamiento para diagonales."""
     INDIVIDUAL = "individual"  # Opcion (c) - Confinamiento de diagonales individuales
     FULL_SECTION = "full_section"  # Opcion (d) - Confinamiento de seccion completa
-
-
-# SteelGrade importado desde constants.materials
 
 
 @dataclass
@@ -122,8 +119,6 @@ class CouplingBeamService:
     - Esfuerzos: MPa
     - Fuerzas: tonf
     """
-
-    # PHI_SHEAR importado desde constants.shear
 
     # =========================================================================
     # CLASIFICACION DE VIGA (18.10.7.1-18.10.7.3)
