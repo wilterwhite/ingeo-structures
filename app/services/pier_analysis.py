@@ -648,8 +648,8 @@ class PierAnalysisService:
                 angle_deg=angle_deg
             )
 
-        # Preparar datos de propuesta (solo si hay propuesta exitosa)
-        has_proposal = proposal is not None and proposal.success
+        # Preparar datos de propuesta (mostrar siempre que haya propuesta)
+        has_proposal = proposal is not None
         if has_proposal:
             original_thickness = proposal.original_config.thickness
             proposal_failure_mode = proposal.failure_mode.value
@@ -659,7 +659,7 @@ class PierAnalysisService:
             proposal_sf_proposed = proposal.proposed_sf_flexure
             proposal_dcr_original = proposal.original_dcr_shear
             proposal_dcr_proposed = proposal.proposed_dcr_shear
-            proposal_success = True
+            proposal_success = proposal.success  # Puede ser False si requiere rediseño
             proposal_changes = ", ".join(proposal.changes)
         else:
             proposal_failure_mode = ""
