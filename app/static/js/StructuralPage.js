@@ -362,15 +362,26 @@ class StructuralPage {
     // Acciones de Pier
     // =========================================================================
 
-    toggleAllCombinations() {
+    async toggleAllCombinations() {
         const { toggleCombosIcon, toggleAllCombosBtn } = this.elements;
-        const allExpanded = this.resultsTable.toggleAllExpand();
 
-        // Actualizar ícono y texto
-        if (toggleCombosIcon && toggleAllCombosBtn) {
-            toggleCombosIcon.textContent = allExpanded ? '▼' : '▶';
-            // Actualizar texto del botón (después del ícono)
-            toggleAllCombosBtn.innerHTML = `<span id="toggle-combos-icon">${allExpanded ? '▼' : '▶'}</span> ${allExpanded ? 'Colapsar todo' : 'Expandir todo'}`;
+        // Deshabilitar botón mientras carga
+        if (toggleAllCombosBtn) {
+            toggleAllCombosBtn.disabled = true;
+            toggleAllCombosBtn.innerHTML = '<span id="toggle-combos-icon">⏳</span> Cargando...';
+        }
+
+        try {
+            const allExpanded = await this.resultsTable.toggleAllExpand();
+
+            // Actualizar ícono y texto
+            if (toggleAllCombosBtn) {
+                toggleAllCombosBtn.innerHTML = `<span id="toggle-combos-icon">${allExpanded ? '▼' : '▶'}</span> ${allExpanded ? 'Colapsar todo' : 'Expandir todo'}`;
+            }
+        } finally {
+            if (toggleAllCombosBtn) {
+                toggleAllCombosBtn.disabled = false;
+            }
         }
     }
 

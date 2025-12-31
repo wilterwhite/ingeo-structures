@@ -687,18 +687,20 @@ class ResultsTable {
         }
     }
 
-    toggleAllExpand() {
+    async toggleAllExpand() {
         const { resultsTable } = this.elements;
         if (!resultsTable) return false;
 
         const pierKeys = Array.from(resultsTable.querySelectorAll('.pier-row')).map(r => r.dataset.pierKey);
+        if (pierKeys.length === 0) return false;
+
         const hasExpanded = pierKeys.some(key => this.expandedPiers.has(key));
 
         if (hasExpanded) {
             this.collapseAll();
             return false;
         } else {
-            this.expandAll(pierKeys);
+            await this.expandAll(pierKeys);
             return true;
         }
     }
