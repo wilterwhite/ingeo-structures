@@ -1,4 +1,4 @@
-# app/structural/domain/boundary_elements.py
+# app/domain/chapter18/boundary_elements.py
 """
 Verificacion de elementos de borde para muros estructurales especiales.
 
@@ -28,9 +28,6 @@ class BoundaryElementMethod(Enum):
     """Metodo de verificacion de elementos de borde."""
     DISPLACEMENT = "displacement"  # 18.10.6.2
     STRESS = "stress"              # 18.10.6.3
-
-
-# SteelGrade importado desde constants.materials
 
 
 @dataclass
