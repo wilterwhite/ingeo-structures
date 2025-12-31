@@ -1,4 +1,4 @@
-# app/structural/domain/constants/seismic.py
+# app/domain/constants/seismic.py
 """
 Constantes y enums para diseño sísmico según ACI 318-25.
 """

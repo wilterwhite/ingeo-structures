@@ -1,4 +1,4 @@
-# app/structural/domain/constants/shear.py
+# app/domain/constants/shear.py
 """
 Constantes y referencias ACI 318-25 para verificacion de corte en muros.
 
@@ -52,14 +52,7 @@ from .phi_chapter21 import PHI_SHEAR
 
 
 # =============================================================================
-# PROPIEDADES DEL HORMIGON (ACI 318-14 Seccion 19.2)
-# =============================================================================
-
-LAMBDA_NORMAL = 1.0  # lambda = 1.0 para hormigon de peso normal
-
-
-# =============================================================================
-# COEFICIENTES PARA MUROS (ACI 318-14 Tabla 18.10.4.1)
+# COEFICIENTES PARA MUROS (ACI 318-25 Tabla 18.10.4.1)
 # =============================================================================
 
 # Coeficiente alpha_c para resistencia al corte de muros
@@ -78,7 +71,7 @@ ALPHA_C_TENSION_STRESS_MPA = 3.45  # 500 psi en MPa
 
 
 # =============================================================================
-# LIMITES MAXIMOS DE Vn (ACI 318-14 Seccion 18.10.4.4)
+# LIMITES MAXIMOS DE Vn (ACI 318-25 Seccion 18.10.4.4)
 # =============================================================================
 
 # Para segmento individual: Vn <= 0.83 x sqrt(f'c) x Acw
@@ -89,7 +82,7 @@ VN_MAX_GROUP_COEF = 0.66
 
 
 # =============================================================================
-# COEFICIENTES PARA COLUMNAS/VIGAS (ACI 318-14 Seccion 22.5)
+# COEFICIENTES PARA COLUMNAS/VIGAS (ACI 318-25 Seccion 22.5)
 # =============================================================================
 
 # Coeficiente para Vc (Ec. 22.5.5.1): Vc = 0.17 x lambda x sqrt(f'c) x bw x d

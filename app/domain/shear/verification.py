@@ -12,9 +12,9 @@ Ver constants/shear.py para las referencias ACI completas.
 import math
 from typing import Tuple, List, Optional
 
+from ..constants.materials import LAMBDA_NORMAL
 from ..constants.shear import (
     PHI_SHEAR,
-    LAMBDA_NORMAL,
     ALPHA_C_SQUAT,
     ALPHA_C_SLENDER,
     HW_LW_SQUAT_LIMIT,

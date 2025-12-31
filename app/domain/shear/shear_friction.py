@@ -21,8 +21,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+from ..constants.materials import LAMBDA_NORMAL
 from ..constants.shear import (
-    LAMBDA_NORMAL,
     PHI_SHEAR_FRICTION,
     SHEAR_FRICTION_MU,
     SHEAR_FRICTION_VN_MAX_COEF_1,
