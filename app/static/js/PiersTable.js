@@ -32,7 +32,7 @@ class PiersTable {
     // =========================================================================
 
     populateFilters() {
-        const { piersGrillaFilter, piersStoryFilter, piersAxisFilter } = this.elements;
+        const { piersGrillaFilter, piersStoryFilter } = this.elements;
 
         if (piersGrillaFilter) {
             piersGrillaFilter.innerHTML = '<option value="">Todas</option>';
@@ -54,18 +54,58 @@ class PiersTable {
             });
         }
 
-        if (piersAxisFilter) {
-            piersAxisFilter.innerHTML = '<option value="">Todos</option>';
-            this.page.uniqueAxes.forEach(axis => {
-                const option = document.createElement('option');
-                option.value = axis;
-                option.textContent = axis;
-                piersAxisFilter.appendChild(option);
+        // Poblar ejes (inicialmente todos)
+        this.updateAxisFilter();
+    }
+
+    /**
+     * Actualiza el filtro de ejes según la grilla seleccionada.
+     */
+    updateAxisFilter() {
+        const { piersGrillaFilter, piersAxisFilter } = this.elements;
+        if (!piersAxisFilter) return;
+
+        const selectedGrilla = piersGrillaFilter?.value || '';
+        const currentAxis = piersAxisFilter.value;
+
+        // Obtener ejes únicos de la grilla seleccionada
+        let axes;
+        if (selectedGrilla) {
+            const axesSet = new Set();
+            this.piersData.forEach(pier => {
+                if (pier.grilla === selectedGrilla && pier.eje) {
+                    axesSet.add(pier.eje);
+                }
             });
+            axes = [...axesSet].sort();
+        } else {
+            axes = this.page.uniqueAxes;
+        }
+
+        // Repoblar dropdown
+        piersAxisFilter.innerHTML = '<option value="">Todos</option>';
+        axes.forEach(axis => {
+            const option = document.createElement('option');
+            option.value = axis;
+            option.textContent = axis;
+            piersAxisFilter.appendChild(option);
+        });
+
+        // Mantener selección si sigue siendo válida
+        if (axes.includes(currentAxis)) {
+            piersAxisFilter.value = currentAxis;
         }
     }
 
     filter() {
+        this.render();
+    }
+
+    /**
+     * Llamado cuando cambia la grilla - actualiza ejes y filtra.
+     */
+    onGrillaChange() {
+        this.updateAxisFilter();
         this.render();
     }
 

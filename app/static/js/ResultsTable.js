@@ -26,7 +26,7 @@ class ResultsTable {
     // =========================================================================
 
     populateFilters() {
-        const { grillaFilter, storyFilter, axisFilter } = this.elements;
+        const { grillaFilter, storyFilter } = this.elements;
 
         if (grillaFilter) {
             grillaFilter.innerHTML = '<option value="">Todas</option>';
@@ -48,15 +48,58 @@ class ResultsTable {
             });
         }
 
-        if (axisFilter) {
-            axisFilter.innerHTML = '<option value="">Todos</option>';
-            this.page.uniqueAxes.forEach(axis => {
-                const option = document.createElement('option');
-                option.value = axis;
-                option.textContent = axis;
-                axisFilter.appendChild(option);
+        // Poblar ejes (inicialmente todos)
+        this.updateAxisFilter();
+    }
+
+    /**
+     * Actualiza el filtro de ejes según la grilla seleccionada.
+     */
+    updateAxisFilter() {
+        const { grillaFilter, axisFilter } = this.elements;
+        if (!axisFilter) return;
+
+        const selectedGrilla = grillaFilter?.value || '';
+        const currentAxis = axisFilter.value;
+
+        // Obtener ejes únicos de la grilla seleccionada (desde resultados)
+        let axes;
+        if (selectedGrilla) {
+            const axesSet = new Set();
+            this.page.results.forEach(result => {
+                const parts = result.pier_label.split('-');
+                const grilla = parts[0] || '';
+                const axis = parts[1] || '';
+                if (grilla === selectedGrilla && axis) {
+                    axesSet.add(axis);
+                }
             });
+            axes = [...axesSet].sort();
+        } else {
+            axes = this.page.uniqueAxes;
         }
+
+        // Repoblar dropdown
+        axisFilter.innerHTML = '<option value="">Todos</option>';
+        axes.forEach(axis => {
+            const option = document.createElement('option');
+            option.value = axis;
+            option.textContent = axis;
+            axisFilter.appendChild(option);
+        });
+
+        // Mantener selección si sigue siendo válida
+        if (axes.includes(currentAxis)) {
+            axisFilter.value = currentAxis;
+        }
+    }
+
+    /**
+     * Llamado cuando cambia la grilla - actualiza ejes y aplica filtros.
+     */
+    onGrillaChange() {
+        this.updateAxisFilter();
+        this.applyFilters();
     }
 
     applyFilters() {

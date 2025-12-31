@@ -153,12 +153,12 @@ class StructuralPage {
         });
 
         // Delegación a componentes
-        this.elements.piersGrillaFilter?.addEventListener('change', () => this.piersTable.filter());
+        this.elements.piersGrillaFilter?.addEventListener('change', () => this.piersTable.onGrillaChange());
         this.elements.piersStoryFilter?.addEventListener('change', () => this.piersTable.filter());
         this.elements.piersAxisFilter?.addEventListener('change', () => this.piersTable.filter());
         this.elements.applyGlobalBtn?.addEventListener('click', () => this.piersTable.applyGlobalConfig());
         this.elements.reanalyzeBtn?.addEventListener('click', () => this.reanalyze());
-        this.elements.grillaFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
+        this.elements.grillaFilter?.addEventListener('change', () => this.resultsTable.onGrillaChange());
         this.elements.storyFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.axisFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.toggleAllCombosBtn?.addEventListener('click', () => this.toggleAllCombinations());
