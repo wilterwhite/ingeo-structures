@@ -48,6 +48,7 @@ class Pier:
     # Estribos de confinamiento en elemento de borde
     stirrup_diameter: int = 10  # Diámetro estribo (mm)
     stirrup_spacing: int = 150  # Espaciamiento estribos (mm)
+    n_stirrup_legs: int = 2     # Número de ramas del estribo (2, 3 o 4)
 
     # Otros
     cover: float = 25.0     # Recubrimiento (mm) - 2.5cm default
@@ -291,6 +292,7 @@ class Pier:
         n_edge_bars: Optional[int] = None,
         stirrup_diameter: Optional[int] = None,
         stirrup_spacing: Optional[int] = None,
+        n_stirrup_legs: Optional[int] = None,
         fy: Optional[float] = None,
         cover: Optional[float] = None
     ):
@@ -307,6 +309,7 @@ class Pier:
             n_edge_bars: Número de barras de borde por extremo
             stirrup_diameter: Diámetro estribo confinamiento (mm)
             stirrup_spacing: Espaciamiento estribos (mm)
+            n_stirrup_legs: Número de ramas del estribo (2, 3 o 4)
             fy: Límite de fluencia (MPa)
             cover: Recubrimiento (mm)
         """
@@ -331,6 +334,8 @@ class Pier:
             self.stirrup_diameter = stirrup_diameter
         if stirrup_spacing is not None:
             self.stirrup_spacing = stirrup_spacing
+        if n_stirrup_legs is not None:
+            self.n_stirrup_legs = n_stirrup_legs
         if fy is not None:
             self.fy = fy
         if cover is not None:

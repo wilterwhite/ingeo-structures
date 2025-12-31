@@ -26,6 +26,7 @@ from ...domain.entities.design_proposal import (
     MESH_DIAMETER_SEQUENCE,
     MESH_SPACING_SEQUENCE,
     THICKNESS_SEQUENCE,
+    STIRRUP_LEGS_SEQUENCE,
 )
 from .flexure_service import FlexureService
 from .shear_service import ShearService
@@ -144,6 +145,7 @@ class ProposalService:
             spacing_h=pier.spacing_h,
             stirrup_diameter=pier.stirrup_diameter,
             stirrup_spacing=pier.stirrup_spacing,
+            n_stirrup_legs=pier.n_stirrup_legs,
             thickness=pier.thickness
         )
 
@@ -160,7 +162,8 @@ class ProposalService:
             diameter_h=config.diameter_h,
             spacing_h=config.spacing_h,
             stirrup_diameter=config.stirrup_diameter,
-            stirrup_spacing=config.stirrup_spacing
+            stirrup_spacing=config.stirrup_spacing,
+            n_stirrup_legs=config.n_stirrup_legs
         )
         if config.thickness and config.thickness != pier.thickness:
             new_pier.thickness = config.thickness
@@ -474,27 +477,72 @@ class ProposalService:
         best_dcr: float
     ) -> Optional[DesignProposal]:
         """
-        Propone solución combinada con aumento incremental de espesor.
+        Propone solución combinada con aumento incremental.
 
-        Itera aumentando espesor de a poco (50mm) combinado con refuerzo.
+        Orden de prioridad (antes de aumentar espesor):
+        1. Aumentar ramas de estribos (2 → 3 → 4)
+        2. Aumentar espesor de a 50mm
         """
         # Usar la mejor configuración de refuerzo encontrada o la original
         base_config = best_config or deepcopy(original_config)
 
-        # Encontrar índice de espesor actual
+        # =====================================================================
+        # PASO 1: Intentar aumentar ramas de estribos antes de espesor
+        # Regla: máximo 1 rama cada 100mm de espesor
+        #   - e=200mm → máx 2 ramas
+        #   - e=300mm → máx 3 ramas
+        #   - e=400mm → máx 4 ramas
+        # =====================================================================
+        max_legs_for_thickness = int(pier.thickness // 100)
+        max_legs_for_thickness = min(max_legs_for_thickness, STIRRUP_LEGS_SEQUENCE[-1])
+
+        current_legs_idx = STIRRUP_LEGS_SEQUENCE.index(base_config.n_stirrup_legs) \
+            if base_config.n_stirrup_legs in STIRRUP_LEGS_SEQUENCE else 0
+
+        for legs_offset in range(1, len(STIRRUP_LEGS_SEQUENCE) - current_legs_idx):
+            new_legs = STIRRUP_LEGS_SEQUENCE[current_legs_idx + legs_offset]
+
+            # Verificar si caben las ramas en el espesor actual
+            if new_legs > max_legs_for_thickness:
+                continue
+
+            proposed_config = deepcopy(base_config)
+            proposed_config.n_stirrup_legs = new_legs
+
+            test_pier = self._apply_config_to_pier(pier, proposed_config)
+            new_sf = self._verify_flexure(test_pier, pier_forces)
+            new_dcr = self._verify_shear(test_pier, pier_forces)
+
+            if new_sf >= self.TARGET_SF and new_dcr <= 1.0:
+                changes = self._build_changes(original_config, proposed_config)
+                if new_legs != original_config.n_stirrup_legs:
+                    changes.append(f"{new_legs}R estribos")
+                return self._create_proposal(
+                    pier, FailureMode.COMBINED, ProposalType.COMBINED,
+                    original_config, proposed_config, original_sf, new_sf,
+                    original_dcr, new_dcr, legs_offset, changes
+                )
+
+        # =====================================================================
+        # PASO 2: Iterar espesor + ramas proporcionales
+        # Regla: 1 rama cada 100mm de espesor
+        # =====================================================================
         thickness_start_idx = 0
         for i, t in enumerate(THICKNESS_SEQUENCE):
             if t > pier.thickness:
                 thickness_start_idx = i
                 break
 
-        # Iterar incrementando espesor de a poco
         for thickness_offset in range(len(THICKNESS_SEQUENCE) - thickness_start_idx):
             new_thickness = THICKNESS_SEQUENCE[thickness_start_idx + thickness_offset]
+
+            # Calcular máximo de ramas para este espesor
+            max_legs = min(int(new_thickness // 100), STIRRUP_LEGS_SEQUENCE[-1])
+
             proposed_config = deepcopy(base_config)
             proposed_config.thickness = new_thickness
+            proposed_config.n_stirrup_legs = max_legs
 
-            # Crear pier con nuevo espesor
             test_pier = self._apply_config_to_pier(pier, proposed_config)
             test_pier.thickness = new_thickness
 
@@ -502,14 +550,9 @@ class ProposalService:
             new_dcr = self._verify_shear(test_pier, pier_forces)
 
             if new_sf >= self.TARGET_SF and new_dcr <= 1.0:
-                changes = []
-                if proposed_config.n_edge_bars != original_config.n_edge_bars:
-                    changes.append(f"Borde: {proposed_config.n_edge_bars}φ{proposed_config.diameter_edge}")
-                if proposed_config.spacing_h != original_config.spacing_h:
-                    changes.append(f"Malla @{proposed_config.spacing_h}")
-                if proposed_config.diameter_h != original_config.diameter_h:
-                    changes.append(f"φ{proposed_config.diameter_h}")
-                changes.append(f"e={int(new_thickness)}mm")
+                changes = self._build_changes(original_config, proposed_config)
+                if max_legs != original_config.n_stirrup_legs:
+                    changes.append(f"{max_legs}R")
                 return self._create_proposal(
                     pier, FailureMode.COMBINED, ProposalType.COMBINED,
                     original_config, proposed_config, original_sf, new_sf,
@@ -517,7 +560,6 @@ class ProposalService:
                 )
 
         # Si aún no resuelve, retornar propuesta con mejor configuración encontrada
-        # pero marcar success=False
         return self._create_best_effort_proposal(
             pier, pier_forces, FailureMode.COMBINED, original_config, original_sf, original_dcr
         )
@@ -707,7 +749,9 @@ class ProposalService:
             changes.append(f"Borde: {proposed.n_edge_bars}φ{proposed.diameter_edge}")
         if proposed.spacing_h != original.spacing_h or proposed.diameter_h != original.diameter_h:
             changes.append(f"Malla φ{proposed.diameter_h}@{proposed.spacing_h}")
-        if proposed.thickness != original.thickness:
+        if proposed.n_stirrup_legs != original.n_stirrup_legs:
+            changes.append(f"{proposed.n_stirrup_legs}R")
+        if proposed.thickness and proposed.thickness != original.thickness:
             changes.append(f"e={int(proposed.thickness)}mm")
         return changes
 

@@ -49,6 +49,7 @@ class ReinforcementConfig:
     # Estribos de confinamiento
     stirrup_diameter: int = 10
     stirrup_spacing: int = 150
+    n_stirrup_legs: int = 2  # Número de ramas (2, 3 o 4)
 
     # Geometría (para propuestas de espesor)
     thickness: Optional[float] = None
@@ -71,6 +72,7 @@ class ReinforcementConfig:
             'spacing_h': self.spacing_h,
             'stirrup_diameter': self.stirrup_diameter,
             'stirrup_spacing': self.stirrup_spacing,
+            'n_stirrup_legs': self.n_stirrup_legs,
             'thickness': self.thickness,
             'As_edge': round(self.As_edge, 1)
         }
@@ -222,3 +224,6 @@ STIRRUP_DIAMETER_SEQUENCE = [8, 10, 12, 16]
 
 # Secuencia de espaciamientos de estribo (mm)
 STIRRUP_SPACING_SEQUENCE = [150, 125, 100, 75]
+
+# Secuencia de ramas de estribo (para aumentar capacidad a corte)
+STIRRUP_LEGS_SEQUENCE = [2, 3, 4]
