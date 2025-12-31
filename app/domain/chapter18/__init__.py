@@ -12,7 +12,6 @@ Re-exportados desde domain/chapter11/ para compatibilidad:
 - limits: Límites de diseño de muros (§11.3, §11.7)
 - design_methods: Métodos de diseño (§11.5.3, §11.8)
 """
-from ..constants.materials import SteelGrade
 from .amplification import (
     ShearAmplificationService,
     ShearAmplificationResult,
@@ -77,7 +76,6 @@ __all__ = [
     'DisplacementCheckResult',
     'BoundaryElementDimensions',
     'BoundaryTransverseReinforcement',
-    'SteelGrade',
     # piers
     'WallPierService',
     'WallPierDesignResult',
