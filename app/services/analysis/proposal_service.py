@@ -46,6 +46,11 @@ class ProposalService:
     # Máximo de iteraciones por propuesta
     MAX_ITERATIONS = 30
 
+    # Cuantía máxima para asegurar falla dúctil
+    # ρmax = 0.04 (4%) es límite práctico común
+    # Si se excede, aumentar espesor en lugar de más acero
+    RHO_MAX = 0.04
+
     def __init__(
         self,
         flexure_service: Optional[FlexureService] = None,
@@ -442,6 +447,7 @@ class ProposalService:
         """
         Busca la solución mínima para un espesor dado.
         Itera borde → malla → ramas hasta encontrar SF >= 1.0.
+        Verifica que la cuantía no exceda ρmax para asegurar ductilidad.
         """
         proposed_config = deepcopy(original_config)
         proposed_config.thickness = thickness
@@ -470,6 +476,12 @@ class ProposalService:
 
                         test_pier = self._apply_config_to_pier(pier, proposed_config)
                         test_pier.thickness = thickness
+
+                        # Verificar cuantía máxima para asegurar ductilidad
+                        # Si ρ > ρmax, saltar esta configuración (falla frágil)
+                        if test_pier.rho_vertical > self.RHO_MAX:
+                            continue
+
                         new_sf = self._verify_flexure(test_pier, pier_forces)
                         new_dcr = self._verify_shear(test_pier, pier_forces)
 
