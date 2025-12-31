@@ -387,30 +387,3 @@ class WallLimitsService:
             warnings=warnings
         )
 
-    def check_from_pier(
-        self,
-        pier: 'Pier',
-        Vu: float = 0,
-        phi_Vc: float = 0
-    ) -> WallLimitsResult:
-        """
-        Verificacion simplificada desde un Pier.
-
-        Determina automaticamente si requiere refuerzo por cortante
-        basado en Vu > 0.5*phi*Vc.
-
-        Args:
-            pier: Entidad Pier
-            Vu: Demanda de corte (tonf)
-            phi_Vc: Capacidad de corte del concreto (tonf)
-
-        Returns:
-            WallLimitsResult con todos los resultados
-        """
-        requires_shear = Vu > 0.5 * phi_Vc if phi_Vc > 0 else False
-
-        return self.check_wall_limits(
-            pier=pier,
-            wall_type=WallType.BEARING,  # Asumir de carga por defecto
-            requires_shear_reinforcement=requires_shear
-        )

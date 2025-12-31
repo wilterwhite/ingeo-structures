@@ -131,10 +131,6 @@ class ReinforcementLimitsService:
             return SteelGrade.GRADE_60
         return SteelGrade.GRADE_40
 
-    def is_high_strength_steel(self, fy_mpa: float) -> bool:
-        """Verifica si el acero es de alta resistencia (fy >= 420 MPa)."""
-        return fy_mpa >= self.FY_HIGH_LIMIT_MPA
-
     # =========================================================================
     # CUANTIAS MINIMAS PARA CORTANTE BAJO (11.6.1)
     # =========================================================================
@@ -367,46 +363,4 @@ class ReinforcementLimitsService:
             rho_v_ge_rho_h=rho_v_ge_rho_h,
             is_ok=is_ok,
             aci_reference="ACI 318-25 11.6.2, 18.10.4.3"
-        )
-
-    # =========================================================================
-    # VERIFICACION DESDE PIER
-    # =========================================================================
-
-    def check_from_pier(
-        self,
-        pier: 'Pier',
-        Vu: float = 0,
-        phi_Vc: float = 0,
-        alpha_c: float = 0.25,
-        is_precast: bool = False
-    ) -> MinReinforcementResult:
-        """
-        Verificacion simplificada desde un Pier.
-
-        Args:
-            pier: Entidad Pier con geometria y armadura
-            Vu: Demanda de corte (tonf)
-            phi_Vc: Capacidad de corte del concreto phi*Vc (tonf)
-            alpha_c: Coeficiente alpha_c para calculo de umbral
-            is_precast: Muro prefabricado
-
-        Returns:
-            MinReinforcementResult con resultado de la verificacion
-        """
-        # Calcular umbral para cortante bajo/alto
-        # 0.5 * phi * Vc (ya que phi_Vc = phi * alpha_c * lambda * sqrt(fc) * Acv)
-        threshold = 0.5 * phi_Vc if phi_Vc > 0 else 0
-
-        return self.check_minimum_reinforcement(
-            rho_l=pier.rho_vertical,
-            rho_t=pier.rho_horizontal,
-            diameter_v_mm=pier.diameter_v,
-            diameter_h_mm=pier.diameter_h,
-            fy_mpa=pier.fy,
-            hw=pier.height,
-            lw=pier.width,
-            Vu=Vu,
-            phi_alpha_c_lambda_sqrt_fc_Acv=threshold,
-            is_precast=is_precast
         )

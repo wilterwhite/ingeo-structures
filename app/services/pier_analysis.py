@@ -277,7 +277,7 @@ class PierAnalysisService:
             P = -combo.P  # Convertir a positivo = compresión
             M = combo.moment_resultant
             demand_point = [(P, M, combo.name)]
-            flexure_sf, flexure_status, _, _, _, _ = self._interaction_service.check_flexure(
+            flexure_sf, flexure_status, _, _, _, _, _ = self._interaction_service.check_flexure(
                 interaction_points, demand_point
             )
 

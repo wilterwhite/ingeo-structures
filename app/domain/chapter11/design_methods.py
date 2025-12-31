@@ -383,55 +383,6 @@ class WallDesignMethodsService:
 
         return c
 
-    def calculate_magnified_moment_iterative(
-        self,
-        Mua_Nmm: float,
-        Pu_N: float,
-        lc_mm: float,
-        Ec_mpa: float,
-        Icr_mm4: float
-    ) -> Tuple[float, float]:
-        """
-        Calcula momento magnificado Mu iterativamente segun Ec. 11.8.3.1a-b.
-
-        Mu = Mua + Pu * Delta_u
-        Delta_u = (5 * Mu * lc^2) / (0.75 * 48 * Ec * Icr)
-
-        Args:
-            Mua_Nmm: Momento sin efectos P-Delta (N-mm)
-            Pu_N: Carga axial factorada (N)
-            lc_mm: Longitud no soportada (mm)
-            Ec_mpa: Modulo de elasticidad (MPa)
-            Icr_mm4: Inercia agrietada (mm4)
-
-        Returns:
-            Tuple (Mu_Nmm, Delta_u_mm)
-        """
-        # Constante para deflexion
-        # Delta_u = (5 * Mu * lc^2) / (0.75 * 48 * Ec * Icr)
-        denom = 0.75 * 48 * Ec_mpa * Icr_mm4
-
-        if denom <= 0:
-            return (Mua_Nmm, 0.0)
-
-        # Metodo iterativo
-        Mu = Mua_Nmm
-        max_iterations = 20
-        tolerance = 0.001
-
-        for _ in range(max_iterations):
-            Delta_u = (5 * Mu * lc_mm**2) / denom
-            Mu_new = Mua_Nmm + Pu_N * Delta_u
-
-            if abs(Mu_new - Mu) / max(Mu, 1) < tolerance:
-                Mu = Mu_new
-                break
-            Mu = Mu_new
-
-        Delta_u = (5 * Mu * lc_mm**2) / denom
-
-        return (Mu, Delta_u)
-
     def calculate_magnified_moment_direct(
         self,
         Mua_Nmm: float,
