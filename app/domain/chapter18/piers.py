@@ -53,6 +53,9 @@ class WallPierClassification:
     requires_column_details: bool
     alternative_permitted: bool
     aci_reference: str
+    # ACI 318-25 §18.7.2.1: Columnas sismicas requieren dimension >= 300mm
+    column_min_thickness_ok: bool = True  # True si no aplica o si cumple
+    column_min_thickness_required: float = 0.0  # 300mm si es columna sismica
 
 
 @dataclass
@@ -129,6 +132,7 @@ class WallPierService:
 
     # Constantes
     EXTENSION_MIN_MM = 304.8  # 12" en mm
+    COLUMN_MIN_THICKNESS_MM = 300.0  # §18.7.2.1: Dimension minima columna sismica
 
     def __init__(self):
         """Inicializa los servicios dependientes."""
@@ -209,6 +213,15 @@ class WallPierService:
             requires_column = False
             alternative_ok = False
 
+        # Verificar espesor minimo para columnas sismicas (ACI 318-25 §18.7.2.1)
+        # "The shortest cross-sectional dimension, measured on a straight
+        # line passing through the centroid, shall be at least 300 mm"
+        column_min_ok = True
+        column_min_required = 0.0
+        if requires_column:
+            column_min_required = self.COLUMN_MIN_THICKNESS_MM
+            column_min_ok = bw >= self.COLUMN_MIN_THICKNESS_MM
+
         return WallPierClassification(
             hw=hw,
             lw=lw,
@@ -219,7 +232,9 @@ class WallPierService:
             design_method=design_method,
             requires_column_details=requires_column,
             alternative_permitted=alternative_ok,
-            aci_reference="ACI 318-25 Tabla R18.10.1, 18.10.8.1"
+            aci_reference="ACI 318-25 Tabla R18.10.1, 18.10.8.1",
+            column_min_thickness_ok=column_min_ok,
+            column_min_thickness_required=column_min_required
         )
 
     # =========================================================================
@@ -562,6 +577,13 @@ class WallPierService:
             warnings.append(
                 f"Pilar con lw/bw={classification.lw_bw:.1f}: "
                 "Verificar requisitos de columna especial (18.7)"
+            )
+
+        # Verificar espesor minimo para columnas sismicas (18.7.2.1)
+        if not classification.column_min_thickness_ok:
+            warnings.append(
+                f"⚠️ Espesor {bw:.0f}mm < 300mm minimo para columna sismica "
+                "(ACI 318-25 §18.7.2.1) - Aumentar espesor"
             )
 
         if classification.alternative_permitted:

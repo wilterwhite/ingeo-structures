@@ -29,6 +29,7 @@ from ...domain.entities.design_proposal import (
     THICKNESS_SEQUENCE,
     STIRRUP_LEGS_SEQUENCE,
 )
+from ...domain.chapter18.piers import WallPierService, WallPierCategory
 from .flexure_service import FlexureService
 from .shear_service import ShearService
 
@@ -57,13 +58,49 @@ class ProposalService:
     # Máximo de iteraciones por propuesta
     MAX_ITERATIONS = 30
 
+    # Espesor mínimo para columnas sísmicas (ACI 318-25 §18.7.2.1)
+    COLUMN_MIN_THICKNESS_MM = 300.0
+
     def __init__(
         self,
         flexure_service: Optional[FlexureService] = None,
-        shear_service: Optional[ShearService] = None
+        shear_service: Optional[ShearService] = None,
+        wall_pier_service: Optional[WallPierService] = None
     ):
         self._flexure_service = flexure_service or FlexureService()
         self._shear_service = shear_service or ShearService()
+        self._wall_pier_service = wall_pier_service or WallPierService()
+
+    def _classify_pier(self, pier: Pier) -> tuple:
+        """
+        Clasifica el pier según Tabla R18.10.1 y verifica espesor mínimo.
+
+        Returns:
+            (classification, is_column, needs_300mm)
+        """
+        classification = self._wall_pier_service.classify_wall_pier(
+            hw=pier.height,
+            lw=pier.width,
+            bw=pier.thickness
+        )
+        is_column = classification.requires_column_details
+        needs_300mm = is_column and not classification.column_min_thickness_ok
+        return classification, is_column, needs_300mm
+
+    def _get_min_thickness_for_pier(self, pier: Pier) -> float:
+        """
+        Obtiene el espesor mínimo para un pier según su clasificación.
+
+        Para columnas sísmicas (ACI 318-25 §18.7.2.1): 300mm
+        Para muros: sin restricción especial (usa espesor actual)
+
+        Returns:
+            Espesor mínimo en mm
+        """
+        _, is_column, _ = self._classify_pier(pier)
+        if is_column:
+            return self.COLUMN_MIN_THICKNESS_MM
+        return pier.thickness
 
     def generate_proposal(
         self,
@@ -88,6 +125,16 @@ class ProposalService:
         Returns:
             DesignProposal si hay propuesta, None si pasa o no hay solución
         """
+        # Verificar primero si es columna sísmica que no cumple espesor mínimo
+        classification, is_column, needs_300mm = self._classify_pier(pier)
+
+        if needs_300mm:
+            # Prioridad máxima: columna sísmica < 300mm
+            original_config = self._pier_to_config(pier)
+            return self._propose_for_column_min_thickness(
+                pier, pier_forces, original_config, flexure_sf, shear_dcr
+            )
+
         # Determinar modo de falla
         failure_mode = self._determine_failure_mode(
             flexure_sf, shear_dcr, boundary_required, slenderness_reduction
@@ -406,9 +453,13 @@ class ProposalService:
         best_sf = original_sf
         best_dcr = original_dcr
 
-        # Iterar espesores desde el actual
+        # Obtener espesor mínimo según clasificación del pier
+        min_thickness = self._get_min_thickness_for_pier(pier)
+        effective_min = max(pier.thickness, min_thickness)
+
+        # Iterar espesores desde el mínimo efectivo
         for thickness in THICKNESS_SEQUENCE:
-            if thickness < pier.thickness:
+            if thickness < effective_min:
                 continue
 
             # Calcular máximo de ramas para este espesor
@@ -593,10 +644,14 @@ class ProposalService:
         # =====================================================================
         # PASO 2: Iterar espesor + ramas proporcionales
         # Regla: 1 rama cada 100mm de espesor
+        # Para columnas sísmicas: mínimo 300mm (§18.7.2.1)
         # =====================================================================
+        min_thickness = self._get_min_thickness_for_pier(pier)
+        effective_min = max(pier.thickness, min_thickness)
+
         thickness_start_idx = 0
         for i, t in enumerate(THICKNESS_SEQUENCE):
-            if t > pier.thickness:
+            if t >= effective_min:
                 thickness_start_idx = i
                 break
 
@@ -649,6 +704,97 @@ class ProposalService:
             FailureMode.SLENDERNESS
         )
 
+    def _propose_for_column_min_thickness(
+        self,
+        pier: Pier,
+        pier_forces: Optional[PierForces],
+        original_config: ReinforcementConfig,
+        original_sf: float,
+        original_dcr: float
+    ) -> DesignProposal:
+        """
+        Propone solución para columna sísmica con espesor < 300mm.
+
+        Según ACI 318-25 §18.7.2.1:
+        "The shortest cross-sectional dimension, measured on a straight
+        line passing through the centroid, shall be at least 300 mm"
+
+        Estrategia:
+        1. Proponer espesor mínimo de 300mm
+        2. Si con 300mm no pasa verificación, incrementar espesor hasta pasar
+
+        Returns:
+            DesignProposal con espesor >= 300mm
+        """
+        proposed_config = deepcopy(original_config)
+        changes = [f"⚠️ Columna sísmica: e ≥ 300mm (§18.7.2.1)"]
+
+        # Filtrar secuencia de espesores para comenzar en 300mm
+        valid_thicknesses = [t for t in THICKNESS_SEQUENCE if t >= self.COLUMN_MIN_THICKNESS_MM]
+
+        if not valid_thicknesses:
+            # Si no hay espesores >= 300mm en la secuencia, usar 300mm directamente
+            valid_thicknesses = [self.COLUMN_MIN_THICKNESS_MM]
+
+        best_sf = original_sf
+        best_dcr = original_dcr
+        iteration = 0
+
+        for thickness in valid_thicknesses:
+            proposed_config.thickness = thickness
+            iteration += 1
+
+            # Crear pier de prueba con nuevo espesor
+            test_pier = self._apply_config_to_pier(pier, proposed_config)
+            test_pier.thickness = thickness
+
+            new_sf = self._verify_flexure(test_pier, pier_forces)
+            new_dcr = self._verify_shear(test_pier, pier_forces)
+
+            # Verificar si pasa
+            if new_sf >= self.TARGET_SF and new_dcr <= 1.0:
+                changes.append(f"Espesor: {int(thickness)}mm")
+                return DesignProposal(
+                    pier_key=f"{pier.story}_{pier.label}",
+                    failure_mode=FailureMode.COLUMN_MIN_THICKNESS,
+                    proposal_type=ProposalType.THICKNESS,
+                    original_config=original_config,
+                    proposed_config=proposed_config,
+                    original_sf_flexure=original_sf,
+                    proposed_sf_flexure=new_sf,
+                    original_dcr_shear=original_dcr,
+                    proposed_dcr_shear=new_dcr,
+                    iterations=iteration,
+                    success=True,
+                    changes=changes
+                )
+
+            # Guardar mejor resultado
+            if new_sf > best_sf:
+                best_sf = new_sf
+                best_dcr = new_dcr
+
+        # Si llegamos aquí, proponer 300mm aunque no sea suficiente
+        # (requiere rediseño adicional)
+        proposed_config.thickness = self.COLUMN_MIN_THICKNESS_MM
+        changes.append(f"Espesor: {int(self.COLUMN_MIN_THICKNESS_MM)}mm")
+        changes.append("⚠️ Requiere refuerzo adicional")
+
+        return DesignProposal(
+            pier_key=f"{pier.story}_{pier.label}",
+            failure_mode=FailureMode.COLUMN_MIN_THICKNESS,
+            proposal_type=ProposalType.THICKNESS,
+            original_config=original_config,
+            proposed_config=proposed_config,
+            original_sf_flexure=original_sf,
+            proposed_sf_flexure=best_sf,
+            original_dcr_shear=original_dcr,
+            proposed_dcr_shear=best_dcr,
+            iterations=iteration,
+            success=False,
+            changes=changes
+        )
+
     def _propose_for_reduction(
         self,
         pier: Pier,
@@ -681,12 +827,17 @@ class ProposalService:
         # =================================================================
         # Estrategia 0: Reducir espesor primero (mayor ahorro de material)
         # Solo si SF > 2.0 y hay espesores menores disponibles
+        # Para columnas sísmicas: no reducir por debajo de 300mm (§18.7.2.1)
         # =================================================================
+        min_thickness = self._get_min_thickness_for_pier(pier)
+
         if original_sf > 2.0:
             # Iterar espesores menores
             for thickness in reversed(THICKNESS_SEQUENCE):
                 if thickness >= pier.thickness:
                     continue  # Solo espesores menores
+                if thickness < min_thickness:
+                    continue  # Respetar mínimo para columnas sísmicas
 
                 proposed_config = deepcopy(original_config)
                 proposed_config.thickness = thickness
@@ -892,15 +1043,21 @@ class ProposalService:
     ) -> Optional[DesignProposal]:
         """
         Propone aumento de espesor cuando otras estrategias fallan.
+
+        Para columnas sísmicas (ACI 318-25 §18.7.2.1), respeta el mínimo de 300mm.
         """
         changes = []
         proposed_config = deepcopy(original_config)
 
+        # Obtener espesor mínimo según clasificación del pier
+        min_thickness = self._get_min_thickness_for_pier(pier)
+
         # Encontrar posición actual en secuencia de espesores
-        current_thickness = pier.thickness
+        # Considerando tanto el espesor actual como el mínimo requerido
+        effective_min = max(pier.thickness, min_thickness)
         start_idx = 0
         for i, t in enumerate(THICKNESS_SEQUENCE):
-            if t > current_thickness:
+            if t >= effective_min:
                 start_idx = i
                 break
 
@@ -959,6 +1116,10 @@ class ProposalService:
         best_dcr = original_dcr
         iterations = 0
 
+        # Obtener espesor mínimo según clasificación del pier
+        min_thickness = self._get_min_thickness_for_pier(pier)
+        effective_min = max(pier.thickness, min_thickness)
+
         # Iterar incrementalmente: borde -> malla -> espesor
         for n_bars, diameter in BOUNDARY_BAR_SEQUENCE:
             proposed_config.n_edge_bars = n_bars
@@ -973,7 +1134,7 @@ class ProposalService:
                     proposed_config.diameter_v = mesh_diameter
 
                     for thickness in THICKNESS_SEQUENCE:
-                        if thickness < pier.thickness:
+                        if thickness < effective_min:
                             continue
 
                         proposed_config.thickness = thickness

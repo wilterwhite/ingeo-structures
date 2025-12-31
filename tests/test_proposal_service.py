@@ -316,3 +316,139 @@ class TestProposalResult:
 
         # Mejora = (1.2 - 0.8) / 0.8 * 100 = 50%
         assert abs(proposal.sf_improvement - 50.0) < 0.1
+
+
+class TestColumnMinimumThickness:
+    """Tests para espesor mínimo de columnas sísmicas (ACI 318-25 §18.7.2.1)."""
+
+    @pytest.fixture
+    def column_classified_pier(self):
+        """
+        Pier clasificado como columna (hw/lw >= 2.0 y lw/bw <= 2.5).
+        Con espesor < 300mm, debería requerir aumento.
+        """
+        return Pier(
+            label="Col-A1-1",
+            story="Cielo P1",
+            width=600,       # 600mm -> lw
+            thickness=200,   # 200mm -> bw (< 300mm mínimo para columna)
+            height=2700,     # 2700mm -> hw (hw/lw = 4.5 >= 2.0)
+            fc=25,           # lw/bw = 600/200 = 3.0 > 2.5 -> ALTERNATIVE
+            fy=420,
+            n_meshes=2,
+            diameter_v=8,
+            spacing_v=200,
+            diameter_h=8,
+            spacing_h=200,
+            n_edge_bars=2,
+            diameter_edge=12,
+        )
+
+    @pytest.fixture
+    def column_with_500mm_width(self):
+        """
+        Pier clasificado como columna con lw/bw <= 2.5 (columna especial).
+        """
+        return Pier(
+            label="Col-A2-1",
+            story="Cielo P1",
+            width=500,       # 500mm -> lw
+            thickness=200,   # 200mm -> bw (< 300mm)
+            height=2700,     # hw/lw = 5.4 >= 2.0
+            fc=25,           # lw/bw = 500/200 = 2.5 <= 2.5 -> COLUMN
+            fy=420,
+            n_meshes=2,
+            diameter_v=8,
+            spacing_v=200,
+            diameter_h=8,
+            spacing_h=200,
+            n_edge_bars=2,
+            diameter_edge=12,
+        )
+
+    @pytest.fixture
+    def wall_classified_pier(self):
+        """
+        Pier clasificado como muro (hw/lw < 2.0).
+        No requiere 300mm mínimo.
+        """
+        return Pier(
+            label="Wall-A1-1",
+            story="Cielo P1",
+            width=2000,      # 2000mm -> lw
+            thickness=200,   # 200mm -> bw
+            height=2700,     # hw/lw = 1.35 < 2.0 -> WALL
+            fc=25,
+            fy=420,
+            n_meshes=2,
+            diameter_v=8,
+            spacing_v=200,
+            diameter_h=8,
+            spacing_h=200,
+            n_edge_bars=2,
+            diameter_edge=12,
+        )
+
+    def test_classify_pier_detects_column(self, proposal_service, column_with_500mm_width):
+        """Detecta correctamente cuando un pier es columna sísmica."""
+        classification, is_column, needs_300mm = proposal_service._classify_pier(
+            column_with_500mm_width
+        )
+
+        assert is_column is True
+        assert needs_300mm is True  # thickness=200 < 300
+        assert classification.column_min_thickness_required == 300.0
+
+    def test_classify_pier_detects_wall(self, proposal_service, wall_classified_pier):
+        """No requiere 300mm para piers clasificados como muro."""
+        classification, is_column, needs_300mm = proposal_service._classify_pier(
+            wall_classified_pier
+        )
+
+        assert is_column is False
+        assert needs_300mm is False
+
+    def test_min_thickness_for_column(self, proposal_service, column_with_500mm_width):
+        """Columnas sísmicas tienen espesor mínimo de 300mm."""
+        min_t = proposal_service._get_min_thickness_for_pier(column_with_500mm_width)
+        assert min_t == 300.0
+
+    def test_min_thickness_for_wall(self, proposal_service, wall_classified_pier):
+        """Muros mantienen su espesor actual como mínimo."""
+        min_t = proposal_service._get_min_thickness_for_pier(wall_classified_pier)
+        assert min_t == 200.0  # Espesor actual
+
+    def test_column_proposal_has_min_300mm(self, proposal_service, column_with_500mm_width):
+        """Propuesta para columna con espesor < 300mm propone >= 300mm."""
+        proposal = proposal_service.generate_proposal(
+            pier=column_with_500mm_width,
+            pier_forces=None,
+            flexure_sf=1.0,  # Pasaría normalmente
+            shear_dcr=0.5,
+            boundary_required=False,
+            slenderness_reduction=1.0
+        )
+
+        # Siempre genera propuesta para columna < 300mm
+        assert proposal is not None
+        assert proposal.failure_mode == FailureMode.COLUMN_MIN_THICKNESS
+        assert proposal.proposed_config.thickness >= 300.0
+
+    def test_column_min_thickness_failure_mode(self):
+        """El modo de falla COLUMN_MIN_THICKNESS existe."""
+        assert hasattr(FailureMode, 'COLUMN_MIN_THICKNESS')
+        assert FailureMode.COLUMN_MIN_THICKNESS.value == "column_min_thickness"
+
+    def test_wall_no_column_min_thickness_proposal(self, proposal_service, wall_classified_pier):
+        """Muro con espesor 200mm no genera propuesta de espesor mínimo."""
+        proposal = proposal_service.generate_proposal(
+            pier=wall_classified_pier,
+            pier_forces=None,
+            flexure_sf=1.3,  # OK, pero no sobrediseñado
+            shear_dcr=0.8,   # OK, pero no muy bajo
+            boundary_required=False,
+            slenderness_reduction=1.0
+        )
+
+        # No debería generar propuesta (no falla, no está sobrediseñado)
+        assert proposal is None

@@ -21,6 +21,7 @@ class FailureMode(Enum):
     SLENDERNESS = "slenderness"   # Esbeltez excesiva
     COMBINED = "combined"         # Múltiples fallas
     OVERDESIGNED = "overdesigned" # SF >> 1.0, se puede optimizar
+    COLUMN_MIN_THICKNESS = "column_min_thickness"  # Columna sísmica < 300mm (ACI 318-25 §18.7.2.1)
 
 
 class ProposalType(Enum):
