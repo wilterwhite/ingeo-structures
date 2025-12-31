@@ -1,4 +1,4 @@
-# app/structural/routes/analysis.py
+# app/routes/analysis.py
 """
 Endpoints API para el módulo de análisis estructural.
 """
