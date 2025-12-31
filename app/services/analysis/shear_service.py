@@ -32,10 +32,7 @@ from ...domain.chapter18 import (
     BoundaryElementMethod,
     BoundaryElementResult,
 )
-from ...domain.chapter18.amplification import (
-    ShearAmplificationResult,
-    convert_mm_to_ft,
-)
+from ...domain.chapter18.amplification import ShearAmplificationResult
 
 
 class ShearService:

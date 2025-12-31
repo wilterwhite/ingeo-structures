@@ -462,13 +462,3 @@ class ShearAmplificationService:
 
         # SDC D, E, F
         return WallCategory.SPECIAL if is_sfrs else WallCategory.ORDINARY
-
-
-def convert_m_to_ft(height_m: float) -> float:
-    """Convierte altura de metros a pies."""
-    return height_m * 3.28084
-
-
-def convert_mm_to_ft(height_mm: float) -> float:
-    """Convierte altura de mm a pies."""
-    return height_mm / 304.8
