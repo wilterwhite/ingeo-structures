@@ -1,6 +1,6 @@
-# app/structural/domain/shear/results.py
+# app/domain/shear/results.py
 """
-Dataclasses de resultados para verificacion de corte segun ACI 318-14/19.
+Dataclasses de resultados para verificacion de corte segun ACI 318-25.
 """
 from dataclasses import dataclass
 from typing import List
@@ -36,7 +36,7 @@ class ShearResult:
     rho_warning: str = ""       # Mensaje de advertencia si no cumple
 
     # Referencia ACI para trazabilidad
-    aci_reference: str = ""     # Ej: "ACI 318-14 18.10.4.1"
+    aci_reference: str = ""     # Ej: "ACI 318-25 18.10.4.1"
 
 
 @dataclass
@@ -65,7 +65,7 @@ class CombinedShearResult:
 @dataclass
 class WallGroupShearResult:
     """
-    Resultado para un grupo de segmentos de muro (ACI 318-14 18.10.4.4).
+    Resultado para un grupo de segmentos de muro (ACI 318-25 18.10.4.4).
 
     Para segmentos verticales coplanares que resisten una fuerza lateral
     comun, la suma de sus Vn no debe exceder:
