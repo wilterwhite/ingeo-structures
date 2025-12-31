@@ -11,7 +11,8 @@ from datetime import datetime
 IGNORE_DIRS = {
     '__pycache__', '.git', 'venv', 'node_modules', '.pytest_cache',
     '.mypy_cache', '.tox', 'dist', 'build', '*.egg-info', '.idea',
-    '.vscode', 'htmlcov', '.coverage', 'docs'
+    '.vscode', 'htmlcov', '.coverage', 'docs', 'examples', 'tests',
+    'scripts'
 }
 
 # Extensiones a ignorar

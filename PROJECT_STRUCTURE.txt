@@ -1,9 +1,10 @@
 ======================================================================
   INGEO STRUCTURES - Estructura del Proyecto
-  Generado: 2025-12-30 23:16:52
+  Generado: 2025-12-30 23:25:02
 ======================================================================
 
 ├── .gitignore                     (  32 líneas)  # Archivos ignorados por git
+├── PROJECT_STRUCTURE.txt          ( 135 líneas)  # Archivo de texto
 ├── README.md                      ( 243 líneas)  # Documentación del proyecto
 ├── requirements.txt               (  16 líneas)  # Dependencias Python del proyecto
 └── run.py                         (  96 líneas)  # Punto de entrada de la aplicación
@@ -94,42 +95,19 @@
 │   │   │   └── StructuralPage.js              ( 481 líneas)  # Controlador principal de la página
 │   ├── templates/
 │   │   └── structural_standalone.html     ( 419 líneas)  # Template HTML principal
-├── examples/
-│   ├── Pier results.xlsx              (3019 líneas)  # Archivo Excel
-│   ├── README.md                      (  44 líneas)  # Documentación del proyecto
-│   └── test_data_comprehensive.xlsx   ( 120 líneas)  # Archivo Excel
-├── scripts/
-│   ├── create_test_data.py            ( 172 líneas)  # Módulo Python
-│   ├── generate_project_tree.py       ( 219 líneas)  # Módulo Python
-│   ├── generate_test_data.py          ( 316 líneas)  # Módulo Python
-│   ├── run_test_analysis.py           ( 155 líneas)  # Módulo Python
-│   └── split_aci_pdf.py               ( 386 líneas)  # Módulo Python
-├── tests/
-│   ├── __init__.py                    (   1 líneas)  # Inicialización del módulo
-│   ├── test_coupling_beam.py          ( 214 líneas)  # Tests para coupling_beam
-│   └── test_proposal_service.py       ( 308 líneas)  # Tests para proposal_service
-│   ├── domain/
-│   │   └── __init__.py                    (   1 líneas)  # Inicialización del módulo
-│   │   ├── flexure/
-│   │   │   ├── __init__.py                    (   1 líneas)  # Inicialización del módulo
-│   │   │   └── test_slenderness.py            ( 550 líneas)  # Tests para slenderness
-│   │   ├── shear/
-│   │   │   ├── __init__.py                    (   1 líneas)  # Inicialización del módulo
-│   │   │   └── test_shear_friction.py         ( 353 líneas)  # Tests para shear_friction
 
 ======================================================================
   RESUMEN
 ======================================================================
-  Total de archivos: 89
-  Total de líneas:   25,180
+  Total de archivos: 74
+  Total de líneas:   19,455
 
   Líneas por tipo de archivo:
-    .py        17,804 líneas ( 70.7%)
-    .xlsx       3,139 líneas ( 12.5%)
-    .js         2,036 líneas (  8.1%)
-    .css        1,447 líneas (  5.7%)
-    .html         419 líneas (  1.7%)
-    .md           287 líneas (  1.1%)
-    other          32 líneas (  0.1%)
-    .txt           16 líneas (  0.1%)
+    .py        15,127 líneas ( 77.8%)
+    .js         2,036 líneas ( 10.5%)
+    .css        1,447 líneas (  7.4%)
+    .html         419 líneas (  2.2%)
+    .md           243 líneas (  1.2%)
+    .txt          151 líneas (  0.8%)
+    other          32 líneas (  0.2%)
 ======================================================================
