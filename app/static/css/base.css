@@ -238,6 +238,67 @@ header:not(.app-header) p {
     min-width: 150px;
 }
 
+/* ==========================================================================
+   TOOLBAR BAR (Stats + Filters en una fila)
+   ========================================================================== */
+
+.toolbar-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--bg-color);
+    border-radius: var(--border-radius);
+    margin-bottom: 16px;
+}
+
+.stats-inline {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+.stat-item {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.stat-item strong {
+    font-size: 1rem;
+    color: var(--text-color);
+    margin-right: 4px;
+}
+
+.stat-item.stat-ok strong {
+    color: var(--success-color);
+}
+
+.stat-item.stat-fail strong {
+    color: var(--danger-color);
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border-color);
+}
+
+.toolbar-bar .filter-group select {
+    min-width: 100px;
+}
+
+.toolbar-bar .plane-indicator {
+    margin-left: auto;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    background: rgba(37, 99, 235, 0.1);
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+
 .plane-indicator {
     margin-left: auto;
     font-size: 0.9rem;

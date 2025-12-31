@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INGEO Structures - ACI 318-25</title>
-    <link rel="stylesheet" href="{{ url_for('structural_static', filename='css/structural.css') }}">
+    <link rel="stylesheet" href="{{ url_for('structural_static', filename='css/structural.css') }}?v=9">
 </head>
 <body>
     <div class="container">
@@ -151,49 +151,32 @@
         <div class="card hidden" id="results-section">
             <div class="card-header">3. Resultados del Análisis</div>
             <div class="card-body">
-                <!-- Statistics -->
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value" id="stat-total">0</div>
-                        <div class="stat-label">Total Piers</div>
+                <!-- Stats + Filters (una sola fila) -->
+                <div class="toolbar-bar">
+                    <div class="stats-inline">
+                        <span class="stat-item"><strong id="stat-total">0</strong> Total</span>
+                        <span class="stat-item stat-ok"><strong id="stat-ok">0</strong> OK</span>
+                        <span class="stat-item stat-fail"><strong id="stat-fail">0</strong> Fail</span>
+                        <span class="stat-item"><strong id="stat-rate">0%</strong></span>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-value stat-ok" id="stat-ok">0</div>
-                        <div class="stat-label">OK</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value stat-fail" id="stat-fail">0</div>
-                        <div class="stat-label">NO OK</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="stat-rate">0%</div>
-                        <div class="stat-label">Tasa de Aprobación</div>
-                    </div>
-                </div>
-
-                <!-- Filters (cerca de la tabla) -->
-                <div class="filters-bar">
+                    <div class="toolbar-divider"></div>
                     <div class="filter-group">
-                        <label>Filtrar por Piso:</label>
+                        <label>Piso:</label>
                         <select id="story-filter">
-                            <option value="">Todos los pisos</option>
+                            <option value="">Todos</option>
                         </select>
                     </div>
                     <div class="filter-group">
-                        <label>Filtrar por Eje:</label>
+                        <label>Eje:</label>
                         <select id="axis-filter">
-                            <option value="">Todos los ejes</option>
+                            <option value="">Todos</option>
                         </select>
                     </div>
-                    <div class="filter-group">
-                        <button class="btn btn-sm" id="toggle-all-combos-btn" title="Expandir/Colapsar todas las combinaciones">
-                            <span id="toggle-combos-icon">▶</span> Expandir todo
-                        </button>
-                    </div>
-                    <div class="plane-indicator">
-                        <span>Plano actual: </span>
-                        <span id="current-plane-label">M3</span>
-                    </div>
+                    <div class="toolbar-divider"></div>
+                    <button class="btn btn-sm" id="toggle-all-combos-btn" title="Expandir/Colapsar todas las combinaciones">
+                        <span id="toggle-combos-icon">▶</span> Combos
+                    </button>
+                    <span class="plane-indicator">M3</span>
                 </div>
 
                 <!-- Results Table -->
@@ -205,7 +188,8 @@
                                 <th title="Altura desde sección crítica (continuidad del muro)">hwcs</th>
                                 <th title="Malla distribuida vertical/horizontal">Malla</th>
                                 <th title="Elemento de borde">Borde</th>
-                                <th title="Viga de acople genérica">Vigas</th>
+                                <th title="Viga de acople izquierda">V.Izq</th>
+                                <th title="Viga de acople derecha">V.Der</th>
                                 <th>FS Flex.</th>
                                 <th>Cap. Flexión</th>
                                 <th>FS Corte</th>
@@ -403,12 +387,12 @@
         </div>
     </div>
 
-    <!-- JavaScript Modules -->
-    <script src="{{ url_for('structural_static', filename='js/StructuralAPI.js') }}"></script>
-    <script src="{{ url_for('structural_static', filename='js/PlotModal.js') }}"></script>
-    <script src="{{ url_for('structural_static', filename='js/PiersTable.js') }}"></script>
-    <script src="{{ url_for('structural_static', filename='js/ResultsTable.js') }}"></script>
-    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}"></script>
+    <!-- JavaScript Modules (v3 cache bust) -->
+    <script src="{{ url_for('structural_static', filename='js/StructuralAPI.js') }}?v=9"></script>
+    <script src="{{ url_for('structural_static', filename='js/PlotModal.js') }}?v=9"></script>
+    <script src="{{ url_for('structural_static', filename='js/PiersTable.js') }}?v=9"></script>
+    <script src="{{ url_for('structural_static', filename='js/ResultsTable.js') }}?v=9"></script>
+    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}?v=9"></script>
     <script>
         // Inicializar la página cuando el DOM esté listo
         document.addEventListener('DOMContentLoaded', () => {
