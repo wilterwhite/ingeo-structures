@@ -1,12 +1,11 @@
-# app/structural/domain/entities/parsed_data.py
+# app/domain/entities/parsed_data.py
 """
 Estructura de datos parseados de archivos Excel de ETABS.
 """
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import pandas as pd
     from .pier import Pier
     from .pier_forces import PierForces
     from .coupling_beam import CouplingBeamConfig, PierCouplingConfig
@@ -33,7 +32,7 @@ class ParsedData:
     pier_forces: Dict[str, 'PierForces']
     materials: Dict[str, float]
     stories: List[str]
-    raw_data: Dict[str, 'pd.DataFrame']
+    raw_data: Dict[str, Any]  # pd.DataFrame, Any para evitar dependencia de tipos
     continuity_info: Optional[Dict[str, 'WallContinuityInfo']] = field(default=None)
     building_info: Optional['BuildingInfo'] = field(default=None)
     default_coupling_beam: Optional['CouplingBeamConfig'] = field(default=None)
