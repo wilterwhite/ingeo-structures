@@ -1,4 +1,4 @@
-# app/structural/services/analysis/aci_318_25_service.py
+# app/services/analysis/aci_318_25_service.py
 """
 Servicio de verificacion de conformidad ACI 318-25 para muros.
 
