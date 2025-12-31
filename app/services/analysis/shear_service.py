@@ -1,4 +1,4 @@
-# app/structural/services/analysis/shear_service.py
+# app/services/analysis/shear_service.py
 """
 Servicio de verificacion de corte para piers.
 
