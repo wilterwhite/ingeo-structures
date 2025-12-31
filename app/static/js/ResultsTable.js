@@ -196,6 +196,10 @@ class ResultsTable {
             ? `${pier.n_meshes}M φ${pier.diameter_v}@${pier.spacing_v} +${pier.n_meshes}φ${pier.diameter_edge || 10}`
             : '-';
 
+        // Propuesta de diseño
+        const proposal = result.design_proposal;
+        const hasProposal = proposal && proposal.has_proposal;
+
         // Esbeltez info
         const slenderness = result.slenderness || {};
         const lambdaVal = slenderness.lambda || 0;
@@ -282,6 +286,18 @@ class ResultsTable {
                 <span class="dcr-info" title="DCR = Vu/φVn">DCR: ${this.formatDcr(result.shear.dcr_combined)} (Vu=${result.shear.Vu_2}t)</span>
             </td>
             <td class="${statusClass}">${result.overall_status}</td>
+            <td class="proposal-cell ${hasProposal ? 'has-proposal' : ''}" data-pier-key="${pierKey}">
+                ${hasProposal ? `
+                    <div class="proposal-info">
+                        <span class="proposal-mode proposal-mode-${proposal.failure_mode}">${this.getFailureModeLabel(proposal.failure_mode)}</span>
+                        <span class="proposal-desc">${proposal.description}</span>
+                        <span class="proposal-sf ${proposal.success ? 'proposal-success' : 'proposal-fail'}">
+                            SF: ${proposal.sf_original.toFixed(2)} → ${proposal.sf_proposed.toFixed(2)}
+                        </span>
+                    </div>
+                    <button class="apply-proposal-btn" data-pier-key="${pierKey}" title="Aplicar propuesta">✓</button>
+                ` : '<span class="no-proposal">-</span>'}
+            </td>
             <td class="actions-cell">
                 <div class="action-buttons">
                     <button class="action-btn ${isExpanded ? 'active' : ''}" data-action="expand" title="Ver combinaciones">
@@ -320,6 +336,15 @@ class ResultsTable {
             });
         });
 
+        // Event handler para aplicar propuesta
+        const applyBtn = row.querySelector('.apply-proposal-btn');
+        if (applyBtn) {
+            applyBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.applyProposal(pierKey, result.design_proposal);
+            });
+        }
+
         return row;
     }
 
@@ -339,7 +364,7 @@ class ResultsTable {
             loadingRow.className = 'combo-row';
             loadingRow.dataset.pierKey = pierKey;
             loadingRow.style.cssText = displayStyle;
-            loadingRow.innerHTML = '<td colspan="11" style="text-align:center; color: #6b7280;">Cargando combinaciones...</td>';
+            loadingRow.innerHTML = '<td colspan="12" style="text-align:center; color: #6b7280;">Cargando combinaciones...</td>';
             container.appendChild(loadingRow);
         }
     }
@@ -375,6 +400,7 @@ class ResultsTable {
             <td class="fs-value ${this.getFsClass(comboShearDisplay)}">${comboShearDisplay}</td>
             <td class="combo-forces-cell">V2=${combo.V2} | V3=${combo.V3} | DCR: ${this.formatDcr(dcrCombined)}</td>
             <td class="${statusClass}">${combo.overall_status}</td>
+            <td></td>
             <td class="actions-cell">
                 <button class="action-btn" data-action="diagram-combo" title="Ver diagrama P-M">📊</button>
             </td>
@@ -496,6 +522,66 @@ class ResultsTable {
         if (dcr === undefined || dcr === null) return '-';
         if (dcr < 0.001) return '≈0';
         return dcr.toFixed(2);
+    }
+
+    getFailureModeLabel(mode) {
+        const labels = {
+            'flexure': 'Flexión',
+            'shear': 'Corte',
+            'combined': 'Combinado',
+            'slenderness': 'Esbeltez',
+            'confinement': 'Confinamiento'
+        };
+        return labels[mode] || mode;
+    }
+
+    async applyProposal(pierKey, proposal) {
+        if (!proposal || !proposal.has_proposal) return;
+
+        const pier = this.piersData.find(p => p.key === pierKey);
+        if (!pier) return;
+
+        // Parsear la descripción de la propuesta para extraer valores
+        // Formato típico: "4φ16 + 2M φ8@150 + e=200mm"
+        const config = this.parseProposalConfig(proposal);
+
+        // Actualizar pier con la configuración propuesta
+        if (config.n_edge_bars) pier.n_edge_bars = config.n_edge_bars;
+        if (config.diameter_edge) pier.diameter_edge = config.diameter_edge;
+        if (config.n_meshes) pier.n_meshes = config.n_meshes;
+        if (config.diameter_v) {
+            pier.diameter_v = config.diameter_v;
+            pier.diameter_h = config.diameter_v;
+        }
+        if (config.spacing_v) {
+            pier.spacing_v = config.spacing_v;
+            pier.spacing_h = config.spacing_v;
+        }
+
+        // Re-analizar el pier
+        await this.reanalyzeSinglePier(pierKey);
+    }
+
+    parseProposalConfig(proposal) {
+        const config = {};
+        const desc = proposal.description || '';
+
+        // Parsear barras de borde: "4φ16"
+        const borderMatch = desc.match(/(\d+)φ(\d+)/);
+        if (borderMatch) {
+            config.n_edge_bars = parseInt(borderMatch[1]);
+            config.diameter_edge = parseInt(borderMatch[2]);
+        }
+
+        // Parsear malla: "2M φ8@150"
+        const meshMatch = desc.match(/(\d)M\s*φ(\d+)@(\d+)/);
+        if (meshMatch) {
+            config.n_meshes = parseInt(meshMatch[1]);
+            config.diameter_v = parseInt(meshMatch[2]);
+            config.spacing_v = parseInt(meshMatch[3]);
+        }
+
+        return config;
     }
 
     // =========================================================================

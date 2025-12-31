@@ -21,6 +21,7 @@ from .presentation.plot_generator import PlotGenerator
 from .analysis.flexure_service import FlexureService
 from .analysis.shear_service import ShearService
 from .analysis.statistics_service import StatisticsService
+from .analysis.proposal_service import ProposalService
 from .analysis.aci_318_25_service import (
     ACI318_25_Service,
     Chapter18_VerificationResult
@@ -50,7 +51,8 @@ class PierAnalysisService:
         slenderness_service: Optional[SlendernessService] = None,
         interaction_service: Optional[InteractionDiagramService] = None,
         plot_generator: Optional[PlotGenerator] = None,
-        aci_318_25_service: Optional[ACI318_25_Service] = None
+        aci_318_25_service: Optional[ACI318_25_Service] = None,
+        proposal_service: Optional[ProposalService] = None
     ):
         """
         Inicializa el servicio de analisis.
@@ -64,6 +66,7 @@ class PierAnalysisService:
             interaction_service: Servicio de diagrama interaccion (opcional)
             plot_generator: Generador de graficos (opcional)
             aci_318_25_service: Servicio de verificacion ACI 318-25 (opcional)
+            proposal_service: Servicio de propuestas de diseño (opcional)
 
         Nota: Los servicios se crean por defecto si no se pasan.
               Pasar None explicito permite inyectar mocks para testing.
@@ -76,6 +79,10 @@ class PierAnalysisService:
         self._interaction_service = interaction_service or InteractionDiagramService()
         self._plot_generator = plot_generator or PlotGenerator()
         self._aci_318_25_service = aci_318_25_service or ACI318_25_Service()
+        self._proposal_service = proposal_service or ProposalService(
+            flexure_service=self._flexure_service,
+            shear_service=self._shear_service
+        )
 
     # =========================================================================
     # Validación Centralizada
@@ -483,7 +490,22 @@ class PierAnalysisService:
         if flexure_result['status'] != "OK" or shear_result['status'] != "OK":
             overall_status = "NO OK"
 
-        # 7. Gráfico P-M
+        # 7. Obtener datos de esbeltez (antes de propuesta)
+        slenderness_data = flexure_result.get('slenderness', {})
+
+        # 8. Propuesta de diseño (si falla)
+        proposal = None
+        if overall_status != "OK":
+            proposal = self._proposal_service.generate_proposal(
+                pier=pier,
+                pier_forces=pier_forces,
+                flexure_sf=flexure_result['sf'],
+                shear_dcr=shear_result['dcr_combined'],
+                boundary_required=boundary.get('required', False),
+                slenderness_reduction=slenderness_data.get('reduction', 1.0)
+            )
+
+        # 9. Gráfico P-M
         pm_plot = ""
         if generate_plot:
             pm_plot = self._plot_generator.generate_pm_diagram(
@@ -495,8 +517,29 @@ class PierAnalysisService:
                 angle_deg=angle_deg
             )
 
-        # Obtener datos de esbeltez
-        slenderness_data = flexure_result.get('slenderness', {})
+        # Preparar datos de propuesta (solo si hay propuesta exitosa)
+        has_proposal = proposal is not None and proposal.success
+        if has_proposal:
+            original_thickness = proposal.original_config.thickness
+            proposal_failure_mode = proposal.failure_mode.value
+            proposal_type = proposal.proposal_type.value
+            proposal_description = proposal.proposed_config.description(original_thickness)
+            proposal_sf_original = proposal.original_sf_flexure
+            proposal_sf_proposed = proposal.proposed_sf_flexure
+            proposal_dcr_original = proposal.original_dcr_shear
+            proposal_dcr_proposed = proposal.proposed_dcr_shear
+            proposal_success = True
+            proposal_changes = ", ".join(proposal.changes)
+        else:
+            proposal_failure_mode = ""
+            proposal_type = ""
+            proposal_description = ""
+            proposal_sf_original = 0.0
+            proposal_sf_proposed = 0.0
+            proposal_dcr_original = 0.0
+            proposal_dcr_proposed = 0.0
+            proposal_success = False
+            proposal_changes = ""
 
         return VerificationResult(
             pier_label=pier.label,
@@ -560,7 +603,18 @@ class PierAnalysisService:
             continuity_n_stories=continuity_info.n_stories if continuity_info else 1,
             continuity_is_continuous=continuity_info.is_continuous if continuity_info else False,
             continuity_is_base=continuity_info.is_base if continuity_info else True,
-            continuity_hwcs_lw=(hwcs / pier.width) if hwcs and pier.width > 0 else (pier.height / pier.width if pier.width > 0 else 0)
+            continuity_hwcs_lw=(hwcs / pier.width) if hwcs and pier.width > 0 else (pier.height / pier.width if pier.width > 0 else 0),
+            # Propuesta de diseño
+            has_proposal=has_proposal,
+            proposal_failure_mode=proposal_failure_mode,
+            proposal_type=proposal_type,
+            proposal_description=proposal_description,
+            proposal_sf_original=proposal_sf_original,
+            proposal_sf_proposed=proposal_sf_proposed,
+            proposal_dcr_original=proposal_dcr_original,
+            proposal_dcr_proposed=proposal_dcr_proposed,
+            proposal_success=proposal_success,
+            proposal_changes=proposal_changes
         )
 
     # =========================================================================

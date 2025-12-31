@@ -1,155 +1,243 @@
-# Módulo Structural - Análisis de Muros de Hormigón Armado
+# INGEO Structures - Verificación de Muros ACI 318-25
 
-App standalone para análisis estructural de muros (piers) de hormigón armado según ACI 318.
+Aplicación web para verificación estructural de muros (piers) de hormigón armado según ACI 318-25.
 
-## Estructura
+## Características
+
+- Importación directa de archivos Excel exportados de ETABS
+- Verificación de flexocompresión con diagrama de interacción P-M
+- Verificación de corte bidireccional (V2-V3) con DCR combinado
+- Análisis de esbeltez y magnificación de momentos
+- Clasificación automática de elementos (muro, columna, wall-pier)
+- **Propuestas automáticas de diseño** cuando un elemento falla
+- Interfaz web interactiva con edición inline de armadura
+
+## Arquitectura
 
 ```
-app/structural/
-├── domain/                    # Lógica de negocio pura
-│   ├── entities/              # Entidades de dominio
-│   │   ├── pier.py            # Muro de hormigón
-│   │   ├── load_combination.py # Combinación de carga
-│   │   ├── pier_forces.py     # Colección de combinaciones
-│   │   ├── verification_result.py # Resultado de verificación
-│   │   └── parsed_data.py     # Datos parseados de Excel
-│   │
-│   ├── calculations/          # Calculadores puros
-│   │   ├── steel_layer_calculator.py    # Capas de acero
-│   │   ├── reinforcement_calculator.py  # Propiedades de armadura
-│   │   └── flexure_checker.py           # Verificación flexión
-│   │
-│   ├── interaction_diagram.py # Diagrama de interacción P-M
-│   ├── shear_verification.py  # Verificación de corte
-│   ├── slenderness.py         # Análisis de esbeltez
-│   └── result.py              # Tipo Result genérico
+app/
+├── domain/                     # Lógica de negocio (cálculos ACI 318-25)
+│   ├── chapter11/              # Capítulo 11: Muros - Límites y métodos
+│   ├── chapter18/              # Capítulo 18: Muros sísmicos - Requisitos especiales
+│   ├── flexure/                # Flexocompresión: Diagramas P-M, esbeltez
+│   ├── shear/                  # Corte: Verificación, fricción, clasificación
+│   ├── entities/               # Estructuras de datos
+│   ├── constants/              # Constantes y conversión de unidades
+│   └── calculations/           # Calculadores puros
 │
-├── services/                  # Lógica de aplicación
-│   ├── pier_analysis.py       # Orquestador principal
-│   ├── factory.py             # Factory para servicios
-│   │
-│   ├── analysis/              # Servicios de análisis
-│   │   ├── flexure_service.py
-│   │   ├── shear_service.py
-│   │   └── statistics_service.py
-│   │
-│   ├── parsing/               # Servicios de parsing
-│   │   ├── excel_parser.py    # Parser de Excel ETABS
-│   │   ├── session_manager.py # Gestión de sesiones
-│   │   ├── material_mapper.py # Mapeo de materiales
-│   │   └── table_extractor.py # Extracción de tablas
-│   │
-│   └── presentation/          # Servicios de presentación
-│       └── plot_generator.py  # Generación de gráficos
+├── services/                   # Orquestación y servicios de aplicación
+│   ├── analysis/               # Servicios de análisis (SF, DCR)
+│   ├── parsing/                # Parsing de Excel ETABS
+│   └── presentation/           # Generación de gráficos
 │
-├── routes/                    # API REST
-│   └── analysis.py            # Endpoints
-│
-├── templates/                 # HTML
-├── static/                    # CSS/JS
-└── standalone_app.py          # Punto de entrada Flask
+├── routes/                     # API REST (Flask)
+├── templates/                  # HTML (Jinja2)
+└── static/                     # CSS, JavaScript
+```
+
+## Organización del Dominio
+
+### `domain/chapter11/` - Muros Estructurales (ACI 318-25 Cap. 11)
+
+Contiene **límites y métodos de diseño** para muros no sísmicos:
+
+| Archivo | Contenido |
+|---------|-----------|
+| `limits.py` | Espesores mínimos, cuantías de refuerzo, espaciamientos máximos |
+| `design_methods.py` | Método simplificado vs método detallado de diseño |
+| `reinforcement.py` | Distribución de armadura, capas, recubrimientos |
+
+### `domain/chapter18/` - Muros Sísmicos (ACI 318-25 Cap. 18)
+
+Contiene **requisitos sísmicos especiales** para SDC D, E, F:
+
+| Archivo | Contenido |
+|---------|-----------|
+| `piers.py` | Clasificación de wall piers (§18.10.8) |
+| `boundary_elements.py` | Elementos de borde: cuándo se requieren, dimensiones (§18.10.6) |
+| `amplification.py` | Amplificación de cortante Ωv×ωv (§18.10.3) |
+| `coupling_beams.py` | Vigas de acople: requisitos de armadura diagonal |
+
+### `domain/flexure/` - Flexocompresión
+
+**Cálculo de capacidad** y verificación de flexión:
+
+| Archivo | Contenido |
+|---------|-----------|
+| `interaction_diagram.py` | Genera curva P-M de capacidad (φPn, φMn) |
+| `slenderness.py` | Esbeltez: λ, Pc, δns, momento mínimo M2,min, factor Cm |
+| `checker.py` | Compara demanda vs capacidad, calcula SF |
+
+### `domain/shear/` - Corte
+
+**Cálculo de resistencia** y verificación de corte:
+
+| Archivo | Contenido |
+|---------|-----------|
+| `verification.py` | Vc (concreto) + Vs (acero), fórmulas muro vs columna |
+| `classification.py` | Determina si usar fórmula de muro o columna |
+| `shear_friction.py` | Fricción cortante en juntas de construcción |
+| `results.py` | Estructuras de resultado de corte |
+
+### `domain/entities/` - Estructuras de Datos
+
+| Entidad | Descripción |
+|---------|-------------|
+| `Pier` | Muro con geometría, materiales y armadura |
+| `PierForces` | Colección de combinaciones de carga |
+| `LoadCombination` | P, M2, M3, V2, V3 de una combinación |
+| `VerificationResult` | Resultado completo de verificación |
+| `DesignProposal` | Propuesta de diseño cuando falla |
+
+### `domain/constants/` - Constantes
+
+| Archivo | Contenido |
+|---------|-----------|
+| `units.py` | Conversiones: N↔tonf, mm↔m, MPa↔psi |
+| `materials.py` | Propiedades de hormigón y acero |
+| `seismic.py` | Categorías de diseño sísmico (SDC) |
+
+## Servicios de Análisis
+
+Los servicios en `services/analysis/` **orquestan los cálculos** y producen factores de seguridad:
+
+### `FlexureService`
+```
+Pier + Fuerzas → InteractionDiagram → SlendernessService → SF de flexión
+```
+- Genera diagrama P-M de capacidad
+- Aplica magnificación de momentos si es esbelto
+- Calcula SF = φMn / Mu para cada combinación
+
+### `ShearService`
+```
+Pier + Fuerzas → Classification → Vc + Vs → DCR de corte
+```
+- Clasifica el elemento (muro vs columna)
+- Calcula Vc según tipo (αc√f'c para muros, 0.17√f'c para columnas)
+- Calcula Vs del refuerzo horizontal
+- DCR = √(DCR₂² + DCR₃²) combinando ambas direcciones
+
+### `ProposalService`
+```
+SF < 1.0 o DCR > 1.0 → Analiza modo de falla → Propuesta automática
+```
+- **Flexión falla** → Aumenta barras de borde progresivamente
+- **Corte falla** → Reduce espaciamiento o aumenta diámetro de malla
+- **Combinado** → Mejora ambos iterativamente
+- **Esbeltez** → Propone aumento de espesor
+
+### `ACI318_25_Service`
+Integra verificaciones adicionales del Capítulo 18:
+- Clasificación de elementos (§18.10.8)
+- Amplificación de cortante (§18.10.3.3)
+- Elementos de borde (§18.10.6)
+
+## Flujo de Verificación
+
+```
+                    ┌─────────────────────────────────────┐
+                    │         Excel ETABS                 │
+                    │  (Pier Forces, Pier Sections)       │
+                    └─────────────────┬───────────────────┘
+                                      │
+                                      ▼
+                    ┌─────────────────────────────────────┐
+                    │         EtabsExcelParser            │
+                    │  Extrae piers, fuerzas, materiales  │
+                    └─────────────────┬───────────────────┘
+                                      │
+                                      ▼
+                    ┌─────────────────────────────────────┐
+                    │         PierAnalysisService         │
+                    │       (Orquestador principal)       │
+                    └───┬─────────────┬─────────────┬─────┘
+                        │             │             │
+           ┌────────────▼──┐   ┌──────▼──────┐   ┌──▼────────────┐
+           │FlexureService │   │ShearService │   │ACI318_25_Svc  │
+           │               │   │             │   │               │
+           │ • P-M Diagram │   │ • Vc + Vs   │   │ • Clasific.   │
+           │ • Slenderness │   │ • DCR₂, DCR₃│   │ • Amplific.   │
+           │ • SF flexión  │   │ • DCR comb. │   │ • Borde       │
+           └───────┬───────┘   └──────┬──────┘   └───────┬───────┘
+                   │                  │                  │
+                   └────────────┬─────┴──────────────────┘
+                                │
+                                ▼
+                   ┌────────────────────────┐
+                   │   ¿SF ≥ 1 y DCR ≤ 1?   │
+                   └─────────┬──────────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              │ NO                          │ SÍ
+              ▼                             ▼
+    ┌─────────────────────┐       ┌─────────────────┐
+    │  ProposalService    │       │  ✓ PASA         │
+    │  Genera propuesta   │       │                 │
+    │  automática         │       │                 │
+    └─────────────────────┘       └─────────────────┘
 ```
 
 ## Ejecución
 
-### Servidor standalone
+```bash
+# Desde la raíz del proyecto
+python run.py
 
-Ejecutar desde la raíz del proyecto:
+# El servidor inicia en http://localhost:5001
+```
+
+## Uso de la API
+
+### Parsear Excel
+```python
+POST /structural/parse
+Content-Type: multipart/form-data
+file: <archivo.xlsx>
+
+Response: { session_id, piers: [...], statistics: {...} }
+```
+
+### Analizar
+```python
+POST /structural/analyze
+{
+    "session_id": "...",
+    "pier_updates": [...],  # Opcional: modificar armadura
+    "generate_plots": true,
+    "moment_axis": "M3"
+}
+
+Response: { results: [...], statistics: {...}, summary_plot: "base64..." }
+```
+
+## Sistema de Unidades
+
+| Magnitud | Unidad Interna | Unidad Salida |
+|----------|----------------|---------------|
+| Longitud | mm | m (geometría) |
+| Fuerza | N | tonf |
+| Momento | N-mm | tonf-m |
+| Esfuerzo | MPa | MPa |
+
+Conversiones en `domain/constants/units.py` según ACI 318-25 Apéndice E.
+
+## Tests
 
 ```bash
-python app/structural/standalone_app.py
+# Ejecutar todos los tests
+pytest tests/ -v
+
+# Tests específicos
+pytest tests/test_proposal_service.py -v
+pytest tests/domain/flexure/test_slenderness.py -v
 ```
 
-O como módulo:
+## Referencias
 
-```bash
-python -m app.structural.standalone_app
-```
-
-El servidor inicia en **http://localhost:5001**
-
-### Configuración
-
-| Variable | Valor |
-|----------|-------|
-| Puerto | 5001 |
-| Max upload | 50 MB |
-| Debug | Habilitado |
-
-## Patrones Arquitectónicos
-
-### Capas
-1. **Domain**: Lógica de negocio pura, sin dependencias externas
-2. **Services**: Orquestación y coordinación
-3. **Routes**: API REST (presentación)
-
-### Calculadores (domain/calculations/)
-Clases estáticas con métodos puros para cálculos:
-- `SteelLayerCalculator`: Genera capas de acero para análisis P-M
-- `ReinforcementCalculator`: Calcula propiedades de armadura
-- `FlexureChecker`: Verifica flexocompresión contra demandas
-
-### Inyección de Dependencias
-`PierAnalysisService` acepta dependencias opcionales:
-
-```python
-# Default
-service = PierAnalysisService()
-
-# Con dependencias personalizadas (testing)
-service = PierAnalysisService(
-    session_manager=mock_session,
-    flexure_service=mock_flexure
-)
-
-# Usando factory
-from app.structural.services.factory import ServiceFactory
-service = ServiceFactory.create_analysis_service()
-```
-
-## Flujo de Datos
-
-```
-Excel ETABS → EtabsExcelParser → ParsedData → SessionManager (cache)
-                                                    ↓
-                                            PierAnalysisService
-                                                    ↓
-                                    ┌───────────────┼───────────────┐
-                                    ↓               ↓               ↓
-                            FlexureService   ShearService   StatisticsService
-                                    ↓               ↓               ↓
-                            VerificationResult (por pier)
-                                                    ↓
-                                            JSON Response
-```
-
-## Uso
-
-### Análisis básico
-```python
-from app.structural.services import PierAnalysisService
-
-service = PierAnalysisService()
-
-# Parsear Excel
-result = service.parse_excel(file_content, session_id)
-
-# Analizar
-result = service.analyze(session_id, generate_plots=True)
-```
-
-### Análisis de combinación específica
-```python
-result = service.analyze_single_combination(
-    session_id=session_id,
-    pier_key="Cielo P1_PMar-C4-1",
-    combination_index=5
-)
-```
-
-## Cálculos Implementados
-
-- **Flexocompresión**: Diagrama de interacción P-M según ACI 318
-- **Corte bidireccional**: Interacción V2-V3 con verificación combinada
-- **Esbeltez**: Factor de reducción por pandeo (k*lu/r)
-- **Materiales**: Conversión automática de nombres ETABS a f'c
+- ACI 318-25: Building Code Requirements for Structural Concrete
+- Capítulo 6: Análisis estructural (esbeltez, momentos de diseño)
+- Capítulo 11: Muros (límites, refuerzo distribuido)
+- Capítulo 18: Estructuras resistentes a sismo (muros especiales)
+- Capítulo 22: Resistencia de secciones (flexión, corte)
+- Apéndice E: Equivalencias de unidades SI/US

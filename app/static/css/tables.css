@@ -80,18 +80,19 @@
     table-layout: fixed;
 }
 
-/* Columnas: Piso | Pier | Dim | hwcs | Armadura | FS Flex | Cap Flex | FS Corte | Cap Corte | Estado | Acciones */
-.results-table th:nth-child(1), .results-table td:nth-child(1) { width: 70px; }   /* Piso */
-.results-table th:nth-child(2), .results-table td:nth-child(2) { width: 100px; }  /* Pier */
-.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 90px; }   /* Dimensiones */
-.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 70px; }   /* hwcs */
-.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 190px; }  /* Armadura */
-.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 80px; }   /* FS Flexión */
-.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 115px; }  /* Cap. Flexión */
-.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 80px; }   /* FS Corte */
-.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 155px; }  /* Cap. Corte */
-.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 55px; } /* Estado */
-.results-table th:nth-child(11), .results-table td:nth-child(11) { width: 120px; } /* Acciones */
+/* Columnas: Piso | Pier | Dim | hwcs | Armadura | FS Flex | Cap Flex | FS Corte | Cap Corte | Estado | Propuesta | Acciones */
+.results-table th:nth-child(1), .results-table td:nth-child(1) { width: 60px; }   /* Piso */
+.results-table th:nth-child(2), .results-table td:nth-child(2) { width: 90px; }   /* Pier */
+.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 80px; }   /* Dimensiones */
+.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 65px; }   /* hwcs */
+.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 180px; }  /* Armadura */
+.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 70px; }   /* FS Flexión */
+.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 105px; }  /* Cap. Flexión */
+.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 70px; }   /* FS Corte */
+.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 145px; }  /* Cap. Corte */
+.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 50px; } /* Estado */
+.results-table th:nth-child(11), .results-table td:nth-child(11) { width: 140px; } /* Propuesta */
+.results-table th:nth-child(12), .results-table td:nth-child(12) { width: 100px; } /* Acciones */
 
 /* hwcs cell styling */
 .hwcs-cell {
@@ -365,4 +366,99 @@
 .action-btn.active {
     background: var(--primary-color);
     border-color: var(--primary-color);
+}
+
+/* ==========================================================================
+   PROPOSAL CELL
+   ========================================================================== */
+
+.proposal-cell {
+    font-size: 0.75rem;
+    vertical-align: middle;
+    text-align: center;
+}
+
+.proposal-cell.has-proposal {
+    background: rgba(251, 191, 36, 0.1);
+}
+
+.proposal-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: center;
+}
+
+.proposal-mode {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 1px 4px;
+    border-radius: 3px;
+    text-transform: uppercase;
+}
+
+.proposal-mode-flexure {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.proposal-mode-shear {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.proposal-mode-combined {
+    background: #fce7f3;
+    color: #9d174d;
+}
+
+.proposal-mode-slenderness {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.proposal-mode-confinement {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.proposal-desc {
+    font-family: 'Consolas', monospace;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.proposal-sf {
+    font-family: 'Consolas', monospace;
+    font-size: 0.7rem;
+}
+
+.proposal-sf.proposal-success {
+    color: var(--success-color);
+}
+
+.proposal-sf.proposal-fail {
+    color: var(--warning-color);
+}
+
+.apply-proposal-btn {
+    margin-top: 4px;
+    padding: 2px 8px;
+    font-size: 0.8rem;
+    background: var(--success-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.apply-proposal-btn:hover {
+    background: #059669;
+    transform: scale(1.05);
+}
+
+.no-proposal {
+    color: var(--text-muted);
 }

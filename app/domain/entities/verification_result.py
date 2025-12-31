@@ -105,6 +105,20 @@ class VerificationResult:
     continuity_is_base: bool = True         # Si es la base del muro continuo
     continuity_hwcs_lw: float = 0.0         # Relación hwcs/lw
 
+    # ==========================================================================
+    # Propuesta de diseño (cuando falla verificación)
+    # ==========================================================================
+    has_proposal: bool = False              # Si tiene propuesta de diseño
+    proposal_failure_mode: str = ""         # flexure, shear, combined, slenderness
+    proposal_type: str = ""                 # boundary_bars, mesh, thickness, combined
+    proposal_description: str = ""          # Descripción corta de la propuesta
+    proposal_sf_original: float = 0.0       # SF original (antes de propuesta)
+    proposal_sf_proposed: float = 0.0       # SF propuesto (después de propuesta)
+    proposal_dcr_original: float = 0.0      # DCR original (antes de propuesta)
+    proposal_dcr_proposed: float = 0.0      # DCR propuesto (después de propuesta)
+    proposal_success: bool = False          # Si la propuesta resuelve el problema
+    proposal_changes: str = ""              # Cambios específicos (ej: "4φ16 borde")
+
     @property
     def is_ok(self) -> bool:
         return self.overall_status == "OK"
@@ -200,5 +214,18 @@ class VerificationResult:
                 'is_base': self.continuity_is_base
             },
             'overall_status': self.overall_status,
-            'pm_plot': self.pm_plot_base64
+            'pm_plot': self.pm_plot_base64,
+            # Propuesta de diseño
+            'design_proposal': {
+                'has_proposal': self.has_proposal,
+                'failure_mode': self.proposal_failure_mode,
+                'proposal_type': self.proposal_type,
+                'description': self.proposal_description,
+                'sf_original': round(self.proposal_sf_original, 3),
+                'sf_proposed': round(self.proposal_sf_proposed, 3),
+                'dcr_original': round(self.proposal_dcr_original, 3),
+                'dcr_proposed': round(self.proposal_dcr_proposed, 3),
+                'success': self.proposal_success,
+                'changes': self.proposal_changes
+            } if self.has_proposal else None
         }
