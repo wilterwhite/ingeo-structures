@@ -378,8 +378,6 @@ class ShearService:
         is_wall_pier = self._wall_classification.is_wall_pier(classification)
 
         if not self._shear_amplification.should_amplify(
-            hwcs=hwcs_value,
-            lw=pier.width,
             is_wall_pier=is_wall_pier
         ):
             # No amplifica, retornar valores sin amplificar
