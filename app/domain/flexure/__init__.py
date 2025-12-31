@@ -1,4 +1,4 @@
-# app/structural/domain/flexure/__init__.py
+# app/domain/flexure/__init__.py
 """
 Verificación de flexión según ACI 318-25.
 

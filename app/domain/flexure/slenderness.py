@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .entities.pier import Pier
+    from ..entities.pier import Pier
 
 
 @dataclass
