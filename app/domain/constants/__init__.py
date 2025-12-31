@@ -10,7 +10,7 @@ Módulos:
 - materials: Grados de acero y propiedades de materiales
 - stiffness: Factores de rigidez efectiva (Tabla 6.6.3.1.1)
 """
-from .units import N_TO_TONF, NMM_TO_TONFM, MM_TO_M, M_TO_MM, INCH_TO_MM
+from .units import N_TO_TONF, NMM_TO_TONFM, MM_TO_M, M_TO_MM, MM_TO_FT, INCH_TO_MM
 from .phi_chapter21 import (
     PHI_COMPRESSION,
     PHI_COMPRESSION_SPIRAL,

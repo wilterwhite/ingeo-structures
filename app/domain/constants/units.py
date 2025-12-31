@@ -55,6 +55,7 @@ MM_TO_INCH = 1 / INCH_TO_MM  # 0.03937
 FT_TO_M = 0.3048           # Exacto por definicion
 M_TO_FT = 1 / FT_TO_M      # 3.2808
 FT_TO_MM = FT_TO_M * 1000  # 304.8
+MM_TO_FT = 1 / FT_TO_MM    # 0.00328084
 
 # =============================================================================
 # CONVERSION DE AREA

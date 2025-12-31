@@ -14,6 +14,8 @@ hwcs es necesario para:
 from dataclasses import dataclass
 from typing import Dict, List, Optional, TYPE_CHECKING
 
+from ..constants.units import MM_TO_M, MM_TO_FT
+
 if TYPE_CHECKING:
     from ..entities.pier import Pier
     from ..entities.parsed_data import ParsedData
@@ -61,10 +63,6 @@ class WallContinuityService:
     son continuos a través de varios pisos y calcular hwcs para cada uno.
     """
 
-    # Conversión mm a pies
-    MM_TO_FT = 0.00328084
-    MM_TO_M = 0.001
-
     def __init__(self):
         self._continuity_cache: Dict[str, WallContinuityInfo] = {}
         self._building_info: Optional[BuildingInfo] = None
@@ -106,7 +104,7 @@ class WallContinuityService:
                 if pier.story not in story_heights:
                     story_heights[pier.story] = pier.height
             total_height = sum(story_heights.values())
-            hn_ft = total_height * self.MM_TO_FT
+            hn_ft = total_height * MM_TO_FT
 
         # Guardar info del edificio
         self._building_info = BuildingInfo(
@@ -114,7 +112,7 @@ class WallContinuityService:
             stories=stories,
             total_height_mm=total_height,
             hn_ft=hn_ft,
-            hn_m=total_height * self.MM_TO_M
+            hn_m=total_height * MM_TO_M
         )
 
         # Crear mapa de índice de piso
@@ -181,10 +179,6 @@ class WallContinuityService:
         info = self._continuity_cache.get(pier_key)
         return info.hwcs if info else 0
 
-    def get_continuity_info(self, pier_key: str) -> Optional[WallContinuityInfo]:
-        """Obtiene información de continuidad para un pier."""
-        return self._continuity_cache.get(pier_key)
-
     def get_building_info(self) -> Optional[BuildingInfo]:
         """Obtiene información del edificio."""
         return self._building_info
@@ -192,50 +186,3 @@ class WallContinuityService:
     def get_hn_ft(self) -> float:
         """Obtiene la altura del edificio en pies."""
         return self._building_info.hn_ft if self._building_info else 0
-
-    def get_continuous_walls(self) -> Dict[str, List[str]]:
-        """
-        Retorna diccionario de muros continuos.
-
-        Returns:
-            Dict con label -> lista de pier_keys ordenados por piso
-        """
-        walls: Dict[str, List[str]] = {}
-
-        for pier_key, info in self._continuity_cache.items():
-            if info.label not in walls:
-                walls[info.label] = []
-            walls[info.label].append(pier_key)
-
-        # Ordenar cada lista por story_index
-        for label in walls:
-            walls[label] = sorted(
-                walls[label],
-                key=lambda pk: self._continuity_cache[pk].story_index
-            )
-
-        return walls
-
-    def get_summary(self) -> Dict:
-        """Retorna resumen de continuidad para debugging."""
-        if not self._continuity_cache:
-            return {"error": "No se ha analizado continuidad"}
-
-        continuous_walls = [
-            info.label for info in self._continuity_cache.values()
-            if info.is_continuous and info.is_base
-        ]
-
-        single_story_walls = [
-            info.label for info in self._continuity_cache.values()
-            if not info.is_continuous
-        ]
-
-        return {
-            "total_piers": len(self._continuity_cache),
-            "continuous_walls": len(set(continuous_walls)),
-            "single_story_walls": len(set(single_story_walls)),
-            "building_height_m": self._building_info.hn_m if self._building_info else 0,
-            "building_height_ft": self._building_info.hn_ft if self._building_info else 0,
-            "n_stories": self._building_info.n_stories if self._building_info else 0,
-        }

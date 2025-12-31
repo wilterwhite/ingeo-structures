@@ -189,22 +189,6 @@ class SessionManager:
             return 0
         return parsed_data.building_info.hn_ft
 
-    def get_continuity_info(self, session_id: str, pier_key: str):
-        """
-        Obtiene información de continuidad para un pier.
-
-        Args:
-            session_id: ID de sesión
-            pier_key: Clave del pier (Story_Label)
-
-        Returns:
-            WallContinuityInfo o None
-        """
-        parsed_data = self.get_session(session_id)
-        if not parsed_data or not parsed_data.continuity_info:
-            return None
-        return parsed_data.continuity_info.get(pier_key)
-
     def get_building_info(self, session_id: str):
         """
         Obtiene información del edificio.
