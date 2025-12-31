@@ -305,6 +305,16 @@
     font-weight: 500;
 }
 
+/* Advertencia: Pu excede φPn,max */
+.capacity-line.axial-exceeded {
+    color: #dc2626;
+    font-weight: 600;
+    background: #fef2f2;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.75rem;
+}
+
 .capacity-info {
     font-size: 0.7rem;
     color: var(--primary-color);

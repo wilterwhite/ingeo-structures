@@ -119,6 +119,12 @@ class VerificationResult:
     proposal_success: bool = False          # Si la propuesta resuelve el problema
     proposal_changes: str = ""              # Cambios específicos (ej: "4φ16 borde")
 
+    # ==========================================================================
+    # Exceso de capacidad axial (campos al final por orden de dataclass)
+    # ==========================================================================
+    flexure_exceeds_axial: bool = False  # Si Pu > φPn,max (excede capacidad axial)
+    flexure_phi_Pn_max: float = 0.0      # Capacidad axial máxima φPn,max (tonf)
+
     @property
     def is_ok(self) -> bool:
         return self.overall_status == "OK"
@@ -170,7 +176,9 @@ class VerificationResult:
                 'phi_Mn_0': round(self.flexure_phi_Mn_0, 1),       # Capacidad a P=0
                 'phi_Mn_at_Pu': round(self.flexure_phi_Mn_at_Pu, 1),  # Capacidad a Pu crítico
                 'Pu': round(self.flexure_Pu, 1),
-                'Mu': round(self.flexure_Mu, 1)
+                'Mu': round(self.flexure_Mu, 1),
+                'exceeds_axial': self.flexure_exceeds_axial,      # Si Pu > φPn,max
+                'phi_Pn_max': round(self.flexure_phi_Pn_max, 1)   # Capacidad axial máxima
             },
             'shear': {
                 'sf': self._format_sf(self.shear_sf),

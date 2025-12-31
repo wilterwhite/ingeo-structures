@@ -22,6 +22,8 @@ class FlexureCheckResult:
     critical_Pu: float       # Carga axial crítica (tonf)
     critical_Mu: float       # Momento crítico (tonf-m)
     is_inside: bool          # Si el punto crítico está dentro de la curva
+    exceeds_axial_capacity: bool = False  # Si Pu > φPn,max
+    phi_Pn_max: float = 0.0  # Capacidad axial máxima (tonf)
 
 
 class FlexureChecker:
@@ -265,6 +267,10 @@ class FlexureChecker:
         phi_Mn_0 = FlexureChecker.get_phi_Mn_at_P0(points)
         phi_Mn_at_Pu = FlexureChecker.get_phi_Mn_at_P(points, critical_Pu)
 
+        # Detectar si Pu excede la capacidad axial máxima
+        phi_Pn_max = max(p.phi_Pn for p in points) if points else 0.0
+        exceeds_axial = critical_Pu > phi_Pn_max * 1.001  # 0.1% tolerancia
+
         return FlexureCheckResult(
             safety_factor=min_sf,
             status=status,
@@ -273,5 +279,7 @@ class FlexureChecker:
             phi_Mn_at_Pu=phi_Mn_at_Pu,
             critical_Pu=critical_Pu,
             critical_Mu=critical_Mu,
-            is_inside=critical_is_inside
+            is_inside=critical_is_inside,
+            exceeds_axial_capacity=exceeds_axial,
+            phi_Pn_max=phi_Pn_max
         )

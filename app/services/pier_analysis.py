@@ -691,6 +691,8 @@ class PierAnalysisService:
             flexure_phi_Mn_at_Pu=flexure_result['phi_Mn_at_Pu'],
             flexure_Pu=flexure_result['Pu'],
             flexure_Mu=flexure_result['Mu'],
+            flexure_exceeds_axial=flexure_result.get('exceeds_axial_capacity', False),
+            flexure_phi_Pn_max=flexure_result.get('phi_Pn_max', 0.0),
             shear_sf=shear_result['sf'],
             shear_status=shear_result['status'],
             critical_combo_shear=shear_result['critical_combo'],

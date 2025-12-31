@@ -324,15 +324,27 @@ class ResultsTable {
         const sl = result.slenderness || {};
         const slenderClass = sl.is_slender ? 'slender-warn' : '';
         const slenderInfo = sl.is_slender ? `λ=${sl.lambda} (-${sl.reduction_pct}%)` : `λ=${sl.lambda || 0}`;
+        const exceedsAxial = result.flexure.exceeds_axial || false;
 
         const td = document.createElement('td');
         td.className = 'capacity-cell';
-        td.innerHTML = `
-            <span class="capacity-line">φMn(Pu)=${result.flexure.phi_Mn_at_Pu}t-m</span>
-            <span class="capacity-line">Mu=${result.flexure.Mu}t-m</span>
-            <span class="capacity-line capacity-ref">φMn₀=${result.flexure.phi_Mn_0}t-m</span>
-            <span class="slenderness-info ${slenderClass}">${slenderInfo}</span>
-        `;
+
+        if (exceedsAxial) {
+            // Pu excede φPn,max - mostrar advertencia clara
+            td.innerHTML = `
+                <span class="capacity-line axial-exceeded">⚠️ Pu=${result.flexure.Pu}t > φPn=${result.flexure.phi_Pn_max}t</span>
+                <span class="capacity-line">Mu=${result.flexure.Mu}t-m</span>
+                <span class="capacity-line capacity-ref">φMn₀=${result.flexure.phi_Mn_0}t-m</span>
+                <span class="slenderness-info ${slenderClass}">${slenderInfo}</span>
+            `;
+        } else {
+            td.innerHTML = `
+                <span class="capacity-line">φMn(Pu)=${result.flexure.phi_Mn_at_Pu}t-m</span>
+                <span class="capacity-line">Mu=${result.flexure.Mu}t-m</span>
+                <span class="capacity-line capacity-ref">φMn₀=${result.flexure.phi_Mn_0}t-m</span>
+                <span class="slenderness-info ${slenderClass}">${slenderInfo}</span>
+            `;
+        }
         return td;
     }
 

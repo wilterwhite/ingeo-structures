@@ -120,11 +120,13 @@ class FlexureService:
 
         # Verificar
         if demand_points:
-            sf, status, critical, phi_Mn_0, phi_Mn_at_Pu, critical_Pu, critical_Mu = \
+            (sf, status, critical, phi_Mn_0, phi_Mn_at_Pu,
+             critical_Pu, critical_Mu, exceeds_axial, phi_Pn_max) = \
                 self._interaction_service.check_flexure(interaction_points, demand_points)
         else:
             sf, status, critical = float('inf'), "OK", "N/A"
             phi_Mn_0, phi_Mn_at_Pu, critical_Pu, critical_Mu = 0.0, 0.0, 0.0, 0.0
+            exceeds_axial, phi_Pn_max = False, 0.0
 
         return {
             'sf': sf,
@@ -136,7 +138,9 @@ class FlexureService:
             'Mu': critical_Mu,
             'design_curve': design_curve,
             'demand_points': demand_points,
-            'slenderness': slenderness_data
+            'slenderness': slenderness_data,
+            'exceeds_axial_capacity': exceeds_axial,  # Si Pu > φPn,max
+            'phi_Pn_max': phi_Pn_max                  # Capacidad axial máxima
         }
 
     def get_capacities(self, pier: Pier) -> Dict[str, Any]:
