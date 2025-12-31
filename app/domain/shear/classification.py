@@ -1,4 +1,4 @@
-# app/structural/domain/shear/classification.py
+# app/domain/shear/classification.py
 """
 Clasificacion de muros y pilares de muro segun ACI 318-25.
 
@@ -10,7 +10,6 @@ Referencias:
 """
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from ..constants.shear import (
     ASPECT_RATIO_WALL_LIMIT,
