@@ -1,4 +1,4 @@
-# app/structural/domain/wall_piers.py
+# app/domain/chapter18/piers.py
 """
 Verificacion de pilares de muro (wall piers) segun ACI 318-25 Seccion 18.10.8.
 
