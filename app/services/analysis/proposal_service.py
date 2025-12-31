@@ -177,6 +177,36 @@ class ProposalService:
         result = self._shear_service.check_shear(pier, pier_forces)
         return result.get('dcr_combined', 0)
 
+    def _create_proposal(
+        self,
+        pier: Pier,
+        failure_mode: FailureMode,
+        proposal_type: ProposalType,
+        original_config: ReinforcementConfig,
+        proposed_config: ReinforcementConfig,
+        original_sf: float,
+        new_sf: float,
+        original_dcr: float,
+        new_dcr: float,
+        iterations: int,
+        changes: List[str]
+    ) -> DesignProposal:
+        """Crea una propuesta de diseño con los parámetros dados."""
+        return DesignProposal(
+            pier_key=f"{pier.story}_{pier.label}",
+            failure_mode=failure_mode,
+            proposal_type=proposal_type,
+            original_config=original_config,
+            proposed_config=proposed_config,
+            original_sf_flexure=original_sf,
+            proposed_sf_flexure=new_sf,
+            original_dcr_shear=original_dcr,
+            proposed_dcr_shear=new_dcr,
+            iterations=iterations,
+            success=True,
+            changes=changes
+        )
+
     # =========================================================================
     # PROPUESTAS POR MODO DE FALLA
     # =========================================================================
@@ -222,19 +252,10 @@ class ProposalService:
 
             if new_sf >= self.TARGET_SF:
                 changes.append(f"Borde: {n_bars}φ{diameter}")
-                return DesignProposal(
-                    pier_key=f"{pier.story}_{pier.label}",
-                    failure_mode=FailureMode.FLEXURE,
-                    proposal_type=ProposalType.BOUNDARY_BARS,
-                    original_config=original_config,
-                    proposed_config=proposed_config,
-                    original_sf_flexure=original_sf,
-                    proposed_sf_flexure=new_sf,
-                    original_dcr_shear=original_dcr,
-                    proposed_dcr_shear=new_dcr,
-                    iterations=iteration + 1,
-                    success=True,
-                    changes=changes
+                return self._create_proposal(
+                    pier, FailureMode.FLEXURE, ProposalType.BOUNDARY_BARS,
+                    original_config, proposed_config, original_sf, new_sf,
+                    original_dcr, new_dcr, iteration + 1, changes
                 )
 
         # No se encontró solución solo con borde, intentar con espesor
@@ -285,19 +306,10 @@ class ProposalService:
 
             if new_dcr <= 1.0:
                 changes.append(f"Malla @{proposed_config.spacing_h}")
-                return DesignProposal(
-                    pier_key=f"{pier.story}_{pier.label}",
-                    failure_mode=FailureMode.SHEAR,
-                    proposal_type=ProposalType.MESH,
-                    original_config=original_config,
-                    proposed_config=proposed_config,
-                    original_sf_flexure=original_sf,
-                    proposed_sf_flexure=new_sf,
-                    original_dcr_shear=original_dcr,
-                    proposed_dcr_shear=new_dcr,
-                    iterations=iteration,
-                    success=True,
-                    changes=changes
+                return self._create_proposal(
+                    pier, FailureMode.SHEAR, ProposalType.MESH,
+                    original_config, proposed_config, original_sf, new_sf,
+                    original_dcr, new_dcr, iteration, changes
                 )
 
         # Estrategia 2: Aumentar diámetro
@@ -319,19 +331,10 @@ class ProposalService:
 
             if new_dcr <= 1.0:
                 changes.append(f"Malla φ{proposed_config.diameter_h}@{proposed_config.spacing_h}")
-                return DesignProposal(
-                    pier_key=f"{pier.story}_{pier.label}",
-                    failure_mode=FailureMode.SHEAR,
-                    proposal_type=ProposalType.MESH,
-                    original_config=original_config,
-                    proposed_config=proposed_config,
-                    original_sf_flexure=original_sf,
-                    proposed_sf_flexure=new_sf,
-                    original_dcr_shear=original_dcr,
-                    proposed_dcr_shear=new_dcr,
-                    iterations=iteration,
-                    success=True,
-                    changes=changes
+                return self._create_proposal(
+                    pier, FailureMode.SHEAR, ProposalType.MESH,
+                    original_config, proposed_config, original_sf, new_sf,
+                    original_dcr, new_dcr, iteration, changes
                 )
 
         # Estrategia 3: Agregar segunda malla si solo tiene una
@@ -344,19 +347,10 @@ class ProposalService:
 
             if new_dcr <= 1.0:
                 changes.append("2 mallas")
-                return DesignProposal(
-                    pier_key=f"{pier.story}_{pier.label}",
-                    failure_mode=FailureMode.SHEAR,
-                    proposal_type=ProposalType.MESH,
-                    original_config=original_config,
-                    proposed_config=proposed_config,
-                    original_sf_flexure=original_sf,
-                    proposed_sf_flexure=new_sf,
-                    original_dcr_shear=original_dcr,
-                    proposed_dcr_shear=new_dcr,
-                    iterations=iteration,
-                    success=True,
-                    changes=changes
+                return self._create_proposal(
+                    pier, FailureMode.SHEAR, ProposalType.MESH,
+                    original_config, proposed_config, original_sf, new_sf,
+                    original_dcr, new_dcr, iteration, changes
                 )
 
         # Si nada funciona, proponer aumento de espesor
@@ -416,19 +410,10 @@ class ProposalService:
             if new_sf >= self.TARGET_SF and new_dcr <= 1.0:
                 changes.append(f"Borde: {n_bars}φ{diameter}")
                 changes.append(f"Malla @{proposed_config.spacing_h}")
-                return DesignProposal(
-                    pier_key=f"{pier.story}_{pier.label}",
-                    failure_mode=FailureMode.COMBINED,
-                    proposal_type=ProposalType.COMBINED,
-                    original_config=original_config,
-                    proposed_config=proposed_config,
-                    original_sf_flexure=original_sf,
-                    proposed_sf_flexure=new_sf,
-                    original_dcr_shear=original_dcr,
-                    proposed_dcr_shear=new_dcr,
-                    iterations=iteration + 1,
-                    success=True,
-                    changes=changes
+                return self._create_proposal(
+                    pier, FailureMode.COMBINED, ProposalType.COMBINED,
+                    original_config, proposed_config, original_sf, new_sf,
+                    original_dcr, new_dcr, iteration + 1, changes
                 )
 
         # Si no encuentra solución, intentar con espesor
@@ -500,19 +485,10 @@ class ProposalService:
 
             if passes:
                 changes.append(f"Espesor: {int(new_thickness)}mm")
-                return DesignProposal(
-                    pier_key=f"{pier.story}_{pier.label}",
-                    failure_mode=failure_mode,
-                    proposal_type=ProposalType.THICKNESS,
-                    original_config=original_config,
-                    proposed_config=proposed_config,
-                    original_sf_flexure=original_sf,
-                    proposed_sf_flexure=new_sf,
-                    original_dcr_shear=original_dcr,
-                    proposed_dcr_shear=new_dcr,
-                    iterations=iteration + 1,
-                    success=True,
-                    changes=changes
+                return self._create_proposal(
+                    pier, failure_mode, ProposalType.THICKNESS,
+                    original_config, proposed_config, original_sf, new_sf,
+                    original_dcr, new_dcr, iteration + 1, changes
                 )
 
         # No se encontró solución automática - retornar None
