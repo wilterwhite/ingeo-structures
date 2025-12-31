@@ -427,7 +427,7 @@ class ShearService:
         return {
             'Vu_original': round(result.Vu_original, 2),
             'Ve': round(result.Ve, 2),
-            'omega_v': round(result.omega_v, 3),
+            'Omega_v': round(result.Omega_v, 3),
             'omega_v_dyn': round(result.omega_v_dyn, 3),
             'amplification': round(result.amplification, 3),
             'hwcs_lw': round(result.hwcs_lw, 2),

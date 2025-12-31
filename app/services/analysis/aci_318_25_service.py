@@ -34,7 +34,6 @@ from ...domain.chapter18 import (
     ShearAmplificationService,
     ShearAmplificationFactors,
     SpecialWallRequirements,
-    DesignShearResult,
     BoundaryElementService,
     BoundaryElementMethod,
     BoundaryElementResult,
@@ -515,24 +514,18 @@ class ACI318_25_Service:
             if hwcs <= 0:
                 hwcs = pier.height
 
-            shear_amplification = self._shear_amplification.calculate_amplification_factors(
+            # Calcular cortante de diseño amplificado
+            shear_amplification = self._shear_amplification.calculate_amplified_shear(
+                Vu=Vu_Eh,
                 hwcs=hwcs,
                 lw=pier.width,
                 hn_ft=hn_ft
             )
 
-            # Calcular cortante de diseno amplificado
-            design_shear = self._shear_amplification.calculate_design_shear(
-                Vu_Eh=Vu_Eh,
-                hwcs=hwcs,
-                lw=pier.width,
-                hn_ft=hn_ft
-            )
-
-            if design_shear.Ve > Vu:
+            if shear_amplification.Ve > Vu:
                 warnings.append(
-                    f"Cortante amplificado Ve={design_shear.Ve:.1f} > Vu={Vu:.1f} tonf "
-                    f"(Omega_v={shear_amplification.Omega_v}, omega_v={shear_amplification.omega_v})"
+                    f"Cortante amplificado Ve={shear_amplification.Ve:.1f} > Vu={Vu:.1f} tonf "
+                    f"(Omega_v={shear_amplification.Omega_v}, omega_v={shear_amplification.omega_v_dyn})"
                 )
 
         # =====================================================================

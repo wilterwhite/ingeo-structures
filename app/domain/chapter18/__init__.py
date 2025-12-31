@@ -17,7 +17,6 @@ from .amplification import (
     ShearAmplificationService,
     ShearAmplificationResult,
     ShearAmplificationFactors,
-    DesignShearResult,
     SpecialWallRequirements,
 )
 from .boundary_elements import (
@@ -69,7 +68,6 @@ __all__ = [
     'ShearAmplificationService',
     'ShearAmplificationResult',
     'ShearAmplificationFactors',
-    'DesignShearResult',
     'SpecialWallRequirements',
     # boundary_elements
     'BoundaryElementService',
