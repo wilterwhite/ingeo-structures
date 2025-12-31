@@ -1,4 +1,4 @@
-# app/structural/domain/calculations/flexure_checker.py
+# app/domain/flexure/checker.py
 """
 Verificador de flexocompresión para secciones de hormigón armado.
 Extrae la lógica de verificación que antes estaba en interaction_diagram.py.
@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import List, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..interaction_diagram import InteractionPoint
+    from .interaction_diagram import InteractionPoint
 
 
 @dataclass
