@@ -384,7 +384,7 @@ class ShearService:
             return ShearAmplificationResult(
                 Vu_original=Vu,
                 Ve=Vu,
-                omega_v=1.0,
+                Omega_v=1.0,
                 omega_v_dyn=1.0,
                 amplification=1.0,
                 hwcs_lw=hwcs_value / pier.width if pier.width > 0 else 0,
