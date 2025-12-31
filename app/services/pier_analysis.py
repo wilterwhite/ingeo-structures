@@ -27,6 +27,7 @@ from .analysis.aci_318_25_service import (
     Chapter18_VerificationResult
 )
 from .analysis.pier_verification_service import PierVerificationService
+from .analysis.pier_capacity_service import PierCapacityService
 from ..domain.entities import Pier, VerificationResult, PierForces
 from ..domain.flexure import InteractionDiagramService, SlendernessService, SteelLayer
 from ..domain.chapter11 import WallType, WallCastType
@@ -54,7 +55,8 @@ class PierAnalysisService:
         plot_generator: Optional[PlotGenerator] = None,
         aci_318_25_service: Optional[ACI318_25_Service] = None,
         proposal_service: Optional[ProposalService] = None,
-        verification_service: Optional[PierVerificationService] = None
+        verification_service: Optional[PierVerificationService] = None,
+        capacity_service: Optional[PierCapacityService] = None
     ):
         """
         Inicializa el servicio de analisis.
@@ -70,6 +72,7 @@ class PierAnalysisService:
             aci_318_25_service: Servicio de verificacion ACI 318-25 (opcional)
             proposal_service: Servicio de propuestas de diseño (opcional)
             verification_service: Servicio de verificacion de piers (opcional)
+            capacity_service: Servicio de capacidades de piers (opcional)
 
         Nota: Los servicios se crean por defecto si no se pasan.
               Pasar None explicito permite inyectar mocks para testing.
@@ -89,6 +92,13 @@ class PierAnalysisService:
         self._verification_service = verification_service or PierVerificationService(
             session_manager=self._session_manager,
             aci_318_25_service=self._aci_318_25_service
+        )
+        self._capacity_service = capacity_service or PierCapacityService(
+            session_manager=self._session_manager,
+            flexure_service=self._flexure_service,
+            shear_service=self._shear_service,
+            slenderness_service=self._slenderness_service,
+            plot_generator=self._plot_generator
         )
 
     # =========================================================================
@@ -804,112 +814,16 @@ class PierAnalysisService:
         }
 
     # =========================================================================
-    # Capacidades Puras del Pier
+    # Capacidades (delegado a PierCapacityService)
     # =========================================================================
 
     def get_section_diagram(self, session_id: str, pier_key: str) -> Dict[str, Any]:
-        """
-        Genera un diagrama de la sección transversal del pier.
-
-        Args:
-            session_id: ID de sesión
-            pier_key: Clave del pier (Story_Label)
-
-        Returns:
-            Dict con section_diagram en base64
-        """
-        # Validar pier
-        error = self._validate_pier(session_id, pier_key)
-        if error:
-            return error
-
-        pier = self._session_manager.get_pier(session_id, pier_key)
-
-        # Generar diagrama
-        section_diagram = self._plot_generator.generate_section_diagram(pier)
-
-        return {
-            'success': True,
-            'pier_key': pier_key,
-            'section_diagram': section_diagram
-        }
+        """Genera un diagrama de la sección transversal del pier."""
+        return self._capacity_service.get_section_diagram(session_id, pier_key)
 
     def get_pier_capacities(self, session_id: str, pier_key: str) -> Dict[str, Any]:
-        """
-        Calcula las capacidades puras del pier (sin interacción).
-
-        Delega a FlexureService y ShearService para los cálculos.
-
-        Args:
-            session_id: ID de sesión
-            pier_key: Clave del pier (Story_Label)
-
-        Returns:
-            Diccionario con información del pier y sus capacidades
-        """
-        # Validar pier
-        error = self._validate_pier(session_id, pier_key)
-        if error:
-            return error
-
-        pier = self._session_manager.get_pier(session_id, pier_key)
-
-        # Delegar cálculos de flexión a FlexureService
-        flexure_capacities = self._flexure_service.get_capacities(pier)
-
-        # Delegar cálculos de corte a ShearService
-        shear_capacities = self._shear_service.get_shear_capacity(pier, Nu=0)
-
-        # Obtener datos detallados de esbeltez
-        slenderness = self._slenderness_service.analyze(pier, k=0.8, braced=True)
-
-        # Calcular capacidad reducida por esbeltez
-        phi_Pn_max = flexure_capacities['phi_Pn_max']
-        phi_Pn_reduced = phi_Pn_max * slenderness.buckling_factor if slenderness.is_slender else phi_Pn_max
-
-        return {
-            'success': True,
-            'pier_info': {
-                'label': pier.label,
-                'story': pier.story,
-                'width_m': round(pier.width / 1000, 3),
-                'thickness_m': round(pier.thickness / 1000, 3),
-                'height_m': round(pier.height / 1000, 2),
-                'fc_MPa': pier.fc,
-                'fy_MPa': pier.fy
-            },
-            'reinforcement': {
-                'n_meshes': pier.n_meshes,
-                'diameter_v': pier.diameter_v,
-                'spacing_v': pier.spacing_v,
-                'diameter_h': pier.diameter_h,
-                'spacing_h': pier.spacing_h,
-                'diameter_edge': pier.diameter_edge,
-                'As_vertical_mm2': round(pier.As_vertical, 1),
-                'As_edge_mm2': round(pier.As_edge_total, 1),
-                'As_flexure_total_mm2': round(pier.As_flexure_total, 1),
-                'description': pier.reinforcement_description
-            },
-            'slenderness': {
-                'lambda': round(slenderness.lambda_ratio, 1),
-                'k': slenderness.k,
-                'lu_m': round(slenderness.lu / 1000, 2),
-                'r_mm': round(slenderness.r, 1),
-                'is_slender': slenderness.is_slender,
-                'limit': slenderness.lambda_limit,
-                'Pc_kN': round(slenderness.Pc_kN, 1),
-                'buckling_factor': round(slenderness.buckling_factor, 3),
-                'reduction_pct': round((1 - slenderness.buckling_factor) * 100, 0) if slenderness.is_slender else 0
-            },
-            'capacities': {
-                'phi_Pn_max_tonf': round(phi_Pn_max, 1),
-                'phi_Pn_reduced_tonf': round(phi_Pn_reduced, 1),
-                'phi_Mn3_tonf_m': flexure_capacities['phi_Mn3'],
-                'phi_Mn2_tonf_m': flexure_capacities['phi_Mn2'],
-                'phi_Vn2_tonf': shear_capacities['phi_Vn_2'],
-                'phi_Vn3_tonf': shear_capacities['phi_Vn_3']
-            }
-        }
+        """Calcula las capacidades puras del pier (sin interacción)."""
+        return self._capacity_service.get_pier_capacities(session_id, pier_key)
 
     # =========================================================================
     # Verificacion ACI 318-25 (delegado a PierVerificationService)
