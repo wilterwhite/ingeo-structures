@@ -1,4 +1,4 @@
-# app/structural/domain/shear/verification.py
+# app/domain/shear/verification.py
 """
 Servicio de verificacion de corte para muros y columnas segun ACI 318-25.
 
@@ -37,7 +37,7 @@ from .results import (
 
 class ShearVerificationService:
     """
-    Servicio para verificacion de corte en muros y columnas segun ACI 318-14/19.
+    Servicio para verificacion de corte en muros y columnas segun ACI 318-25.
 
     Selecciona automaticamente la formula correcta segun la relacion de aspecto:
     - lw/tw >= 4: MUROS (Seccion 18.10.4)
