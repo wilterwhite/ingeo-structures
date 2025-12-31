@@ -80,17 +80,18 @@
     table-layout: fixed;
 }
 
-/* Columnas: Pier(fusionado) | hwcs | Armadura | Vigas | FS Flex | Cap Flex | FS Corte | Cap Corte | Propuesta | Acciones */
-.results-table th:nth-child(1), .results-table td:nth-child(1) { width: 110px; }  /* Pier (fusionado) */
-.results-table th:nth-child(2), .results-table td:nth-child(2) { width: 60px; }   /* hwcs */
-.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 260px; }  /* Armadura (más ancha para V/H) */
-.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 115px; }  /* Vigas */
-.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 65px; }   /* FS Flexión */
-.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 110px; }  /* Cap. Flexión */
-.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 65px; }   /* FS Corte */
-.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 140px; }  /* Cap. Corte */
-.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 130px; }  /* Propuesta */
-.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 60px; }  /* Acciones (2x2 grid) */
+/* Columnas: Pier | hwcs | Malla | Borde | Vigas | FS Flex | Cap Flex | FS Corte | Cap Corte | Propuesta | Acciones */
+.results-table th:nth-child(1), .results-table td:nth-child(1) { width: 100px; }   /* Pier */
+.results-table th:nth-child(2), .results-table td:nth-child(2) { width: 55px; }    /* hwcs */
+.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 155px; }   /* Malla (V/H) */
+.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 140px; }   /* Borde */
+.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 100px; }   /* Vigas */
+.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 60px; }    /* FS Flexión */
+.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 100px; }   /* Cap. Flexión */
+.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 60px; }    /* FS Corte */
+.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 130px; }   /* Cap. Corte */
+.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 115px; } /* Propuesta */
+.results-table th:nth-child(11), .results-table td:nth-child(11) { width: 55px; }  /* Acciones */
 
 /* hwcs cell styling */
 .hwcs-cell {
@@ -144,11 +145,6 @@
     align-items: center;
 }
 
-.armadura-row.borde-row {
-    padding-top: 2px;
-    border-top: 1px dashed var(--border-color);
-}
-
 .armadura-cell select {
     padding: 2px 3px;
     font-size: 0.7rem;
@@ -175,6 +171,67 @@
     color: var(--text-muted);
     min-width: 10px;
     text-align: center;
+}
+
+/* ==========================================================================
+   BORDE CELL (Elemento de borde)
+   ========================================================================== */
+
+.borde-cell {
+    font-family: monospace;
+    font-size: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.borde-row {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+}
+
+.borde-row.estribos-row {
+    padding-top: 2px;
+    border-top: 1px dashed var(--border-color);
+}
+
+.borde-cell select {
+    padding: 2px 3px;
+    font-size: 0.7rem;
+    font-family: monospace;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: white;
+    cursor: pointer;
+}
+
+.borde-cell select:hover {
+    border-color: var(--primary-color);
+}
+
+.borde-cell select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.borde-cell select:disabled {
+    background: #f1f5f9;
+    color: #94a3b8;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.borde-cell select:disabled:hover {
+    border-color: var(--border-color);
+}
+
+.borde-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    min-width: 10px;
 }
 
 /* Celdas de capacidad (nueva estructura horizontal) */
@@ -561,17 +618,3 @@
     margin-top: 2px;
 }
 
-/* ==========================================================================
-   DISABLED STIRRUPS (2 barras de borde)
-   ========================================================================== */
-
-.armadura-cell select:disabled {
-    background: #f1f5f9;
-    color: #94a3b8;
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-.armadura-cell select:disabled:hover {
-    border-color: var(--border-color);
-}

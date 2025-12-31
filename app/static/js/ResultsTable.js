@@ -253,6 +253,9 @@ class ResultsTable {
                     <select class="edit-spacing-v" title="@ Vertical">
                         ${[100,125,150,175,200,250,300].map(s => `<option value="${s}" ${pier?.spacing_v === s ? 'selected' : ''}>@${s}</option>`).join('')}
                     </select>
+                </div>
+                <div class="armadura-row">
+                    <span style="width:28px"></span>
                     <span class="armadura-label">H</span>
                     <select class="edit-diameter-h" title="φ Horizontal">
                         ${[6,8,10,12,16].map(d => `<option value="${d}" ${pier?.diameter_h === d ? 'selected' : ''}>φ${d}</option>`).join('')}
@@ -261,13 +264,18 @@ class ResultsTable {
                         ${[100,125,150,175,200,250,300].map(s => `<option value="${s}" ${pier?.spacing_h === s ? 'selected' : ''}>@${s}</option>`).join('')}
                     </select>
                 </div>
-                <div class="armadura-row borde-row">
+            </td>
+            <td class="borde-cell" data-pier-key="${pierKey}">
+                <div class="borde-row">
                     <select class="edit-n-edge" title="Nº barras borde (por lado)">
                         ${[2,4,6,8,10,12].map(n => `<option value="${n}" ${pier?.n_edge_bars === n ? 'selected' : ''}>${n}φ</option>`).join('')}
                     </select>
                     <select class="edit-edge" title="φ Borde">
                         ${[12,16,18,20,22,25,28,32].map(d => `<option value="${d}" ${pier?.diameter_edge === d ? 'selected' : ''}>φ${d}</option>`).join('')}
                     </select>
+                </div>
+                <div class="borde-row estribos-row">
+                    <span class="borde-label">E</span>
                     <select class="edit-stirrup-d" title="φ Estribo${stirrupsDisabled ? ' (requiere 4+ barras)' : ''}" ${stirrupsDisabled ? 'disabled' : ''}>
                         ${[8,10,12].map(d => `<option value="${d}" ${pier?.stirrup_diameter === d ? 'selected' : ''}>E${d}</option>`).join('')}
                     </select>
@@ -364,6 +372,13 @@ class ResultsTable {
         // Event handlers para edición inline de armadura
         row.querySelectorAll('.armadura-cell select').forEach(select => {
             select.addEventListener('change', () => {
+                this.saveInlineEdit(row, pierKey);
+            });
+        });
+
+        // Event handlers para edición inline de borde
+        row.querySelectorAll('.borde-cell select').forEach(select => {
+            select.addEventListener('change', () => {
                 // Actualizar estado de estribos si cambia n_edge_bars
                 if (select.classList.contains('edit-n-edge')) {
                     this.updateStirrupsState(row);
@@ -385,9 +400,12 @@ class ResultsTable {
     }
 
     updateStirrupsState(row) {
-        const nEdgeSelect = row.querySelector('.edit-n-edge');
-        const stirrupDSelect = row.querySelector('.edit-stirrup-d');
-        const stirrupSSelect = row.querySelector('.edit-stirrup-s');
+        const bordeCell = row.querySelector('.borde-cell');
+        if (!bordeCell) return;
+
+        const nEdgeSelect = bordeCell.querySelector('.edit-n-edge');
+        const stirrupDSelect = bordeCell.querySelector('.edit-stirrup-d');
+        const stirrupSSelect = bordeCell.querySelector('.edit-stirrup-s');
 
         if (!nEdgeSelect || !stirrupDSelect || !stirrupSSelect) return;
 
@@ -422,7 +440,7 @@ class ResultsTable {
             loadingRow.className = 'combo-row';
             loadingRow.dataset.pierKey = pierKey;
             loadingRow.style.cssText = displayStyle;
-            loadingRow.innerHTML = '<td colspan="10" style="text-align:center; color: #6b7280;">Cargando combinaciones...</td>';
+            loadingRow.innerHTML = '<td colspan="11" style="text-align:center; color: #6b7280;">Cargando combinaciones...</td>';
             container.appendChild(loadingRow);
         }
     }
@@ -447,12 +465,12 @@ class ResultsTable {
         const comboShearSf = 1.0 / dcrCombined;
         const comboShearDisplay = comboShearSf >= 100 ? '>100' : comboShearSf.toFixed(2);
 
-        // 10 columnas: Pier | hwcs | Armadura | Vigas | FS Flex | Cap Flex | FS Corte | Cap Corte | Propuesta | Acciones
+        // 11 columnas: Pier | hwcs | Malla | Borde | Vigas | FS Flex | Cap Flex | FS Corte | Cap Corte | Propuesta | Acciones
         tr.innerHTML = `
             <td class="combo-indent" colspan="2">
                 <span class="combo-name">${combo.full_name || combo.name}</span>
             </td>
-            <td class="combo-forces-cell" colspan="2">P=${combo.P} | M2=${combo.M2} | M3=${combo.M3}</td>
+            <td class="combo-forces-cell" colspan="3">P=${combo.P} | M2=${combo.M2} | M3=${combo.M3}</td>
             <td class="fs-value ${this.getFsClass(combo.flexure_sf)}">${combo.flexure_sf}</td>
             <td></td>
             <td class="fs-value ${this.getFsClass(comboShearDisplay)}">${comboShearDisplay}</td>
@@ -647,6 +665,7 @@ class ResultsTable {
 
     async saveInlineEdit(row, pierKey) {
         const armaduraCell = row.querySelector('.armadura-cell');
+        const bordeCell = row.querySelector('.borde-cell');
 
         // Armadura distribuida (V y H separados)
         const meshes = parseInt(armaduraCell.querySelector('.edit-meshes').value);
@@ -655,11 +674,11 @@ class ResultsTable {
         const diameterH = parseInt(armaduraCell.querySelector('.edit-diameter-h').value);
         const spacingH = parseInt(armaduraCell.querySelector('.edit-spacing-h').value);
 
-        // Elemento de borde
-        const nEdgeBars = parseInt(armaduraCell.querySelector('.edit-n-edge').value);
-        const edgeDiameter = parseInt(armaduraCell.querySelector('.edit-edge').value);
-        const stirrupDiameter = parseInt(armaduraCell.querySelector('.edit-stirrup-d').value);
-        const stirrupSpacing = parseInt(armaduraCell.querySelector('.edit-stirrup-s').value);
+        // Elemento de borde (ahora en borde-cell)
+        const nEdgeBars = parseInt(bordeCell.querySelector('.edit-n-edge').value);
+        const edgeDiameter = parseInt(bordeCell.querySelector('.edit-edge').value);
+        const stirrupDiameter = parseInt(bordeCell.querySelector('.edit-stirrup-d').value);
+        const stirrupSpacing = parseInt(bordeCell.querySelector('.edit-stirrup-s').value);
 
         // Actualizar piersData local
         const pier = this.piersData.find(p => p.key === pierKey);
