@@ -192,9 +192,6 @@ class ResultsTable {
         const isExpanded = this.expandedPiers.has(pierKey);
 
         const pier = this.piersData.find(p => p.key === pierKey);
-        const armaduraText = pier
-            ? `${pier.n_meshes}M φ${pier.diameter_v}@${pier.spacing_v} +${pier.n_meshes}φ${pier.diameter_edge || 10}`
-            : '-';
 
         // Propuesta de diseño
         const proposal = result.design_proposal;
@@ -228,26 +225,40 @@ class ResultsTable {
         const isContinuous = continuity.is_continuous || false;
         const storiesText = isContinuous ? `${nStories} pisos` : '1 piso';
 
+        // Determinar si estribos están deshabilitados (2 barras de borde)
+        const nEdgeBars = pier?.n_edge_bars || 2;
+        const stirrupsDisabled = nEdgeBars <= 2;
+
         row.innerHTML = `
-            <td>${result.story}</td>
-            <td>${result.pier_label}</td>
-            <td>${result.geometry.width_m.toFixed(2)}×${result.geometry.thickness_m.toFixed(2)}</td>
+            <td class="pier-info-cell">
+                <span class="pier-name">${result.pier_label}</span>
+                <span class="pier-story">${result.story}</span>
+                <span class="pier-dims">lw=${result.geometry.width_m.toFixed(2)} e=${result.geometry.thickness_m.toFixed(2)}</span>
+            </td>
             <td class="hwcs-cell" title="hwcs/lw = ${hwcsLw.toFixed(2)}">
                 <span class="hwcs-value">${hwcsM.toFixed(1)}m</span>
                 <span class="hwcs-ratio">hwcs/lw=${hwcsLw.toFixed(1)}</span>
                 <span class="hwcs-stories">${storiesText}</span>
             </td>
-            <td class="armadura-cell" data-pier-key="${pierKey}">
+            <td class="armadura-cell" data-pier-key="${pierKey}" data-thickness="${result.geometry.thickness_m * 1000}">
                 <div class="armadura-row">
                     <select class="edit-meshes" title="Mallas">
                         <option value="1" ${pier?.n_meshes === 1 ? 'selected' : ''}>1M</option>
                         <option value="2" ${pier?.n_meshes === 2 ? 'selected' : ''}>2M</option>
                     </select>
-                    <select class="edit-diameter" title="φ Vertical">
-                        ${[6,8,10,12,16,20,22,25].map(d => `<option value="${d}" ${pier?.diameter_v === d ? 'selected' : ''}>φ${d}</option>`).join('')}
+                    <span class="armadura-label">V</span>
+                    <select class="edit-diameter-v" title="φ Vertical">
+                        ${[6,8,10,12,16].map(d => `<option value="${d}" ${pier?.diameter_v === d ? 'selected' : ''}>φ${d}</option>`).join('')}
                     </select>
-                    <select class="edit-spacing" title="Espaciamiento">
-                        ${[100,150,200,250,300].map(s => `<option value="${s}" ${pier?.spacing_v === s ? 'selected' : ''}>@${s}</option>`).join('')}
+                    <select class="edit-spacing-v" title="@ Vertical">
+                        ${[100,125,150,175,200,250,300].map(s => `<option value="${s}" ${pier?.spacing_v === s ? 'selected' : ''}>@${s}</option>`).join('')}
+                    </select>
+                    <span class="armadura-label">H</span>
+                    <select class="edit-diameter-h" title="φ Horizontal">
+                        ${[6,8,10,12,16].map(d => `<option value="${d}" ${pier?.diameter_h === d ? 'selected' : ''}>φ${d}</option>`).join('')}
+                    </select>
+                    <select class="edit-spacing-h" title="@ Horizontal">
+                        ${[100,125,150,175,200,250,300].map(s => `<option value="${s}" ${pier?.spacing_h === s ? 'selected' : ''}>@${s}</option>`).join('')}
                     </select>
                 </div>
                 <div class="armadura-row borde-row">
@@ -257,11 +268,32 @@ class ResultsTable {
                     <select class="edit-edge" title="φ Borde">
                         ${[12,16,18,20,22,25,28,32].map(d => `<option value="${d}" ${pier?.diameter_edge === d ? 'selected' : ''}>φ${d}</option>`).join('')}
                     </select>
-                    <select class="edit-stirrup-d" title="φ Estribo">
+                    <select class="edit-stirrup-d" title="φ Estribo${stirrupsDisabled ? ' (requiere 4+ barras)' : ''}" ${stirrupsDisabled ? 'disabled' : ''}>
                         ${[8,10,12].map(d => `<option value="${d}" ${pier?.stirrup_diameter === d ? 'selected' : ''}>E${d}</option>`).join('')}
                     </select>
-                    <select class="edit-stirrup-s" title="@ Estribo">
+                    <select class="edit-stirrup-s" title="@ Estribo${stirrupsDisabled ? ' (requiere 4+ barras)' : ''}" ${stirrupsDisabled ? 'disabled' : ''}>
                         ${[75,100,125,150,200].map(s => `<option value="${s}" ${pier?.stirrup_spacing === s ? 'selected' : ''}>@${s}</option>`).join('')}
+                    </select>
+                </div>
+            </td>
+            <td class="vigas-cell" data-pier-key="${pierKey}">
+                <div class="vigas-row">
+                    <span class="vigas-label">b×h</span>
+                    <select class="edit-viga-width" title="Ancho viga">
+                        ${[150,200,250,300].map(w => `<option value="${w}" ${w === 200 ? 'selected' : ''}>${w}</option>`).join('')}
+                    </select>
+                    <span>×</span>
+                    <select class="edit-viga-height" title="Altura viga">
+                        ${[400,500,600,700,800].map(h => `<option value="${h}" ${h === 500 ? 'selected' : ''}>${h}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="vigas-row vigas-secondary">
+                    <span class="vigas-label">As</span>
+                    <select class="edit-viga-nbars" title="Nº barras">
+                        ${[2,3,4,5,6].map(n => `<option value="${n}" ${n === 3 ? 'selected' : ''}>${n}</option>`).join('')}
+                    </select>
+                    <select class="edit-viga-diam" title="φ barras">
+                        ${[12,16,18,20,22,25].map(d => `<option value="${d}" ${d === 16 ? 'selected' : ''}>φ${d}</option>`).join('')}
                     </select>
                 </div>
             </td>
@@ -285,7 +317,6 @@ class ResultsTable {
                 <span class="capacity-line">φVn=${result.shear.phi_Vn_2}t</span>
                 <span class="dcr-info" title="DCR = Vu/φVn">DCR: ${this.formatDcr(result.shear.dcr_combined)} (Vu=${result.shear.Vu_2}t)</span>
             </td>
-            <td class="${statusClass}">${result.overall_status}</td>
             <td class="proposal-cell ${hasProposal ? 'has-proposal' : ''}" data-pier-key="${pierKey}">
                 ${hasProposal ? `
                     <div class="proposal-info">
@@ -299,14 +330,15 @@ class ResultsTable {
                 ` : '<span class="no-proposal">-</span>'}
             </td>
             <td class="actions-cell">
-                <div class="action-buttons">
+                <div class="action-buttons-grid">
                     <button class="action-btn ${isExpanded ? 'active' : ''}" data-action="expand" title="Ver combinaciones">
                         <span class="expand-icon">▶</span>
                     </button>
-                    <button class="action-btn" data-action="section" title="Ver sección transversal">🔲</button>
+                    <button class="action-btn" data-action="section" title="Ver sección">🔲</button>
                     <button class="action-btn" data-action="info" title="Ver capacidades">ℹ️</button>
                     ${result.pm_plot ?
-                        `<button class="action-btn" data-action="diagram" title="Ver diagrama P-M">📊</button>` : ''}
+                        `<button class="action-btn" data-action="diagram" title="Ver diagrama P-M">📊</button>` :
+                        `<button class="action-btn" disabled style="visibility:hidden">-</button>`}
                 </div>
             </td>
         `;
@@ -332,6 +364,10 @@ class ResultsTable {
         // Event handlers para edición inline de armadura
         row.querySelectorAll('.armadura-cell select').forEach(select => {
             select.addEventListener('change', () => {
+                // Actualizar estado de estribos si cambia n_edge_bars
+                if (select.classList.contains('edit-n-edge')) {
+                    this.updateStirrupsState(row);
+                }
                 this.saveInlineEdit(row, pierKey);
             });
         });
@@ -346,6 +382,28 @@ class ResultsTable {
         }
 
         return row;
+    }
+
+    updateStirrupsState(row) {
+        const nEdgeSelect = row.querySelector('.edit-n-edge');
+        const stirrupDSelect = row.querySelector('.edit-stirrup-d');
+        const stirrupSSelect = row.querySelector('.edit-stirrup-s');
+
+        if (!nEdgeSelect || !stirrupDSelect || !stirrupSSelect) return;
+
+        const nEdgeBars = parseInt(nEdgeSelect.value);
+        const shouldDisable = nEdgeBars <= 2;
+
+        stirrupDSelect.disabled = shouldDisable;
+        stirrupSSelect.disabled = shouldDisable;
+
+        if (shouldDisable) {
+            stirrupDSelect.title = 'φ Estribo (requiere 4+ barras)';
+            stirrupSSelect.title = '@ Estribo (requiere 4+ barras)';
+        } else {
+            stirrupDSelect.title = 'φ Estribo';
+            stirrupSSelect.title = '@ Estribo';
+        }
     }
 
     appendComboRows(container, pierKey) {
@@ -364,7 +422,7 @@ class ResultsTable {
             loadingRow.className = 'combo-row';
             loadingRow.dataset.pierKey = pierKey;
             loadingRow.style.cssText = displayStyle;
-            loadingRow.innerHTML = '<td colspan="12" style="text-align:center; color: #6b7280;">Cargando combinaciones...</td>';
+            loadingRow.innerHTML = '<td colspan="10" style="text-align:center; color: #6b7280;">Cargando combinaciones...</td>';
             container.appendChild(loadingRow);
         }
     }
@@ -389,17 +447,16 @@ class ResultsTable {
         const comboShearSf = 1.0 / dcrCombined;
         const comboShearDisplay = comboShearSf >= 100 ? '>100' : comboShearSf.toFixed(2);
 
+        // 10 columnas: Pier | hwcs | Armadura | Vigas | FS Flex | Cap Flex | FS Corte | Cap Corte | Propuesta | Acciones
         tr.innerHTML = `
-            <td class="combo-indent"></td>
-            <td class="combo-name" colspan="3">
-                ${combo.full_name || combo.name}
+            <td class="combo-indent" colspan="2">
+                <span class="combo-name">${combo.full_name || combo.name}</span>
             </td>
-            <td class="combo-forces-cell">P=${combo.P} | M2=${combo.M2} | M3=${combo.M3}</td>
+            <td class="combo-forces-cell" colspan="2">P=${combo.P} | M2=${combo.M2} | M3=${combo.M3}</td>
             <td class="fs-value ${this.getFsClass(combo.flexure_sf)}">${combo.flexure_sf}</td>
             <td></td>
             <td class="fs-value ${this.getFsClass(comboShearDisplay)}">${comboShearDisplay}</td>
             <td class="combo-forces-cell">V2=${combo.V2} | V3=${combo.V3} | DCR: ${this.formatDcr(dcrCombined)}</td>
-            <td class="${statusClass}">${combo.overall_status}</td>
             <td></td>
             <td class="actions-cell">
                 <button class="action-btn" data-action="diagram-combo" title="Ver diagrama P-M">📊</button>
@@ -591,10 +648,12 @@ class ResultsTable {
     async saveInlineEdit(row, pierKey) {
         const armaduraCell = row.querySelector('.armadura-cell');
 
-        // Armadura distribuida
+        // Armadura distribuida (V y H separados)
         const meshes = parseInt(armaduraCell.querySelector('.edit-meshes').value);
-        const diameter = parseInt(armaduraCell.querySelector('.edit-diameter').value);
-        const spacing = parseInt(armaduraCell.querySelector('.edit-spacing').value);
+        const diameterV = parseInt(armaduraCell.querySelector('.edit-diameter-v').value);
+        const spacingV = parseInt(armaduraCell.querySelector('.edit-spacing-v').value);
+        const diameterH = parseInt(armaduraCell.querySelector('.edit-diameter-h').value);
+        const spacingH = parseInt(armaduraCell.querySelector('.edit-spacing-h').value);
 
         // Elemento de borde
         const nEdgeBars = parseInt(armaduraCell.querySelector('.edit-n-edge').value);
@@ -606,10 +665,10 @@ class ResultsTable {
         const pier = this.piersData.find(p => p.key === pierKey);
         if (pier) {
             pier.n_meshes = meshes;
-            pier.diameter_v = diameter;
-            pier.diameter_h = diameter;
-            pier.spacing_v = spacing;
-            pier.spacing_h = spacing;
+            pier.diameter_v = diameterV;
+            pier.diameter_h = diameterH;
+            pier.spacing_v = spacingV;
+            pier.spacing_h = spacingH;
             pier.n_edge_bars = nEdgeBars;
             pier.diameter_edge = edgeDiameter;
             pier.stirrup_diameter = stirrupDiameter;

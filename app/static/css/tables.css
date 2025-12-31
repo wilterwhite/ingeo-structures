@@ -80,19 +80,17 @@
     table-layout: fixed;
 }
 
-/* Columnas: Piso | Pier | Dim | hwcs | Armadura | FS Flex | Cap Flex | FS Corte | Cap Corte | Estado | Propuesta | Acciones */
-.results-table th:nth-child(1), .results-table td:nth-child(1) { width: 60px; }   /* Piso */
-.results-table th:nth-child(2), .results-table td:nth-child(2) { width: 90px; }   /* Pier */
-.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 80px; }   /* Dimensiones */
-.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 65px; }   /* hwcs */
-.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 180px; }  /* Armadura */
-.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 70px; }   /* FS Flexión */
-.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 105px; }  /* Cap. Flexión */
-.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 70px; }   /* FS Corte */
-.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 145px; }  /* Cap. Corte */
-.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 50px; } /* Estado */
-.results-table th:nth-child(11), .results-table td:nth-child(11) { width: 140px; } /* Propuesta */
-.results-table th:nth-child(12), .results-table td:nth-child(12) { width: 100px; } /* Acciones */
+/* Columnas: Pier(fusionado) | hwcs | Armadura | Vigas | FS Flex | Cap Flex | FS Corte | Cap Corte | Propuesta | Acciones */
+.results-table th:nth-child(1), .results-table td:nth-child(1) { width: 110px; }  /* Pier (fusionado) */
+.results-table th:nth-child(2), .results-table td:nth-child(2) { width: 60px; }   /* hwcs */
+.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 260px; }  /* Armadura (más ancha para V/H) */
+.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 115px; }  /* Vigas */
+.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 65px; }   /* FS Flexión */
+.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 110px; }  /* Cap. Flexión */
+.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 65px; }   /* FS Corte */
+.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 140px; }  /* Cap. Corte */
+.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 130px; }  /* Propuesta */
+.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 60px; }  /* Acciones (2x2 grid) */
 
 /* hwcs cell styling */
 .hwcs-cell {
@@ -169,6 +167,14 @@
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.armadura-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    min-width: 10px;
+    text-align: center;
 }
 
 /* Celdas de capacidad (nueva estructura horizontal) */
@@ -344,12 +350,20 @@
 
 .actions-cell {
     white-space: nowrap;
+    vertical-align: middle;
 }
 
 .action-buttons {
     display: flex;
     gap: 6px;
     justify-content: center;
+}
+
+.action-buttons-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 3px;
+    justify-items: center;
 }
 
 .action-btn {
@@ -461,4 +475,103 @@
 
 .no-proposal {
     color: var(--text-muted);
+}
+
+/* ==========================================================================
+   PIER INFO CELL (FUSIONADO: Piso/Pier/Dimensiones)
+   ========================================================================== */
+
+.pier-info-cell {
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.pier-info-cell .pier-name {
+    font-weight: 600;
+    color: var(--primary-color);
+    display: block;
+}
+
+.pier-info-cell .pier-story {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.pier-info-cell .pier-dims {
+    font-family: 'Consolas', monospace;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: block;
+    margin-top: 2px;
+}
+
+/* ==========================================================================
+   VIGAS DE ACOPLE CELL
+   ========================================================================== */
+
+.vigas-cell {
+    font-family: monospace;
+    font-size: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.vigas-row {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+}
+
+.vigas-row.vigas-secondary {
+    padding-top: 2px;
+    border-top: 1px dashed var(--border-color);
+}
+
+.vigas-cell select {
+    padding: 2px 3px;
+    font-size: 0.7rem;
+    font-family: monospace;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: white;
+    cursor: pointer;
+}
+
+.vigas-cell select:hover {
+    border-color: var(--primary-color);
+}
+
+.vigas-cell select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.vigas-cell .vigas-label {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    min-width: 18px;
+}
+
+.vigas-cell .vigas-mpr {
+    font-size: 0.65rem;
+    color: var(--success-color);
+    display: block;
+    margin-top: 2px;
+}
+
+/* ==========================================================================
+   DISABLED STIRRUPS (2 barras de borde)
+   ========================================================================== */
+
+.armadura-cell select:disabled {
+    background: #f1f5f9;
+    color: #94a3b8;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.armadura-cell select:disabled:hover {
+    border-color: var(--border-color);
 }

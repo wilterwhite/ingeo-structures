@@ -34,11 +34,12 @@ class Pier:
     fy: float = 420.0       # fy del acero (default A630-420H)
 
     # Configuración de armadura (malla, diámetro, espaciamiento)
+    # spacing=0 significa "usar armadura mínima según espesor"
     n_meshes: int = 2           # 1=malla central, 2=doble cara
     diameter_v: int = 8         # Diámetro barra vertical (mm)
-    spacing_v: int = 200        # Espaciamiento vertical (mm)
+    spacing_v: int = 0          # Espaciamiento vertical (mm), 0=calcular mínimo
     diameter_h: int = 8         # Diámetro barra horizontal (mm)
-    spacing_h: int = 200        # Espaciamiento horizontal (mm)
+    spacing_h: int = 0          # Espaciamiento horizontal (mm), 0=calcular mínimo
 
     # Elemento de borde (barras adicionales en los extremos del muro)
     n_edge_bars: int = 2        # Número de barras de borde por extremo
@@ -58,28 +59,58 @@ class Pier:
     _bar_area_edge: float = field(default=78.5, repr=False)  # φ10 por defecto
 
     def __post_init__(self):
-        """Calcula áreas de barra según diámetros."""
+        """Calcula áreas de barra según diámetros y aplica armadura mínima si no se especificó."""
         self._bar_area_v = get_bar_area(self.diameter_v, 50.3)
         self._bar_area_h = get_bar_area(self.diameter_h, 50.3)
         self._bar_area_edge = get_bar_area(self.diameter_edge, 78.5)
 
-        # Si no se especificó armadura, usar mínima
+        # Si no se especificó armadura (spacing=0), calcular mínima según espesor
         if self.spacing_v == 0:
-            self.spacing_v = self._calculate_min_spacing()
-        if self.spacing_h == 0:
-            self.spacing_h = self._calculate_min_spacing()
+            self._apply_minimum_reinforcement()
+
+    def _apply_minimum_reinforcement(self):
+        """
+        Aplica armadura mínima según ACI 318-25.
+
+        Reglas:
+        - ρmin = 0.0025 (§11.6.1)
+        - Espesor ≤ 130mm: malla simple (§11.7.2.3)
+        - Espesor > 130mm: malla doble
+        - Diámetro por defecto: φ8
+        - Espaciamiento: redondeado hacia abajo a múltiplo de 5mm
+        """
+        # Determinar número de mallas según espesor
+        self.n_meshes = 1 if self.thickness <= 130 else 2
+
+        # Diámetro φ8 por defecto
+        self.diameter_v = 8
+        self.diameter_h = 8
+        self._bar_area_v = get_bar_area(8)
+        self._bar_area_h = get_bar_area(8)
+
+        # Calcular espaciamiento para ρmin = 0.0025
+        spacing = self._calculate_min_spacing()
+        self.spacing_v = spacing
+        self.spacing_h = spacing
 
     def _calculate_min_spacing(self) -> int:
-        """Calcula espaciamiento para armadura mínima (ρ=0.25%)."""
+        """
+        Calcula espaciamiento para armadura mínima (ρ=0.25%).
+
+        Fórmula: s = n_meshes × As_barra × 1000 / (ρmin × t × 1000)
+        Redondea hacia abajo a múltiplo de 5mm para cumplir ρ >= ρmin.
+        """
         RHO_MIN = 0.0025
-        As_min_per_m = RHO_MIN * self.thickness * 1000
-        spacing = self.n_meshes * self._bar_area_v * 1000 / As_min_per_m
-        # Redondear a espaciamiento típico
-        typical = [100, 150, 200, 250, 300]
-        for s in typical:
-            if s >= spacing:
-                return s
-        return 200
+        As_min_per_m = RHO_MIN * self.thickness * 1000  # mm²/m
+        spacing_exact = self.n_meshes * self._bar_area_v * 1000 / As_min_per_m
+
+        # Redondear hacia abajo a múltiplo de 5mm (para cumplir >= ρmin)
+        spacing = int(spacing_exact // 5) * 5
+
+        # Limitar a rango típico [100, 300]
+        spacing = max(100, min(300, spacing))
+
+        return spacing
 
     # =========================================================================
     # Propiedades de Armadura
