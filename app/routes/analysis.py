@@ -7,6 +7,7 @@ import json
 from flask import Blueprint, request, jsonify, current_app, Response
 
 from ..services.pier_analysis import PierAnalysisService
+from ..services.report import PDFReportGenerator, ReportConfig
 
 
 # Crear blueprint
@@ -545,6 +546,113 @@ def get_section_diagram():
         return jsonify({
             'success': False,
             'error': f'Error: {str(e)}'
+        }), 500
+
+
+@bp.route('/generate-report', methods=['POST'])
+def generate_report():
+    """
+    Genera un informe PDF descargable.
+
+    Request (JSON):
+        {
+            "session_id": "uuid-xxx",
+            "project_name": "Mi Proyecto",
+            "top_by_load": 5,
+            "top_by_cuantia": 5,
+            "include_failing": true,
+            "include_proposals": true,
+            "include_pm_diagrams": true,
+            "include_sections": true,
+            "include_full_table": true,
+            "moment_axis": "M3"  // Opcional: "M2", "M3", "combined", "SRSS"
+        }
+
+    Response:
+        PDF file (application/pdf)
+    """
+    try:
+        data = request.get_json() or {}
+
+        session_id = data.get('session_id')
+        if not session_id:
+            return jsonify({
+                'success': False,
+                'error': 'Se requiere session_id'
+            }), 400
+
+        # Obtener datos de la sesión
+        service = get_analysis_service()
+        parsed_data = service._session_manager.get_session(session_id)
+
+        if not parsed_data:
+            return jsonify({
+                'success': False,
+                'error': 'Sesión no encontrada o expirada'
+            }), 404
+
+        # Crear configuración del informe
+        config = ReportConfig.from_dict(data)
+
+        # Validar configuración
+        total_piers = len(parsed_data.piers)
+        validation_errors = config.validate(total_piers)
+        if validation_errors:
+            return jsonify({
+                'success': False,
+                'error': 'Errores de validación',
+                'validation_errors': validation_errors
+            }), 400
+
+        # Ejecutar análisis para obtener resultados actualizados
+        moment_axis = data.get('moment_axis', 'M3')
+        analysis_result = service.analyze(
+            session_id=session_id,
+            generate_plots=config.include_pm_diagrams,
+            moment_axis=moment_axis
+        )
+
+        if not analysis_result.get('success'):
+            return jsonify({
+                'success': False,
+                'error': 'Error al ejecutar análisis: ' + analysis_result.get('error', '')
+            }), 500
+
+        # Obtener resultados y estadísticas
+        results = analysis_result.get('results', [])
+        statistics = analysis_result.get('statistics', {})
+
+        if not results:
+            return jsonify({
+                'success': False,
+                'error': 'No se generaron resultados de análisis'
+            }), 400
+
+        # Generar PDF
+        generator = PDFReportGenerator()
+        pdf_bytes = generator.generate_report(
+            results=results,
+            piers=parsed_data.piers,
+            config=config,
+            statistics=statistics
+        )
+
+        # Retornar PDF como descarga
+        filename = f"Informe_{config.project_name.replace(' ', '_')}.pdf"
+
+        return Response(
+            pdf_bytes,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Content-Length': str(len(pdf_bytes))
+            }
+        )
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error al generar informe: {str(e)}'
         }), 500
 
 

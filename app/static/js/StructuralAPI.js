@@ -237,6 +237,39 @@ class StructuralAPI {
     }
 
     // =========================================================================
+    // Informes PDF
+    // =========================================================================
+
+    /**
+     * Genera un informe PDF.
+     * @param {Object} config - Configuración del informe
+     * @param {string} config.session_id - ID de sesión
+     * @param {string} config.project_name - Nombre del proyecto
+     * @param {number} config.top_by_load - Top piers por carga
+     * @param {number} config.top_by_cuantia - Top piers por cuantía
+     * @param {boolean} config.include_failing - Incluir piers que fallan
+     * @param {boolean} config.include_proposals - Incluir propuestas
+     * @param {boolean} config.include_pm_diagrams - Incluir diagramas P-M
+     * @param {boolean} config.include_sections - Incluir secciones
+     * @param {boolean} config.include_full_table - Incluir tabla completa
+     * @returns {Promise<Blob>} PDF como blob
+     */
+    async generateReport(config) {
+        const response = await fetch(`${this.baseUrl}/generate-report`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+
+        return response.blob();
+    }
+
+    // =========================================================================
     // Health Check
     // =========================================================================
 

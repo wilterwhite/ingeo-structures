@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INGEO Structures - ACI 318-25</title>
-    <link rel="stylesheet" href="{{ url_for('structural_static', filename='css/structural.css') }}?v=9">
+    <link rel="stylesheet" href="{{ url_for('structural_static', filename='css/structural.css') }}?v=10">
 </head>
 <body>
     <div class="container">
@@ -195,6 +195,9 @@
                     <div class="toolbar-divider"></div>
                     <button class="btn btn-sm" id="toggle-all-combos-btn" title="Expandir/Colapsar todas las combinaciones">
                         <span id="toggle-combos-icon">▶</span> Expandir todo
+                    </button>
+                    <button class="btn btn-sm btn-primary" id="generate-report-btn" title="Generar informe PDF">
+                        Generar Informe
                     </button>
                     <span class="plane-indicator">M3</span>
                 </div>
@@ -421,12 +424,82 @@
         </div>
     </div>
 
-    <!-- JavaScript Modules (v3 cache bust) -->
-    <script src="{{ url_for('structural_static', filename='js/StructuralAPI.js') }}?v=9"></script>
-    <script src="{{ url_for('structural_static', filename='js/PlotModal.js') }}?v=9"></script>
-    <script src="{{ url_for('structural_static', filename='js/PiersTable.js') }}?v=9"></script>
-    <script src="{{ url_for('structural_static', filename='js/ResultsTable.js') }}?v=9"></script>
-    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}?v=9"></script>
+    <!-- Modal for Report Configuration -->
+    <div class="modal" id="report-modal">
+        <button class="modal-close">×</button>
+        <div class="modal-content report-config-content">
+            <h3>Generar Informe PDF</h3>
+            <div class="report-config-form">
+                <!-- Project Name -->
+                <div class="form-group">
+                    <label for="report-project-name">Nombre del Proyecto:</label>
+                    <input type="text" id="report-project-name" maxlength="100"
+                           placeholder="Mi Proyecto Estructural">
+                </div>
+
+                <!-- Top Piers -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="report-top-load">Top piers por carga axial:</label>
+                        <input type="number" id="report-top-load" value="5" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="report-top-cuantia">Top piers por cuantia:</label>
+                        <input type="number" id="report-top-cuantia" value="5" min="1" max="100">
+                    </div>
+                </div>
+
+                <!-- Include Options -->
+                <div class="form-group">
+                    <label>Secciones a incluir:</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="report-include-failing" checked>
+                            Piers que fallan verificacion
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="report-include-proposals" checked>
+                            Propuestas de diseno
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="report-include-pm" checked>
+                            Diagramas P-M
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="report-include-sections" checked>
+                            Secciones transversales
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="report-include-full-table" checked>
+                            Tabla completa de resultados
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Validation Error -->
+                <div class="form-error" id="report-error" style="display: none;"></div>
+
+                <!-- Actions -->
+                <div class="form-actions">
+                    <button class="btn btn-secondary" id="report-cancel-btn">Cancelar</button>
+                    <button class="btn btn-primary" id="report-generate-btn">
+                        <span class="btn-text">Generar PDF</span>
+                        <span class="btn-loading" style="display: none;">
+                            <span class="spinner-small"></span> Generando...
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Modules -->
+    <script src="{{ url_for('structural_static', filename='js/StructuralAPI.js') }}?v=10"></script>
+    <script src="{{ url_for('structural_static', filename='js/PlotModal.js') }}?v=10"></script>
+    <script src="{{ url_for('structural_static', filename='js/PiersTable.js') }}?v=10"></script>
+    <script src="{{ url_for('structural_static', filename='js/ResultsTable.js') }}?v=10"></script>
+    <script src="{{ url_for('structural_static', filename='js/ReportModal.js') }}?v=10"></script>
+    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}?v=10"></script>
     <script>
         // Inicializar la página cuando el DOM esté listo
         document.addEventListener('DOMContentLoaded', () => {

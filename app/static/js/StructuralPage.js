@@ -22,6 +22,7 @@ class StructuralPage {
         this.piersTable = null;
         this.resultsTable = null;
         this.plotModal = null;
+        this.reportModal = null;
     }
 
     // =========================================================================
@@ -88,7 +89,10 @@ class StructuralPage {
             sectionModal: document.getElementById('section-modal'),
             sectionModalTitle: document.getElementById('section-modal-title'),
             sectionModalLoading: document.getElementById('section-modal-loading'),
-            sectionModalImg: document.getElementById('section-modal-img')
+            sectionModalImg: document.getElementById('section-modal-img'),
+
+            // Report
+            generateReportBtn: document.getElementById('generate-report-btn')
         };
     }
 
@@ -97,6 +101,8 @@ class StructuralPage {
         this.resultsTable = new ResultsTable(this);
         this.plotModal = new PlotModal(this);
         this.plotModal.init();
+        this.reportModal = new ReportModal(this);
+        this.reportModal.init();
         this.initPierDetailsModal();
         this.initSectionModal();
     }
@@ -164,6 +170,7 @@ class StructuralPage {
         this.elements.axisFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.statusFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.toggleAllCombosBtn?.addEventListener('click', () => this.toggleAllCombinations());
+        this.elements.generateReportBtn?.addEventListener('click', () => this.openReportModal());
 
         // Botones de navegación
         document.getElementById('new-file-btn')?.addEventListener('click', () => {
@@ -539,6 +546,19 @@ class StructuralPage {
     closeSectionModal() {
         const { sectionModal } = this.elements;
         sectionModal?.classList.remove('active');
+    }
+
+    // =========================================================================
+    // Report Modal
+    // =========================================================================
+
+    openReportModal() {
+        const totalPiers = this.results?.length || 0;
+        if (totalPiers === 0) {
+            alert('No hay resultados de análisis para generar informe.');
+            return;
+        }
+        this.reportModal.open(totalPiers);
     }
 
     async showProposedSectionDiagram(pierKey, pierLabel, proposedConfig) {
