@@ -491,8 +491,70 @@ class ProposalService:
                     original_dcr, new_dcr, iteration + 1, changes
                 )
 
-        # No se encontró solución automática - retornar None
-        return None
+        # No se encontró solución automática - retornar la mejor propuesta encontrada
+        # con success=False para indicar que no resuelve el problema
+        return self._create_best_effort_proposal(
+            pier, pier_forces, failure_mode, original_config, original_sf, original_dcr
+        )
+
+    def _create_best_effort_proposal(
+        self,
+        pier: Pier,
+        pier_forces: Optional[PierForces],
+        failure_mode: FailureMode,
+        original_config: ReinforcementConfig,
+        original_sf: float,
+        original_dcr: float
+    ) -> DesignProposal:
+        """
+        Crea una propuesta con la configuración máxima disponible.
+
+        Se usa cuando ninguna estrategia logra resolver el problema.
+        Retorna success=False para indicar que requiere rediseño estructural.
+        """
+        # Configurar con los máximos disponibles
+        proposed_config = deepcopy(original_config)
+        changes = []
+
+        # Máximas barras de borde
+        max_n_bars, max_diameter = BOUNDARY_BAR_SEQUENCE[-1]
+        proposed_config.n_edge_bars = max_n_bars
+        proposed_config.diameter_edge = max_diameter
+        changes.append(f"Borde: {max_n_bars}φ{max_diameter}")
+
+        # Máxima malla
+        proposed_config.diameter_h = MESH_DIAMETER_SEQUENCE[-1]
+        proposed_config.diameter_v = MESH_DIAMETER_SEQUENCE[-1]
+        proposed_config.spacing_h = MESH_SPACING_SEQUENCE[-1]
+        proposed_config.spacing_v = MESH_SPACING_SEQUENCE[-1]
+        changes.append(f"Malla φ{MESH_DIAMETER_SEQUENCE[-1]}@{MESH_SPACING_SEQUENCE[-1]}")
+
+        # Máximo espesor
+        proposed_config.thickness = THICKNESS_SEQUENCE[-1]
+        changes.append(f"Espesor: {THICKNESS_SEQUENCE[-1]}mm")
+
+        # Verificar con la configuración máxima
+        test_pier = self._apply_config_to_pier(pier, proposed_config)
+        test_pier.thickness = THICKNESS_SEQUENCE[-1]
+        new_sf = self._verify_flexure(test_pier, pier_forces)
+        new_dcr = self._verify_shear(test_pier, pier_forces)
+
+        changes.append("⚠️ Requiere rediseño")
+
+        return DesignProposal(
+            pier_key=f"{pier.story}_{pier.label}",
+            failure_mode=failure_mode,
+            proposal_type=ProposalType.COMBINED,
+            original_config=original_config,
+            proposed_config=proposed_config,
+            original_sf_flexure=original_sf,
+            proposed_sf_flexure=new_sf,
+            original_dcr_shear=original_dcr,
+            proposed_dcr_shear=new_dcr,
+            iterations=self.MAX_ITERATIONS,
+            success=False,  # Indica que no resuelve el problema
+            changes=changes
+        )
 
     # =========================================================================
     # API PÚBLICA
