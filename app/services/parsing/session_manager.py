@@ -7,6 +7,7 @@ from typing import Dict, Optional, Any
 
 from .excel_parser import EtabsExcelParser, ParsedData
 from ...domain.calculations import WallContinuityService
+from ...domain.entities.coupling_beam import CouplingBeamConfig, PierCouplingConfig
 
 
 class SessionManager:
@@ -203,3 +204,152 @@ class SessionManager:
         if not parsed_data:
             return None
         return parsed_data.building_info
+
+    # =========================================================================
+    # VIGAS DE ACOPLE
+    # =========================================================================
+
+    def set_default_coupling_beam(
+        self,
+        session_id: str,
+        config: dict
+    ) -> bool:
+        """
+        Configura la viga de acople generica por defecto.
+
+        Args:
+            session_id: ID de sesión
+            config: Diccionario con configuración:
+                - width: Ancho (mm)
+                - height: Altura (mm)
+                - n_bars_top: Número de barras superiores
+                - diameter_top: Diámetro superior (mm)
+                - n_bars_bottom: Número de barras inferiores
+                - diameter_bottom: Diámetro inferior (mm)
+                - stirrup_diameter: Diámetro estribos (mm)
+                - stirrup_spacing: Espaciamiento estribos (mm)
+                - n_legs: Número de ramas (default 2)
+                - fy: Fluencia del acero (MPa, default 420)
+                - fc: f'c del concreto (MPa, default 25)
+
+        Returns:
+            True si se aplicó la configuración
+        """
+        parsed_data = self.get_session(session_id)
+        if not parsed_data:
+            return False
+
+        beam = CouplingBeamConfig(
+            width=config.get('width', 200),
+            height=config.get('height', 500),
+            n_bars_top=config.get('n_bars_top', 3),
+            diameter_top=config.get('diameter_top', 16),
+            n_bars_bottom=config.get('n_bars_bottom', 3),
+            diameter_bottom=config.get('diameter_bottom', 16),
+            stirrup_diameter=config.get('stirrup_diameter', 10),
+            stirrup_spacing=config.get('stirrup_spacing', 150),
+            n_legs=config.get('n_legs', 2),
+            fy=config.get('fy', 420),
+            fc=config.get('fc', 25),
+            cover=config.get('cover', 40),
+        )
+
+        parsed_data.default_coupling_beam = beam
+        return True
+
+    def get_default_coupling_beam(
+        self,
+        session_id: str
+    ) -> Optional[CouplingBeamConfig]:
+        """
+        Obtiene la viga de acople genérica.
+
+        Args:
+            session_id: ID de sesión
+
+        Returns:
+            CouplingBeamConfig o None
+        """
+        parsed_data = self.get_session(session_id)
+        if not parsed_data:
+            return None
+        return parsed_data.default_coupling_beam
+
+    def set_pier_coupling_config(
+        self,
+        session_id: str,
+        pier_key: str,
+        has_beam_left: bool = True,
+        has_beam_right: bool = True,
+        beam_left_config: Optional[dict] = None,
+        beam_right_config: Optional[dict] = None
+    ) -> bool:
+        """
+        Configura las vigas de acople para un pier específico.
+
+        Args:
+            session_id: ID de sesión
+            pier_key: Clave del pier (Story_Label)
+            has_beam_left: Si tiene viga a la izquierda
+            has_beam_right: Si tiene viga a la derecha
+            beam_left_config: Config de viga izquierda (None = usar genérica)
+            beam_right_config: Config de viga derecha (None = usar genérica)
+
+        Returns:
+            True si se aplicó la configuración
+        """
+        parsed_data = self.get_session(session_id)
+        if not parsed_data or pier_key not in parsed_data.piers:
+            return False
+
+        # Crear vigas específicas si se proveen configs
+        beam_left = None
+        if beam_left_config:
+            beam_left = CouplingBeamConfig(**beam_left_config)
+
+        beam_right = None
+        if beam_right_config:
+            beam_right = CouplingBeamConfig(**beam_right_config)
+
+        config = PierCouplingConfig(
+            pier_key=pier_key,
+            beam_left=beam_left,
+            beam_right=beam_right,
+            has_beam_left=has_beam_left,
+            has_beam_right=has_beam_right
+        )
+
+        parsed_data.pier_coupling_configs[pier_key] = config
+        return True
+
+    def get_pier_Mpr_total(
+        self,
+        session_id: str,
+        pier_key: str
+    ) -> float:
+        """
+        Obtiene el Mpr total de vigas de acople para un pier.
+
+        Args:
+            session_id: ID de sesión
+            pier_key: Clave del pier
+
+        Returns:
+            Mpr total en kN-m (suma de vigas izq + der)
+        """
+        parsed_data = self.get_session(session_id)
+        if not parsed_data:
+            return 0.0
+
+        default_beam = parsed_data.default_coupling_beam
+        if not default_beam:
+            return 0.0
+
+        # Buscar config específica o usar default (vigas en ambos lados)
+        pier_config = parsed_data.pier_coupling_configs.get(pier_key)
+
+        if pier_config:
+            return pier_config.get_Mpr_total(default_beam)
+        else:
+            # Por defecto: viga genérica en ambos lados
+            return 2 * default_beam.Mpr_max

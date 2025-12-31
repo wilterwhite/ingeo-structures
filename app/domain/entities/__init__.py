@@ -13,6 +13,7 @@ from .design_proposal import (
     FailureMode,
     ProposalType,
 )
+from .coupling_beam import CouplingBeamConfig, PierCouplingConfig
 
 __all__ = [
     'Pier',
@@ -24,4 +25,6 @@ __all__ = [
     'ReinforcementConfig',
     'FailureMode',
     'ProposalType',
+    'CouplingBeamConfig',
+    'PierCouplingConfig',
 ]

@@ -270,6 +270,12 @@ class PierAnalysisService:
                 point.phi_Pn *= reduction
                 point.Pn *= reduction
 
+        # Obtener phi_Mn_0 (capacidad a flexión pura) para verificación de capacidad
+        # Usamos P=0, M=1 solo para obtener phi_Mn_0
+        _, _, _, phi_Mn_0, _, _, _ = self._interaction_service.check_flexure(
+            interaction_points, [(0, 1, "dummy")]
+        )
+
         # Calcular FS para cada combinación
         combinations_with_fs = []
         for i, combo in enumerate(pier_forces.combinations):
@@ -322,12 +328,31 @@ class PierAnalysisService:
                 'overall_status': status
             })
 
+        # Verificación de capacidad (muro fuerte - viga débil)
+        # phi_Mn_muro >= 1.2 × Mpr_vigas
+        capacity_check = None
+        Mpr_total = self._session_manager.get_pier_Mpr_total(session_id, pier_key)
+        if Mpr_total > 0:
+            # Convertir phi_Mn_0 de tonf-m a kN-m para comparar (1 tonf-m ≈ 9.81 kN-m)
+            phi_Mn_kNm = phi_Mn_0 * 9.80665
+            Mpr_required = 1.2 * Mpr_total
+            capacity_ratio = phi_Mn_kNm / Mpr_required if Mpr_required > 0 else float('inf')
+            capacity_check = {
+                'phi_Mn_wall_kNm': round(phi_Mn_kNm, 1),
+                'Mpr_beams_kNm': round(Mpr_total, 1),
+                'required_kNm': round(Mpr_required, 1),
+                'ratio': round(capacity_ratio, 2),
+                'is_ok': capacity_ratio >= 1.0,
+                'status': 'OK' if capacity_ratio >= 1.0 else 'NO OK'
+            }
+
         return {
             'success': True,
             'pier_key': pier_key,
             'combinations': combinations_with_fs,
             'unique_angles': pier_forces.get_unique_angles(),
-            'total_combinations': len(pier_forces.combinations)
+            'total_combinations': len(pier_forces.combinations),
+            'capacity_check': capacity_check
         }
 
     def analyze_single_combination(
@@ -370,7 +395,7 @@ class PierAnalysisService:
         P = -combo.P
         M = combo.moment_resultant
         demand_points = [(P, M, f"{combo.name} ({combo.location})")]
-        flexure_sf, flexure_status, _, _, _, _ = self._interaction_service.check_flexure(
+        flexure_sf, flexure_status, _, _, _, _, _ = self._interaction_service.check_flexure(
             interaction_points, demand_points
         )
 
