@@ -1,11 +1,11 @@
-# app/structural/domain/entities/pier.py
+# app/domain/entities/pier.py
 """
 Entidad Pier: representa un muro de hormigón armado desde ETABS.
 """
 from dataclasses import dataclass, field
 from typing import Optional, List, TYPE_CHECKING
 
-from ..constants.materials import BAR_AREAS, get_bar_area
+from ..constants.materials import get_bar_area
 
 if TYPE_CHECKING:
     from ..calculations.steel_layer_calculator import SteelLayer
