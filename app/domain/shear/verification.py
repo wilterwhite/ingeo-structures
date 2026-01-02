@@ -12,7 +12,11 @@ Ver constants/shear.py para las referencias ACI completas.
 import math
 from typing import Tuple, List, Optional
 
-from ..constants.materials import LAMBDA_NORMAL
+from ..constants.materials import (
+    LAMBDA_NORMAL,
+    get_effective_fc_shear,
+    get_effective_fyt_shear,
+)
 from ..constants.shear import (
     PHI_SHEAR,
     ALPHA_C_SQUAT,
@@ -27,7 +31,10 @@ from ..constants.shear import (
     ASPECT_RATIO_WALL_LIMIT,
     DEFAULT_COVER_MM,
     N_TO_TONF,
+    calculate_alpha_sh,
+    ALPHA_SH_MIN,
 )
+from ..constants.reinforcement import check_rho_vertical_ge_horizontal
 from .results import (
     ShearResult,
     CombinedShearResult,
@@ -117,22 +124,9 @@ class ShearVerificationService:
         Verifica cuantia minima segun 18.10.4.3.
 
         Requisito: Si hw/lw <= 2.0, entonces rho_v >= rho_h
+        Usa función compartida de constants/reinforcement.py.
         """
-        if lw <= 0:
-            return True, ""
-
-        hw_lw = hw / lw
-
-        if hw_lw <= HW_LW_SLENDER_LIMIT:
-            if rho_vertical < rho_horizontal:
-                warning = (
-                    f"ADVERTENCIA 18.10.4.3: Para hw/lw={hw_lw:.2f} <= 2.0, "
-                    f"se requiere rho_v >= rho_h. Actual: rho_v={rho_vertical:.5f}, "
-                    f"rho_h={rho_horizontal:.5f}"
-                )
-                return False, warning
-
-        return True, ""
+        return check_rho_vertical_ge_horizontal(hw, lw, rho_vertical, rho_horizontal)
 
     # =========================================================================
     # CALCULO DE RESISTENCIA NOMINAL
@@ -146,16 +140,27 @@ class ShearVerificationService:
         fc: float,
         fy: float,
         rho_h: float,
-        Nu: float = 0
-    ) -> Tuple[float, float, float, float, float]:
+        Nu: float = 0,
+        bcf: float = 0,
+        tcf: float = 0,
+        is_lightweight: bool = False
+    ) -> Tuple[float, float, float, float, float, float]:
         """
         Calcula Vn para MUROS segun Ec. 18.10.4.1 y 11.5.4.4.
 
-        Vn = Acv x (alpha_c x lambda x sqrt(f'c) + rho_t x fy)
-        Limite: Vn <= 0.83 x sqrt(f'c) x Acv
+        Vn = Acv x (alpha_c x lambda x sqrt(f'c) + rho_t x fyt)
+        Limite: Vn <= alpha_sh x 0.83 x sqrt(f'c) x Acv
 
         Para tension axial neta (Nu < 0):
         alpha_c = 2 * (1 + Nu/(3.45*Ag)) >= 0  [Ec. 11.5.4.4]
+
+        Validaciones de materiales (ACI 318-25 §18.2.5, §18.2.6):
+        - f'c efectivo: min(f'c, 82.7 MPa) para cortante
+        - fyt efectivo: min(fyt, 420 MPa) para cortante
+
+        Factor alpha_sh (ACI 318-25 §18.10.4.4):
+        - alpha_sh = 0.7 * (1 + (bw + bcf) * tcf / Acx)^2
+        - 1.0 <= alpha_sh <= 1.2
 
         Args:
             lw: Largo del muro (mm)
@@ -165,21 +170,32 @@ class ShearVerificationService:
             fy: Resistencia del acero (MPa)
             rho_h: Cuantia de refuerzo horizontal
             Nu: Carga axial factorada (N, negativo para tension)
+            bcf: Ancho del ala comprimida (mm), 0 si no hay ala
+            tcf: Espesor del ala comprimida (mm), 0 si no hay ala
+            is_lightweight: True si es concreto liviano
 
         Returns:
-            Tuple (Vc, Vs, Vn, Vn_max, alpha_c) en tonf
+            Tuple (Vc, Vs, Vn, Vn_max, alpha_c, alpha_sh) en tonf
         """
         Acv = lw * tw
         Ag = Acv  # Para muros, Ag = Acv
 
+        # Aplicar limites de materiales (§18.2.5, §18.2.6)
+        fc_eff = get_effective_fc_shear(fc, is_lightweight)
+        fy_eff = get_effective_fyt_shear(fy)
+
         # Calcula alpha_c considerando tension axial si aplica
         alpha_c = self.calculate_alpha_c(hw, lw, Nu=Nu, Ag=Ag)
 
-        Vc = Acv * alpha_c * LAMBDA_NORMAL * math.sqrt(fc)
-        Vs = Acv * rho_h * fy
+        # Calcula alpha_sh para limite de Vn (§18.10.4.4)
+        alpha_sh = calculate_alpha_sh(bw=tw, bcf=bcf, tcf=tcf, lw=lw)
+
+        Vc = Acv * alpha_c * LAMBDA_NORMAL * math.sqrt(fc_eff)
+        Vs = Acv * rho_h * fy_eff
         Vn = Vc + Vs
 
-        Vn_max = VN_MAX_INDIVIDUAL_COEF * math.sqrt(fc) * Acv
+        # Limite con factor alpha_sh (§18.10.4.4)
+        Vn_max = alpha_sh * VN_MAX_INDIVIDUAL_COEF * math.sqrt(fc_eff) * Acv
         if Vn > Vn_max:
             Vn = Vn_max
 
@@ -188,7 +204,8 @@ class ShearVerificationService:
             Vs / N_TO_TONF,
             Vn / N_TO_TONF,
             Vn_max / N_TO_TONF,
-            alpha_c
+            alpha_c,
+            alpha_sh
         )
 
     def calculate_Vn_column(
@@ -249,7 +266,10 @@ class ShearVerificationService:
         rho_h: float,
         Vu: float,
         Nu: float = 0,
-        rho_v: Optional[float] = None
+        rho_v: Optional[float] = None,
+        bcf: float = 0,
+        tcf: float = 0,
+        is_lightweight: bool = False
     ) -> ShearResult:
         """
         Verifica resistencia al corte del muro o columna.
@@ -260,18 +280,27 @@ class ShearVerificationService:
 
         Para muros con tension axial neta (Nu < 0), aplica Ec. 11.5.4.4.
 
+        Validaciones de materiales (ACI 318-25 §18.2.5, §18.2.6):
+        - f'c efectivo: min(f'c, 82.7 MPa) para cortante
+        - fyt efectivo: min(fyt, 420 MPa) para cortante
+
         Args:
             Nu: Carga axial factorada (tonf, negativo para tension)
+            bcf: Ancho del ala comprimida (mm), 0 si no hay ala
+            tcf: Espesor del ala comprimida (mm), 0 si no hay ala
+            is_lightweight: True si es concreto liviano
         """
         # Convertir Nu de tonf a N para calculo interno
         Nu_N = Nu * N_TO_TONF
+        alpha_sh = ALPHA_SH_MIN  # Default para columnas
 
         if self.is_wall(lw, tw):
-            Vc, Vs, Vn, Vn_max, alpha_c = self.calculate_Vn_wall(
-                lw, tw, hw, fc, fy, rho_h, Nu=Nu_N
+            Vc, Vs, Vn, Vn_max, alpha_c, alpha_sh = self.calculate_Vn_wall(
+                lw, tw, hw, fc, fy, rho_h, Nu=Nu_N,
+                bcf=bcf, tcf=tcf, is_lightweight=is_lightweight
             )
             formula_type = "wall"
-            aci_reference = "ACI 318-25 11.5.4.3, 18.10.4.1"
+            aci_reference = "ACI 318-25 11.5.4.3, 18.10.4.1, 18.10.4.4"
             # Agregar referencia a 11.5.4.4 si hay tension
             if Nu < 0:
                 aci_reference += ", 11.5.4.4"
@@ -299,7 +328,7 @@ class ShearVerificationService:
         return ShearResult(
             Vc=Vc, Vs=Vs, Vn=Vn, phi_Vn=phi_Vn, Vn_max=Vn_max,
             Vu=Vu_abs, sf=sf, status=status,
-            alpha_c=alpha_c, hw_lw=hw_lw, formula_type=formula_type,
+            alpha_c=alpha_c, alpha_sh=alpha_sh, hw_lw=hw_lw, formula_type=formula_type,
             rho_check_ok=rho_check_ok, rho_warning=rho_warning,
             aci_reference=aci_reference
         )
@@ -386,19 +415,27 @@ class ShearVerificationService:
         rho_h: float,
         Vu_total: float,
         Nu: float = 0,
-        rho_v: Optional[float] = None
+        rho_v: Optional[float] = None,
+        is_lightweight: bool = False
     ) -> WallGroupShearResult:
         """
         Verifica grupo de segmentos segun 18.10.4.4.
 
-        Limite: Vn_grupo <= 0.66 x sqrt(f'c) x Acv_total
+        Limite: Vn_grupo <= Sum(alpha_sh * 0.66 x sqrt(f'c) x Acv)
+
+        Validaciones de materiales (ACI 318-25 §18.2.5, §18.2.6):
+        - f'c efectivo: min(f'c, 82.7 MPa) para cortante
         """
         if not segments:
             raise ValueError("Se requiere al menos un segmento")
 
+        # Aplicar limite de materiales
+        fc_eff = get_effective_fc_shear(fc, is_lightweight)
+
         segment_results: List[ShearResult] = []
         Acv_total = 0.0
         Vn_total = 0.0
+        Vn_max_contributions = 0.0  # Sum(alpha_sh * 0.66 * sqrt(fc) * Acv)
         total_area = sum(s[0] * s[1] for s in segments)
 
         for lw, tw, hw in segments:
@@ -408,12 +445,17 @@ class ShearVerificationService:
 
             result = self.verify_shear(
                 lw=lw, tw=tw, hw=hw, fc=fc, fy=fy, rho_h=rho_h,
-                Vu=Vu_total * area_ratio, Nu=Nu * area_ratio, rho_v=rho_v
+                Vu=Vu_total * area_ratio, Nu=Nu * area_ratio, rho_v=rho_v,
+                is_lightweight=is_lightweight
             )
             segment_results.append(result)
             Vn_total += result.Vn
 
-        Vn_max_group = VN_MAX_GROUP_COEF * math.sqrt(fc) * Acv_total / N_TO_TONF
+            # Contribucion al limite del grupo con alpha_sh de cada segmento
+            alpha_sh = result.alpha_sh
+            Vn_max_contributions += alpha_sh * VN_MAX_GROUP_COEF * math.sqrt(fc_eff) * Acv_segment / N_TO_TONF
+
+        Vn_max_group = Vn_max_contributions
         controls_group_limit = Vn_total > Vn_max_group
         Vn_effective = min(Vn_total, Vn_max_group)
         phi_Vn_effective = PHI_SHEAR * Vn_effective

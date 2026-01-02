@@ -28,7 +28,8 @@ class ShearResult:
 
     # Parametros de calculo
     alpha_c: float      # Coeficiente alpha_c segun Tabla 18.10.4.1
-    hw_lw: float        # Relacion altura/largo del elemento
+    alpha_sh: float = 1.0  # Factor alpha_sh segun Ec. 18.10.4.4 (1.0-1.2)
+    hw_lw: float = 0    # Relacion altura/largo del elemento
     formula_type: str = "wall"  # "wall" (18.10.4) o "column" (22.5)
 
     # Verificacion de cuantia minima (18.10.4.3)

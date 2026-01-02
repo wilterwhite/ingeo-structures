@@ -36,6 +36,11 @@ from .shear import (
     VN_MAX_GROUP_COEF,
     VC_COEF_COLUMN,
     VS_MAX_COEF,
+    # Factor alpha_sh (§18.10.4.4)
+    ALPHA_SH_MIN,
+    ALPHA_SH_MAX,
+    ALPHA_SH_COEF,
+    calculate_alpha_sh,
     # Clasificación
     ASPECT_RATIO_WALL_LIMIT,
     DEFAULT_COVER_MM,
@@ -78,6 +83,14 @@ from .materials import (
     BAR_AREAS,
     AVAILABLE_DIAMETERS,
     get_bar_area,
+    # Límites de materiales (§18.2)
+    FC_MAX_SHEAR_MPA,
+    FC_MAX_LIGHTWEIGHT_MPA,
+    FYT_MAX_SHEAR_MPA,
+    FYT_MAX_CONFINEMENT_MPA,
+    get_effective_fc_shear,
+    get_effective_fyt_shear,
+    get_effective_fyt_confinement,
 )
 from .stiffness import (
     WALL_STIFFNESS_FACTOR,
@@ -92,4 +105,8 @@ from .stiffness import (
     CM_FACTOR,
     CM_MIN,
     CM_TRANSVERSE,
+)
+from .reinforcement import (
+    check_rho_vertical_ge_horizontal,
+    is_rho_v_ge_rho_h_required,
 )

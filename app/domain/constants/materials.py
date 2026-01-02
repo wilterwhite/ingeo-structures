@@ -82,3 +82,71 @@ def get_bar_area(diameter: int, default: float = 50.3) -> float:
 LAMBDA_NORMAL = 1.0           # Concreto peso normal
 LAMBDA_SAND_LIGHTWEIGHT = 0.85  # Arena liviana
 LAMBDA_ALL_LIGHTWEIGHT = 0.75   # Todo liviano
+
+
+# =============================================================================
+# LIMITES DE MATERIALES PARA DISENO SISMICO (ACI 318-25 Seccion 18.2)
+# =============================================================================
+
+# Limite de f'c para calculo de Vn en muros especiales (18.10.4.1)
+# Nota: f'c para calculos de cortante no debe exceder 12,000 psi
+FC_MAX_SHEAR_PSI = 12000          # psi
+FC_MAX_SHEAR_MPA = 82.7           # MPa (12000 psi)
+
+# Limite de f'c para concreto liviano en diseno sismico (18.2.5)
+FC_MAX_LIGHTWEIGHT_PSI = 5000     # psi
+FC_MAX_LIGHTWEIGHT_MPA = 35.0     # MPa (5000 psi)
+
+# Limite de fyt para resistencia nominal al cortante (18.2.6)
+# "fyt para resistencia nominal al cortante no debe exceder 60,000 psi"
+FYT_MAX_SHEAR_PSI = 60000         # psi
+FYT_MAX_SHEAR_MPA = 420.0         # MPa (60000 psi)
+
+# Limite de fyt para refuerzo de confinamiento (18.2.6)
+FYT_MAX_CONFINEMENT_PSI = 100000  # psi
+FYT_MAX_CONFINEMENT_MPA = 690.0   # MPa (100000 psi)
+
+
+def get_effective_fc_shear(fc: float, is_lightweight: bool = False) -> float:
+    """
+    Obtiene el f'c efectivo para calculo de cortante segun 18.10.4.1 y 18.2.5.
+
+    Args:
+        fc: Resistencia especificada del concreto (MPa)
+        is_lightweight: True si es concreto liviano
+
+    Returns:
+        f'c efectivo limitado segun ACI 318-25 (MPa)
+    """
+    if is_lightweight:
+        return min(fc, FC_MAX_LIGHTWEIGHT_MPA)
+    return min(fc, FC_MAX_SHEAR_MPA)
+
+
+def get_effective_fyt_shear(fyt: float) -> float:
+    """
+    Obtiene el fyt efectivo para calculo de cortante segun 18.2.6.
+
+    "fyt usado para calcular resistencia nominal al cortante
+    no debe exceder 60,000 psi (420 MPa)"
+
+    Args:
+        fyt: Resistencia del acero transversal (MPa)
+
+    Returns:
+        fyt efectivo limitado a 420 MPa
+    """
+    return min(fyt, FYT_MAX_SHEAR_MPA)
+
+
+def get_effective_fyt_confinement(fyt: float) -> float:
+    """
+    Obtiene el fyt efectivo para calculo de confinamiento segun 18.2.6.
+
+    Args:
+        fyt: Resistencia del acero de confinamiento (MPa)
+
+    Returns:
+        fyt efectivo limitado a 690 MPa
+    """
+    return min(fyt, FYT_MAX_CONFINEMENT_MPA)

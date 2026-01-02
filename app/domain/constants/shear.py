@@ -74,11 +74,82 @@ ALPHA_C_TENSION_STRESS_MPA = 3.45  # 500 psi en MPa
 # LIMITES MAXIMOS DE Vn (ACI 318-25 Seccion 18.10.4.4)
 # =============================================================================
 
-# Para segmento individual: Vn <= 0.83 x sqrt(f'c) x Acw
+# Para segmento individual: Vn <= alpha_sh * 0.83 x sqrt(f'c) x Acw
 VN_MAX_INDIVIDUAL_COEF = 0.83
 
-# Para grupo de segmentos: Vn <= 0.66 x sqrt(f'c) x Acv_total
+# Para grupo de segmentos: Vn <= Sum(alpha_sh * 0.66 x sqrt(f'c) x Acv)
 VN_MAX_GROUP_COEF = 0.66
+
+
+# =============================================================================
+# FACTOR ALPHA_SH (ACI 318-25 Seccion 18.10.4.4, Ec. 18.10.4.4)
+# =============================================================================
+#
+# Factor que considera la contribucion de alas (flanges) a la capacidad de corte.
+#
+# alpha_sh = 0.7 * (1 + (bw + bcf) * tcf / Acx)^2     [Ec. 18.10.4.4]
+#
+# Donde:
+# - bw: espesor del alma del muro (mm)
+# - bcf: ancho del ala comprimida (mm), 0 si no hay ala
+# - tcf: espesor del ala comprimida (mm), 0 si no hay ala
+# - Acx: area de la seccion del muro incluyendo alas (mm²)
+#
+# Limites: 1.0 <= alpha_sh <= 1.2
+# Se permite tomar conservadoramente alpha_sh = 1.0
+#
+ALPHA_SH_MIN = 1.0    # Limite inferior (caso conservador sin alas)
+ALPHA_SH_MAX = 1.2    # Limite superior
+ALPHA_SH_COEF = 0.7   # Coeficiente de la ecuacion
+
+
+def calculate_alpha_sh(
+    bw: float,
+    bcf: float = 0,
+    tcf: float = 0,
+    Acx: float = None,
+    lw: float = None
+) -> float:
+    """
+    Calcula el factor alpha_sh segun Ec. 18.10.4.4.
+
+    alpha_sh = 0.7 * (1 + (bw + bcf) * tcf / Acx)^2
+    Limites: 1.0 <= alpha_sh <= 1.2
+
+    Args:
+        bw: Espesor del alma del muro (mm)
+        bcf: Ancho del ala comprimida (mm), 0 si no hay ala
+        tcf: Espesor del ala comprimida (mm), 0 si no hay ala
+        Acx: Area de la seccion incluyendo alas (mm²)
+        lw: Longitud del muro (mm), usado si Acx no se proporciona
+
+    Returns:
+        Factor alpha_sh entre 1.0 y 1.2
+
+    Notas:
+        - Para muros rectangulares (bcf=0, tcf=0): alpha_sh = 0.7 < 1.0 → usa 1.0
+        - Para muros con alas significativas: alpha_sh aumenta hasta 1.2
+        - Se puede tomar conservadoramente alpha_sh = 1.0
+    """
+    # Calcular Acx si no se proporciona
+    if Acx is None:
+        if lw is None or bw <= 0:
+            return ALPHA_SH_MIN
+        # Para seccion rectangular sin alas
+        Acx = bw * lw
+        # Agregar area del ala si existe
+        if bcf > 0 and tcf > 0:
+            Acx += bcf * tcf
+
+    if Acx <= 0:
+        return ALPHA_SH_MIN
+
+    # Ecuacion 18.10.4.4
+    flange_term = (bw + bcf) * tcf / Acx
+    alpha_sh = ALPHA_SH_COEF * (1 + flange_term) ** 2
+
+    # Aplicar limites
+    return max(ALPHA_SH_MIN, min(alpha_sh, ALPHA_SH_MAX))
 
 
 # =============================================================================
