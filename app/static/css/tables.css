@@ -751,3 +751,338 @@
     color: #ccc;
 }
 
+/* ==========================================================================
+   ELEMENT TYPE BADGES
+   ========================================================================== */
+
+.element-type-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+
+.element-type-badge.type-pier {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.element-type-badge.type-column {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+/* Fila de columna tiene fondo ligeramente diferente */
+.pier-row.column-type {
+    background: rgba(16, 185, 129, 0.03);
+}
+
+.pier-row.column-type:hover {
+    background: rgba(16, 185, 129, 0.08);
+}
+
+/* ==========================================================================
+   COLUMN-SPECIFIC CELLS
+   ========================================================================== */
+
+.height-cell {
+    text-align: center;
+    font-size: 0.8rem;
+}
+
+.height-cell .height-value {
+    display: block;
+    font-weight: 600;
+}
+
+.height-cell .height-label {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+}
+
+/* Armadura longitudinal de columna */
+.longitudinal-cell {
+    font-family: monospace;
+    font-size: 0.75rem;
+    vertical-align: middle;
+}
+
+.longitudinal-cell .long-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-bottom: 3px;
+}
+
+.longitudinal-cell .long-label {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.longitudinal-cell .as-info {
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+}
+
+.longitudinal-cell select {
+    padding: 2px 4px;
+    font-size: 0.7rem;
+    font-family: monospace;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    min-width: 40px;
+}
+
+/* Estribos de columna */
+.stirrups-cell {
+    font-family: monospace;
+    font-size: 0.75rem;
+    vertical-align: middle;
+}
+
+.stirrups-cell .stirrup-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-bottom: 3px;
+}
+
+.stirrups-cell .stirrup-label {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.stirrups-cell select {
+    padding: 2px 4px;
+    font-size: 0.7rem;
+    font-family: monospace;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    min-width: 45px;
+}
+
+/* Celda vacía (para columnas sin vigas de acople) */
+.empty-cell {
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.empty-cell .na-value {
+    font-size: 0.75rem;
+    color: #ccc;
+}
+
+/* =========================================================================
+   TABS DE RESULTADOS
+   ========================================================================= */
+
+.results-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 0;
+}
+
+.tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+    color: var(--primary-color);
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.tab-btn.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.tab-btn .tab-icon {
+    font-size: 1.1rem;
+}
+
+.tab-btn .tab-count {
+    background: var(--bg-secondary);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.tab-btn.active .tab-count {
+    background: var(--primary-color);
+    color: white;
+}
+
+/* Tab panels */
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+/* =========================================================================
+   SECCION DE VIGAS (TAB)
+   ========================================================================= */
+
+.beams-toolbar {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+}
+
+/* Tabla de vigas */
+.beams-table {
+    font-size: 0.85rem;
+}
+
+.beams-table th,
+.beams-table td {
+    padding: 0.5rem 0.75rem;
+    text-align: center;
+}
+
+.beams-table th:first-child,
+.beams-table td:first-child {
+    text-align: left;
+}
+
+/* Celdas específicas de vigas */
+.beam-info-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+
+.beam-info-cell .beam-name {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.beam-info-cell .beam-story {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.element-type-badge.type-frame {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.element-type-badge.type-spandrel {
+    background: #ede9fe;
+    color: #5b21b6;
+}
+
+.section-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.section-cell .section-dims {
+    font-weight: 500;
+    font-family: monospace;
+}
+
+.section-cell .section-length {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.beam-row .stirrups-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.beam-row .stirrup-config {
+    font-family: monospace;
+    font-weight: 500;
+}
+
+.beam-row .av-info {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.capacity-value,
+.demand-value {
+    font-family: monospace;
+    font-weight: 500;
+}
+
+.dcr-value {
+    font-family: monospace;
+}
+
+.dcr-ok {
+    color: var(--success-color);
+}
+
+.dcr-warn {
+    color: var(--warning-color);
+}
+
+.dcr-fail {
+    color: var(--error-color);
+    font-weight: 600;
+}
+
+.combo-cell .combo-name {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.status-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-badge.status-ok {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.status-badge.status-fail {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.beam-row.status-fail {
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.beam-row.status-ok:hover {
+    background: rgba(16, 185, 129, 0.05);
+}
+
+.beam-row.status-fail:hover {
+    background: rgba(239, 68, 68, 0.08);
+}
+

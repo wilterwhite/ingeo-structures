@@ -24,35 +24,10 @@
                 <div class="upload-area" id="upload-area">
                     <div class="icon">📄</div>
                     <p>Arrastra tu archivo Excel aquí o haz clic para seleccionar</p>
-                    <details class="tables-hint">
-                        <summary class="hint">Ver tablas ETABS soportadas</summary>
-                        <div class="tables-list">
-                            <div class="table-group">
-                                <strong>Piers (Muros):</strong>
-                                <ul>
-                                    <li>Wall Property Definitions</li>
-                                    <li>Pier Section Properties</li>
-                                    <li>Pier Forces</li>
-                                </ul>
-                            </div>
-                            <div class="table-group">
-                                <strong>Columnas:</strong>
-                                <ul>
-                                    <li>Frame Section Property Definitions - Concrete Rectangular</li>
-                                    <li>Element Forces - Columns</li>
-                                </ul>
-                            </div>
-                            <div class="table-group">
-                                <strong>Vigas:</strong>
-                                <ul>
-                                    <li>Frame Section Property Definitions - Concrete Rectangular</li>
-                                    <li>Element Forces - Beams</li>
-                                    <li>Spandrel Section Properties</li>
-                                    <li>Spandrel Forces</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </details>
+                    <p class="hint">Tablas ETABS requeridas:</p>
+                    <img src="{{ url_for('structural_static', filename='img/Tablas_Etabs.png') }}?v=3"
+                         alt="Tablas ETABS soportadas"
+                         class="etabs-tables-img">
                     <input type="file" id="file-input" accept=".xlsx">
                 </div>
                 <div class="loading" id="upload-loading">
@@ -62,14 +37,24 @@
             </div>
         </div>
 
-        <!-- Step 2: Review Piers -->
+        <!-- Step 2: Review Elements -->
         <div class="card hidden" id="piers-section">
-            <div class="card-header">2. Revisar Piers y Armaduras</div>
+            <div class="card-header">2. Revisar Elementos y Armaduras</div>
             <div class="card-body">
-                <p class="section-info">
-                    Se encontraron <strong id="pier-count">0</strong> piers.
-                    Por defecto se usa armadura mínima (ρ = 0.25%) con barras φ8.
-                </p>
+                <div class="section-info" id="elements-summary">
+                    <div class="elements-counts">
+                        <span class="element-count" id="pier-count-wrapper">
+                            <strong id="pier-count">0</strong> piers
+                        </span>
+                        <span class="element-count hidden" id="column-count-wrapper">
+                            <strong id="column-count">0</strong> columnas
+                        </span>
+                        <span class="element-count hidden" id="beam-count-wrapper">
+                            <strong id="beam-count">0</strong> vigas
+                        </span>
+                    </div>
+                    <p class="section-hint">Por defecto se usa armadura mínima.</p>
+                </div>
 
                 <!-- Filters for Piers -->
                 <div class="filters-bar" id="piers-filters">
@@ -185,10 +170,41 @@
         <div class="card hidden" id="results-section">
             <div class="card-header">3. Resultados del Análisis</div>
             <div class="card-body">
+                <!-- Elementos detectados -->
+                <div class="elements-summary-bar" id="elements-summary-results">
+                    <span class="elements-label">Elementos detectados:</span>
+                    <span class="element-badge" id="pier-badge">
+                        <strong id="pier-count-results">0</strong> piers
+                    </span>
+                    <span class="element-badge hidden" id="column-badge">
+                        <strong id="column-count-results">0</strong> columnas
+                    </span>
+                    <span class="element-badge hidden" id="beam-badge">
+                        <strong id="beam-count-results">0</strong> vigas
+                    </span>
+                </div>
+
+                <!-- Tabs de navegación -->
+                <div class="results-tabs">
+                    <button class="tab-btn active" data-tab="walls-tab">
+                        <span class="tab-icon">🧱</span>
+                        <span class="tab-label">Muros y Columnas</span>
+                        <span class="tab-count" id="walls-tab-count">0</span>
+                    </button>
+                    <button class="tab-btn" data-tab="beams-tab">
+                        <span class="tab-icon">📏</span>
+                        <span class="tab-label">Vigas</span>
+                        <span class="tab-count" id="beams-tab-count">0</span>
+                    </button>
+                </div>
+
+                <!-- TAB: Muros y Columnas -->
+                <div class="tab-panel active" id="walls-tab">
+
                 <!-- Stats + Filters (una sola fila) -->
                 <div class="toolbar-bar">
                     <div class="stats-inline">
-                        <span class="stat-item"><strong id="stat-total">0</strong> Total</span>
+                        <span class="stat-item"><strong id="stat-total">0</strong> verificados</span>
                         <span class="stat-item stat-ok"><strong id="stat-ok">0</strong> OK</span>
                         <span class="stat-item stat-fail"><strong id="stat-fail">0</strong> Fail</span>
                         <span class="stat-item"><strong id="stat-rate">0%</strong></span>
@@ -300,6 +316,38 @@
 
                 <!-- Summary Plot (below table) -->
                 <div class="summary-plot" id="summary-plot-container"></div>
+
+                </div><!-- Fin TAB: Muros y Columnas -->
+
+                <!-- TAB: Vigas -->
+                <div class="tab-panel" id="beams-tab">
+                    <div class="beams-toolbar">
+                        <div class="stats-inline">
+                            <span class="stat-item"><strong id="beam-stat-total">0</strong> vigas</span>
+                            <span class="stat-item stat-ok"><strong id="beam-stat-ok">0</strong> OK</span>
+                            <span class="stat-item stat-fail"><strong id="beam-stat-fail">0</strong> Fail</span>
+                            <span class="stat-item"><strong id="beam-stat-rate">0%</strong></span>
+                        </div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="results-table beams-table" id="beams-table">
+                            <thead>
+                                <tr>
+                                    <th title="Piso / Viga / Tipo">Viga</th>
+                                    <th title="Dimensiones de la sección">Sección</th>
+                                    <th title="Armadura transversal">Estribos</th>
+                                    <th title="Resistencia de diseño">φVn (t)</th>
+                                    <th title="Demanda máxima">Vu (t)</th>
+                                    <th title="Factor de seguridad">FS</th>
+                                    <th title="Demand/Capacity Ratio">DCR</th>
+                                    <th title="Combinación crítica">Combo</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div><!-- Fin TAB: Vigas -->
 
                 <div class="action-bar">
                     <button class="btn btn-secondary" id="new-analysis-btn">Nuevo Análisis</button>
@@ -570,9 +618,11 @@
     <script src="{{ url_for('structural_static', filename='js/StructuralAPI.js') }}?v=12"></script>
     <script src="{{ url_for('structural_static', filename='js/PlotModal.js') }}?v=12"></script>
     <script src="{{ url_for('structural_static', filename='js/PiersTable.js') }}?v=12"></script>
-    <script src="{{ url_for('structural_static', filename='js/ResultsTable.js') }}?v=12"></script>
+    <script src="{{ url_for('structural_static', filename='js/RowFactory.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/ResultsTable.js') }}?v=17"></script>
+    <script src="{{ url_for('structural_static', filename='js/BeamsTable.js') }}?v=1"></script>
     <script src="{{ url_for('structural_static', filename='js/ReportModal.js') }}?v=12"></script>
-    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}?v=12"></script>
+    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}?v=18"></script>
     <script>
         // Inicializar la página cuando el DOM esté listo
         document.addEventListener('DOMContentLoaded', () => {

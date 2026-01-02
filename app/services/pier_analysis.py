@@ -28,6 +28,8 @@ from .analysis.aci_318_25_service import (
 )
 from .analysis.pier_verification_service import PierVerificationService
 from .analysis.pier_capacity_service import PierCapacityService
+from .analysis.column_service import ColumnService
+from .analysis.beam_service import BeamService
 from ..domain.entities import Pier, VerificationResult, PierForces
 from ..domain.flexure import InteractionDiagramService, SlendernessService, SteelLayer
 from ..domain.chapter11 import WallType, WallCastType
@@ -56,7 +58,9 @@ class PierAnalysisService:
         aci_318_25_service: Optional[ACI318_25_Service] = None,
         proposal_service: Optional[ProposalService] = None,
         verification_service: Optional[PierVerificationService] = None,
-        capacity_service: Optional[PierCapacityService] = None
+        capacity_service: Optional[PierCapacityService] = None,
+        column_service: Optional[ColumnService] = None,
+        beam_service: Optional[BeamService] = None
     ):
         """
         Inicializa el servicio de analisis.
@@ -73,6 +77,7 @@ class PierAnalysisService:
             proposal_service: Servicio de propuestas de diseño (opcional)
             verification_service: Servicio de verificacion de piers (opcional)
             capacity_service: Servicio de capacidades de piers (opcional)
+            column_service: Servicio de verificacion de columnas (opcional)
 
         Nota: Los servicios se crean por defecto si no se pasan.
               Pasar None explicito permite inyectar mocks para testing.
@@ -100,6 +105,136 @@ class PierAnalysisService:
             slenderness_service=self._slenderness_service,
             plot_generator=self._plot_generator
         )
+        self._column_service = column_service or ColumnService()
+        self._beam_service = beam_service or BeamService()
+
+    # =========================================================================
+    # Helpers - Conversión de Resultados
+    # =========================================================================
+
+    def _convert_column_result_to_unified(
+        self,
+        column: Any,
+        col_result: Dict[str, Any],
+        key: str
+    ) -> Dict[str, Any]:
+        """
+        Convierte resultado de columna al formato unificado para la tabla.
+
+        El formato es compatible con VerificationResult.to_dict() pero con
+        campos específicos para columnas.
+        """
+        flexure = col_result.get('flexure', {})
+        shear = col_result.get('shear', {})
+        slenderness = flexure.get('slenderness', {})
+
+        return {
+            'element_type': 'column',
+            'key': key,
+            'pier_label': column.label,
+            'story': column.story,
+            'geometry': {
+                'width_m': column.depth / 1000,      # depth es el "largo"
+                'thickness_m': column.width / 1000,  # width es el "ancho"
+                'height_m': column.height / 1000,
+                'fc_MPa': column.fc,
+                'fy_MPa': column.fy
+            },
+            'reinforcement': {
+                'n_total_bars': column.n_total_bars,
+                'n_bars_depth': column.n_bars_depth,
+                'n_bars_width': column.n_bars_width,
+                'diameter_long': column.diameter_long,
+                'stirrup_diameter': column.stirrup_diameter,
+                'stirrup_spacing': column.stirrup_spacing,
+                'As_longitudinal_mm2': round(column.As_longitudinal, 0),
+                'rho_longitudinal': round(column.rho_longitudinal, 4),
+                'description': column.reinforcement_description
+            },
+            'flexure': {
+                'sf': flexure.get('sf', 0),
+                'status': flexure.get('status', 'N/A'),
+                'critical_combo': flexure.get('critical_combo', ''),
+                'phi_Mn_at_Pu': flexure.get('phi_Mn_at_Pu', 0),
+                'Mu': flexure.get('Mu', 0),
+                'phi_Mn_0': flexure.get('phi_Mn_M3', 0),
+                'Pu': flexure.get('Pu', 0),
+                'phi_Pn_max': flexure.get('phi_Pn_max', 0),
+                'exceeds_axial': flexure.get('exceeds_axial_capacity', False),
+                'has_tension': flexure.get('has_tension', False),
+                'tension_combos': flexure.get('tension_combos', 0)
+            },
+            'shear': {
+                'sf': shear.get('sf_combined', 0),
+                'status': shear.get('status', 'N/A'),
+                'critical_combo': shear.get('critical_combo', ''),
+                'dcr_2': shear.get('dcr_V2', 0),
+                'dcr_3': shear.get('dcr_V3', 0),
+                'dcr_combined': shear.get('dcr_combined', 0),
+                'phi_Vn_2': shear.get('phi_Vn_V2', 0),
+                'phi_Vn_3': shear.get('phi_Vn_V3', 0),
+                'Vu_2': shear.get('Vu_V2', 0),
+                'Vu_3': shear.get('Vu_V3', 0),
+                'Vc': shear.get('Vc_V2', 0),
+                'Vs': shear.get('Vs_V2', 0),
+                'formula_type': 'column'
+            },
+            'slenderness': {
+                'lambda': slenderness.get('lambda', 0),
+                'is_slender': slenderness.get('is_slender', False),
+                'reduction': slenderness.get('factor', 1.0),
+                'reduction_pct': round((1 - slenderness.get('factor', 1.0)) * 100, 1)
+            },
+            'overall_status': col_result.get('status', 'N/A'),
+            # Campos no aplicables a columnas (pero requeridos por la tabla)
+            'wall_continuity': None,
+            'classification': None,
+            'amplification': None,
+            'boundary_element': None,
+            'design_proposal': {'has_proposal': False},
+            'pm_plot': None
+        }
+
+    def _convert_beam_result_to_unified(
+        self,
+        beam: Any,
+        shear_result: Dict[str, Any],
+        key: str
+    ) -> Dict[str, Any]:
+        """
+        Convierte resultado de viga al formato para la tabla de vigas.
+
+        Args:
+            beam: Entidad Beam
+            shear_result: Resultado de verificación de cortante
+            key: Clave única de la viga
+
+        Returns:
+            Dict con formato unificado para UI
+        """
+        return {
+            'element_type': 'beam',
+            'key': key,
+            'label': beam.label,
+            'story': beam.story,
+            'source': beam.source.value,  # 'frame' o 'spandrel'
+            'geometry': {
+                'length_m': beam.length / 1000,
+                'depth_m': beam.depth / 1000,
+                'width_m': beam.width / 1000,
+                'fc_MPa': beam.fc,
+                'fy_MPa': beam.fy
+            },
+            'reinforcement': {
+                'stirrup_diameter': beam.stirrup_diameter,
+                'stirrup_spacing': beam.stirrup_spacing,
+                'n_stirrup_legs': beam.n_stirrup_legs,
+                'Av': round(beam.Av, 1),
+                'rho_transversal': round(beam.rho_transversal, 5)
+            },
+            'shear': shear_result,
+            'overall_status': shear_result.get('status', 'N/A')
+        }
 
     # =========================================================================
     # Helpers - Conversión de Enums
@@ -370,7 +505,7 @@ class PierAnalysisService:
 
         Yields:
             Dict con eventos de progreso:
-            - {"type": "progress", "current": 1, "total": 100, "pier": "P1-A1"}
+            - {"type": "progress", "current": 1, "total": 100, "element": "P1-A1"}
             - {"type": "complete", "result": {...}}
             - {"type": "error", "message": "..."}
         """
@@ -387,23 +522,31 @@ class PierAnalysisService:
         # Obtener datos de la sesión
         parsed_data = self._session_manager.get_session(session_id)
 
-        # Analizar piers con progreso
+        # Contar elementos totales (piers + columnas)
         piers = parsed_data.piers
-        total = len(piers)
+        columns = parsed_data.columns or {}
+        total_piers = len(piers)
+        total_columns = len(columns)
+        total_elements = total_piers + total_columns
+
         results = []
+        column_results = []
 
         # Obtener hn_ft del edificio
         hn_ft = None
         if parsed_data.building_info:
             hn_ft = parsed_data.building_info.hn_ft
 
+        # =====================================================================
+        # FASE 1: Analizar PIERS
+        # =====================================================================
         for i, (key, pier) in enumerate(piers.items(), 1):
             # Enviar progreso
             yield {
                 "type": "progress",
                 "current": i,
-                "total": total,
-                "pier": f"{pier.story} - {pier.label}"
+                "total": total_elements,
+                "pier": f"Pier: {pier.story} - {pier.label}"
             }
 
             # Obtener datos del pier
@@ -431,19 +574,106 @@ class PierAnalysisService:
             )
             results.append(result)
 
-        # Calcular estadísticas
+        # =====================================================================
+        # FASE 2: Analizar COLUMNAS
+        # =====================================================================
+        column_forces_dict = parsed_data.column_forces or {}
+        for i, (key, column) in enumerate(columns.items(), 1):
+            # Enviar progreso
+            yield {
+                "type": "progress",
+                "current": total_piers + i,
+                "total": total_elements,
+                "pier": f"Columna: {column.story} - {column.label}"
+            }
+
+            # Obtener fuerzas de la columna
+            col_forces = column_forces_dict.get(key)
+
+            # Verificar columna
+            col_result = self._column_service.verify_column(column, col_forces)
+
+            # Convertir a formato compatible con la tabla
+            unified_result = self._convert_column_result_to_unified(
+                column, col_result, key
+            )
+            column_results.append(unified_result)
+
+        # =====================================================================
+        # FASE 3: Procesar Vigas
+        # =====================================================================
+        beam_results = []
+        beams = parsed_data.beams or {}
+        beam_forces_dict = parsed_data.beam_forces or {}
+        total_beams = len(beams)
+
+        for i, (key, beam) in enumerate(beams.items(), 1):
+            # Enviar progreso
+            yield {
+                "type": "progress",
+                "current": total_piers + total_columns + i,
+                "total": total_elements + total_beams,
+                "pier": f"Viga: {beam.story} - {beam.label}"
+            }
+
+            # Obtener fuerzas de la viga
+            beam_forces = beam_forces_dict.get(key)
+
+            # Verificar cortante de viga
+            shear_result = self._beam_service.check_shear(beam, beam_forces)
+
+            # Convertir a formato para UI
+            unified_result = self._convert_beam_result_to_unified(
+                beam, shear_result, key
+            )
+            beam_results.append(unified_result)
+
+        # Calcular estadísticas de piers
         statistics = self._statistics_service.calculate_statistics(results)
 
-        # Generar gráfico resumen
+        # Agregar estadísticas de columnas
+        if column_results:
+            col_ok = sum(1 for r in column_results if r['overall_status'] == 'OK')
+            col_fail = len(column_results) - col_ok
+            statistics['columns'] = {
+                'total': len(column_results),
+                'ok': col_ok,
+                'fail': col_fail,
+                'pass_rate': round(col_ok / len(column_results) * 100, 1) if column_results else 100
+            }
+
+        # Agregar estadísticas de vigas
+        if beam_results:
+            beam_ok = sum(1 for r in beam_results if r['overall_status'] == 'OK')
+            beam_fail = len(beam_results) - beam_ok
+            statistics['beams'] = {
+                'total': len(beam_results),
+                'ok': beam_ok,
+                'fail': beam_fail,
+                'pass_rate': round(beam_ok / len(beam_results) * 100, 1) if beam_results else 100
+            }
+
+        # Generar gráfico resumen (solo para piers por ahora)
         summary_plot = None
         if generate_plots and results:
             yield {
                 "type": "progress",
-                "current": total,
-                "total": total,
+                "current": total_elements,
+                "total": total_elements,
                 "pier": "Generando resumen..."
             }
             summary_plot = self._statistics_service.generate_summary_plot(results)
+
+        # Combinar resultados de piers y columnas
+        # Agregar element_type a piers
+        pier_results_dicts = []
+        for r in results:
+            d = r.to_dict()
+            d['element_type'] = 'pier'
+            pier_results_dicts.append(d)
+
+        # Unificar todos los resultados
+        all_results = pier_results_dicts + column_results
 
         # Enviar resultado completo
         yield {
@@ -451,7 +681,8 @@ class PierAnalysisService:
             "result": {
                 'success': True,
                 'statistics': statistics,
-                'results': [r.to_dict() for r in results],
+                'results': all_results,
+                'beam_results': beam_results,  # Vigas separadas (tabla diferente)
                 'summary_plot': summary_plot
             }
         }

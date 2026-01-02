@@ -9,7 +9,11 @@ class StructuralPage {
         // Estado
         this.sessionId = null;
         this.piersData = [];
+        this.columnsData = [];
+        this.beamsData = [];
         this.results = [];
+        this.columnResults = [];
+        this.beamResults = [];
         this.filters = { grilla: '', story: '', axis: '', status: '' };
         this.uniqueGrillas = [];
         this.uniqueStories = [];
@@ -21,6 +25,7 @@ class StructuralPage {
         // Componentes (se inicializan en init())
         this.piersTable = null;
         this.resultsTable = null;
+        this.beamsTable = null;
         this.plotModal = null;
         this.reportModal = null;
     }
@@ -106,6 +111,7 @@ class StructuralPage {
     initComponents() {
         this.piersTable = new PiersTable(this);
         this.resultsTable = new ResultsTable(this);
+        this.beamsTable = new BeamsTable(this);
         this.plotModal = new PlotModal(this);
         this.plotModal.init();
         this.reportModal = new ReportModal(this);
@@ -186,6 +192,11 @@ class StructuralPage {
         this.elements.stdBeamNbars?.addEventListener('change', () => this.onStandardBeamChange());
         this.elements.stdBeamDiam?.addEventListener('change', () => this.onStandardBeamChange());
 
+        // Tabs de resultados
+        document.querySelectorAll('.results-tabs .tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+        });
+
         // Botones de navegación
         document.getElementById('new-file-btn')?.addEventListener('click', () => {
             this.showSection('upload');
@@ -219,15 +230,86 @@ class StructuralPage {
         }
     }
 
+    switchTab(tabId) {
+        // Actualizar botones
+        document.querySelectorAll('.results-tabs .tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tabId);
+        });
+
+        // Actualizar paneles
+        document.querySelectorAll('.tab-panel').forEach(panel => {
+            panel.classList.toggle('active', panel.id === tabId);
+        });
+    }
+
+    updateTabCounts() {
+        // Contar muros + columnas
+        const wallsCount = this.results.length;
+        const wallsCountEl = document.getElementById('walls-tab-count');
+        if (wallsCountEl) wallsCountEl.textContent = wallsCount;
+
+        // Contar vigas
+        const beamsCount = this.beamResults.length;
+        const beamsCountEl = document.getElementById('beams-tab-count');
+        if (beamsCountEl) beamsCountEl.textContent = beamsCount;
+    }
+
     reset() {
         this.sessionId = null;
         this.piersData = [];
+        this.columnsData = [];
+        this.beamsData = [];
         this.results = [];
+        this.columnResults = [];
+        this.beamResults = [];
         this.filters = { grilla: '', story: '', axis: '', status: '' };
         this.uniqueGrillas = [];
         this.uniqueStories = [];
         this.uniqueAxes = [];
         this.resultsTable.reset();
+        this.beamsTable.clear();
+    }
+
+    updateElementCounts() {
+        console.log('[UI] updateElementCounts called', {
+            piers: this.piersData.length,
+            columns: this.columnsData.length,
+            beams: this.beamsData.length
+        });
+
+        // Piers - sección de piers
+        const pierCount = document.getElementById('pier-count');
+        const pierWrapper = document.getElementById('pier-count-wrapper');
+        if (pierCount) pierCount.textContent = this.piersData.length;
+        if (pierWrapper) pierWrapper.classList.toggle('hidden', this.piersData.length === 0);
+
+        // Columns - sección de piers
+        const columnCount = document.getElementById('column-count');
+        const columnWrapper = document.getElementById('column-count-wrapper');
+        if (columnCount) columnCount.textContent = this.columnsData.length;
+        if (columnWrapper) columnWrapper.classList.toggle('hidden', this.columnsData.length === 0);
+
+        // Beams - sección de piers
+        const beamCount = document.getElementById('beam-count');
+        const beamWrapper = document.getElementById('beam-count-wrapper');
+        if (beamCount) beamCount.textContent = this.beamsData.length;
+        if (beamWrapper) beamWrapper.classList.toggle('hidden', this.beamsData.length === 0);
+
+        // También actualizar sección de resultados
+        const pierCountResults = document.getElementById('pier-count-results');
+        const pierBadge = document.getElementById('pier-badge');
+        if (pierCountResults) pierCountResults.textContent = this.piersData.length;
+        if (pierBadge) pierBadge.classList.toggle('hidden', this.piersData.length === 0);
+
+        const columnCountResults = document.getElementById('column-count-results');
+        const columnBadge = document.getElementById('column-badge');
+        if (columnCountResults) columnCountResults.textContent = this.columnsData.length;
+        if (columnBadge) columnBadge.classList.toggle('hidden', this.columnsData.length === 0);
+
+        const beamCountResults = document.getElementById('beam-count-results');
+        const beamBadge = document.getElementById('beam-badge');
+        if (beamCountResults) beamCountResults.textContent = this.beamsData.length;
+        if (beamBadge) beamBadge.classList.toggle('hidden', this.beamsData.length === 0);
     }
 
     // =========================================================================
@@ -267,10 +349,22 @@ class StructuralPage {
             if (!uploadData.success) throw new Error(uploadData.error);
 
             this.sessionId = uploadData.session_id;
-            this.piersData = uploadData.summary.piers_list;
+            this.piersData = uploadData.summary.piers_list || [];
+            this.columnsData = uploadData.summary.columns_list || [];
+            this.beamsData = uploadData.summary.beams_list || [];
             this.uniqueGrillas = uploadData.summary.grillas || [];
             this.uniqueStories = uploadData.summary.stories || [];
             this.uniqueAxes = uploadData.summary.axes || [];
+
+            // Debug: log counts
+            console.log('[Upload] Parsed data:', {
+                piers: this.piersData.length,
+                columns: this.columnsData.length,
+                beams: this.beamsData.length
+            });
+
+            // Actualizar conteos en la UI
+            this.updateElementCounts();
 
             // Mostrar progreso
             this.showProgressModal();
@@ -305,19 +399,19 @@ class StructuralPage {
         if (modal) modal.classList.remove('active');
     }
 
-    updateProgress(current, total, pier) {
+    updateProgress(current, total, element) {
         const progressText = document.getElementById('progress-text');
         const progressBar = document.getElementById('progress-bar');
         const progressPier = document.getElementById('progress-pier');
 
         if (progressText) {
-            progressText.textContent = total > 0 ? `Procesando pier ${current} de ${total}` : pier;
+            progressText.textContent = total > 0 ? `Procesando ${current} de ${total}` : element;
         }
         if (progressBar && total > 0) {
             progressBar.style.width = `${(current / total) * 100}%`;
         }
         if (progressPier) {
-            progressPier.textContent = pier;
+            progressPier.textContent = element;
         }
     }
 
@@ -334,8 +428,21 @@ class StructuralPage {
                     this.hideProgressModal();
                     if (data.success) {
                         this.results = data.results;
+                        this.columnResults = data.column_results || [];
+                        this.beamResults = data.beam_results || [];
+
+                        // Log results para debug
+                        if (this.columnResults.length > 0) {
+                            console.log('[Analysis] Column results:', this.columnResults.length);
+                        }
+                        if (this.beamResults.length > 0) {
+                            console.log('[Analysis] Beam results:', this.beamResults.length);
+                        }
+
                         this.resultsTable.populateFilters();
                         this.resultsTable.render(data);
+                        this.beamsTable.renderTable(this.beamResults);
+                        this.updateTabCounts();
                         this.showSection('results');
                         this.piersTable.populateFilters();
                         this.piersTable.render();

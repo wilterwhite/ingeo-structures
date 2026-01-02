@@ -1,24 +1,25 @@
 // app/structural/static/js/ResultsTable.js
 /**
- * Módulo para manejo de la tabla de resultados y combinaciones.
- * Refactorizado para mejor mantenibilidad.
+ * Módulo para manejo de la tabla de resultados.
+ * Usa RowFactory para crear filas de piers y columnas.
  */
 
 class ResultsTable {
     constructor(page) {
         this.page = page;
+        this.rowFactory = new RowFactory(this);
         this.expandedPiers = new Set();
         this.combinationsCache = {};
         this.plotsCache = {};
 
-        // Estado de vigas
+        // Estado de vigas estándar
         this.standardBeam = { width: 200, height: 500, ln: 1500, nbars: 2, diam: 12 };
-        this.customBeamPiers = new Set();  // Piers con vigas personalizadas
-        this.pierBeamConfigs = {};  // Configuración de vigas por pier
+        this.customBeamPiers = new Set();
+        this.pierBeamConfigs = {};
     }
 
     // =========================================================================
-    // Acceso a elementos y datos
+    // Acceso a datos
     // =========================================================================
 
     get elements() { return this.page.elements; }
@@ -53,13 +54,9 @@ class ResultsTable {
             });
         }
 
-        // Poblar ejes (inicialmente todos)
         this.updateAxisFilter();
     }
 
-    /**
-     * Actualiza el filtro de ejes según la grilla seleccionada.
-     */
     updateAxisFilter() {
         const { grillaFilter, axisFilter } = this.elements;
         if (!axisFilter) return;
@@ -67,7 +64,6 @@ class ResultsTable {
         const selectedGrilla = grillaFilter?.value || '';
         const currentAxis = axisFilter.value;
 
-        // Obtener ejes únicos de la grilla seleccionada (desde resultados)
         let axes;
         if (selectedGrilla) {
             const axesSet = new Set();
@@ -75,16 +71,13 @@ class ResultsTable {
                 const parts = result.pier_label.split('-');
                 const grilla = parts[0] || '';
                 const axis = parts[1] || '';
-                if (grilla === selectedGrilla && axis) {
-                    axesSet.add(axis);
-                }
+                if (grilla === selectedGrilla && axis) axesSet.add(axis);
             });
             axes = [...axesSet].sort();
         } else {
             axes = this.page.uniqueAxes;
         }
 
-        // Repoblar dropdown
         axisFilter.innerHTML = '<option value="">Todos</option>';
         axes.forEach(axis => {
             const option = document.createElement('option');
@@ -93,15 +86,9 @@ class ResultsTable {
             axisFilter.appendChild(option);
         });
 
-        // Mantener selección si sigue siendo válida
-        if (axes.includes(currentAxis)) {
-            axisFilter.value = currentAxis;
-        }
+        if (axes.includes(currentAxis)) axisFilter.value = currentAxis;
     }
 
-    /**
-     * Llamado cuando cambia la grilla - actualiza ejes y aplica filtros.
-     */
     onGrillaChange() {
         this.updateAxisFilter();
         this.applyFilters();
@@ -209,146 +196,25 @@ class ResultsTable {
         this.plotsCache = {};
 
         results.forEach(result => {
-            const pierKey = `${result.story}_${result.pier_label}`;
-            if (result.pm_plot) this.plotsCache[pierKey] = result.pm_plot;
+            const elementKey = result.key || `${result.story}_${result.pier_label}`;
+            if (result.pm_plot) this.plotsCache[elementKey] = result.pm_plot;
 
-            const row = this.createPierRow(result, pierKey);
+            const row = this.rowFactory.createRow(result, elementKey);
             resultsTable.appendChild(row);
-            this.appendComboRows(resultsTable, pierKey);
 
-            if (this.expandedPiers.has(pierKey) && !this.combinationsCache[pierKey]) {
-                this.loadCombinations(pierKey);
+            // Solo agregar combo rows para piers (columnas no tienen por ahora)
+            if (result.element_type !== 'column') {
+                this.appendComboRows(resultsTable, elementKey);
+                if (this.expandedPiers.has(elementKey) && !this.combinationsCache[elementKey]) {
+                    this.loadCombinations(elementKey);
+                }
             }
         });
     }
 
     // =========================================================================
-    // Creación de Fila Principal (Refactorizado)
+    // Vigas de Acople (para piers)
     // =========================================================================
-
-    createPierRow(result, pierKey) {
-        const pier = this.piersData.find(p => p.key === pierKey);
-        const isExpanded = this.expandedPiers.has(pierKey);
-
-        const row = document.createElement('tr');
-        row.className = `pier-row ${isExpanded ? 'expanded' : ''}`;
-        row.dataset.pierKey = pierKey;
-
-        // Crear cada celda por separado
-        row.appendChild(this.createPierInfoCell(result));
-        row.appendChild(this.createHwcsCell(result));
-        row.appendChild(this.createMallaCell(pier, pierKey, result));
-        row.appendChild(this.createBordeCell(pier, pierKey));
-        row.appendChild(this.createVigaCell(pierKey, 'izq'));
-        row.appendChild(this.createVigaCell(pierKey, 'der'));
-        row.appendChild(this.createFlexureSfCell(result));
-        row.appendChild(this.createFlexureCapCell(result));
-        row.appendChild(this.createShearSfCell(result));
-        row.appendChild(this.createShearCapCell(result));
-        row.appendChild(this.createProposalCell(result, pierKey));
-        row.appendChild(this.createActionsCell(result, pierKey, isExpanded));
-
-        // Event handlers
-        this.attachRowEventHandlers(row, pierKey, result);
-
-        return row;
-    }
-
-    // =========================================================================
-    // Celdas Individuales
-    // =========================================================================
-
-    createPierInfoCell(result) {
-        const td = document.createElement('td');
-        td.className = 'pier-info-cell';
-        td.innerHTML = `
-            <span class="pier-name">${result.pier_label}</span>
-            <span class="pier-story">${result.story}</span>
-            <span class="pier-dims">lw=${result.geometry.width_m.toFixed(2)} e=${result.geometry.thickness_m.toFixed(2)}</span>
-        `;
-        return td;
-    }
-
-    createHwcsCell(result) {
-        const cont = result.wall_continuity || {};
-        const hwcsM = cont.hwcs_m || result.geometry.height_m || 0;
-        const hwcsLw = cont.hwcs_lw || 0;
-        const nStories = cont.n_stories || 1;
-        const storiesText = cont.is_continuous ? `${nStories} pisos` : '1 piso';
-
-        const td = document.createElement('td');
-        td.className = 'hwcs-cell';
-        td.title = `hwcs/lw = ${hwcsLw.toFixed(2)}`;
-        td.innerHTML = `
-            <span class="hwcs-value">${hwcsM.toFixed(1)}m</span>
-            <span class="hwcs-ratio">hwcs/lw=${hwcsLw.toFixed(1)}</span>
-            <span class="hwcs-stories">${storiesText}</span>
-        `;
-        return td;
-    }
-
-    createMallaCell(pier, pierKey, result) {
-        const td = document.createElement('td');
-        td.className = 'malla-cell';
-        td.dataset.pierKey = pierKey;
-
-        td.innerHTML = `
-            <div class="malla-row">
-                <select class="edit-meshes" title="Mallas">
-                    <option value="1" ${pier?.n_meshes === 1 ? 'selected' : ''}>1M</option>
-                    <option value="2" ${pier?.n_meshes === 2 ? 'selected' : ''}>2M</option>
-                </select>
-                <span class="malla-label">V</span>
-                <select class="edit-diameter-v" title="φ Vertical">
-                    ${[6,8,10,12,16].map(d => `<option value="${d}" ${pier?.diameter_v === d ? 'selected' : ''}>φ${d}</option>`).join('')}
-                </select>
-                <select class="edit-spacing-v" title="@ Vertical">
-                    ${[100,125,150,175,200,250,300].map(s => `<option value="${s}" ${pier?.spacing_v === s ? 'selected' : ''}>@${s}</option>`).join('')}
-                </select>
-            </div>
-            <div class="malla-row">
-                <span class="malla-spacer"></span>
-                <span class="malla-label">H</span>
-                <select class="edit-diameter-h" title="φ Horizontal">
-                    ${[6,8,10,12,16].map(d => `<option value="${d}" ${pier?.diameter_h === d ? 'selected' : ''}>φ${d}</option>`).join('')}
-                </select>
-                <select class="edit-spacing-h" title="@ Horizontal">
-                    ${[100,125,150,175,200,250,300].map(s => `<option value="${s}" ${pier?.spacing_h === s ? 'selected' : ''}>@${s}</option>`).join('')}
-                </select>
-            </div>
-        `;
-        return td;
-    }
-
-    createBordeCell(pier, pierKey) {
-        const nEdgeBars = pier?.n_edge_bars || 2;
-        const stirrupsDisabled = nEdgeBars <= 2;
-
-        const td = document.createElement('td');
-        td.className = 'borde-cell';
-        td.dataset.pierKey = pierKey;
-
-        td.innerHTML = `
-            <div class="borde-row">
-                <select class="edit-n-edge" title="Nº barras borde">
-                    ${[2,4,6,8,10,12].map(n => `<option value="${n}" ${pier?.n_edge_bars === n ? 'selected' : ''}>${n}φ</option>`).join('')}
-                </select>
-                <select class="edit-edge" title="φ Borde">
-                    ${[12,16,18,20,22,25,28,32].map(d => `<option value="${d}" ${pier?.diameter_edge === d ? 'selected' : ''}>φ${d}</option>`).join('')}
-                </select>
-            </div>
-            <div class="borde-row borde-estribos">
-                <span class="borde-label">E</span>
-                <select class="edit-stirrup-d" title="φ Estribo" ${stirrupsDisabled ? 'disabled' : ''}>
-                    ${[8,10,12].map(d => `<option value="${d}" ${pier?.stirrup_diameter === d ? 'selected' : ''}>E${d}</option>`).join('')}
-                </select>
-                <select class="edit-stirrup-s" title="@ Estribo" ${stirrupsDisabled ? 'disabled' : ''}>
-                    ${[75,100,125,150,200].map(s => `<option value="${s}" ${pier?.stirrup_spacing === s ? 'selected' : ''}>@${s}</option>`).join('')}
-                </select>
-            </div>
-        `;
-        return td;
-    }
 
     createVigaCell(pierKey, side) {
         const isCustom = this.customBeamPiers.has(pierKey);
@@ -388,7 +254,6 @@ class ResultsTable {
             ${side === 'der' ? `<button class="btn-toggle-beam ${isCustom ? 'unlocked' : ''}" data-pier="${pierKey}" title="${isCustom ? 'Volver a estándar' : 'Especificar vigas'}">${isCustom ? '✓' : '⚙'}</button>` : ''}
         `;
 
-        // Agregar event listener al botón de toggle (solo en lado derecho)
         if (side === 'der') {
             const btn = td.querySelector('.btn-toggle-beam');
             btn?.addEventListener('click', (e) => {
@@ -397,7 +262,6 @@ class ResultsTable {
             });
         }
 
-        // Agregar event listeners para guardar cambios si está desbloqueado
         if (isCustom) {
             td.querySelectorAll('select').forEach(select => {
                 select.addEventListener('change', () => this.onBeamChange(pierKey, side));
@@ -407,47 +271,31 @@ class ResultsTable {
         return td;
     }
 
-    /**
-     * Obtiene la configuración de viga para un pier/lado.
-     */
     getBeamConfig(pierKey, side) {
-        // Si tiene config personalizada, usarla
         if (this.customBeamPiers.has(pierKey) && this.pierBeamConfigs[pierKey]?.[side]) {
             return this.pierBeamConfigs[pierKey][side];
         }
-        // Si no, usar la estándar
         return this.standardBeam;
     }
 
-    /**
-     * Alterna el estado bloqueado/desbloqueado de vigas de un pier.
-     */
     togglePierBeamLock(pierKey) {
         if (this.customBeamPiers.has(pierKey)) {
-            // Volver a estándar
             this.customBeamPiers.delete(pierKey);
             delete this.pierBeamConfigs[pierKey];
         } else {
-            // Desbloquear - inicializar con valores actuales (estándar)
             this.customBeamPiers.add(pierKey);
             this.pierBeamConfigs[pierKey] = {
                 izq: { ...this.standardBeam },
                 der: { ...this.standardBeam }
             };
         }
-
-        // Re-renderizar las celdas de viga de este pier
         this.updatePierBeamCells(pierKey);
     }
 
-    /**
-     * Actualiza las celdas de viga de un pier específico.
-     */
     updatePierBeamCells(pierKey) {
         const row = document.querySelector(`tr[data-pier-key="${pierKey}"]`);
         if (!row) return;
 
-        // Encontrar las celdas de viga (posiciones 4 y 5)
         const cells = row.querySelectorAll('.viga-cell');
         if (cells.length >= 2) {
             const newIzq = this.createVigaCell(pierKey, 'izq');
@@ -457,9 +305,6 @@ class ResultsTable {
         }
     }
 
-    /**
-     * Maneja cambios en los selects de viga.
-     */
     onBeamChange(pierKey, side) {
         const row = document.querySelector(`tr[data-pier-key="${pierKey}"]`);
         if (!row) return;
@@ -467,30 +312,22 @@ class ResultsTable {
         const cell = row.querySelector(`.viga-cell[data-side="${side}"]`);
         if (!cell) return;
 
-        // Leer valores actuales
         const width = parseInt(cell.querySelector(`.edit-viga-width-${side}`)?.value) || 0;
         const height = parseInt(cell.querySelector(`.edit-viga-height-${side}`)?.value) || 0;
         const ln = parseInt(cell.querySelector(`.edit-viga-ln-${side}`)?.value) || 1500;
         const nbars = parseInt(cell.querySelector(`.edit-viga-nbars-${side}`)?.value) || 2;
         const diam = parseInt(cell.querySelector(`.edit-viga-diam-${side}`)?.value) || 12;
 
-        // Guardar en config local
         if (!this.pierBeamConfigs[pierKey]) {
             this.pierBeamConfigs[pierKey] = { izq: { ...this.standardBeam }, der: { ...this.standardBeam } };
         }
         this.pierBeamConfigs[pierKey][side] = { width, height, ln, nbars, diam };
-
-        // Enviar al backend
         this.savePierBeamConfig(pierKey);
     }
 
-    /**
-     * Guarda la configuración de viga de un pier en el backend.
-     */
     async savePierBeamConfig(pierKey) {
         const config = this.pierBeamConfigs[pierKey];
         if (!config) return;
-
         try {
             await this.page.api.setPierBeam(this.sessionId, pierKey, config);
         } catch (error) {
@@ -498,27 +335,17 @@ class ResultsTable {
         }
     }
 
-    /**
-     * Actualiza la viga estándar y propaga a piers bloqueados.
-     */
     updateStandardBeam(beam) {
         this.standardBeam = { ...beam };
-
-        // Actualizar todas las celdas de viga bloqueadas
         document.querySelectorAll('.viga-cell.locked').forEach(cell => {
             const pierKey = cell.dataset.pierKey;
             const side = cell.dataset.side;
             const newCell = this.createVigaCell(pierKey, side);
             cell.replaceWith(newCell);
         });
-
-        // Guardar en backend
         this.saveStandardBeam();
     }
 
-    /**
-     * Guarda la viga estándar en el backend.
-     */
     async saveStandardBeam() {
         try {
             await this.page.api.setDefaultBeam(this.sessionId, this.standardBeam);
@@ -527,217 +354,8 @@ class ResultsTable {
         }
     }
 
-    createFlexureSfCell(result) {
-        const hasTension = result.flexure.has_tension || false;
-        const tensionCombos = result.flexure.tension_combos || 0;
-
-        const td = document.createElement('td');
-        td.className = `fs-value ${this.getFsClass(result.flexure.sf)}`;
-
-        let tensionWarning = '';
-        if (hasTension) {
-            tensionWarning = `<span class="tension-warning" title="${tensionCombos} combinación(es) con tracción (Pu<0)">⚡${tensionCombos}</span>`;
-        }
-
-        td.innerHTML = `
-            <span class="fs-number">${result.flexure.sf}</span>${tensionWarning}
-            <span class="critical-combo">${this.truncateCombo(result.flexure.critical_combo)}</span>
-        `;
-        return td;
-    }
-
-    createFlexureCapCell(result) {
-        const sl = result.slenderness || {};
-        const slenderClass = sl.is_slender ? 'slender-warn' : '';
-        const slenderInfo = sl.is_slender ? `λ=${sl.lambda} (-${sl.reduction_pct}%)` : `λ=${sl.lambda || 0}`;
-        const exceedsAxial = result.flexure.exceeds_axial || false;
-
-        const td = document.createElement('td');
-        td.className = 'capacity-cell';
-
-        if (exceedsAxial) {
-            // Pu excede φPn,max - mostrar advertencia clara
-            td.innerHTML = `
-                <span class="capacity-line axial-exceeded">⚠️ Pu=${result.flexure.Pu}t > φPn=${result.flexure.phi_Pn_max}t</span>
-                <span class="capacity-line">Mu=${result.flexure.Mu}t-m</span>
-                <span class="capacity-line capacity-ref">φMn₀=${result.flexure.phi_Mn_0}t-m</span>
-                <span class="slenderness-info ${slenderClass}">${slenderInfo}</span>
-            `;
-        } else {
-            td.innerHTML = `
-                <span class="capacity-line">φMn(Pu)=${result.flexure.phi_Mn_at_Pu}t-m</span>
-                <span class="capacity-line">Mu=${result.flexure.Mu}t-m</span>
-                <span class="capacity-line capacity-ref">φMn₀=${result.flexure.phi_Mn_0}t-m</span>
-                <span class="slenderness-info ${slenderClass}">${slenderInfo}</span>
-            `;
-        }
-        return td;
-    }
-
-    createShearSfCell(result) {
-        const shearType = result.shear.formula_type === 'column' ? 'COL' : 'MURO';
-        const shearTitle = result.shear.formula_type === 'column'
-            ? 'Fórmula COLUMNA (ACI 22.5)'
-            : 'Fórmula MURO (ACI 18.10.4)';
-
-        const td = document.createElement('td');
-        td.className = `fs-value ${this.getFsClass(result.shear.sf)}`;
-        td.innerHTML = `
-            <span class="fs-number">${result.shear.sf}</span>
-            <span class="critical-combo">${this.truncateCombo(result.shear.critical_combo)}</span>
-            <span class="formula-tag formula-${result.shear.formula_type}" title="${shearTitle}">${shearType}</span>
-        `;
-        return td;
-    }
-
-    createShearCapCell(result) {
-        const td = document.createElement('td');
-        td.className = 'capacity-cell';
-        td.innerHTML = `
-            <span class="capacity-line">Vc=${result.shear.Vc}t + Vs=${result.shear.Vs}t</span>
-            <span class="capacity-line">φVn=${result.shear.phi_Vn_2}t</span>
-            <span class="dcr-info">DCR: ${this.formatDcr(result.shear.dcr_combined)} (Vu=${result.shear.Vu_2}t)</span>
-        `;
-        return td;
-    }
-
-    createProposalCell(result, pierKey) {
-        const proposal = result.design_proposal;
-        const hasProposal = proposal && proposal.has_proposal;
-
-        const td = document.createElement('td');
-        td.className = `proposal-cell ${hasProposal ? 'has-proposal' : ''}`;
-        td.dataset.pierKey = pierKey;
-
-        if (hasProposal) {
-            td.innerHTML = `
-                <div class="proposal-info">
-                    <span class="proposal-mode proposal-mode-${proposal.failure_mode}">${this.getFailureModeLabel(proposal.failure_mode)}</span>
-                    <span class="proposal-desc">${proposal.description}</span>
-                    <span class="proposal-sf ${proposal.success ? 'proposal-success' : 'proposal-fail'}">
-                        SF: ${proposal.sf_original.toFixed(2)} → ${proposal.sf_proposed.toFixed(2)}
-                    </span>
-                </div>
-                <div class="proposal-actions">
-                    <button class="view-proposal-btn" data-pier-key="${pierKey}" title="Ver sección propuesta">🔲</button>
-                    <button class="apply-proposal-btn" data-pier-key="${pierKey}" title="Aplicar propuesta">✓</button>
-                </div>
-            `;
-        } else {
-            td.innerHTML = '<span class="no-proposal">-</span>';
-        }
-        return td;
-    }
-
-    createActionsCell(result, pierKey, isExpanded) {
-        const td = document.createElement('td');
-        td.className = 'actions-cell';
-        td.innerHTML = `
-            <div class="action-buttons-grid">
-                <button class="action-btn ${isExpanded ? 'active' : ''}" data-action="expand" title="Ver combinaciones">
-                    <span class="expand-icon">▶</span>
-                </button>
-                <button class="action-btn" data-action="section" title="Ver sección">🔲</button>
-                <button class="action-btn" data-action="info" title="Ver capacidades">ℹ️</button>
-                ${result.pm_plot
-                    ? `<button class="action-btn" data-action="diagram" title="Diagrama P-M">📊</button>`
-                    : `<button class="action-btn" disabled style="visibility:hidden">-</button>`}
-            </div>
-        `;
-        return td;
-    }
-
     // =========================================================================
-    // Event Handlers
-    // =========================================================================
-
-    attachRowEventHandlers(row, pierKey, result) {
-        const pierLabel = `${result.story} - ${result.pier_label}`;
-
-        // Botones de acción
-        row.querySelectorAll('.action-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const action = btn.dataset.action;
-                if (action === 'expand') this.toggleExpand(pierKey);
-                else if (action === 'section') this.page.showSectionDiagram(pierKey, pierLabel);
-                else if (action === 'info') this.page.showPierDetails(pierKey, pierLabel);
-                else if (action === 'diagram') this.page.plotModal.open(pierKey, pierLabel, this.plotsCache[pierKey]);
-            });
-        });
-
-        // Edición de malla
-        row.querySelectorAll('.malla-cell select').forEach(select => {
-            select.addEventListener('change', () => this.saveInlineEdit(row, pierKey));
-        });
-
-        // Edición de borde
-        row.querySelectorAll('.borde-cell select').forEach(select => {
-            select.addEventListener('change', () => {
-                if (select.classList.contains('edit-n-edge')) this.updateStirrupsState(row);
-                this.saveInlineEdit(row, pierKey);
-            });
-        });
-
-        // Edición de vigas
-        row.querySelectorAll('.viga-cell select').forEach(select => {
-            select.addEventListener('change', () => this.saveInlineEdit(row, pierKey));
-        });
-
-        // Ver sección propuesta
-        const viewProposalBtn = row.querySelector('.view-proposal-btn');
-        if (viewProposalBtn) {
-            viewProposalBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const pierLabel = `${result.story} - ${result.pier_label}`;
-                const proposedConfig = this.getProposedConfig(result.design_proposal);
-                this.page.showProposedSectionDiagram(pierKey, pierLabel, proposedConfig);
-            });
-        }
-
-        // Aplicar propuesta
-        const applyBtn = row.querySelector('.apply-proposal-btn');
-        if (applyBtn) {
-            applyBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.applyProposal(pierKey, result.design_proposal);
-            });
-        }
-    }
-
-    getProposedConfig(proposal) {
-        if (!proposal || !proposal.proposed_config) return null;
-        const config = proposal.proposed_config;
-        return {
-            n_edge_bars: config.n_edge_bars,
-            diameter_edge: config.diameter_edge,
-            n_meshes: config.n_meshes,
-            diameter_v: config.diameter_v,
-            spacing_v: config.spacing_v,
-            diameter_h: config.diameter_h,
-            spacing_h: config.spacing_h,
-            stirrup_diameter: config.stirrup_diameter,
-            stirrup_spacing: config.stirrup_spacing,
-            n_stirrup_legs: config.n_stirrup_legs,
-            thickness: config.thickness
-        };
-    }
-
-    updateStirrupsState(row) {
-        const bordeCell = row.querySelector('.borde-cell');
-        if (!bordeCell) return;
-
-        const nEdge = parseInt(bordeCell.querySelector('.edit-n-edge')?.value) || 2;
-        const shouldDisable = nEdge <= 2;
-
-        const stirrupD = bordeCell.querySelector('.edit-stirrup-d');
-        const stirrupS = bordeCell.querySelector('.edit-stirrup-s');
-        if (stirrupD) stirrupD.disabled = shouldDisable;
-        if (stirrupS) stirrupS.disabled = shouldDisable;
-    }
-
-    // =========================================================================
-    // Filas de Combinaciones
+    // Combinaciones
     // =========================================================================
 
     appendComboRows(container, pierKey) {
@@ -774,10 +392,10 @@ class ResultsTable {
         tr.innerHTML = `
             <td class="combo-indent" colspan="2"><span class="combo-name">${combo.full_name || combo.name}</span></td>
             <td class="combo-forces-cell" colspan="4">P=${combo.P} | M2=${combo.M2} | M3=${combo.M3}</td>
-            <td class="fs-value ${this.getFsClass(combo.flexure_sf)}">${combo.flexure_sf}</td>
+            <td class="fs-value ${this.rowFactory.getFsClass(combo.flexure_sf)}">${combo.flexure_sf}</td>
             <td></td>
-            <td class="fs-value ${this.getFsClass(comboShearDisplay)}">${comboShearDisplay}</td>
-            <td class="combo-forces-cell">V2=${combo.V2} | V3=${combo.V3} | DCR: ${this.formatDcr(dcrCombined)}</td>
+            <td class="fs-value ${this.rowFactory.getFsClass(comboShearDisplay)}">${comboShearDisplay}</td>
+            <td class="combo-forces-cell">V2=${combo.V2} | V3=${combo.V3} | DCR: ${this.rowFactory.formatDcr(dcrCombined)}</td>
             <td></td>
             <td class="actions-cell"><button class="action-btn" data-action="diagram-combo">📊</button></td>
         `;
@@ -790,27 +408,23 @@ class ResultsTable {
         return tr;
     }
 
-    // =========================================================================
-    // Expandir/Contraer
-    // =========================================================================
-
     async toggleExpand(pierKey) {
         const { resultsTable } = this.elements;
-        const pierRow = resultsTable.querySelector(`.pier-row[data-pier-key="${pierKey}"]`);
-        const comboRows = resultsTable.querySelectorAll(`.combo-row[data-pier-key="${pierKey}"]`);
+        const pierRow = resultsTable?.querySelector(`.pier-row[data-pier-key="${pierKey}"]`);
+        const comboRows = resultsTable?.querySelectorAll(`.combo-row[data-pier-key="${pierKey}"]`);
         if (!pierRow) return;
 
         if (this.expandedPiers.has(pierKey)) {
             this.expandedPiers.delete(pierKey);
             pierRow.classList.remove('expanded');
-            comboRows.forEach(row => row.style.display = 'none');
+            comboRows?.forEach(row => row.style.display = 'none');
         } else {
             this.expandedPiers.add(pierKey);
             pierRow.classList.add('expanded');
             if (!this.combinationsCache[pierKey]) {
                 await this.loadCombinations(pierKey);
             } else {
-                comboRows.forEach(row => row.style.display = '');
+                comboRows?.forEach(row => row.style.display = '');
             }
         }
     }
@@ -821,9 +435,9 @@ class ResultsTable {
             if (data.success) {
                 this.combinationsCache[pierKey] = data.combinations;
                 const { resultsTable } = this.elements;
-                resultsTable.querySelectorAll(`.combo-row[data-pier-key="${pierKey}"]`).forEach(r => r.remove());
+                resultsTable?.querySelectorAll(`.combo-row[data-pier-key="${pierKey}"]`).forEach(r => r.remove());
 
-                const pierRow = resultsTable.querySelector(`.pier-row[data-pier-key="${pierKey}"]`);
+                const pierRow = resultsTable?.querySelector(`.pier-row[data-pier-key="${pierKey}"]`);
                 if (!pierRow) return;
 
                 let insertAfter = pierRow;
@@ -858,7 +472,7 @@ class ResultsTable {
         const { resultsTable } = this.elements;
         if (!resultsTable) return false;
 
-        const pierKeys = Array.from(resultsTable.querySelectorAll('.pier-row')).map(r => r.dataset.pierKey);
+        const pierKeys = Array.from(resultsTable.querySelectorAll('.pier-row:not(.column-type)')).map(r => r.dataset.pierKey);
         if (pierKeys.length === 0) return false;
 
         const hasExpanded = pierKeys.some(key => this.expandedPiers.has(key));
@@ -892,42 +506,39 @@ class ResultsTable {
     }
 
     // =========================================================================
-    // Utilidades
-    // =========================================================================
-
-    truncateCombo(name) {
-        if (!name) return '';
-        return name.length > 20 ? name.substring(0, 18) + '...' : name;
-    }
-
-    getFsClass(fs) {
-        if (fs === '>100') return 'fs-ok';
-        const val = parseFloat(fs);
-        if (val >= 1.5) return 'fs-ok';
-        if (val >= 1.0) return 'fs-warn';
-        return 'fs-fail';
-    }
-
-    formatDcr(dcr) {
-        if (dcr === undefined || dcr === null) return '-';
-        if (dcr < 0.001) return '≈0';
-        return dcr.toFixed(2);
-    }
-
-    getFailureModeLabel(mode) {
-        return {
-            flexure: 'Flexión',
-            shear: 'Corte',
-            combined: 'Combinado',
-            slenderness: 'Esbeltez',
-            confinement: 'Confinamiento',
-            overdesigned: 'Optimizar'
-        }[mode] || mode;
-    }
-
-    // =========================================================================
     // Edición y Propuestas
     // =========================================================================
+
+    updateStirrupsState(row) {
+        const bordeCell = row.querySelector('.borde-cell');
+        if (!bordeCell) return;
+
+        const nEdge = parseInt(bordeCell.querySelector('.edit-n-edge')?.value) || 2;
+        const shouldDisable = nEdge <= 2;
+
+        const stirrupD = bordeCell.querySelector('.edit-stirrup-d');
+        const stirrupS = bordeCell.querySelector('.edit-stirrup-s');
+        if (stirrupD) stirrupD.disabled = shouldDisable;
+        if (stirrupS) stirrupS.disabled = shouldDisable;
+    }
+
+    getProposedConfig(proposal) {
+        if (!proposal || !proposal.proposed_config) return null;
+        const config = proposal.proposed_config;
+        return {
+            n_edge_bars: config.n_edge_bars,
+            diameter_edge: config.diameter_edge,
+            n_meshes: config.n_meshes,
+            diameter_v: config.diameter_v,
+            spacing_v: config.spacing_v,
+            diameter_h: config.diameter_h,
+            spacing_h: config.spacing_h,
+            stirrup_diameter: config.stirrup_diameter,
+            stirrup_spacing: config.stirrup_spacing,
+            n_stirrup_legs: config.n_stirrup_legs,
+            thickness: config.thickness
+        };
+    }
 
     async applyProposal(pierKey, proposal) {
         if (!proposal?.has_proposal) return;

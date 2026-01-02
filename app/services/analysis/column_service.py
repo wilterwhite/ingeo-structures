@@ -36,6 +36,13 @@ from ...domain.constants.shear import (
 from ...domain.constants.phi_chapter21 import PHI_COMPRESSION
 
 
+def _format_sf(value: float) -> Any:
+    """Formatea SF para JSON. Convierte inf a '>100'."""
+    if math.isinf(value):
+        return ">100"
+    return round(value, 2)
+
+
 @dataclass
 class ColumnFlexureResult:
     """Resultado de verificacion de flexocompresion para una columna."""
@@ -158,7 +165,7 @@ class ColumnService:
         # Sin fuerzas -> todo OK
         if not column_forces or not column_forces.combinations:
             return {
-                'sf': float('inf'),
+                'sf': ">100",
                 'status': 'OK',
                 'critical_combo': 'N/A',
                 'phi_Pn_max': round(phi_Pn_max, 1),
@@ -340,9 +347,9 @@ class ColumnService:
         """
         # Resultado por defecto
         default_result = {
-            'sf_V2': float('inf'),
-            'sf_V3': float('inf'),
-            'sf_combined': float('inf'),
+            'sf_V2': ">100",
+            'sf_V3': ">100",
+            'sf_combined': ">100",
             'dcr_V2': 0,
             'dcr_V3': 0,
             'dcr_combined': 0,
@@ -398,9 +405,9 @@ class ColumnService:
         status = 'OK' if max_dcr_combined <= 1.0 else 'NO OK'
 
         return {
-            'sf_V2': round(sf_V2, 2),
-            'sf_V3': round(sf_V3, 2),
-            'sf_combined': round(sf_combined, 2),
+            'sf_V2': _format_sf(sf_V2),
+            'sf_V3': _format_sf(sf_V3),
+            'sf_combined': _format_sf(sf_combined),
             'dcr_V2': round(dcr_V2, 3),
             'dcr_V3': round(dcr_V3, 3),
             'dcr_combined': round(max_dcr_combined, 3),
@@ -499,14 +506,21 @@ class ColumnService:
         if flexure_result['status'] == 'NO OK' or shear_result['status'] == 'NO OK':
             overall_status = 'NO OK'
 
-        # SF minimo
+        # SF minimo (manejar strings ">100")
         sf_flexure = flexure_result['sf']
         sf_shear = shear_result['sf_combined']
-        min_sf = min(sf_flexure, sf_shear) if sf_shear != float('inf') else sf_flexure
+
+        # Convertir a float para comparar (">100" -> 100)
+        sf_flex_val = 100.0 if sf_flexure == ">100" else float(sf_flexure)
+        sf_shear_val = 100.0 if sf_shear == ">100" else float(sf_shear)
+        min_sf_val = min(sf_flex_val, sf_shear_val)
+
+        # Formatear resultado
+        min_sf = ">100" if min_sf_val >= 100 else round(min_sf_val, 2)
 
         return {
             'status': overall_status,
-            'min_sf': round(min_sf, 2) if min_sf != float('inf') else None,
+            'min_sf': min_sf,
             'flexure': flexure_result,
             'shear': shear_result,
             'column_info': {
@@ -573,13 +587,18 @@ class ColumnService:
         )
 
         # Encontrar columna critica
-        min_sf = float('inf')
+        min_sf_val = float('inf')
         critical_column = None
         for col_key, result in results.items():
             sf = result.get('min_sf')
-            if sf is not None and sf < min_sf:
-                min_sf = sf
-                critical_column = col_key
+            if sf is not None:
+                sf_val = 100.0 if sf == ">100" else float(sf)
+                if sf_val < min_sf_val:
+                    min_sf_val = sf_val
+                    critical_column = col_key
+
+        # Formatear resultado
+        min_sf = ">100" if min_sf_val >= 100 else round(min_sf_val, 2)
 
         return {
             'total_columns': total,
@@ -588,6 +607,6 @@ class ColumnService:
             'pass_rate': round(ok_count / total * 100, 1) if total > 0 else 100,
             'flexure_failures': flexure_fail,
             'shear_failures': shear_fail,
-            'min_sf': round(min_sf, 2) if min_sf != float('inf') else None,
+            'min_sf': min_sf if min_sf_val != float('inf') else None,
             'critical_column': critical_column
         }

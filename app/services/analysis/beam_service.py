@@ -30,6 +30,13 @@ from ...domain.constants.shear import (
 )
 
 
+def _format_sf(value: float) -> Any:
+    """Formatea SF para JSON. Convierte inf a '>100'."""
+    if math.isinf(value):
+        return ">100"
+    return round(value, 2)
+
+
 @dataclass
 class BeamShearResult:
     """Resultado de verificacion de cortante para una viga."""
@@ -86,7 +93,7 @@ class BeamService:
         """
         # Resultado por defecto cuando no hay fuerzas
         default_result = {
-            'sf': float('inf'),
+            'sf': ">100",
             'dcr': 0,
             'status': 'OK',
             'critical_combo': 'N/A',
@@ -116,12 +123,12 @@ class BeamService:
 
         # Calcular DCR y SF
         phi_Vn = shear_capacity['phi_Vn']
-        dcr = Vu_max / phi_Vn if phi_Vn > 0 else float('inf')
+        dcr = Vu_max / phi_Vn if phi_Vn > 0 else 0
         sf = phi_Vn / Vu_max if Vu_max > 0 else float('inf')
         status = "OK" if sf >= 1.0 else "NO OK"
 
         return {
-            'sf': round(sf, 2),
+            'sf': _format_sf(sf),
             'dcr': round(dcr, 3),
             'status': status,
             'critical_combo': critical_combo_name,
@@ -292,22 +299,27 @@ class BeamService:
         ok_count = sum(1 for r in results.values() if r['status'] == 'OK')
         fail_count = total - ok_count
 
-        min_sf = float('inf')
+        min_sf_val = float('inf')
         max_dcr = 0
         critical_beam = None
 
         for beam_key, result in results.items():
-            if result['sf'] < min_sf:
-                min_sf = result['sf']
+            sf = result['sf']
+            sf_val = 100.0 if sf == ">100" else float(sf)
+            if sf_val < min_sf_val:
+                min_sf_val = sf_val
                 max_dcr = result['dcr']
                 critical_beam = beam_key
+
+        # Formatear resultado
+        min_sf = ">100" if min_sf_val >= 100 else round(min_sf_val, 2)
 
         return {
             'total_beams': total,
             'ok_count': ok_count,
             'fail_count': fail_count,
             'pass_rate': round(ok_count / total * 100, 1) if total > 0 else 100,
-            'min_sf': round(min_sf, 2) if min_sf != float('inf') else None,
+            'min_sf': min_sf if min_sf_val != float('inf') else None,
             'max_dcr': round(max_dcr, 3),
             'critical_beam': critical_beam
         }
