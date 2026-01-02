@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, TYPE_CHECKING
 
 from ..constants.materials import get_bar_area
+from ..constants.reinforcement import RHO_MIN, FY_DEFAULT_MPA
 
 if TYPE_CHECKING:
     from ..calculations.steel_layer_calculator import SteelLayer
@@ -31,7 +32,7 @@ class Pier:
 
     # Propiedades del material (MPa)
     fc: float               # f'c del hormigón
-    fy: float = 420.0       # fy del acero (default A630-420H)
+    fy: float = FY_DEFAULT_MPA  # fy del acero (default A630-420H)
 
     # Configuración de armadura (malla, diámetro, espaciamiento)
     # spacing=0 significa "usar armadura mínima según espesor"
@@ -101,7 +102,6 @@ class Pier:
         Fórmula: s = n_meshes × As_barra × 1000 / (ρmin × t × 1000)
         Redondea hacia abajo a múltiplo de 5mm para cumplir ρ >= ρmin.
         """
-        RHO_MIN = 0.0025
         As_min_per_m = RHO_MIN * self.thickness * 1000  # mm²/m
         spacing_exact = self.n_meshes * self._bar_area_v * 1000 / As_min_per_m
 

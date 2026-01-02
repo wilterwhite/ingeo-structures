@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, TYPE_CHECKING
 
 from ..constants.materials import get_bar_area
+from ..constants.reinforcement import FY_DEFAULT_MPA, COVER_DEFAULT_COLUMN_MM
 
 if TYPE_CHECKING:
     from ..calculations.steel_layer_calculator import SteelLayer
@@ -35,7 +36,7 @@ class Column:
 
     # Propiedades del material (MPa)
     fc: float               # f'c del hormigon
-    fy: float = 420.0       # fy del acero (default A630-420H)
+    fy: float = FY_DEFAULT_MPA  # fy del acero (default A630-420H)
 
     # Seccion ETABS (para referencia)
     section_name: str = ""  # "ConcCol" - nombre de seccion en ETABS
@@ -53,7 +54,7 @@ class Column:
     n_stirrup_legs_width: int = 2   # Ramas en direccion ancho
 
     # Otros
-    cover: float = 40.0         # Recubrimiento (mm) - 4cm default para columnas
+    cover: float = COVER_DEFAULT_COLUMN_MM         # Recubrimiento (mm) - 4cm default para columnas
 
     # Areas de barra precalculadas
     _bar_area_long: float = field(default=314.2, repr=False)  # phi20 por defecto

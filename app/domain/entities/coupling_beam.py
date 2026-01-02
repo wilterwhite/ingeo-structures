@@ -6,6 +6,8 @@ Permite definir una viga estandar que se aplica a todos los piers,
 con posibilidad de sobre-escribir valores individuales.
 """
 from dataclasses import dataclass
+
+from ..constants.reinforcement import FY_DEFAULT_MPA
 from typing import Optional
 
 from ..constants.materials import get_bar_area
@@ -56,7 +58,7 @@ class CouplingBeamConfig:
     n_legs: int = 2
 
     # Materiales
-    fy: float = 420.0   # MPa
+    fy: float = FY_DEFAULT_MPA  # MPa
     fc: float = 25.0    # MPa
     cover: float = 40.0  # mm
 

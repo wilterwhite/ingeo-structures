@@ -544,7 +544,7 @@ class ACI318_25_Service:
                 Vu=Vu,
                 fc=pier.fc,
                 lambda_factor=1.0,
-                has_double_curtain=pier.double_layer
+                has_double_curtain=pier.n_meshes >= 2
             )
 
             if not special_wall.is_ok:
@@ -627,7 +627,7 @@ class ACI318_25_Service:
                 fyt=pier.fy,
                 rho_h=pier.rho_horizontal,
                 sigma_max=sigma_max,
-                has_single_curtain=not pier.double_layer
+                has_single_curtain=pier.n_meshes == 1
             )
 
             if not wall_pier_result.shear_design.is_ok:

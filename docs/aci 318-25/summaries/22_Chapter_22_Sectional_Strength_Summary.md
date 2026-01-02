@@ -3,6 +3,22 @@
 
 ---
 
+## INDICE
+
+- [22.1 Alcance](#221-alcance)
+- [22.2 Supuestos de Diseno para Momento y Carga Axial](#222-supuestos-de-diseno-para-momento-y-carga-axial)
+- [22.3 Resistencia a Flexion](#223-resistencia-a-flexion)
+- [22.4 Resistencia Axial o Combinada Flexion-Axial](#224-resistencia-axial-o-combinada-flexion-axial)
+- [22.5 Resistencia a Cortante Unidireccional](#225-resistencia-a-cortante-unidireccional)
+- [22.6 Resistencia a Cortante Bidireccional](#226-resistencia-a-cortante-bidireccional)
+- [22.7 Resistencia a Torsion](#227-resistencia-a-torsion)
+- [22.8 Aplastamiento (Bearing)](#228-aplastamiento-bearing)
+- [22.9 Friccion por Cortante (Shear Friction)](#229-friccion-por-cortante-shear-friction)
+- [Tablas Resumen](#tablas-resumen)
+- [Referencias Cruzadas](#referencias-cruzadas)
+
+---
+
 ## 22.1 ALCANCE
 
 ### 22.1.1 Aplicabilidad

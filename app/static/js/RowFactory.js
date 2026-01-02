@@ -2,6 +2,7 @@
 /**
  * Factory para crear filas de la tabla de resultados.
  * Soporta piers y columnas con celdas diferenciadas.
+ * Usa Constants.js y Utils.js para valores y funciones compartidas.
  */
 
 class RowFactory {
@@ -55,13 +56,13 @@ class RowFactory {
         row.appendChild(this.createColumnHeightCell(result));
         row.appendChild(this.createLongitudinalCell(result, colKey));
         row.appendChild(this.createStirrupsCell(result, colKey));
-        row.appendChild(this.createEmptyCell()); // Sin viga izq
-        row.appendChild(this.createEmptyCell()); // Sin viga der
+        row.appendChild(this.createEmptyCell());
+        row.appendChild(this.createEmptyCell());
         row.appendChild(this.createFlexureSfCell(result));
         row.appendChild(this.createFlexureCapCell(result));
         row.appendChild(this.createShearSfCell(result));
         row.appendChild(this.createShearCapCell(result));
-        row.appendChild(this.createEmptyCell()); // Sin propuesta
+        row.appendChild(this.createEmptyCell());
         row.appendChild(this.createActionsCell(result, colKey, isExpanded, true));
 
         this.attachRowEventHandlers(row, colKey, result, 'column');
@@ -80,9 +81,7 @@ class RowFactory {
             <span class="element-type-badge ${typeClass}">${typeLabel}</span>
             <span class="pier-name">${result.pier_label}</span>
             <span class="pier-story">${result.story}</span>
-            <span class="pier-dims">
-                ${result.geometry.width_m.toFixed(2)}×${result.geometry.thickness_m.toFixed(2)}
-            </span>
+            <span class="pier-dims">${result.geometry.width_m.toFixed(2)}×${result.geometry.thickness_m.toFixed(2)}</span>
         `;
         return td;
     }
@@ -93,7 +92,7 @@ class RowFactory {
         const sf = result.flexure?.sf ?? 0;
 
         const td = document.createElement('td');
-        td.className = `fs-value ${this.getFsClass(sf)}`;
+        td.className = `fs-value ${getFsClass(sf)}`;
 
         let tensionWarning = '';
         if (hasTension) {
@@ -102,7 +101,7 @@ class RowFactory {
 
         td.innerHTML = `
             <span class="fs-number">${sf}</span>${tensionWarning}
-            <span class="critical-combo">${this.truncateCombo(result.flexure?.critical_combo)}</span>
+            <span class="critical-combo">${truncateCombo(result.flexure?.critical_combo)}</span>
         `;
         return td;
     }
@@ -137,15 +136,13 @@ class RowFactory {
     createShearSfCell(result) {
         const formulaType = result.shear?.formula_type || 'wall';
         const shearType = formulaType === 'column' ? 'COL' : 'MURO';
-        const shearTitle = formulaType === 'column'
-            ? 'Fórmula COLUMNA (ACI 22.5)'
-            : 'Fórmula MURO (ACI 18.10.4)';
+        const shearTitle = formulaType === 'column' ? 'Fórmula COLUMNA (ACI 22.5)' : 'Fórmula MURO (ACI 18.10.4)';
 
         const td = document.createElement('td');
-        td.className = `fs-value ${this.getFsClass(result.shear?.sf)}`;
+        td.className = `fs-value ${getFsClass(result.shear?.sf)}`;
         td.innerHTML = `
             <span class="fs-number">${result.shear?.sf || 0}</span>
-            <span class="critical-combo">${this.truncateCombo(result.shear?.critical_combo)}</span>
+            <span class="critical-combo">${truncateCombo(result.shear?.critical_combo)}</span>
             <span class="formula-tag formula-${formulaType}" title="${shearTitle}">${shearType}</span>
         `;
         return td;
@@ -157,7 +154,7 @@ class RowFactory {
         td.innerHTML = `
             <span class="capacity-line">Vc=${result.shear?.Vc || 0}t + Vs=${result.shear?.Vs || 0}t</span>
             <span class="capacity-line">φVn=${result.shear?.phi_Vn_2 || 0}t</span>
-            <span class="dcr-info">DCR: ${this.formatDcr(result.shear?.dcr_combined)} (Vu=${result.shear?.Vu_2 || 0}t)</span>
+            <span class="dcr-info">DCR: ${formatDcr(result.shear?.dcr_combined)} (Vu=${result.shear?.Vu_2 || 0}t)</span>
         `;
         return td;
     }
@@ -217,25 +214,24 @@ class RowFactory {
         td.innerHTML = `
             <div class="malla-row">
                 <select class="edit-meshes" title="Mallas">
-                    <option value="1" ${pier?.n_meshes === 1 ? 'selected' : ''}>1M</option>
-                    <option value="2" ${pier?.n_meshes === 2 ? 'selected' : ''}>2M</option>
+                    ${generateOptions(MESH_OPTIONS, pier?.n_meshes, 'M')}
                 </select>
                 <span class="malla-label">V</span>
                 <select class="edit-diameter-v" title="φ Vertical">
-                    ${[6,8,10,12,16].map(d => `<option value="${d}" ${pier?.diameter_v === d ? 'selected' : ''}>φ${d}</option>`).join('')}
+                    ${generateDiameterOptions(DIAMETERS.malla, pier?.diameter_v)}
                 </select>
                 <select class="edit-spacing-v" title="@ Vertical">
-                    ${[100,125,150,175,200,250,300].map(s => `<option value="${s}" ${pier?.spacing_v === s ? 'selected' : ''}>@${s}</option>`).join('')}
+                    ${generateSpacingOptions(SPACINGS.malla, pier?.spacing_v)}
                 </select>
             </div>
             <div class="malla-row">
                 <span class="malla-spacer"></span>
                 <span class="malla-label">H</span>
                 <select class="edit-diameter-h" title="φ Horizontal">
-                    ${[6,8,10,12,16].map(d => `<option value="${d}" ${pier?.diameter_h === d ? 'selected' : ''}>φ${d}</option>`).join('')}
+                    ${generateDiameterOptions(DIAMETERS.malla, pier?.diameter_h)}
                 </select>
                 <select class="edit-spacing-h" title="@ Horizontal">
-                    ${[100,125,150,175,200,250,300].map(s => `<option value="${s}" ${pier?.spacing_h === s ? 'selected' : ''}>@${s}</option>`).join('')}
+                    ${generateSpacingOptions(SPACINGS.malla, pier?.spacing_h)}
                 </select>
             </div>
         `;
@@ -253,19 +249,19 @@ class RowFactory {
         td.innerHTML = `
             <div class="borde-row">
                 <select class="edit-n-edge" title="Nº barras borde">
-                    ${[2,4,6,8,10,12].map(n => `<option value="${n}" ${pier?.n_edge_bars === n ? 'selected' : ''}>${n}φ</option>`).join('')}
+                    ${generateOptions(EDGE_BAR_COUNTS, pier?.n_edge_bars, 'φ')}
                 </select>
                 <select class="edit-edge" title="φ Borde">
-                    ${[12,16,18,20,22,25,28,32].map(d => `<option value="${d}" ${pier?.diameter_edge === d ? 'selected' : ''}>φ${d}</option>`).join('')}
+                    ${generateDiameterOptions(DIAMETERS.borde, pier?.diameter_edge)}
                 </select>
             </div>
             <div class="borde-row borde-estribos">
                 <span class="borde-label">E</span>
                 <select class="edit-stirrup-d" title="φ Estribo" ${stirrupsDisabled ? 'disabled' : ''}>
-                    ${[8,10,12].map(d => `<option value="${d}" ${pier?.stirrup_diameter === d ? 'selected' : ''}>E${d}</option>`).join('')}
+                    ${generateDiameterOptions(DIAMETERS.estribos, pier?.stirrup_diameter, 'E')}
                 </select>
                 <select class="edit-stirrup-s" title="@ Estribo" ${stirrupsDisabled ? 'disabled' : ''}>
-                    ${[75,100,125,150,200].map(s => `<option value="${s}" ${pier?.stirrup_spacing === s ? 'selected' : ''}>@${s}</option>`).join('')}
+                    ${generateSpacingOptions(SPACINGS.estribos, pier?.stirrup_spacing)}
                 </select>
             </div>
         `;
@@ -283,7 +279,7 @@ class RowFactory {
         if (hasProposal) {
             td.innerHTML = `
                 <div class="proposal-info">
-                    <span class="proposal-mode proposal-mode-${proposal.failure_mode}">${this.getFailureModeLabel(proposal.failure_mode)}</span>
+                    <span class="proposal-mode proposal-mode-${proposal.failure_mode}">${getFailureModeLabel(proposal.failure_mode)}</span>
                     <span class="proposal-desc">${proposal.description}</span>
                     <span class="proposal-sf ${proposal.success ? 'proposal-success' : 'proposal-fail'}">
                         SF: ${proposal.sf_original.toFixed(2)} → ${proposal.sf_proposed.toFixed(2)}
@@ -324,16 +320,16 @@ class RowFactory {
             <div class="long-row">
                 <span class="long-label">Long:</span>
                 <select class="edit-n-bars" title="Barras por cara">
-                    ${[2,3,4,5,6].map(n => `<option value="${n}" ${reinf.n_bars_depth === n ? 'selected' : ''}>${n}</option>`).join('')}
+                    ${generateOptions(COLUMN_BARS_PER_FACE, reinf.n_bars_depth)}
                 </select>
                 <span>×</span>
                 <select class="edit-n-bars-w" title="Barras por cara (ancho)">
-                    ${[2,3,4,5,6].map(n => `<option value="${n}" ${reinf.n_bars_width === n ? 'selected' : ''}>${n}</option>`).join('')}
+                    ${generateOptions(COLUMN_BARS_PER_FACE, reinf.n_bars_width)}
                 </select>
             </div>
             <div class="long-row">
                 <select class="edit-diam-long" title="φ Longitudinal">
-                    ${[16,18,20,22,25,28,32].map(d => `<option value="${d}" ${reinf.diameter_long === d ? 'selected' : ''}>φ${d}</option>`).join('')}
+                    ${generateDiameterOptions(DIAMETERS.longitudinal, reinf.diameter_long)}
                 </select>
                 <span class="as-info">${reinf.n_total_bars || 0}φ = ${(reinf.As_longitudinal_mm2/100).toFixed(0)}cm²</span>
             </div>
@@ -351,12 +347,12 @@ class RowFactory {
             <div class="stirrup-row">
                 <span class="stirrup-label">Estribo:</span>
                 <select class="edit-stirrup-d" title="φ Estribo">
-                    ${[8,10,12].map(d => `<option value="${d}" ${reinf.stirrup_diameter === d ? 'selected' : ''}>E${d}</option>`).join('')}
+                    ${generateDiameterOptions(DIAMETERS.estribos, reinf.stirrup_diameter, 'E')}
                 </select>
             </div>
             <div class="stirrup-row">
                 <select class="edit-stirrup-s" title="@ Estribo">
-                    ${[75,100,125,150,200,250].map(s => `<option value="${s}" ${reinf.stirrup_spacing === s ? 'selected' : ''}>@${s}</option>`).join('')}
+                    ${generateSpacingOptions(SPACINGS.columnas, reinf.stirrup_spacing)}
                 </select>
             </div>
         `;
@@ -370,7 +366,6 @@ class RowFactory {
     attachRowEventHandlers(row, elementKey, result, elementType) {
         const elementLabel = `${result.story} - ${result.pier_label}`;
 
-        // Botones de acción
         row.querySelectorAll('.action-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -382,7 +377,6 @@ class RowFactory {
             });
         });
 
-        // Edición de armadura (solo piers por ahora)
         if (elementType === 'pier') {
             row.querySelectorAll('.malla-cell select').forEach(select => {
                 select.addEventListener('change', () => this.table.saveInlineEdit(row, elementKey));
@@ -399,7 +393,6 @@ class RowFactory {
                 select.addEventListener('change', () => this.table.saveInlineEdit(row, elementKey));
             });
 
-            // Propuesta
             const viewProposalBtn = row.querySelector('.view-proposal-btn');
             if (viewProposalBtn) {
                 viewProposalBtn.addEventListener('click', (e) => {
@@ -417,40 +410,5 @@ class RowFactory {
                 });
             }
         }
-    }
-
-    // =========================================================================
-    // Utilidades
-    // =========================================================================
-
-    truncateCombo(name) {
-        if (!name) return '';
-        return name.length > 20 ? name.substring(0, 18) + '...' : name;
-    }
-
-    getFsClass(fs) {
-        if (fs === '>100') return 'fs-ok';
-        const val = parseFloat(fs);
-        if (isNaN(val)) return 'fs-fail';
-        if (val >= 1.5) return 'fs-ok';
-        if (val >= 1.0) return 'fs-warn';
-        return 'fs-fail';
-    }
-
-    formatDcr(dcr) {
-        if (dcr === undefined || dcr === null) return '-';
-        if (dcr < 0.001) return '≈0';
-        return dcr.toFixed(2);
-    }
-
-    getFailureModeLabel(mode) {
-        return {
-            flexure: 'Flexión',
-            shear: 'Corte',
-            combined: 'Combinado',
-            slenderness: 'Esbeltez',
-            confinement: 'Confinamiento',
-            overdesigned: 'Optimizar'
-        }[mode] || mode;
     }
 }

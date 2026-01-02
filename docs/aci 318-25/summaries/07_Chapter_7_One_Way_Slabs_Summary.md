@@ -1,5 +1,18 @@
 # ACI 318-25 - CAPITULO 7: LOSAS EN UNA DIRECCION
-## One-Way Slabs
+
+---
+
+## INDICE
+
+- [7.1 Alcance](#71-alcance)
+- [7.2 Generalidades](#72-generalidades)
+- [7.3 Limites de Diseno](#73-limites-de-diseno)
+- [7.4 Resistencia Requerida](#74-resistencia-requerida)
+- [7.5 Resistencia de Diseno](#75-resistencia-de-diseno)
+- [7.6 Limites de Refuerzo](#76-limites-de-refuerzo)
+- [7.7 Detallado del Refuerzo](#77-detallado-del-refuerzo)
+- [Resumen de Requisitos Principales](#resumen-de-requisitos-principales)
+- [Referencias a Otros Capitulos](#referencias-a-otros-capitulos)
 
 ---
 

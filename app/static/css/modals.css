@@ -559,9 +559,6 @@
     margin-right: 4px;
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
 
 /* ==========================================================================
    RESPONSIVE

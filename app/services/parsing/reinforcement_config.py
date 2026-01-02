@@ -7,6 +7,8 @@ Usa constantes centralizadas de domain/constants/materials.py.
 """
 from dataclasses import dataclass
 
+from app.domain.constants.reinforcement import RHO_MIN, FY_DEFAULT_MPA
+
 from app.domain.constants.materials import BAR_AREAS, AVAILABLE_DIAMETERS
 
 # Diámetro por defecto (más común para mínimo)
@@ -16,8 +18,6 @@ DEFAULT_DIAMETER = 8
 TYPICAL_SPACINGS = [100, 150, 200, 250, 300]
 
 # Cuantía mínima según ACI 318-19 para muros
-RHO_MIN_VERTICAL = 0.0025    # 0.25%
-RHO_MIN_HORIZONTAL = 0.0025  # 0.25%
 
 
 # =============================================================================
@@ -42,7 +42,7 @@ class ReinforcementConfig:
     spacing_v: int = 200
     diameter_h: int = DEFAULT_DIAMETER
     spacing_h: int = 200
-    fy: float = 420.0
+    fy: float = FY_DEFAULT_MPA
 
     def __post_init__(self):
         """Validar valores."""
@@ -178,7 +178,7 @@ def create_minimum_config(
     bar_area = BAR_AREAS.get(preferred_diameter, BAR_AREAS[8])
 
     # As_min por metro = ρ_min × thickness × 1000
-    As_min_per_m = RHO_MIN_VERTICAL * thickness_mm * 1000
+    As_min_per_m = RHO_MIN * thickness_mm * 1000
 
     # Espaciamiento = n_meshes × área_barra × 1000 / As_min
     spacing = n_meshes * bar_area * 1000 / As_min_per_m

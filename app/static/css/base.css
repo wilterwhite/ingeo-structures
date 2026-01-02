@@ -74,22 +74,6 @@ body {
     font-weight: 400;
 }
 
-/* Legacy header support */
-header:not(.app-header) {
-    text-align: center;
-    margin-bottom: 30px;
-}
-
-header:not(.app-header) h1 {
-    font-size: 1.75rem;
-    margin-bottom: 8px;
-}
-
-header:not(.app-header) p {
-    color: var(--text-muted);
-    font-size: 0.95rem;
-}
-
 /* ==========================================================================
    CARDS
    ========================================================================== */
@@ -443,42 +427,6 @@ header:not(.app-header) p {
     color: var(--text-muted);
 }
 
-.stats-grid {
-    display: flex;
-    gap: 24px;
-    margin-bottom: 20px;
-    align-items: center;
-}
-
-.stat-card {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--bg-color);
-    border-radius: var(--border-radius);
-    padding: 8px 16px;
-}
-
-.stat-value {
-    font-size: 1.25rem;
-    font-weight: 700;
-}
-
-.stat-label {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-}
-
-.stat-value.stat-ok { color: var(--success-color); }
-.stat-value.stat-fail { color: var(--danger-color); }
-
-.stat-label {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    margin-top: 4px;
-}
-
 /* ==========================================================================
    SUMMARY PLOT
    ========================================================================== */
@@ -531,7 +479,6 @@ header:not(.app-header) p {
 @media (max-width: 768px) {
     .container { padding: 15px; }
     header h1 { font-size: 1.4rem; }
-    .stats-grid { grid-template-columns: repeat(2, 1fr); }
     .filters-bar { flex-direction: column; align-items: flex-start; }
     .plane-indicator { margin-left: 0; }
     .config-controls { flex-direction: column; align-items: flex-start; }

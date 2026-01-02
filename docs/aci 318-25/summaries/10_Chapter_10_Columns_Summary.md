@@ -1,5 +1,20 @@
-# ACI 318-25 - CAPITULO 10: COLUMNAS (COLUMNS)
-## Resumen para Diseno de Columnas
+# ACI 318-25 - CAPITULO 10: COLUMNAS
+
+---
+
+## INDICE
+
+- [10.1 Alcance](#101-alcance)
+- [10.2 General](#102-general)
+- [10.3 Limites de Diseno](#103-limites-de-diseno)
+- [10.4 Resistencia Requerida](#104-resistencia-requerida)
+- [10.5 Resistencia de Diseno](#105-resistencia-de-diseno)
+- [10.6 Limites de Refuerzo](#106-limites-de-refuerzo)
+- [10.7 Detallado de Refuerzo](#107-detallado-de-refuerzo)
+  - [10.7.5 Empalmes de Refuerzo Longitudinal](#1075-empalmes-de-refuerzo-longitudinal)
+  - [10.7.6 Refuerzo Transversal](#1076-refuerzo-transversal)
+- [Tabla Resumen](#tabla-resumen---requisitos-principales)
+- [Referencias Cruzadas](#referencias-cruzadas)
 
 ---
 

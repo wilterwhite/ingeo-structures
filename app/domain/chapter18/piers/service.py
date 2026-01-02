@@ -338,5 +338,5 @@ class WallPierService:
             sigma_max=sigma_max,
             Mpr_top=Mpr_top,
             Mpr_bottom=Mpr_bottom,
-            has_single_curtain=not pier.double_layer
+            has_single_curtain=pier.n_meshes == 1
         )

@@ -1,5 +1,20 @@
 # ACI 318-25 - CAPITULO 8: LOSAS EN DOS DIRECCIONES
-## Two-Way Slabs
+
+---
+
+## INDICE
+
+- [8.1 Alcance](#81-alcance)
+- [8.2 Generalidades](#82-generalidades)
+- [8.3 Limites de Diseno](#83-limites-de-diseno)
+- [8.4 Resistencia Requerida](#84-resistencia-requerida)
+- [8.5 Resistencia de Diseno](#85-resistencia-de-diseno)
+- [8.6 Limites de Refuerzo](#86-limites-de-refuerzo)
+- [8.7 Detallado del Refuerzo](#87-detallado-del-refuerzo)
+- [8.8 Sistemas de Viguetas en Dos Direcciones](#88-sistemas-de-viguetas-en-dos-direcciones-no-presforzados)
+- [8.9 Construccion Lift-Slab](#89-construccion-lift-slab)
+- [Resumen de Espesores Minimos](#resumen-de-espesores-minimos)
+- [Referencias a Otros Capitulos](#referencias-a-otros-capitulos)
 
 ---
 

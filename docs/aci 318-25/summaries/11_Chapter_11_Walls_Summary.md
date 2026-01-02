@@ -1,5 +1,20 @@
-# ACI 318-25 - CAPITULO 11: MUROS (WALLS)
-## Resumen para Diseno de Muros Estructurales
+# ACI 318-25 - CAPITULO 11: MUROS
+
+---
+
+## INDICE
+
+- [11.1 Alcance](#111-alcance)
+- [11.2 General](#112-general)
+- [11.3 Limites de Diseno](#113-limites-de-diseno)
+- [11.4 Resistencia Requerida](#114-resistencia-requerida)
+- [11.5 Resistencia de Diseno](#115-resistencia-de-diseno)
+  - [11.5.3 Metodo Simplificado](#1153-metodo-simplificado-carga-axial--flexion-fuera-del-plano)
+  - [11.5.4 Cortante en el Plano](#1154-cortante-en-el-plano)
+- [11.6 Limites de Refuerzo](#116-limites-de-refuerzo)
+- [11.7 Detallado de Refuerzo](#117-detallado-de-refuerzo)
+- [11.8 Metodo Alternativo para Muros Esbeltos](#118-metodo-alternativo-para-muros-esbeltos)
+- [Referencias Cruzadas](#referencias-cruzadas)
 
 ---
 

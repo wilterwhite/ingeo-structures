@@ -53,7 +53,6 @@ class ProposalService:
     OVERDESIGNED_DCR_MAX = 0.7  # DCR máximo para considerar sobrediseño
 
     # Cuantía mínima vertical según ACI 318-25 §11.6.1
-    RHO_MIN = 0.0025
 
     # Máximo de iteraciones por propuesta
     MAX_ITERATIONS = 30
@@ -847,7 +846,7 @@ class ProposalService:
                 iterations += 1
 
                 # Verificar cuantía mínima
-                if test_pier.rho_vertical < self.RHO_MIN:
+                if test_pier.rho_vertical < RHO_MIN:
                     continue
 
                 new_sf = self._verify_flexure(test_pier, pier_forces)
@@ -908,7 +907,7 @@ class ProposalService:
                 test_pier.thickness = proposed_config.thickness
             iterations += 1
 
-            if test_pier.rho_vertical < self.RHO_MIN:
+            if test_pier.rho_vertical < RHO_MIN:
                 break
 
             new_sf = self._verify_flexure(test_pier, pier_forces)
@@ -940,7 +939,7 @@ class ProposalService:
                 test_pier.thickness = proposed_config.thickness
             iterations += 1
 
-            if test_pier.rho_vertical < self.RHO_MIN:
+            if test_pier.rho_vertical < RHO_MIN:
                 proposed_config.spacing_v = best_config.spacing_v
                 proposed_config.spacing_h = best_config.spacing_h
                 break
@@ -974,7 +973,7 @@ class ProposalService:
                 test_pier.thickness = proposed_config.thickness
             iterations += 1
 
-            if test_pier.rho_vertical < self.RHO_MIN:
+            if test_pier.rho_vertical < RHO_MIN:
                 proposed_config.diameter_v = best_config.diameter_v
                 proposed_config.diameter_h = best_config.diameter_h
                 break

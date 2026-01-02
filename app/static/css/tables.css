@@ -1,4 +1,4 @@
-/* app/structural/static/css/tables.css */
+/* app/static/css/tables.css */
 /* Tablas de piers y resultados */
 
 /* ==========================================================================
@@ -80,81 +80,60 @@
     table-layout: fixed;
 }
 
-/* Columnas: Pier | hwcs | Malla | Borde | V.Izq | V.Der | FS Flex | Cap Flex | FS Corte | Cap Corte | Propuesta | Acciones */
-.results-table th:nth-child(1), .results-table td:nth-child(1) { width: 90px; }    /* Pier */
-.results-table th:nth-child(2), .results-table td:nth-child(2) { width: 50px; }    /* hwcs */
-.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 145px; }   /* Malla (V/H) */
-.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 110px; }   /* Borde */
-.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 90px; }    /* V.Izq */
-.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 90px; }    /* V.Der */
-.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 55px; }    /* FS Flexión */
-.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 100px; }   /* Cap. Flexión */
-.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 55px; }    /* FS Corte */
-.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 120px; } /* Cap. Corte */
-.results-table th:nth-child(11), .results-table td:nth-child(11) { width: 100px; } /* Propuesta */
-.results-table th:nth-child(12), .results-table td:nth-child(12) { width: 65px; }  /* Acciones */
-
-/* hwcs cell styling */
-.hwcs-cell {
-    font-family: 'Consolas', monospace;
-    font-size: 0.8rem;
-    text-align: center;
-}
-
-.hwcs-value {
-    font-weight: 600;
-    color: var(--text-color);
-}
-
-.hwcs-ratio {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    display: block;
-}
-
-.hwcs-stories {
-    font-size: 0.65rem;
-    color: var(--primary-color);
-    display: block;
-}
-
-/* Safety Factor Values */
-.fs-value { font-weight: 600; text-align: center; }
-.fs-ok { color: var(--success-color); }
-.fs-warn { color: var(--warning-color); }
-.fs-fail { color: var(--danger-color); }
-
-.fs-number {
-    font-size: 1.1rem;
-    display: block;
-}
-
-.status-ok { color: var(--success-color); font-weight: 600; }
-.status-fail { color: var(--danger-color); font-weight: 600; }
+.results-table th:nth-child(1), .results-table td:nth-child(1) { width: 90px; }
+.results-table th:nth-child(2), .results-table td:nth-child(2) { width: 50px; }
+.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 145px; }
+.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 110px; }
+.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 90px; }
+.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 90px; }
+.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 55px; }
+.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 100px; }
+.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 55px; }
+.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 120px; }
+.results-table th:nth-child(11), .results-table td:nth-child(11) { width: 100px; }
+.results-table th:nth-child(12), .results-table td:nth-child(12) { width: 65px; }
 
 /* ==========================================================================
-   MALLA CELL (Armadura distribuida V/H)
+   REINFORCEMENT CELLS - BASE STYLES (SHARED)
+   Aplica a: .malla-cell, .borde-cell, .viga-cell, .longitudinal-cell, .stirrups-cell
    ========================================================================== */
 
-.malla-cell {
+.malla-cell,
+.borde-cell,
+.viga-cell,
+.longitudinal-cell,
+.stirrups-cell {
     font-family: monospace;
     font-size: 0.75rem;
     vertical-align: middle;
 }
 
-.malla-row {
+/* Filas dentro de celdas de armadura */
+.malla-row,
+.borde-row,
+.viga-row,
+.longitudinal-cell .long-row,
+.stirrups-cell .stirrup-row {
     display: flex;
-    flex-wrap: nowrap;
     gap: 2px;
     align-items: center;
     margin-bottom: 2px;
 }
 
-.malla-row:last-child {
+.malla-row:last-child,
+.borde-row:last-child,
+.viga-row:last-child,
+.longitudinal-cell .long-row:last-child,
+.stirrups-cell .stirrup-row:last-child {
     margin-bottom: 0;
 }
 
-.malla-cell select {
+/* Selects de armadura - estilos base */
+.malla-cell select,
+.borde-cell select,
+.viga-cell select,
+.longitudinal-cell select,
+.stirrups-cell select {
     padding: 1px 2px;
     font-size: 0.65rem;
     font-family: monospace;
@@ -164,73 +143,47 @@
     cursor: pointer;
 }
 
-.malla-cell select:hover {
+.malla-cell select:hover,
+.borde-cell select:hover,
+.viga-cell select:hover,
+.longitudinal-cell select:hover,
+.stirrups-cell select:hover {
     border-color: var(--primary-color);
 }
 
-.malla-cell select:focus {
+.malla-cell select:focus,
+.borde-cell select:focus,
+.viga-cell select:focus,
+.longitudinal-cell select:focus,
+.stirrups-cell select:focus {
     outline: none;
     border-color: var(--primary-color);
 }
 
-.malla-label {
+/* Labels de armadura */
+.malla-label,
+.borde-label,
+.longitudinal-cell .long-label,
+.stirrups-cell .stirrup-label {
     font-size: 0.6rem;
     font-weight: 600;
     color: var(--text-muted);
-    width: 12px;
-    text-align: center;
-}
-
-.malla-spacer {
-    width: 26px;
 }
 
 /* ==========================================================================
-   BORDE CELL (Elemento de borde)
+   REINFORCEMENT CELLS - SPECIFIC OVERRIDES
    ========================================================================== */
 
-.borde-cell {
-    font-family: monospace;
-    font-size: 0.75rem;
-    vertical-align: middle;
-}
+/* Malla */
+.malla-label { width: 12px; text-align: center; }
+.malla-spacer { width: 26px; }
 
-.borde-row {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 2px;
-    align-items: center;
-    margin-bottom: 2px;
-}
-
-.borde-row:last-child {
-    margin-bottom: 0;
-}
-
+/* Borde */
+.borde-label { width: 12px; }
 .borde-row.borde-estribos {
     padding-top: 2px;
     border-top: 1px dashed var(--border-color);
 }
-
-.borde-cell select {
-    padding: 1px 2px;
-    font-size: 0.65rem;
-    font-family: monospace;
-    border: 1px solid var(--border-color);
-    border-radius: 3px;
-    background: white;
-    cursor: pointer;
-}
-
-.borde-cell select:hover {
-    border-color: var(--primary-color);
-}
-
-.borde-cell select:focus {
-    outline: none;
-    border-color: var(--primary-color);
-}
-
 .borde-cell select:disabled {
     background: #f1f5f9;
     color: #94a3b8;
@@ -238,14 +191,59 @@
     opacity: 0.6;
 }
 
-.borde-label {
-    font-size: 0.6rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    width: 12px;
+/* Viga */
+.viga-cell { font-size: 0.7rem; text-align: center; }
+.viga-row { gap: 1px; justify-content: center; }
+.viga-cell select { padding: 2px 3px; min-width: 32px; }
+.viga-cell span { font-size: 0.6rem; color: var(--text-muted); }
+.viga-cell.locked select {
+    background: #f5f5f5;
+    color: #999;
+    pointer-events: none;
+    border-color: #ddd;
+}
+.viga-cell.locked span { color: #bbb; }
+
+/* Longitudinal (columnas) */
+.longitudinal-cell .long-row { gap: 4px; margin-bottom: 3px; }
+.longitudinal-cell select { padding: 2px 4px; font-size: 0.7rem; min-width: 40px; }
+.longitudinal-cell .as-info { font-size: 0.65rem; color: var(--text-secondary); }
+
+/* Stirrups (columnas) */
+.stirrups-cell .stirrup-row { gap: 4px; margin-bottom: 3px; }
+.stirrups-cell select { padding: 2px 4px; font-size: 0.7rem; min-width: 45px; }
+
+/* ==========================================================================
+   HWCS CELL
+   ========================================================================== */
+
+.hwcs-cell {
+    font-family: 'Consolas', monospace;
+    font-size: 0.8rem;
+    text-align: center;
 }
 
-/* Celdas de capacidad (nueva estructura horizontal) */
+.hwcs-value { font-weight: 600; color: var(--text-color); }
+.hwcs-ratio { font-size: 0.7rem; color: var(--text-muted); display: block; }
+.hwcs-stories { font-size: 0.65rem; color: var(--primary-color); display: block; }
+
+/* ==========================================================================
+   SAFETY FACTOR & STATUS
+   ========================================================================== */
+
+.fs-value { font-weight: 600; text-align: center; }
+.fs-ok { color: var(--success-color); }
+.fs-warn { color: var(--warning-color); }
+.fs-fail { color: var(--danger-color); }
+.fs-number { font-size: 1.1rem; display: block; }
+
+.status-ok { color: var(--success-color); font-weight: 600; }
+.status-fail { color: var(--danger-color); font-weight: 600; }
+
+/* ==========================================================================
+   CAPACITY CELLS
+   ========================================================================== */
+
 .capacity-cell {
     font-family: 'Consolas', monospace;
     font-size: 0.75rem;
@@ -254,58 +252,8 @@
     line-height: 1.5;
 }
 
-.capacity-line {
-    display: block;
-    color: var(--primary-color);
-}
-
-/* Referencia de capacidad (φMn₀) - más sutil */
-.capacity-line.capacity-ref {
-    font-size: 0.65rem;
-    color: var(--text-muted);
-    opacity: 0.8;
-}
-
-/* Tag de tipo de fórmula de corte */
-.formula-tag {
-    display: inline-block;
-    font-size: 0.65rem;
-    font-weight: 600;
-    padding: 1px 4px;
-    border-radius: 3px;
-    margin-top: 2px;
-}
-
-.formula-tag.formula-column {
-    background: #ede9fe;
-    color: #7c3aed;
-}
-
-.formula-tag.formula-wall {
-    background: #e0f2fe;
-    color: #0369a1;
-}
-
-.critical-combo {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    display: block;
-}
-
-.slenderness-info {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    display: block;
-    font-family: 'Consolas', monospace;
-    margin-top: 2px;
-}
-
-.slenderness-info.slender-warn {
-    color: var(--warning-color);
-    font-weight: 500;
-}
-
-/* Advertencia: Pu excede φPn,max */
+.capacity-line { display: block; color: var(--primary-color); }
+.capacity-line.capacity-ref { font-size: 0.65rem; color: var(--text-muted); opacity: 0.8; }
 .capacity-line.axial-exceeded {
     color: #dc2626;
     font-weight: 600;
@@ -315,7 +263,58 @@
     font-size: 0.75rem;
 }
 
-/* Advertencia: Combinaciones con tracción (Pu < 0) */
+.critical-combo { font-size: 0.75rem; color: var(--text-muted); display: block; }
+
+.slenderness-info {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: block;
+    font-family: 'Consolas', monospace;
+    margin-top: 2px;
+}
+.slenderness-info.slender-warn { color: var(--warning-color); font-weight: 500; }
+
+.dcr-info {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: block;
+    font-family: 'Consolas', monospace;
+    margin-top: 2px;
+}
+.dcr-info.dcr-warn { color: var(--warning-color); font-weight: 500; }
+
+/* ==========================================================================
+   TAGS & BADGES (SHARED PATTERN)
+   ========================================================================== */
+
+/* Formula tags */
+.formula-tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-top: 2px;
+}
+.formula-tag.formula-column { background: #ede9fe; color: #7c3aed; }
+.formula-tag.formula-wall { background: #e0f2fe; color: #0369a1; }
+
+/* Element type badges */
+.element-type-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+.element-type-badge.type-pier { background: #dbeafe; color: #1e40af; }
+.element-type-badge.type-column { background: #d1fae5; color: #065f46; }
+.element-type-badge.type-frame { background: #fef3c7; color: #92400e; }
+.element-type-badge.type-spandrel { background: #ede9fe; color: #5b21b6; }
+
+/* Tension warning */
 .tension-warning {
     display: inline-block;
     background: #fef3c7;
@@ -329,127 +328,49 @@
     vertical-align: middle;
 }
 
-.capacity-info {
-    font-size: 0.7rem;
-    color: var(--primary-color);
-    display: block;
-    font-family: 'Consolas', monospace;
-    margin-top: 2px;
-}
-
-/* Indicador de tipo de fórmula de corte */
-.capacity-info.formula-column {
-    color: #7c3aed;  /* Violeta para columnas */
-}
-
-.capacity-info.formula-wall {
-    color: #0369a1;  /* Azul para muros */
-}
-
-.dcr-info {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    display: block;
-    font-family: 'Consolas', monospace;
-    margin-top: 2px;
-}
-
-.dcr-info.dcr-warn {
-    color: var(--warning-color);
-    font-weight: 500;
-}
-
-.combo-dir {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    font-weight: 400;
-}
-
 /* ==========================================================================
    EXPANDABLE PIER ROWS
    ========================================================================== */
 
-.results-table .pier-row {
-    cursor: pointer;
-}
+.results-table .pier-row { cursor: pointer; }
+.results-table .pier-row:hover { background: rgba(37, 99, 235, 0.05); }
 
-.results-table .pier-row:hover {
-    background: rgba(37, 99, 235, 0.05);
-}
+.expand-icon { display: inline-block; width: 16px; transition: transform 0.2s; }
+.pier-row.expanded .expand-icon { transform: rotate(90deg); }
 
-.expand-icon {
-    display: inline-block;
-    width: 16px;
-    transition: transform 0.2s;
-}
-
-.pier-row.expanded .expand-icon {
-    transform: rotate(90deg);
-}
+.pier-row.column-type { background: rgba(16, 185, 129, 0.03); }
+.pier-row.column-type:hover { background: rgba(16, 185, 129, 0.08); }
 
 /* ==========================================================================
    COMBINATION ROWS
    ========================================================================== */
 
-.results-table .combo-row {
-    background: #f8fafc;
-    font-size: 0.85rem;
-}
-
-.results-table .combo-row:hover {
-    background: #f1f5f9;
-}
-
+.results-table .combo-row { background: #f8fafc; font-size: 0.85rem; }
+.results-table .combo-row:hover { background: #f1f5f9; }
 .results-table .combo-row td {
     padding: 8px 12px;
     border-bottom: 1px solid #e2e8f0;
     vertical-align: middle;
 }
-
 .results-table .combo-row .combo-indent {
     width: 30px;
     border-left: 3px solid var(--primary-color);
     background: linear-gradient(90deg, rgba(37, 99, 235, 0.05) 0%, transparent 100%);
 }
-
-.results-table .combo-row .combo-name {
-    font-weight: 500;
-}
-
-.results-table .combo-row .combo-details {
-    display: block;
-    font-size: 0.75rem;
-    font-family: 'Consolas', monospace;
-    color: var(--text-muted);
-    margin-top: 2px;
-}
-
+.results-table .combo-row .combo-name { font-weight: 500; }
 .results-table .combo-row .combo-forces-cell {
     font-family: 'Consolas', monospace;
     font-size: 0.75rem;
     color: var(--text-muted);
     line-height: 1.4;
 }
-
-.results-table .combo-row .action-btn {
-    padding: 2px 6px;
-    font-size: 0.8rem;
-}
+.results-table .combo-row .action-btn { padding: 2px 6px; font-size: 0.8rem; }
 
 /* ==========================================================================
    ACTION BUTTONS
    ========================================================================== */
 
-.actions-cell {
-    white-space: nowrap;
-    vertical-align: middle;
-}
-
-.action-buttons {
-    display: flex;
-    gap: 6px;
-    justify-content: center;
-}
+.actions-cell { white-space: nowrap; vertical-align: middle; }
 
 .action-buttons-grid {
     display: grid;
@@ -467,7 +388,6 @@
     transition: all 0.15s;
     font-size: 0.9rem;
 }
-
 .action-btn:hover,
 .action-btn.active {
     background: var(--primary-color);
@@ -478,22 +398,10 @@
    PROPOSAL CELL
    ========================================================================== */
 
-.proposal-cell {
-    font-size: 0.75rem;
-    vertical-align: middle;
-    text-align: center;
-}
+.proposal-cell { font-size: 0.75rem; vertical-align: middle; text-align: center; }
+.proposal-cell.has-proposal { background: rgba(251, 191, 36, 0.1); }
 
-.proposal-cell.has-proposal {
-    background: rgba(251, 191, 36, 0.1);
-}
-
-.proposal-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    align-items: center;
-}
+.proposal-info { display: flex; flex-direction: column; gap: 2px; align-items: center; }
 
 .proposal-mode {
     display: inline-block;
@@ -503,62 +411,19 @@
     border-radius: 3px;
     text-transform: uppercase;
 }
+.proposal-mode-flexure { background: #fef3c7; color: #92400e; }
+.proposal-mode-shear { background: #fee2e2; color: #991b1b; }
+.proposal-mode-combined { background: #fce7f3; color: #9d174d; }
+.proposal-mode-slenderness { background: #e0e7ff; color: #3730a3; }
+.proposal-mode-confinement { background: #d1fae5; color: #065f46; }
+.proposal-mode-overdesigned { background: #dbeafe; color: #1e40af; }
 
-.proposal-mode-flexure {
-    background: #fef3c7;
-    color: #92400e;
-}
+.proposal-desc { font-family: 'Consolas', monospace; font-weight: 600; color: var(--text-color); }
+.proposal-sf { font-family: 'Consolas', monospace; font-size: 0.7rem; }
+.proposal-sf.proposal-success { color: var(--success-color); }
+.proposal-sf.proposal-fail { color: var(--warning-color); }
 
-.proposal-mode-shear {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-.proposal-mode-combined {
-    background: #fce7f3;
-    color: #9d174d;
-}
-
-.proposal-mode-slenderness {
-    background: #e0e7ff;
-    color: #3730a3;
-}
-
-.proposal-mode-confinement {
-    background: #d1fae5;
-    color: #065f46;
-}
-
-.proposal-mode-overdesigned {
-    background: #dbeafe;
-    color: #1e40af;
-}
-
-.proposal-desc {
-    font-family: 'Consolas', monospace;
-    font-weight: 600;
-    color: var(--text-color);
-}
-
-.proposal-sf {
-    font-family: 'Consolas', monospace;
-    font-size: 0.7rem;
-}
-
-.proposal-sf.proposal-success {
-    color: var(--success-color);
-}
-
-.proposal-sf.proposal-fail {
-    color: var(--warning-color);
-}
-
-.proposal-actions {
-    display: flex;
-    gap: 4px;
-    justify-content: center;
-    margin-top: 4px;
-}
+.proposal-actions { display: flex; gap: 4px; justify-content: center; margin-top: 4px; }
 
 .view-proposal-btn,
 .apply-proposal-btn {
@@ -569,47 +434,32 @@
     cursor: pointer;
     transition: all 0.15s;
 }
+.view-proposal-btn { background: var(--primary-color); color: white; }
+.view-proposal-btn:hover { background: #1d4ed8; transform: scale(1.05); }
+.apply-proposal-btn { background: var(--success-color); color: white; }
+.apply-proposal-btn:hover { background: #059669; transform: scale(1.05); }
 
-.view-proposal-btn {
-    background: var(--primary-color);
-    color: white;
-}
-
-.view-proposal-btn:hover {
-    background: #1d4ed8;
-    transform: scale(1.05);
-}
-
-.apply-proposal-btn {
-    background: var(--success-color);
-    color: white;
-}
-
-.apply-proposal-btn:hover {
-    background: #059669;
-    transform: scale(1.05);
-}
-
-.no-proposal {
-    color: var(--text-muted);
-}
+.no-proposal { color: var(--text-muted); }
 
 /* ==========================================================================
-   PIER INFO CELL (FUSIONADO: Piso/Pier/Dimensiones)
+   INFO CELLS (Pier/Beam info)
    ========================================================================== */
 
-.pier-info-cell {
+.pier-info-cell,
+.beam-info-cell {
     font-size: 0.85rem;
     line-height: 1.4;
 }
 
-.pier-info-cell .pier-name {
+.pier-info-cell .pier-name,
+.beam-info-cell .beam-name {
     font-weight: 600;
     color: var(--primary-color);
     display: block;
 }
 
-.pier-info-cell .pier-story {
+.pier-info-cell .pier-story,
+.beam-info-cell .beam-story {
     font-size: 0.75rem;
     color: var(--text-muted);
 }
@@ -622,67 +472,17 @@
     margin-top: 2px;
 }
 
+.beam-info-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+
 /* ==========================================================================
-   VIGA DE ACOPLE CELL (Izq / Der)
+   TOGGLE BEAM BUTTON
    ========================================================================== */
 
-.viga-cell {
-    font-family: monospace;
-    font-size: 0.7rem;
-    vertical-align: middle;
-    text-align: center;
-}
-
-.viga-row {
-    display: flex;
-    gap: 1px;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 2px;
-}
-
-.viga-row:last-child {
-    margin-bottom: 0;
-}
-
-.viga-cell select {
-    padding: 2px 3px;
-    font-size: 0.65rem;
-    font-family: monospace;
-    border: 1px solid var(--border-color);
-    border-radius: 3px;
-    background: white;
-    cursor: pointer;
-    min-width: 32px;
-}
-
-.viga-cell select:hover {
-    border-color: var(--primary-color);
-}
-
-.viga-cell select:focus {
-    outline: none;
-    border-color: var(--primary-color);
-}
-
-.viga-cell span {
-    font-size: 0.6rem;
-    color: var(--text-muted);
-}
-
-/* Viga bloqueada (hereda de estándar) */
-.viga-cell.locked select {
-    background: #f5f5f5;
-    color: #999;
-    pointer-events: none;
-    border-color: #ddd;
-}
-
-.viga-cell.locked span {
-    color: #bbb;
-}
-
-/* Botón desbloquear/bloquear viga */
 .btn-toggle-beam {
     display: block;
     margin-top: 3px;
@@ -695,12 +495,7 @@
     color: #666;
     text-align: center;
 }
-
-.btn-toggle-beam:hover {
-    background: #e0e0e0;
-    border-color: #ccc;
-}
-
+.btn-toggle-beam:hover { background: #e0e0e0; border-color: #ccc; }
 .btn-toggle-beam.unlocked {
     background: var(--primary-color);
     color: white;
@@ -721,13 +516,7 @@
     border-radius: var(--border-radius);
     font-size: 0.8rem;
 }
-
-.standard-beam-config .beam-label {
-    font-weight: 500;
-    color: var(--text-color);
-    margin-right: 4px;
-}
-
+.standard-beam-config .beam-label { font-weight: 500; color: var(--text-color); margin-right: 4px; }
 .standard-beam-config select {
     padding: 3px 4px;
     font-size: 0.75rem;
@@ -736,151 +525,24 @@
     background: white;
     min-width: 45px;
 }
-
-.standard-beam-config select:hover {
-    border-color: var(--primary-color);
-}
-
-.standard-beam-config span {
-    color: var(--text-muted);
-    font-size: 0.75rem;
-}
-
-.standard-beam-config .beam-separator {
-    margin: 0 4px;
-    color: #ccc;
-}
-
-/* ==========================================================================
-   ELEMENT TYPE BADGES
-   ========================================================================== */
-
-.element-type-badge {
-    display: inline-block;
-    font-size: 0.6rem;
-    font-weight: 700;
-    padding: 2px 5px;
-    border-radius: 3px;
-    margin-right: 4px;
-    vertical-align: middle;
-}
-
-.element-type-badge.type-pier {
-    background: #dbeafe;
-    color: #1e40af;
-}
-
-.element-type-badge.type-column {
-    background: #d1fae5;
-    color: #065f46;
-}
-
-/* Fila de columna tiene fondo ligeramente diferente */
-.pier-row.column-type {
-    background: rgba(16, 185, 129, 0.03);
-}
-
-.pier-row.column-type:hover {
-    background: rgba(16, 185, 129, 0.08);
-}
+.standard-beam-config select:hover { border-color: var(--primary-color); }
+.standard-beam-config span { color: var(--text-muted); font-size: 0.75rem; }
+.standard-beam-config .beam-separator { margin: 0 4px; color: #ccc; }
 
 /* ==========================================================================
    COLUMN-SPECIFIC CELLS
    ========================================================================== */
 
-.height-cell {
-    text-align: center;
-    font-size: 0.8rem;
-}
+.height-cell { text-align: center; font-size: 0.8rem; }
+.height-cell .height-value { display: block; font-weight: 600; }
+.height-cell .height-label { display: block; font-size: 0.65rem; color: var(--text-muted); }
 
-.height-cell .height-value {
-    display: block;
-    font-weight: 600;
-}
+.empty-cell { text-align: center; color: var(--text-muted); }
+.empty-cell .na-value { font-size: 0.75rem; color: #ccc; }
 
-.height-cell .height-label {
-    display: block;
-    font-size: 0.65rem;
-    color: var(--text-muted);
-}
-
-/* Armadura longitudinal de columna */
-.longitudinal-cell {
-    font-family: monospace;
-    font-size: 0.75rem;
-    vertical-align: middle;
-}
-
-.longitudinal-cell .long-row {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    margin-bottom: 3px;
-}
-
-.longitudinal-cell .long-label {
-    font-size: 0.65rem;
-    color: var(--text-muted);
-    font-weight: 500;
-}
-
-.longitudinal-cell .as-info {
-    font-size: 0.65rem;
-    color: var(--text-secondary);
-}
-
-.longitudinal-cell select {
-    padding: 2px 4px;
-    font-size: 0.7rem;
-    font-family: monospace;
-    border: 1px solid var(--border-color);
-    border-radius: 3px;
-    min-width: 40px;
-}
-
-/* Estribos de columna */
-.stirrups-cell {
-    font-family: monospace;
-    font-size: 0.75rem;
-    vertical-align: middle;
-}
-
-.stirrups-cell .stirrup-row {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    margin-bottom: 3px;
-}
-
-.stirrups-cell .stirrup-label {
-    font-size: 0.65rem;
-    color: var(--text-muted);
-    font-weight: 500;
-}
-
-.stirrups-cell select {
-    padding: 2px 4px;
-    font-size: 0.7rem;
-    font-family: monospace;
-    border: 1px solid var(--border-color);
-    border-radius: 3px;
-    min-width: 45px;
-}
-
-/* Celda vacía (para columnas sin vigas de acople) */
-.empty-cell {
-    text-align: center;
-    color: var(--text-muted);
-}
-
-.empty-cell .na-value {
-    font-size: 0.75rem;
-    color: #ccc;
-}
-
-/* =========================================================================
-   TABS DE RESULTADOS
-   ========================================================================= */
+/* ==========================================================================
+   TABS
+   ========================================================================== */
 
 .results-tabs {
     display: flex;
@@ -905,21 +567,9 @@
     margin-bottom: -2px;
     transition: all 0.2s ease;
 }
-
-.tab-btn:hover {
-    color: var(--primary-color);
-    background: rgba(59, 130, 246, 0.05);
-}
-
-.tab-btn.active {
-    color: var(--primary-color);
-    border-bottom-color: var(--primary-color);
-}
-
-.tab-btn .tab-icon {
-    font-size: 1.1rem;
-}
-
+.tab-btn:hover { color: var(--primary-color); background: rgba(59, 130, 246, 0.05); }
+.tab-btn.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+.tab-btn .tab-icon { font-size: 1.1rem; }
 .tab-btn .tab-count {
     background: var(--bg-secondary);
     padding: 2px 8px;
@@ -927,24 +577,14 @@
     font-size: 0.75rem;
     font-weight: 600;
 }
+.tab-btn.active .tab-count { background: var(--primary-color); color: white; }
 
-.tab-btn.active .tab-count {
-    background: var(--primary-color);
-    color: white;
-}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
 
-/* Tab panels */
-.tab-panel {
-    display: none;
-}
-
-.tab-panel.active {
-    display: block;
-}
-
-/* =========================================================================
-   SECCION DE VIGAS (TAB)
-   ========================================================================= */
+/* ==========================================================================
+   BEAMS TAB
+   ========================================================================== */
 
 .beams-toolbar {
     margin-bottom: 1rem;
@@ -953,109 +593,29 @@
     border-radius: 6px;
 }
 
-/* Tabla de vigas */
-.beams-table {
-    font-size: 0.85rem;
-}
-
+.beams-table { font-size: 0.85rem; }
 .beams-table th,
-.beams-table td {
-    padding: 0.5rem 0.75rem;
-    text-align: center;
-}
-
+.beams-table td { padding: 0.5rem 0.75rem; text-align: center; }
 .beams-table th:first-child,
-.beams-table td:first-child {
-    text-align: left;
-}
+.beams-table td:first-child { text-align: left; }
 
-/* Celdas específicas de vigas */
-.beam-info-cell {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    text-align: left;
-}
+.section-cell { display: flex; flex-direction: column; gap: 2px; }
+.section-cell .section-dims { font-weight: 500; font-family: monospace; }
+.section-cell .section-length { font-size: 0.7rem; color: var(--text-muted); }
 
-.beam-info-cell .beam-name {
-    font-weight: 600;
-    color: var(--primary-color);
-}
-
-.beam-info-cell .beam-story {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
-.element-type-badge.type-frame {
-    background: #fef3c7;
-    color: #92400e;
-}
-
-.element-type-badge.type-spandrel {
-    background: #ede9fe;
-    color: #5b21b6;
-}
-
-.section-cell {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.section-cell .section-dims {
-    font-weight: 500;
-    font-family: monospace;
-}
-
-.section-cell .section-length {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-}
-
-.beam-row .stirrups-cell {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.beam-row .stirrup-config {
-    font-family: monospace;
-    font-weight: 500;
-}
-
-.beam-row .av-info {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-}
+.beam-row .stirrups-cell { display: flex; flex-direction: column; gap: 2px; }
+.beam-row .stirrup-config { font-family: monospace; font-weight: 500; }
+.beam-row .av-info { font-size: 0.7rem; color: var(--text-muted); }
 
 .capacity-value,
-.demand-value {
-    font-family: monospace;
-    font-weight: 500;
-}
+.demand-value { font-family: monospace; font-weight: 500; }
 
-.dcr-value {
-    font-family: monospace;
-}
+.dcr-value { font-family: monospace; }
+.dcr-ok { color: var(--success-color); }
+.dcr-warn { color: var(--warning-color); }
+.dcr-fail { color: var(--error-color); font-weight: 600; }
 
-.dcr-ok {
-    color: var(--success-color);
-}
-
-.dcr-warn {
-    color: var(--warning-color);
-}
-
-.dcr-fail {
-    color: var(--error-color);
-    font-weight: 600;
-}
-
-.combo-cell .combo-name {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
+.combo-cell .combo-name { font-size: 0.75rem; color: var(--text-muted); }
 
 .status-badge {
     padding: 2px 8px;
@@ -1063,26 +623,9 @@
     font-size: 0.75rem;
     font-weight: 600;
 }
+.status-badge.status-ok { background: #d1fae5; color: #065f46; }
+.status-badge.status-fail { background: #fee2e2; color: #991b1b; }
 
-.status-badge.status-ok {
-    background: #d1fae5;
-    color: #065f46;
-}
-
-.status-badge.status-fail {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-.beam-row.status-fail {
-    background: rgba(239, 68, 68, 0.05);
-}
-
-.beam-row.status-ok:hover {
-    background: rgba(16, 185, 129, 0.05);
-}
-
-.beam-row.status-fail:hover {
-    background: rgba(239, 68, 68, 0.08);
-}
-
+.beam-row.status-fail { background: rgba(239, 68, 68, 0.05); }
+.beam-row.status-ok:hover { background: rgba(16, 185, 129, 0.05); }
+.beam-row.status-fail:hover { background: rgba(239, 68, 68, 0.08); }

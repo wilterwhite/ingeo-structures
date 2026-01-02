@@ -220,7 +220,7 @@ class BeamParser:
                 depth=section['depth'],
                 width=section['width'],
                 fc=section['fc'],
-                fy=420.0,
+                fy=FY_DEFAULT_MPA,
                 source=BeamSource.FRAME
             )
 
@@ -335,7 +335,7 @@ class BeamParser:
                 depth=props['depth'],
                 width=props['width'],
                 fc=props['fc'],
-                fy=420.0,
+                fy=FY_DEFAULT_MPA,
                 source=BeamSource.SPANDREL
             )
 

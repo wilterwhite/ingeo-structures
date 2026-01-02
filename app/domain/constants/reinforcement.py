@@ -1,11 +1,33 @@
 # app/domain/constants/reinforcement.py
 """
-Verificaciones de refuerzo según ACI 318-25.
+Constantes y verificaciones de refuerzo segun ACI 318-25.
 
-Contiene función compartida para verificar rho_v >= rho_h
-usada en shear/verification.py, chapter18/amplification/, chapter11/reinforcement.py.
+Constantes:
+    - RHO_MIN: Cuantia minima para muros (0.0025)
+    - FY_DEFAULT_MPA: Fluencia por defecto del acero (420 MPa, A630-420H)
+    - COVER_DEFAULT_PIER_MM: Recubrimiento por defecto muros (25 mm)
+    - COVER_DEFAULT_COLUMN_MM: Recubrimiento por defecto columnas (40 mm)
+
+Funciones:
+    - check_rho_vertical_ge_horizontal: Verifica S18.10.4.3
+    - is_rho_v_ge_rho_h_required: Determina si aplica verificacion
 """
 from typing import Tuple
+
+# =============================================================================
+# CONSTANTES DE REFUERZO
+# =============================================================================
+
+# Cuantia minima de refuerzo para muros S11.6.1 y S18.10.2.1
+RHO_MIN = 0.0025
+
+# Fluencia por defecto del acero (MPa) - A630-420H
+FY_DEFAULT_MPA = 420.0
+
+# Recubrimientos por defecto (mm)
+COVER_DEFAULT_PIER_MM = 25.0
+COVER_DEFAULT_COLUMN_MM = 40.0
+COVER_DEFAULT_BEAM_MM = 40.0
 
 from .shear import HW_LW_SLENDER_LIMIT
 
@@ -17,21 +39,21 @@ def check_rho_vertical_ge_horizontal(
     rho_h: float
 ) -> Tuple[bool, str]:
     """
-    Verifica §18.10.4.3: Para hw/lw <= 2.0, rho_v >= rho_h.
+    Verifica S18.10.4.3: Para hw/lw <= 2.0, rho_v >= rho_h.
 
     Requisito para muros bajos donde la resistencia al cortante
-    depende más del refuerzo vertical que del horizontal.
+    depende mas del refuerzo vertical que del horizontal.
 
     Args:
         hw: Altura del muro (mm)
         lw: Longitud del muro (mm)
-        rho_v: Cuantía de refuerzo vertical
-        rho_h: Cuantía de refuerzo horizontal
+        rho_v: Cuantia de refuerzo vertical
+        rho_h: Cuantia de refuerzo horizontal
 
     Returns:
         Tupla (es_ok, mensaje_advertencia)
         - es_ok: True si cumple o no aplica (hw/lw > 2.0)
-        - mensaje: Advertencia si no cumple, cadena vacía si cumple
+        - mensaje: Advertencia si no cumple, cadena vacia si cumple
     """
     if lw <= 0:
         return True, ""

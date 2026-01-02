@@ -1,5 +1,23 @@
 # ACI 318-25 - CAPITULO 6: ANALISIS ESTRUCTURAL
-## Resumen para Diseno de Estructuras de Concreto
+
+---
+
+## INDICE
+
+- [6.1 Alcance](#61-alcance)
+- [6.2 General](#62-general)
+  - [6.2.5 Efectos de Esbeltez](#625-efectos-de-esbeltez)
+- [6.3 Supuestos de Modelado](#63-supuestos-de-modelado)
+- [6.4 Disposicion de Carga Viva](#64-disposicion-de-carga-viva)
+- [6.5 Metodo Simplificado](#65-metodo-simplificado-vigas-continuas-y-losas-1-way)
+- [6.6 Analisis Elastico Lineal de Primer Orden](#66-analisis-elastico-lineal-de-primer-orden)
+  - [6.6.4 Metodo de Magnificacion de Momentos](#664-metodo-de-magnificacion-de-momentos)
+  - [6.6.5 Redistribucion de Momentos](#665-redistribucion-de-momentos)
+- [6.7 Analisis Elastico Lineal de Segundo Orden](#67-analisis-elastico-lineal-de-segundo-orden)
+- [6.8 Analisis Inelastico](#68-analisis-inelastico)
+- [6.9 Analisis de Elementos Finitos](#69-analisis-de-elementos-finitos)
+- [Tablas Resumen](#tablas-resumen)
+- [Referencias Cruzadas](#referencias-cruzadas)
 
 ---
 

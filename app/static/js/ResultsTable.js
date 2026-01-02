@@ -229,26 +229,26 @@ class ResultsTable {
             <div class="viga-row">
                 <select class="edit-viga-width-${side}" title="Ancho (mm)">
                     <option value="0">-</option>
-                    ${[150,200,250,300].map(w => `<option value="${w}" ${w === beam.width ? 'selected' : ''}>${w}</option>`).join('')}
+                    ${BEAM_OPTIONS.widths.map(w => `<option value="${w}" ${w === beam.width ? 'selected' : ''}>${w}</option>`).join('')}
                 </select>
                 <span>×</span>
                 <select class="edit-viga-height-${side}" title="Alto (mm)">
                     <option value="0">-</option>
-                    ${[400,500,600,700,800].map(h => `<option value="${h}" ${h === beam.height ? 'selected' : ''}>${h}</option>`).join('')}
+                    ${BEAM_OPTIONS.heights.map(h => `<option value="${h}" ${h === beam.height ? 'selected' : ''}>${h}</option>`).join('')}
                 </select>
             </div>
             <div class="viga-row">
                 <select class="edit-viga-nbars-${side}" title="Nº barras">
-                    ${[2,3,4,5,6].map(n => `<option value="${n}" ${n === beam.nbars ? 'selected' : ''}>${n}</option>`).join('')}
+                    ${BEAM_OPTIONS.nBars.map(n => `<option value="${n}" ${n === beam.nbars ? 'selected' : ''}>${n}</option>`).join('')}
                 </select>
                 <select class="edit-viga-diam-${side}" title="φ barras">
-                    ${[12,16,18,20,22,25].map(d => `<option value="${d}" ${d === beam.diam ? 'selected' : ''}>φ${d}</option>`).join('')}
+                    ${generateDiameterOptions(DIAMETERS.vigas, beam.diam)}
                 </select>
             </div>
             <div class="viga-row">
                 <span>L=</span>
                 <select class="edit-viga-ln-${side}" title="Largo libre (mm)">
-                    ${[1000,1200,1500,1800,2000,2500].map(l => `<option value="${l}" ${l === beam.ln ? 'selected' : ''}>${l}</option>`).join('')}
+                    ${BEAM_OPTIONS.lengths.map(l => `<option value="${l}" ${l === beam.ln ? 'selected' : ''}>${l}</option>`).join('')}
                 </select>
             </div>
             ${side === 'der' ? `<button class="btn-toggle-beam ${isCustom ? 'unlocked' : ''}" data-pier="${pierKey}" title="${isCustom ? 'Volver a estándar' : 'Especificar vigas'}">${isCustom ? '✓' : '⚙'}</button>` : ''}
@@ -329,7 +329,7 @@ class ResultsTable {
         const config = this.pierBeamConfigs[pierKey];
         if (!config) return;
         try {
-            await this.page.api.setPierBeam(this.sessionId, pierKey, config);
+            await structuralAPI.setPierBeam(this.sessionId, pierKey, config);
         } catch (error) {
             console.error('Error guardando config de viga:', error);
         }
@@ -348,7 +348,7 @@ class ResultsTable {
 
     async saveStandardBeam() {
         try {
-            await this.page.api.setDefaultBeam(this.sessionId, this.standardBeam);
+            await structuralAPI.setDefaultBeam(this.sessionId, this.standardBeam);
         } catch (error) {
             console.error('Error guardando viga estándar:', error);
         }
@@ -392,10 +392,10 @@ class ResultsTable {
         tr.innerHTML = `
             <td class="combo-indent" colspan="2"><span class="combo-name">${combo.full_name || combo.name}</span></td>
             <td class="combo-forces-cell" colspan="4">P=${combo.P} | M2=${combo.M2} | M3=${combo.M3}</td>
-            <td class="fs-value ${this.rowFactory.getFsClass(combo.flexure_sf)}">${combo.flexure_sf}</td>
+            <td class="fs-value ${getFsClass(combo.flexure_sf)}">${combo.flexure_sf}</td>
             <td></td>
-            <td class="fs-value ${this.rowFactory.getFsClass(comboShearDisplay)}">${comboShearDisplay}</td>
-            <td class="combo-forces-cell">V2=${combo.V2} | V3=${combo.V3} | DCR: ${this.rowFactory.formatDcr(dcrCombined)}</td>
+            <td class="fs-value ${getFsClass(comboShearDisplay)}">${comboShearDisplay}</td>
+            <td class="combo-forces-cell">V2=${combo.V2} | V3=${combo.V3} | DCR: ${formatDcr(dcrCombined)}</td>
             <td></td>
             <td class="actions-cell"><button class="action-btn" data-action="diagram-combo">📊</button></td>
         `;

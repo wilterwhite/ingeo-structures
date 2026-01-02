@@ -102,7 +102,7 @@ class SessionManager:
                        'spacing_v': 150, 'diameter_h': 8, 'spacing_h': 200,
                        'diameter_edge': 10, 'n_edge_bars': 4,
                        'stirrup_diameter': 10, 'stirrup_spacing': 150,
-                       'fy': 420}]
+                       'fy': FY_DEFAULT_MPA}]
 
         Returns:
             True si se aplicaron las actualizaciones
@@ -251,7 +251,7 @@ class SessionManager:
             stirrup_diameter=kwargs.get('stirrup_diameter', 10),
             stirrup_spacing=kwargs.get('stirrup_spacing', 150),
             n_legs=kwargs.get('n_legs', 2),
-            fy=kwargs.get('fy', 420),
+            fy=kwargs.get('fy', FY_DEFAULT_MPA),
             fc=kwargs.get('fc', 25),
             cover=kwargs.get('cover', 40),
         )

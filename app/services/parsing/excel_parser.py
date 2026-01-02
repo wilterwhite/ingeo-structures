@@ -273,7 +273,7 @@ class EtabsExcelParser:
                 thickness=thickness,
                 height=height,
                 fc=fc,
-                fy=420.0,
+                fy=FY_DEFAULT_MPA,
                 axis_angle=axis_angle
             )
 

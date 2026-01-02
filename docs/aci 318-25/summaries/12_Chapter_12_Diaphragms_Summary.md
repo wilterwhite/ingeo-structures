@@ -1,5 +1,19 @@
 # ACI 318-25 - CAPITULO 12: DIAFRAGMAS
-## Diaphragms
+
+---
+
+## INDICE
+
+- [12.1 Alcance](#121-alcance)
+- [12.2 Generalidades](#122-generalidades)
+- [12.3 Limites de Diseno](#123-limites-de-diseno)
+- [12.4 Resistencia Requerida](#124-resistencia-requerida)
+- [12.5 Resistencia de Diseno](#125-resistencia-de-diseno)
+- [12.6 Limites de Refuerzo](#126-limites-de-refuerzo)
+- [12.7 Detallado del Refuerzo](#127-detallado-del-refuerzo)
+- [Resumen de Requisitos Principales](#resumen-de-requisitos-principales)
+- [Referencias a Otros Capitulos](#referencias-a-otros-capitulos)
+- [Notas Importantes](#notas-importantes)
 
 ---
 

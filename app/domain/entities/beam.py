@@ -8,6 +8,7 @@ from typing import Optional
 from enum import Enum
 
 from ..constants.materials import get_bar_area
+from ..constants.reinforcement import FY_DEFAULT_MPA, COVER_DEFAULT_BEAM_MM
 
 
 class BeamSource(Enum):
@@ -40,7 +41,7 @@ class Beam:
 
     # Propiedades del material (MPa)
     fc: float               # f'c del hormigon
-    fy: float = 420.0       # fy del acero (default A630-420H)
+    fy: float = FY_DEFAULT_MPA  # fy del acero (default A630-420H)
 
     # Origen y seccion
     source: BeamSource = BeamSource.FRAME   # frame o spandrel

@@ -3,6 +3,17 @@
 
 ---
 
+## INDICE
+
+- [21.1 Alcance](#211-alcance)
+- [21.2 Factores de Reduccion](#212-factores-de-reduccion)
+  - [21.2.2 Factor phi para Momento y Carga Axial](#2122-factor-phi-para-momento-y-carga-axial)
+  - [21.2.4 Modificaciones para Efectos Sismicos](#2124-modificaciones-para-efectos-sismicos)
+- [Tabla Resumen para Muros](#tabla-resumen-para-muros)
+- [Referencias Cruzadas](#referencias-cruzadas)
+
+---
+
 ## 21.1 ALCANCE
 
 ### 21.1.1 Aplicabilidad

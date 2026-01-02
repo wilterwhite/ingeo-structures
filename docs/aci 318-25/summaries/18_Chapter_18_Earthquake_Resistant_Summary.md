@@ -3,6 +3,27 @@
 
 ---
 
+## INDICE
+
+- [18.1 Alcance](#181-alcance)
+- [18.2 General](#182-general)
+- [18.10 Muros Estructurales Especiales](#1810-muros-estructurales-especiales)
+  - [18.10.2 Refuerzo](#18102-refuerzo)
+  - [18.10.3 Fuerzas de Diseno](#18103-fuerzas-de-diseno)
+  - [18.10.4 Resistencia al Cortante](#18104-resistencia-al-cortante)
+  - [18.10.5 Diseno por Flexion y Carga Axial](#18105-diseno-por-flexion-y-carga-axial)
+  - [18.10.6 Elementos de Borde](#18106-elementos-de-borde)
+  - [18.10.7 Vigas de Acoplamiento](#18107-vigas-de-acoplamiento)
+  - [18.10.8 Pilares de Muro](#18108-pilares-de-muro-wall-piers)
+  - [18.10.9 Muros Acoplados Ductiles](#18109-muros-acoplados-ductiles)
+  - [18.10.10 Juntas de Construccion](#181010-juntas-de-construccion)
+- [18.12 Diafragmas y Cerchas](#1812-diafragmas-y-cerchas)
+- [18.13 Cimentaciones](#1813-cimentaciones)
+- [18.14 Miembros No Parte del SFRS](#1814-miembros-no-parte-del-sfrs)
+- [Referencias Cruzadas](#referencias-cruzadas)
+
+---
+
 ## 18.1 ALCANCE
 
 ### 18.1.1 Aplicabilidad

@@ -1,9 +1,274 @@
-# ACI 318-25 - CAPITULO 2: NOTACION Y TERMINOLOGIA (Parte 2)
-## Seccion 2.2 (continuacion) y 2.3: Notacion y Terminologia
+# ACI 318-25 - CAPITULO 2: NOTACION Y TERMINOLOGIA
 
 ---
 
-## 2.2 NOTACION (Continuacion)
+## INDICE
+
+- [2.1 Alcance](#21-alcance)
+- [2.2 Notacion](#22-notacion)
+  - [Simbolos de Area (A)](#simbolos-de-area-a)
+  - [Simbolos de Dimension (b)](#simbolos-de-dimension-b)
+  - [Simbolos de Resistencia al Aplastamiento (B)](#simbolos-de-resistencia-al-aplastamiento-b)
+  - [Simbolos de Distancia/Recubrimiento (c)](#simbolos-de-distanciarecubrimiento-c)
+  - [Simbolos de Profundidad Efectiva (d)](#simbolos-de-profundidad-efectiva-d)
+  - [Simbolos de Carga/Efecto (D, E)](#simbolos-de-cargaefecto-d-e)
+  - [Simbolos de Esfuerzo (f)](#simbolos-de-esfuerzo-f)
+  - [Simbolos de Fuerza en Nodos/Puntales (F)](#simbolos-de-fuerza-en-nodospuntales-f)
+  - [Simbolos de Altura/Espesor (h)](#simbolos-de-alturaespesor-h)
+  - [Simbolos de Momento de Inercia (I)](#simbolos-de-momento-de-inercia-i)
+  - [Simbolos de Factores (k, K)](#simbolos-de-factores-k-k)
+  - [Simbolos de Longitud (l)](#simbolos-de-longitud-ℓ)
+  - [Simbolos de Momento (M)](#simbolos-de-momento-m)
+  - [Simbolos de Fuerza Axial/Numero (n, N)](#simbolos-de-fuerza-axialnumero-n-n)
+  - [Simbolos de Perimetro/Carga (p, P)](#simbolos-de-perimetrocarga-p-p)
+  - [Simbolos de Carga/Estabilidad (q, Q)](#simbolos-de-cargaestabilidad-q-q)
+  - [Simbolos de Radio/Resistencia (r, R)](#simbolos-de-radioresistencia-r-r)
+  - [Simbolos de Espaciamiento (s)](#simbolos-de-espaciamiento-s)
+  - [Simbolos de Espesor/Torsion (t, T)](#simbolos-de-espesortorsion-t-t)
+  - [Simbolos de Resistencia Requerida (U)](#simbolos-de-resistencia-requerida-u)
+  - [Simbolos de Esfuerzo Cortante (v)](#simbolos-de-esfuerzo-cortante-v)
+  - [Simbolos de Fuerza Cortante (V)](#simbolos-de-fuerza-cortante-v)
+  - [Simbolos de Carga/Ancho (w, W)](#simbolos-de-cargaancho-w-w)
+  - [Simbolos de Distancia (y, z)](#simbolos-de-distancia-y-z)
+- [Simbolos Griegos](#simbolos-griegos)
+- [2.3 Terminologia](#23-terminologia)
+- [Tablas Resumen](#tablas-resumen)
+
+---
+
+## 2.1 ALCANCE
+
+### 2.1.1 Contenido
+Este capitulo define la notacion y terminologia utilizada en el Codigo ACI 318-25.
+
+---
+
+## 2.2 NOTACION
+
+### Simbolos de Area (A)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| a | Profundidad del bloque rectangular equivalente de esfuerzos | in. |
+| av | Luz de corte (distancia de carga concentrada al apoyo) | in. |
+| A1 | Area cargada para aplastamiento, puntal y nodo | in.² |
+| A2 | Area de la base inferior del frustum mas grande | in.² |
+| Ab | Area de una barra o alambre individual | in.² |
+| Abrg | Area neta de apoyo de cabeza de perno, ancla o barra con cabeza | in.² |
+| Ac | Area de seccion de concreto resistiendo transferencia de corte | in.² |
+| Ach | Area de seccion del nucleo medida al exterior del refuerzo transversal | in.² |
+| Acp | Area encerrada por el perimetro exterior de la seccion | in.² |
+| Acv | Area bruta de seccion de concreto para muros y diafragmas | in.² |
+| Ag | Area bruta de la seccion de concreto | in.² |
+| Ah | Area total de refuerzo de corte paralelo al refuerzo principal de tension | in.² |
+| Aj | Area efectiva de seccion transversal dentro de una junta | in.² |
+| Aℓ | Area total de refuerzo longitudinal para resistir torsion | in.² |
+| Ao | Area bruta encerrada por el flujo de corte torsional | in.² |
+| Aoh | Area encerrada por la linea central del refuerzo torsional cerrado | in.² |
+| Aps | Area de refuerzo presforzado longitudinal en tension | in.² |
+| As | Area de refuerzo no presforzado longitudinal en tension | in.² |
+| As' | Area de refuerzo en compresion | in.² |
+| As,min | Area minima de refuerzo a flexion | in.² |
+| Ash | Area total de refuerzo transversal (incluyendo grapas) | in.² |
+| Ast | Area total de refuerzo longitudinal no presforzado | in.² |
+| At | Area de una pierna de estribo cerrado resistiendo torsion | in.² |
+| Av | Area de refuerzo de corte dentro del espaciamiento s | in.² |
+| Av,min | Area minima de refuerzo de corte | in.² |
+| Avf | Area de refuerzo de friccion por corte | in.² |
+| AVc | Area proyectada de falla de concreto para corte (anclas) | in.² |
+
+### Simbolos de Dimension (b)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| b | Ancho de la cara de compresion del miembro | in. |
+| b1 | Dimension de la seccion critica bo en direccion del claro | in. |
+| b2 | Dimension de la seccion critica bo perpendicular a b1 | in. |
+| bc | Dimension del nucleo del miembro al exterior del refuerzo transversal | in. |
+| bf | Ancho efectivo del patin | in. |
+| bo | Perimetro de la seccion critica para corte en dos direcciones | in. |
+| bs | Ancho del puntal | in. |
+| bt | Ancho de la seccion conteniendo estribos cerrados para torsion | in. |
+| bv | Ancho de seccion en superficie de contacto para corte horizontal | in. |
+| bw | Ancho del alma o diametro de seccion circular | in. |
+
+### Simbolos de Resistencia al Aplastamiento (B)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| B | Factor de sesgo para ajustar resistencia nominal (Apendice A) | - |
+| Bn | Resistencia nominal al aplastamiento | lb |
+| Bu | Carga factorizada de aplastamiento | lb |
+
+### Simbolos de Distancia/Recubrimiento (c)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| c | Distancia de fibra extrema en compresion al eje neutro | in. |
+| c1 | Dimension de columna rectangular en direccion del claro | in. |
+| c2 | Dimension de columna rectangular perpendicular a c1 | in. |
+| ca1, ca2 | Distancia del centro del ancla al borde del concreto | in. |
+| cac | Distancia critica al borde para desarrollar resistencia basica | in. |
+| cb | Menor de: distancia al recubrimiento o 1/2 espaciamiento de barras | in. |
+| cc | Recubrimiento libre del refuerzo | in. |
+| Cm | Factor que relaciona diagrama de momento real con equivalente uniforme | - |
+
+### Simbolos de Profundidad Efectiva (d)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| d | Distancia de fibra extrema en compresion al centroide del refuerzo en tension | in. |
+| d' | Distancia de fibra extrema en compresion al centroide del refuerzo en compresion | in. |
+| da | Diametro exterior del ancla | in. |
+| dagg | Tamano maximo nominal del agregado grueso | in. |
+| db | Diametro nominal de barra, alambre o toron | in. |
+| dp | Distancia de fibra extrema en compresion al centroide del refuerzo presforzado | in. |
+
+### Simbolos de Carga/Efecto (D, E)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| D | Efecto de carga muerta de servicio | - |
+| Ds | Efecto de carga muerta sobreimpuesta | - |
+| Dw | Efecto de peso propio del sistema estructural de concreto | - |
+| E | Efecto de fuerzas inducidas por sismo (horizontal y vertical) | - |
+| Ec | Modulo de elasticidad del concreto | psi |
+| Ep | Modulo de elasticidad del refuerzo de presfuerzo | psi |
+| Es | Modulo de elasticidad del refuerzo y acero estructural | psi |
+| EI | Rigidez a flexion del miembro | in.²-lb |
+| (EI)eff | Rigidez efectiva a flexion del miembro | in.²-lb |
+
+### Simbolos de Esfuerzo (f)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| fc' | Resistencia especificada a compresion del concreto | psi |
+| √fc' | Raiz cuadrada de fc' (solo valor numerico, resultado en psi) | psi |
+| fce | Resistencia efectiva a compresion del concreto en puntal o nodo | psi |
+| fci' | Resistencia especificada del concreto a la transferencia de presfuerzo | psi |
+| fpc | Esfuerzo compresivo en el concreto despues de perdidas de presfuerzo | psi |
+| fpe | Esfuerzo compresivo en el concreto debido solo a fuerzas de presfuerzo efectivas | psi |
+| fps | Esfuerzo en refuerzo presforzado a resistencia nominal a flexion | psi |
+| fpu | Resistencia especificada a tension del refuerzo de presfuerzo | psi |
+| fpy | Resistencia especificada de fluencia del refuerzo de presfuerzo | psi |
+| fr | Modulo de ruptura del concreto | psi |
+| fs | Esfuerzo de tension en refuerzo a cargas de servicio | psi |
+| fse | Esfuerzo efectivo en refuerzo presforzado despues de perdidas | psi |
+| fu | Resistencia especificada a tension del refuerzo no presforzado | psi |
+| futa | Resistencia especificada a tension del acero de ancla | psi |
+| fy | Resistencia especificada de fluencia del refuerzo no presforzado | psi |
+| fya | Resistencia especificada de fluencia del acero de ancla | psi |
+| fye | Resistencia esperada de fluencia del refuerzo (Apendice A, B) | psi |
+| fyt | Resistencia especificada de fluencia del refuerzo transversal | psi |
+
+### Simbolos de Fuerza en Nodos/Puntales (F)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| F | Efecto de carga de servicio debido a fluidos | - |
+| Fnn | Resistencia nominal en cara de zona nodal | lb |
+| Fns | Resistencia nominal de un puntal | lb |
+| Fnt | Resistencia nominal de un tensor | lb |
+| Fun | Fuerza factorizada en la cara de un nodo | lb |
+| Fus | Fuerza compresiva factorizada en un puntal | lb |
+| Fut | Fuerza de tension factorizada en un tensor | lb |
+
+### Simbolos de Altura/Espesor (h)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| h | Espesor total, altura o profundidad del miembro | in. |
+| ha | Espesor del miembro donde esta ubicada el ancla | in. |
+| hef | Profundidad de empotramiento efectivo del ancla o barra | in. |
+| hn | Altura estructural desde la base al nivel mas alto del SFRS | ft |
+| hsx | Altura de entrepiso x (Apendice A, B) | in. |
+| hu | Altura sin soporte lateral en fibra de compresion extrema de muro | in. |
+| hw | Altura total del muro desde la base hasta la parte superior | in. |
+| hx | Espaciamiento maximo c-c de barras longitudinales soportadas lateralmente | in. |
+| H | Efecto de carga de servicio por presion lateral de tierra | lb |
+
+### Simbolos de Momento de Inercia (I)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| I | Momento de inercia de la seccion sobre el eje centroidal | in.⁴ |
+| Ib | Momento de inercia de seccion bruta de viga | in.⁴ |
+| Icr | Momento de inercia de seccion agrietada transformada a concreto | in.⁴ |
+| Ie | Momento de inercia efectivo para calculo de deflexion | in.⁴ |
+| Ig | Momento de inercia de seccion bruta de concreto, ignorando refuerzo | in.⁴ |
+| Is | Momento de inercia de seccion bruta de losa | in.⁴ |
+
+### Simbolos de Factores (k, K)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| k | Factor de longitud efectiva para miembros en compresion | - |
+| kc | Coeficiente para resistencia basica de rotura de concreto en tension | - |
+| kcp | Coeficiente para resistencia de desprendimiento | - |
+| kf | Factor de resistencia del concreto | - |
+| kn | Factor de efectividad de confinamiento | - |
+| Ktr | Indice de refuerzo transversal | in. |
+
+### Simbolos de Longitud (ℓ)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| ℓ | Longitud del claro de viga o losa en una direccion | in. |
+| ℓ1 | Longitud de claro en direccion de momentos, c-c de apoyos | in. |
+| ℓ2 | Longitud de claro perpendicular a ℓ1, c-c de apoyos | in. |
+| ℓa | Longitud de empotramiento adicional mas alla del apoyo | in. |
+| ℓbe | Longitud del elemento de borde desde la cara de compresion | in. |
+| ℓc | Longitud del miembro en compresion, c-c de juntas | in. |
+| ℓd | Longitud de desarrollo en tension de barra deformada | in. |
+| ℓdc | Longitud de desarrollo en compresion de barras deformadas | in. |
+| ℓdh | Longitud de desarrollo en tension con gancho estandar | in. |
+| ℓdt | Longitud de desarrollo en tension de barra deformada con cabeza | in. |
+| ℓn | Longitud de claro libre medida cara a cara de apoyos | in. |
+| ℓo | Longitud donde se requiere refuerzo transversal especial | in. |
+| ℓsc | Longitud de traslape en compresion | in. |
+| ℓst | Longitud de traslape en tension | in. |
+| ℓtr | Longitud de transferencia del refuerzo pretensado | in. |
+| ℓu | Longitud sin soporte de columna o muro | in. |
+| ℓw | Longitud total del muro o segmento de muro | in. |
+| L | Efecto de carga viva de servicio | - |
+| Lr | Efecto de carga viva de techo de servicio | - |
+
+### Simbolos de Momento (M)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| M1 | Menor momento factorizado en extremo de miembro en compresion | in.-lb |
+| M2 | Mayor momento factorizado en extremo de miembro en compresion | in.-lb |
+| M2,min | Valor minimo de M2 | in.-lb |
+| Ma | Momento maximo en miembro debido a cargas de servicio | in.-lb |
+| Mc | Momento factorizado amplificado por efectos de curvatura | in.-lb |
+| Mcr | Momento de agrietamiento | in.-lb |
+| Mmax | Momento factorizado maximo debido a cargas aplicadas externamente | in.-lb |
+| Mn | Resistencia nominal a flexion en la seccion | in.-lb |
+| Mnb | Resistencia nominal a flexion de viga incluyendo losa | in.-lb |
+| Mnc | Resistencia nominal a flexion de columna en junta | in.-lb |
+| Mpr | Resistencia probable a flexion del miembro | in.-lb |
+| Mu | Momento factorizado en la seccion | in.-lb |
+
+### Simbolos de Fuerza Axial/Numero (n, N)
+
+| Simbolo | Descripcion | Unidades |
+|---------|-------------|----------|
+| n | Numero de items (barras, alambres, anclas, etc.) | - |
+| nℓ | Numero de barras longitudinales alrededor del perimetro del nucleo | - |
+| ns | Numero de pisos sobre la seccion critica | - |
+| Na | Resistencia nominal de adherencia en tension de ancla adhesiva individual | lb |
+| Nag | Resistencia nominal de adherencia en tension de grupo de anclas adhesivas | lb |
+| Nb | Resistencia basica de rotura de concreto en tension de ancla individual | lb |
+| Ncb | Resistencia nominal de rotura de concreto en tension de ancla individual | lb |
+| Ncbg | Resistencia nominal de rotura de concreto en tension de grupo de anclas | lb |
+| Nn | Resistencia nominal en tension | lb |
+| Np | Resistencia de extraccion en tension de ancla individual en concreto agrietado | lb |
+| Nsa | Resistencia nominal de ancla individual en tension por acero | lb |
+| Nsb | Resistencia de desprendimiento lateral de ancla individual | lb |
+| Nu | Fuerza axial factorizada normal a la seccion | lb |
+| Nua | Fuerza de tension factorizada aplicada al ancla | lb |
+| Nuc | Fuerza de restriccion factorizada en conexion de apoyo | lb |
 
 ### Simbolos de Perimetro/Carga (p, P)
 
@@ -249,82 +514,43 @@
 
 ## 2.3 TERMINOLOGIA
 
-### Definiciones A-B
+### Definiciones A-C
 
 | Termino | Definicion |
 |---------|------------|
-| **Accion controlada por deformacion** | Accion permitida para exceder la deformacion esperada de fluencia del elemento (Apendice B) |
-| **Accion controlada por fuerza** | Accion no permitida para exceder la resistencia de diseno del elemento (Apendice B) |
+| **Accion controlada por deformacion** | Accion permitida para exceder la deformacion esperada de fluencia del elemento |
+| **Accion controlada por fuerza** | Accion no permitida para exceder la resistencia de diseno del elemento |
 | **Adhesivo** | Componentes quimicos formulados de polimeros organicos que curan al mezclarse |
-| **Aditivo** | Material diferente de agua, agregado, materiales cementantes y refuerzo de fibra |
 | **Agregado** | Material granular como arena, grava, piedra triturada, escoria |
 | **Agregado ligero** | Agregado que cumple ASTM C330 con densidad suelta ≤ 70 lb/ft³ |
 | **Ancla** | Elemento de acero colado o post-instalado para transmitir cargas al concreto |
 | **Ancla adhesiva** | Ancla post-instalada con diametro de agujero ≤ 1.5 veces el diametro del ancla |
-| **Ancla colada** | Perno con cabeza, perno de soldadura o perno doblado instalado antes de colar |
+| **Ancla colada** | Perno con cabeza instalado antes de colar |
 | **Ancla de expansion** | Ancla post-instalada que transfiere cargas por apoyo directo o friccion |
-| **Ancla de rosca** | Ancla post-instalada roscada mecanica que transfiere cargas por enganche de roscas |
-| **Ancla de socavado** | Ancla post-instalada con resistencia por interbloqueo mecanico en el concreto |
 | **Ancla post-instalada** | Ancla instalada en concreto endurecido |
-
-### Definiciones B-C
-
-| Termino | Definicion |
-|---------|------------|
-| **Barras deformadas con cabeza** | Barras deformadas con cabezas unidas en uno o ambos extremos |
-| **Cemento alternativo** | Cemento inorganico que puede reemplazar completamente al cemite portland |
-| **Colapso de cara lateral** | Resistencia de anclas con empotramiento profundo y recubrimiento delgado |
 | **Columna** | Miembro principalmente vertical para soportar carga axial compresiva |
 | **Concreto de peso ligero** | Concreto con agregado ligero, densidad de equilibrio entre 90 y 135 lb/ft³ |
 | **Concreto de peso normal** | Concreto con agregados que cumplen ASTM C33, densidad > 135 lb/ft³ |
-| **Concreto no presforzado** | Concreto reforzado sin refuerzo presforzado |
-| **Concreto precolado** | Elemento de concreto estructural colado fuera de su posicion final |
 | **Concreto presforzado** | Concreto reforzado con esfuerzos internos introducidos por refuerzo presforzado |
 | **Concreto reforzado** | Concreto estructural con cantidades minimas de refuerzo especificadas |
 | **Concreto simple** | Concreto estructural sin refuerzo o con menos del minimo especificado |
-| **Confinamiento** | Refuerzo que encierra el nucleo del miembro |
-| **Conexion** | Region de estructura que une dos o mas miembros |
 | **Conexion ductil** | Conexion que experimenta fluencia por desplazamientos de diseno sismico |
 | **Conexion fuerte** | Conexion que permanece elastica mientras miembros adyacentes fluyen |
 
-### Definiciones D-E
+### Definiciones D-L
 
 | Termino | Definicion |
 |---------|------------|
 | **Desplazamiento de diseno** | Desplazamiento lateral total calculado esperado para sismo de diseno |
 | **Diafragma estructural** | Miembro (losa) que transmite fuerzas en el plano a elementos verticales del SFRS |
-| **Discontinuidad** | Cambio abrupto en geometria o carga |
-| **Dispositivo de anclaje** | Hardware para transferir fuerza de refuerzo presforzado al concreto |
-| **Distancia de borde** | Distancia del borde del concreto al centro del ancla mas cercana |
-| **Ducto** | Conducto, liso o corrugado, para alojar refuerzo de presfuerzo |
 | **Durabilidad** | Capacidad de estructura de resistir deterioro que afecta desempeno |
 | **Elemento de borde** | Porcion a lo largo del borde de muro o diafragma reforzada |
-| **Empotramiento** | Items embebidos en concreto, excluyendo refuerzo y anclas |
-
-### Definiciones F-H
-
-| Termino | Definicion |
-|---------|------------|
 | **Factor de reduccion de resistencia** | Factor ϕ aplicado a resistencia nominal |
-| **Fractil cinco por ciento** | 90% de confianza de 95% de probabilidad de exceder resistencia nominal |
-| **Funcionario de edificacion** | Persona que administra y hace cumplir el codigo de edificacion |
-| **Gancho sismico** | Gancho con doblez ≥ 135° (90° para espirales circulares), extension ≥ 6db o 3 in. |
+| **Gancho sismico** | Gancho con doblez ≥ 135°, extension ≥ 6db o 3 in. |
 | **Grupo de anclas** | Numero de anclas similares con profundidades similares y areas proyectadas traslapadas |
-| **Haz** | Grupo de barras en contacto, atadas juntas, actuando como unidad |
-
-### Definiciones I-L
-
-| Termino | Definicion |
-|---------|------------|
-| **Inspeccion** | Observacion, verificacion y documentacion de materiales e instalacion |
-| **Inspeccion continua** | Observacion de tiempo completo de construccion |
-| **Inspeccion periodica** | Observacion de tiempo parcial o intermitente de construccion |
-| **Junta** | Porcion de estructura comun a miembros que se intersecan |
-| **Junta de esquina** | Junta donde dos miembros no colineales transfieren momento y terminan |
 | **Longitud de desarrollo** | Longitud de refuerzo embebido para desarrollar fy o fps |
-| **Longitud de empotramiento** | Longitud de refuerzo embebido mas alla de seccion critica |
 
-### Definiciones M-P
+### Definiciones M-R
 
 | Termino | Definicion |
 |---------|------------|
@@ -332,60 +558,31 @@
 | **Marco de momento especial** | Marco viga-columna colado en sitio que cumple 18.6-18.8 |
 | **Marco de momento intermedio** | Marco viga-columna o losa-columna que cumple 18.4 |
 | **Marco de momento ordinario** | Marco viga-columna o losa-columna que cumple 18.3 |
-| **Materiales cementantes** | Materiales con valor cementante para lechada, mortero o concreto |
-| **Miembro de borde** | Porcion a lo largo de borde de muro reforzada longitudinal y transversalmente |
 | **Modelo puntal-tensor** | Modelo de armadura de miembro con puntales y tensores conectados en nodos |
-| **Modulo de elasticidad** | Relacion de esfuerzo normal a deformacion correspondiente |
 | **Muro estructural** | Muro proporcionado para resistir momentos, cortantes y fuerzas axiales en el plano |
 | **Muro estructural especial** | Muro que cumple 18.2.3-18.2.8 y 18.10 o 18.11 |
 | **Nodo** | Punto donde se intersecan ejes de puntales, tensores y fuerzas concentradas |
 | **Pedestal** | Miembro con relacion altura/dimension lateral menor ≤ 3 |
-| **Pilote precolado de concreto** | Pilote hincado de concreto presforzado o reforzado convencionalmente |
 | **Post-tensionado** | Presfuerzo donde el refuerzo se tensiona despues del endurecimiento del concreto |
 | **Pretensionado** | Presfuerzo donde el refuerzo se tensiona antes de colar el concreto |
-| **Presfuerzo efectivo** | Esfuerzo en refuerzo presforzado despues de perdidas |
-| **Profesional de diseno licenciado** | Individuo licenciado para practicar diseno estructural |
-| **Profundidad de empotramiento efectivo** | Profundidad a traves de la cual el ancla transfiere fuerza |
 | **Puntal** | Miembro en compresion en modelo puntal-tensor |
-| **Puntal de borde** | Puntal ubicado a lo largo del borde de miembro o region de discontinuidad |
-| **Puntal interior** | Puntal no ubicado a lo largo del borde |
-
-### Definiciones R-S
-
-| Termino | Definicion |
-|---------|------------|
-| **Recubrimiento especificado** | Distancia entre superficie exterior de refuerzo y superficie mas cercana del concreto |
-| **Refuerzo** | Elemento de acero embebido en concreto que cumple 20.2-20.4 |
-| **Refuerzo de ancla** | Refuerzo para transferir carga de tension de anclas al miembro estructural |
-| **Refuerzo deformado** | Barras deformadas, mallas, alambre deformado que cumple 20.2.1.3, 20.2.1.5 o 20.2.1.7 |
-| **Refuerzo espiral** | Refuerzo enrollado continuamente en forma de helice cilindrica |
-| **Refuerzo liso** | Barras o alambres que no cumplen definicion de refuerzo deformado |
-| **Refuerzo no presforzado** | Refuerzo adherido que no esta presforzado |
-| **Refuerzo presforzado** | Refuerzo de presfuerzo que ha sido tensionado |
-| **Refuerzo suplementario** | Refuerzo que restringe rotura potencial pero no transfiere carga de anclas |
-| **Region B** | Porcion donde deformaciones por flexion varian linealmente |
-| **Region D** | Porcion dentro de distancia h de discontinuidad de fuerza o geometrica |
 | **Resistencia de diseno** | Resistencia nominal multiplicada por factor de reduccion ϕ |
 | **Resistencia nominal** | Resistencia calculada antes de aplicar factores de reduccion |
 | **Resistencia requerida** | Resistencia para resistir cargas factorizadas |
-| **Seccion controlada por compresion** | Seccion con deformacion neta de tension ≤ limite controlado por compresion |
-| **Seccion controlada por tension** | Seccion con deformacion neta de tension ≥ εty + 0.003 |
-| **Sistema de resistencia a fuerzas sismicas (SFRS)** | Porcion de estructura disenada para resistir efectos sismicos |
-| **Shotcrete** | Concreto colocado neumaticamente por proyeccion de alta velocidad |
 
-### Definiciones T-Z
+### Definiciones S-Z
 
 | Termino | Definicion |
 |---------|------------|
+| **Seccion controlada por compresion** | Seccion con deformacion neta de tension ≤ limite controlado por compresion |
+| **Seccion controlada por tension** | Seccion con deformacion neta de tension ≥ εty + 0.003 |
+| **Sistema de resistencia a fuerzas sismicas (SFRS)** | Porcion de estructura disenada para resistir efectos sismicos |
 | **Tendon** | Ensamble completo de anclajes, refuerzo de presfuerzo y revestimiento |
 | **Tendon adherido** | Tendon con refuerzo adherido continuamente al concreto por inyeccion |
-| **Tendon externo** | Tendon externo a la seccion transversal del concreto |
 | **Tendon no adherido** | Tendon donde se evita la adherencia del refuerzo al concreto |
-| **Tensor** | (a) Barra o alambre que encierra refuerzo longitudinal; (b) Elemento de tension en modelo puntal-tensor |
-| **Trabajo** | Construccion completa requerida bajo documentos de construccion |
+| **Tensor** | Elemento de tension en modelo puntal-tensor |
 | **Transferencia** | Acto de transferir esfuerzo en refuerzo de presfuerzo de gatos al concreto |
 | **Viga** | Miembro sometido principalmente a flexion y corte |
-| **Zona de anclaje** | Porcion del miembro donde se transfiere la fuerza de presfuerzo al concreto |
 | **Zona nodal** | Volumen de concreto alrededor de nodo que transfiere fuerzas puntal-tensor |
 
 ---
@@ -421,5 +618,5 @@
 
 ---
 
-*Resumen del ACI 318-25 Capitulo 2 (Parte 2) - Notacion y Terminologia.*
+*Resumen del ACI 318-25 Capitulo 2 - Notacion y Terminologia.*
 *Fecha: 2025*

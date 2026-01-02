@@ -34,8 +34,6 @@ class ShearAmplificationService:
     """
 
     # Constantes ACI 318-25 §18.10.2
-    RHO_L_MIN_SPECIAL = 0.0025
-    RHO_T_MIN_SPECIAL = 0.0025
     SPACING_MAX_MM = 457.2  # 18 in
 
     # =========================================================================
@@ -178,8 +176,8 @@ class ShearAmplificationService:
             SpecialWallRequirements con resultado de la verificación
         """
         warnings = []
-        rho_l_min = self.RHO_L_MIN_SPECIAL
-        rho_t_min = self.RHO_T_MIN_SPECIAL
+        rho_l_min = RHO_MIN
+        rho_t_min = RHO_MIN
         spacing_max = self.SPACING_MAX_MM
 
         Acv = lw * tw

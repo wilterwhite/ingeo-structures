@@ -139,7 +139,6 @@ def run_analysis():
     print(f"NO OK: {stats.get('not_ok', 0)}")
     print(f"Tasa de cumplimiento: {stats.get('compliance_rate', 0):.1f}%")
 
-    # Skip detailed ACI verification for now (has bug with double_layer attr)
 
     # Limpiar sesión
     service.clear_session(session_id)

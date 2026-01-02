@@ -1,5 +1,20 @@
 # ACI 318-25 - CAPITULO 9: VIGAS
-## Beams
+
+---
+
+## INDICE
+
+- [9.1 Alcance](#91-alcance)
+- [9.2 Generalidades](#92-generalidades)
+- [9.3 Limites de Diseno](#93-limites-de-diseno)
+- [9.4 Resistencia Requerida](#94-resistencia-requerida)
+- [9.5 Resistencia de Diseno](#95-resistencia-de-diseno)
+- [9.6 Limites de Refuerzo](#96-limites-de-refuerzo)
+- [9.7 Detallado del Refuerzo](#97-detallado-del-refuerzo)
+- [9.8 Sistemas de Viguetas en Una Direccion](#98-sistemas-de-viguetas-en-una-direccion-no-presforzados)
+- [9.9 Vigas Profundas (Deep Beams)](#99-vigas-profundas-deep-beams)
+- [Resumen de Requisitos Principales](#resumen-de-requisitos-principales)
+- [Referencias a Otros Capitulos](#referencias-a-otros-capitulos)
 
 ---
 

@@ -1,39 +1,19 @@
-// app/structural/static/js/PiersTable.js
+// app/static/js/PiersTable.js
 /**
  * Módulo para manejo de la tabla de piers y configuración de armaduras.
+ * Usa Constants.js para valores de armadura.
  */
-
-// Áreas de barras estándar (mm²)
-const BAR_AREAS = {
-    6: 28.3, 8: 50.3, 10: 78.5, 12: 113.1,
-    16: 201.1, 18: 254.5, 20: 314.2, 22: 380.1,
-    25: 490.9, 28: 615.8, 32: 804.2, 36: 1017.9
-};
 
 class PiersTable {
     constructor(page) {
         this.page = page;
     }
 
-    // =========================================================================
-    // Elementos DOM
-    // =========================================================================
-
-    get elements() {
-        return this.page.elements;
-    }
-
-    get piersData() {
-        return this.page.piersData;
-    }
-
-    // =========================================================================
-    // Filtros
-    // =========================================================================
+    get elements() { return this.page.elements; }
+    get piersData() { return this.page.piersData; }
 
     populateFilters() {
         const { piersGrillaFilter, piersStoryFilter } = this.elements;
-
         if (piersGrillaFilter) {
             piersGrillaFilter.innerHTML = '<option value="">Todas</option>';
             this.page.uniqueGrillas.forEach(grilla => {
@@ -43,7 +23,6 @@ class PiersTable {
                 piersGrillaFilter.appendChild(option);
             });
         }
-
         if (piersStoryFilter) {
             piersStoryFilter.innerHTML = '<option value="">Todos</option>';
             this.page.uniqueStories.forEach(story => {
@@ -53,36 +32,24 @@ class PiersTable {
                 piersStoryFilter.appendChild(option);
             });
         }
-
-        // Poblar ejes (inicialmente todos)
         this.updateAxisFilter();
     }
 
-    /**
-     * Actualiza el filtro de ejes según la grilla seleccionada.
-     */
     updateAxisFilter() {
         const { piersGrillaFilter, piersAxisFilter } = this.elements;
         if (!piersAxisFilter) return;
-
         const selectedGrilla = piersGrillaFilter?.value || '';
         const currentAxis = piersAxisFilter.value;
-
-        // Obtener ejes únicos de la grilla seleccionada
         let axes;
         if (selectedGrilla) {
             const axesSet = new Set();
             this.piersData.forEach(pier => {
-                if (pier.grilla === selectedGrilla && pier.eje) {
-                    axesSet.add(pier.eje);
-                }
+                if (pier.grilla === selectedGrilla && pier.eje) axesSet.add(pier.eje);
             });
             axes = [...axesSet].sort();
         } else {
             axes = this.page.uniqueAxes;
         }
-
-        // Repoblar dropdown
         piersAxisFilter.innerHTML = '<option value="">Todos</option>';
         axes.forEach(axis => {
             const option = document.createElement('option');
@@ -90,156 +57,54 @@ class PiersTable {
             option.textContent = axis;
             piersAxisFilter.appendChild(option);
         });
-
-        // Mantener selección si sigue siendo válida
-        if (axes.includes(currentAxis)) {
-            piersAxisFilter.value = currentAxis;
-        }
+        if (axes.includes(currentAxis)) piersAxisFilter.value = currentAxis;
     }
 
-    filter() {
-        this.render();
-    }
-
-    /**
-     * Llamado cuando cambia la grilla - actualiza ejes y filtra.
-     */
-    onGrillaChange() {
-        this.updateAxisFilter();
-        this.render();
-    }
-
-    // =========================================================================
-    // Renderizado
-    // =========================================================================
+    filter() { this.render(); }
+    onGrillaChange() { this.updateAxisFilter(); this.render(); }
 
     render() {
         const { piersTable, piersGrillaFilter, piersStoryFilter, piersAxisFilter, pierCount } = this.elements;
         if (!piersTable) return;
-
         piersTable.innerHTML = '';
-
         const grillaFilter = piersGrillaFilter?.value || '';
         const storyFilter = piersStoryFilter?.value || '';
         const axisFilter = piersAxisFilter?.value || '';
-
         const filteredPiers = this.piersData.filter(pier => {
             if (grillaFilter && pier.grilla !== grillaFilter) return false;
             if (storyFilter && pier.story !== storyFilter) return false;
             if (axisFilter && pier.eje !== axisFilter) return false;
             return true;
         });
-
-        filteredPiers.forEach(pier => {
-            const row = this.createPierRow(pier);
-            piersTable.appendChild(row);
-        });
-
-        if (pierCount) {
-            pierCount.textContent = this.piersData.length;
-        }
+        filteredPiers.forEach(pier => piersTable.appendChild(this.createPierRow(pier)));
+        if (pierCount) pierCount.textContent = this.piersData.length;
     }
 
     createPierRow(pier) {
         const row = document.createElement('tr');
         row.dataset.key = pier.key;
-
-        const asVertPerM = this.calculateAs(pier.n_meshes, pier.diameter_v, pier.spacing_v);
+        const asVertPerM = calculateAsPerMeter(pier.n_meshes, pier.diameter_v, pier.spacing_v);
         const edgeDiameter = pier.diameter_edge || 10;
         const cover = pier.cover || 25;
-
         row.innerHTML = `
             <td>${pier.story}</td>
             <td>${pier.label}</td>
             <td>${pier.width_m.toFixed(2)}</td>
             <td>${pier.thickness_m.toFixed(2)}</td>
             <td>${pier.fc_MPa.toFixed(1)}</td>
-            <td>
-                <select data-field="n_meshes">
-                    <option value="1" ${pier.n_meshes === 1 ? 'selected' : ''}>1</option>
-                    <option value="2" ${pier.n_meshes === 2 ? 'selected' : ''}>2</option>
-                </select>
-            </td>
-            <td>
-                <select data-field="diameter_v">
-                    ${this.getDiameterOptions(pier.diameter_v)}
-                </select>
-            </td>
-            <td>
-                <select data-field="spacing_v">
-                    ${this.getSpacingOptions(pier.spacing_v)}
-                </select>
-            </td>
-            <td>
-                <select data-field="diameter_h">
-                    ${this.getDiameterOptions(pier.diameter_h)}
-                </select>
-            </td>
-            <td>
-                <select data-field="spacing_h">
-                    ${this.getSpacingOptions(pier.spacing_h)}
-                </select>
-            </td>
-            <td>
-                <select data-field="diameter_edge">
-                    ${this.getEdgeDiameterOptions(edgeDiameter)}
-                </select>
-            </td>
-            <td>
-                <select data-field="cover">
-                    ${this.getCoverOptions(cover)}
-                </select>
-            </td>
+            <td><select data-field="n_meshes">${generateOptions(MESH_OPTIONS, pier.n_meshes)}</select></td>
+            <td><select data-field="diameter_v">${generateDiameterOptions(DIAMETERS.general, pier.diameter_v)}</select></td>
+            <td><select data-field="spacing_v">${generateSpacingOptions(SPACINGS.general, pier.spacing_v)}</select></td>
+            <td><select data-field="diameter_h">${generateDiameterOptions(DIAMETERS.general, pier.diameter_h)}</select></td>
+            <td><select data-field="spacing_h">${generateSpacingOptions(SPACINGS.general, pier.spacing_h)}</select></td>
+            <td><select data-field="diameter_edge">${generateDiameterOptions(DIAMETERS.generalBorde, edgeDiameter)}</select></td>
+            <td><select data-field="cover">${generateOptions(COVERS, cover)}</select></td>
             <td class="as-display">${Math.round(asVertPerM)}</td>
         `;
-
         row.querySelectorAll('select').forEach(select => {
             select.addEventListener('change', () => this.updateAsDisplay(row));
         });
-
         return row;
-    }
-
-    // =========================================================================
-    // Opciones de Select
-    // =========================================================================
-
-    getDiameterOptions(selected) {
-        const diameters = [6, 8, 10, 12, 16, 20, 22, 25];
-        return diameters.map(d =>
-            `<option value="${d}" ${d === selected ? 'selected' : ''}>φ${d}</option>`
-        ).join('');
-    }
-
-    getEdgeDiameterOptions(selected) {
-        // Diámetros típicos para barras de borde (fierros de extremo)
-        const diameters = [10, 12, 16, 20, 22, 25];
-        return diameters.map(d =>
-            `<option value="${d}" ${d === selected ? 'selected' : ''}>φ${d}</option>`
-        ).join('');
-    }
-
-    getSpacingOptions(selected) {
-        const spacings = [100, 150, 200, 250, 300];
-        return spacings.map(s =>
-            `<option value="${s}" ${s === selected ? 'selected' : ''}>@${s}</option>`
-        ).join('');
-    }
-
-    getCoverOptions(selected) {
-        const covers = [20, 25, 30, 40, 50];
-        return covers.map(c =>
-            `<option value="${c}" ${c === selected ? 'selected' : ''}>${c}</option>`
-        ).join('');
-    }
-
-    // =========================================================================
-    // Cálculos
-    // =========================================================================
-
-    calculateAs(nMeshes, diameter, spacing) {
-        const barArea = BAR_AREAS[diameter] || 50.3;
-        return nMeshes * (barArea / spacing) * 1000;
     }
 
     updateAsDisplay(row) {
@@ -247,25 +112,16 @@ class PiersTable {
         const diameterV = parseInt(row.querySelector('[data-field="diameter_v"]').value);
         const spacingV = parseInt(row.querySelector('[data-field="spacing_v"]').value);
         const asDisplay = row.querySelector('.as-display');
-
-        if (asDisplay) {
-            asDisplay.textContent = Math.round(this.calculateAs(nMeshes, diameterV, spacingV));
-        }
+        if (asDisplay) asDisplay.textContent = Math.round(calculateAsPerMeter(nMeshes, diameterV, spacingV));
     }
-
-    // =========================================================================
-    // Configuración Global
-    // =========================================================================
 
     applyGlobalConfig() {
         const { globalMeshes, globalDiameter, globalSpacing, globalEdgeDiameter, globalCover, piersTable } = this.elements;
-
         const meshes = globalMeshes?.value || '2';
         const diameter = globalDiameter?.value || '8';
         const spacing = globalSpacing?.value || '200';
         const edgeDiameter = globalEdgeDiameter?.value || '10';
         const cover = globalCover?.value || '25';
-
         const rows = piersTable?.querySelectorAll('tr') || [];
         rows.forEach(row => {
             const meshSelect = row.querySelector('[data-field="n_meshes"]');
@@ -275,7 +131,6 @@ class PiersTable {
             const spacHSelect = row.querySelector('[data-field="spacing_h"]');
             const diamEdgeSelect = row.querySelector('[data-field="diameter_edge"]');
             const coverSelect = row.querySelector('[data-field="cover"]');
-
             if (meshSelect) meshSelect.value = meshes;
             if (diamVSelect) diamVSelect.value = diameter;
             if (spacVSelect) spacVSelect.value = spacing;
@@ -283,11 +138,8 @@ class PiersTable {
             if (spacHSelect) spacHSelect.value = spacing;
             if (diamEdgeSelect) diamEdgeSelect.value = edgeDiameter;
             if (coverSelect) coverSelect.value = cover;
-
             this.updateAsDisplay(row);
         });
-
-        // Actualizar datos en memoria incluyendo cover
         this.piersData.forEach(pier => {
             pier.n_meshes = parseInt(meshes);
             pier.diameter_v = parseInt(diameter);
@@ -299,19 +151,13 @@ class PiersTable {
         });
     }
 
-    // =========================================================================
-    // Obtener Actualizaciones
-    // =========================================================================
-
     getUpdates() {
         const updates = [];
         const { piersTable } = this.elements;
         if (!piersTable) return updates;
-
         piersTable.querySelectorAll('tr').forEach(row => {
             const key = row.dataset.key;
             if (!key) return;
-
             updates.push({
                 key,
                 n_meshes: parseInt(row.querySelector('[data-field="n_meshes"]')?.value || 2),
@@ -323,18 +169,12 @@ class PiersTable {
                 cover: parseFloat(row.querySelector('[data-field="cover"]')?.value || 25)
             });
         });
-
         return updates;
     }
-
-    // =========================================================================
-    // Navegación a Pier
-    // =========================================================================
 
     scrollToPier(pierKey) {
         const { piersTable } = this.elements;
         const row = piersTable?.querySelector(`tr[data-key="${pierKey}"]`);
-
         if (row) {
             row.scrollIntoView({ behavior: 'smooth', block: 'center' });
             row.classList.add('highlight');

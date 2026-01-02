@@ -205,7 +205,7 @@ class ColumnParser:
                 width=section['width'],
                 height=height,
                 fc=section['fc'],
-                fy=420.0
+                fy=FY_DEFAULT_MPA
             )
 
         return columns, column_forces, stories

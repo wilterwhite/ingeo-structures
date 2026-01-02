@@ -3,6 +3,31 @@
 
 ---
 
+## INDICE
+
+- [13.1 Alcance](#131-alcance)
+- [13.2 Generalidades](#132-generalidades)
+  - [13.2.7 Secciones Criticas](#1327-secciones-criticas-para-fundaciones-superficiales-y-cabezales)
+  - [13.2.8 Desarrollo de Refuerzo](#1328-desarrollo-de-refuerzo-en-fundaciones-superficiales-y-cabezales)
+- [13.3 Fundaciones Superficiales](#133-fundaciones-superficiales)
+  - [13.3.2 Fundaciones en Una Direccion](#1332-fundaciones-superficiales-en-una-direccion)
+  - [13.3.3 Zapatas Aisladas](#1333-zapatas-aisladas-en-dos-direcciones)
+  - [13.3.4 Zapatas Combinadas y Losas](#1334-zapatas-combinadas-y-losas-de-fundacion-en-dos-direcciones)
+  - [13.3.5 Muros como Vigas de Fundacion](#1335-muros-como-vigas-de-fundacion)
+  - [13.3.6 Muros de Contencion](#1336-componentes-de-muro-de-muros-de-contencion-en-voladizo)
+  - [13.3.7 Muros de Sotano](#1337-muros-de-sotano)
+- [13.4 Fundaciones Profundas](#134-fundaciones-profundas)
+  - [13.4.2 Resistencia Axial Admisible](#1342-resistencia-axial-admisible)
+  - [13.4.3 Diseno por Resistencia](#1343-diseno-por-resistencia)
+  - [13.4.4 Fundaciones Coladas en Sitio](#1344-fundaciones-profundas-coladas-en-sitio)
+  - [13.4.5 Pilotes Precolados](#1345-pilotes-de-concreto-precolado)
+  - [13.4.6 Cabezales de Pilotes](#1346-cabezales-de-pilotes-pile-caps)
+- [Resumen de Dimensiones Minimas](#resumen-de-dimensiones-minimas)
+- [Resumen de Factores de Reduccion](#resumen-de-factores-de-reduccion-de-resistencia)
+- [Referencias a Otros Capitulos](#referencias-a-otros-capitulos)
+
+---
+
 ## 13.1 ALCANCE
 
 ### 13.1.1 Aplicacion

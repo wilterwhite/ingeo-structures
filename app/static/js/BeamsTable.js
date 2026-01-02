@@ -2,6 +2,7 @@
 /**
  * Módulo para manejo de la tabla de vigas.
  * Muestra resultados de verificación de cortante para vigas.
+ * Usa Utils.js para funciones compartidas.
  */
 
 class BeamsTable {
@@ -21,11 +22,8 @@ class BeamsTable {
         if (!tbody) return;
 
         tbody.innerHTML = '';
-
-        // Actualizar estadísticas
         this.updateStats();
 
-        // Renderizar filas
         this.beamResults.forEach(result => {
             const row = this.createRow(result);
             tbody.appendChild(row);
@@ -54,23 +52,14 @@ class BeamsTable {
         row.className = `beam-row ${result.overall_status === 'OK' ? 'status-ok' : 'status-fail'}`;
         row.dataset.beamKey = result.key;
 
-        // Info cell
         row.appendChild(this.createInfoCell(result));
-        // Section cell
         row.appendChild(this.createSectionCell(result));
-        // Stirrups cell
         row.appendChild(this.createStirrupsCell(result));
-        // φVn cell
         row.appendChild(this.createCapacityCell(result));
-        // Vu cell
         row.appendChild(this.createDemandCell(result));
-        // SF cell
         row.appendChild(this.createSfCell(result));
-        // DCR cell
         row.appendChild(this.createDcrCell(result));
-        // Combo cell
         row.appendChild(this.createComboCell(result));
-        // Status cell
         row.appendChild(this.createStatusCell(result));
 
         return row;
@@ -142,7 +131,7 @@ class BeamsTable {
         const sf = shear.sf;
 
         const td = document.createElement('td');
-        td.className = `fs-value ${this.getFsClass(sf)}`;
+        td.className = `fs-value ${getFsClass(sf)}`;
         td.innerHTML = `<span class="fs-number">${sf}</span>`;
         return td;
     }
@@ -164,9 +153,7 @@ class BeamsTable {
         const shear = result.shear || {};
 
         const combo = shear.critical_combo || 'N/A';
-        const truncated = combo.length > 15 ? combo.substring(0, 13) + '...' : combo;
-
-        td.innerHTML = `<span class="combo-name" title="${combo}">${truncated}</span>`;
+        td.innerHTML = `<span class="combo-name" title="${combo}">${truncateCombo(combo, 15)}</span>`;
         return td;
     }
 
@@ -177,19 +164,6 @@ class BeamsTable {
 
         td.innerHTML = `<span class="status-badge ${statusClass}">${status}</span>`;
         return td;
-    }
-
-    // =========================================================================
-    // Utilidades
-    // =========================================================================
-
-    getFsClass(sf) {
-        if (sf === '>100') return 'fs-ok';
-        const val = parseFloat(sf);
-        if (isNaN(val)) return 'fs-fail';
-        if (val >= 1.5) return 'fs-ok';
-        if (val >= 1.0) return 'fs-warn';
-        return 'fs-fail';
     }
 
     clear() {

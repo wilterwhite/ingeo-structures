@@ -107,6 +107,13 @@ from .stiffness import (
     CM_TRANSVERSE,
 )
 from .reinforcement import (
+    # Constantes
+    RHO_MIN,
+    FY_DEFAULT_MPA,
+    COVER_DEFAULT_PIER_MM,
+    COVER_DEFAULT_COLUMN_MM,
+    COVER_DEFAULT_BEAM_MM,
+    # Funciones
     check_rho_vertical_ge_horizontal,
     is_rho_v_ge_rho_h_required,
 )

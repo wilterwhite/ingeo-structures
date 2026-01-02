@@ -4,6 +4,7 @@ Endpoints API para el módulo de análisis estructural.
 """
 import uuid
 import json
+import logging
 from flask import Blueprint, request, jsonify, current_app, Response
 
 from ..services.pier_analysis import PierAnalysisService
@@ -12,6 +13,7 @@ from ..services.report import PDFReportGenerator, ReportConfig
 
 # Crear blueprint
 bp = Blueprint('structural', __name__, url_prefix='/structural')
+logger = logging.getLogger(__name__)
 
 # Instancia global del servicio (para modo standalone)
 _analysis_service = None
@@ -76,9 +78,9 @@ def upload_excel():
 
     try:
         # Leer contenido
-        print(f"[Upload] Recibiendo archivo: {file.filename}")
+        logger.info(f"[Upload] Recibiendo archivo: {file.filename}")
         file_content = file.read()
-        print(f"[Upload] Tamaño: {len(file_content) / 1024:.1f} KB")
+        logger.info(f"[Upload] Tamaño: {len(file_content) / 1024:.1f} KB")
 
         # Obtener hn_ft opcional (altura del edificio en pies)
         hn_ft = None
@@ -91,24 +93,24 @@ def upload_excel():
 
         # Generar session_id
         session_id = str(uuid.uuid4())
-        print(f"[Upload] Iniciando parseo... session_id={session_id[:8]}")
+        logger.info(f"[Upload] Iniciando parseo... session_id={session_id[:8]}")
 
         # Parsear (ahora acepta hn_ft como parámetro opcional)
         service = get_analysis_service()
-        result = service._session_manager.create_session(
+        result = service.parse_excel(
             file_content, session_id, hn_ft=hn_ft
         )
 
         summary = result.get('summary', {})
-        print(f"[Upload] Parseo completado:")
-        print(f"         - Piers: {summary.get('total_piers', 0)}")
-        print(f"         - Columnas: {summary.get('total_columns', 0)}")
-        print(f"         - Vigas: {summary.get('total_beams', 0)}")
+        logger.info("[Upload] Parseo completado:")
+        logger.info(f"         - Piers: {summary.get('total_piers', 0)}")
+        logger.info(f"         - Columnas: {summary.get('total_columns', 0)}")
+        logger.info(f"         - Vigas: {summary.get('total_beams', 0)}")
         return jsonify(result)
 
     except Exception as e:
         import traceback
-        print(f"[Upload] ERROR: {str(e)}")
+        logger.error(f"[Upload] ERROR: {str(e)}")
         traceback.print_exc()
         return jsonify({
             'success': False,
@@ -591,7 +593,7 @@ def set_default_beam():
             }), 400
 
         service = get_analysis_service()
-        service._session_manager.set_default_coupling_beam(
+        service.set_default_coupling_beam(
             session_id=session_id,
             width=float(data.get('width', 200)),
             height=float(data.get('height', 500)),
@@ -676,7 +678,7 @@ def set_pier_beam():
             }
 
         service = get_analysis_service()
-        service._session_manager.set_pier_coupling_config(
+        service.set_pier_coupling_config(
             session_id=session_id,
             pier_key=pier_key,
             has_beam_left=data.get('has_beam_left', True),
@@ -728,7 +730,7 @@ def generate_report():
 
         # Obtener datos de la sesión
         service = get_analysis_service()
-        parsed_data = service._session_manager.get_session(session_id)
+        parsed_data = service.get_session_data(session_id)
 
         if not parsed_data:
             return jsonify({

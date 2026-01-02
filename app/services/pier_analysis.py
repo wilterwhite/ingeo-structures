@@ -423,9 +423,9 @@ class PierAnalysisService:
     # API Pública - Gestión de Sesiones
     # =========================================================================
 
-    def parse_excel(self, file_content: bytes, session_id: str) -> Dict[str, Any]:
+    def parse_excel(self, file_content: bytes, session_id: str, hn_ft: Optional[float] = None) -> Dict[str, Any]:
         """Parsea Excel de ETABS y crea una sesión."""
-        return self._session_manager.create_session(file_content, session_id)
+        return self._session_manager.create_session(file_content, session_id, hn_ft=hn_ft)
 
     def clear_session(self, session_id: str) -> bool:
         """Limpia una sesión del cache."""
@@ -1267,3 +1267,49 @@ class PierAnalysisService:
         return self._verification_service.verify_all_piers_seismic(
             session_id, sdc, hn_ft
         )
+    # =========================================================================
+    # API Publica - Configuracion de Sesion
+    # =========================================================================
+
+    def set_default_coupling_beam(
+        self,
+        session_id: str,
+        width: float,
+        height: float,
+        ln: float,
+        n_bars_top: int,
+        diameter_top: int,
+        n_bars_bottom: int,
+        diameter_bottom: int
+    ) -> None:
+        """Configura la viga de acople por defecto para una sesion."""
+        self._session_manager.set_default_coupling_beam(
+            session_id=session_id,
+            width=width,
+            height=height,
+            ln=ln,
+            n_bars_top=n_bars_top,
+            diameter_top=diameter_top,
+            n_bars_bottom=n_bars_bottom,
+            diameter_bottom=diameter_bottom
+        )
+
+    def set_pier_coupling_config(
+        self,
+        session_id: str,
+        pier_key: str,
+        has_coupling: bool,
+        coupling_beam_config: Optional[Dict] = None
+    ) -> None:
+        """Configura si un pier tiene viga de acople y su configuracion."""
+        self._session_manager.set_pier_coupling_config(
+            session_id=session_id,
+            pier_key=pier_key,
+            has_coupling=has_coupling,
+            coupling_beam_config=coupling_beam_config
+        )
+
+    def get_session_data(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Obtiene los datos de una sesion."""
+        return self._session_manager.get_session(session_id)
+
