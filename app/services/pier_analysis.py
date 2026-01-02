@@ -238,7 +238,9 @@ class PierAnalysisService:
                 angle_deg=angle_deg,
                 hwcs=hwcs,
                 hn_ft=hn_ft,
-                continuity_info=continuity_info
+                continuity_info=continuity_info,
+                session_id=session_id,
+                pier_key=key
             )
             results.append(result)
 
@@ -423,7 +425,9 @@ class PierAnalysisService:
                 angle_deg=angle_deg,
                 hwcs=hwcs,
                 hn_ft=hn_ft,
-                continuity_info=continuity_info
+                continuity_info=continuity_info,
+                session_id=session_id,
+                pier_key=key
             )
             results.append(result)
 
@@ -650,14 +654,16 @@ class PierAnalysisService:
         angle_deg: float,
         hwcs: Optional[float] = None,
         hn_ft: Optional[float] = None,
-        continuity_info: Optional[Any] = None
+        continuity_info: Optional[Any] = None,
+        session_id: Optional[str] = None,
+        pier_key: Optional[str] = None
     ) -> VerificationResult:
         """
         Ejecuta el análisis estructural de un pier individual.
 
         Incluye verificaciones ACI 318-25:
         - Flexocompresión
-        - Cortante con interacción V2-V3
+        - Cortante con interacción V2-V3 y diseño por capacidad (§18.10.8.1(a))
         - Clasificación de muros (§18.10.8)
         - Amplificación de cortante (§18.10.3.3)
         - Elementos de borde (§18.10.6)
@@ -671,6 +677,8 @@ class PierAnalysisService:
             hwcs: Altura desde sección crítica (mm), opcional
             hn_ft: Altura total del edificio (pies), opcional
             continuity_info: WallContinuityInfo para este pier, opcional
+            session_id: ID de sesión para obtener config de vigas
+            pier_key: Clave del pier para obtener Mpr de vigas
         """
 
         # 1. Flexocompresión (delegado a FlexureService)
@@ -678,19 +686,29 @@ class PierAnalysisService:
             pier, pier_forces, moment_axis, angle_deg
         )
 
-        # 2. Corte (delegado a ShearService)
-        shear_result = self._shear_service.check_shear(pier, pier_forces)
+        # 2. Obtener Mpr total de vigas de acople (para diseño por capacidad)
+        Mpr_total = 0.0
+        if session_id and pier_key:
+            Mpr_total = self._session_manager.get_pier_Mpr_total(session_id, pier_key)
 
-        # 3. Clasificación del muro (ACI 318-25 §18.10.8)
+        # 3. Corte (delegado a ShearService)
+        # Incluye diseño por capacidad si es pilar de muro con vigas (§18.10.8.1(a))
+        shear_result = self._shear_service.check_shear(
+            pier, pier_forces,
+            Mpr_total=Mpr_total,
+            lu=pier.height  # Altura del pier = luz libre
+        )
+
+        # 4. Clasificación del muro (ACI 318-25 §18.10.8)
         classification = self._shear_service.get_classification_dict(pier)
 
-        # 4. Amplificación de cortante (ACI 318-25 §18.10.3.3)
+        # 5. Amplificación de cortante (ACI 318-25 §18.10.3.3)
         Vu_max = shear_result.get('Vu_2', 0)
         amplification = self._shear_service.get_amplification_dict(
             pier, Vu_max, hwcs=hwcs, hn_ft=hn_ft
         )
 
-        # 5. Elementos de borde (ACI 318-25 §18.10.6)
+        # 6. Elementos de borde (ACI 318-25 §18.10.6)
         boundary = {'required': False, 'method': '', 'aci_reference': ''}
         boundary_sigma_max = 0.0
         boundary_limit = 0.0
@@ -713,15 +731,15 @@ class PierAnalysisService:
                 if 'dimensions' in boundary:
                     boundary_length = boundary['dimensions'].get('length_horizontal_mm', 0)
 
-        # 6. Estado general
+        # 7. Estado general
         overall_status = "OK"
         if flexure_result['status'] != "OK" or shear_result['status'] != "OK":
             overall_status = "NO OK"
 
-        # 7. Obtener datos de esbeltez (antes de propuesta)
+        # 8. Obtener datos de esbeltez (antes de propuesta)
         slenderness_data = flexure_result.get('slenderness', {})
 
-        # 8. Propuesta de diseño (si falla O si está sobrediseñado)
+        # 9. Propuesta de diseño (si falla O si está sobrediseñado)
         proposal = None
         flexure_sf = flexure_result['sf']
         shear_dcr = shear_result['dcr_combined']
@@ -818,6 +836,8 @@ class PierAnalysisService:
             shear_Vs=shear_result.get('Vs', 0),
             shear_alpha_c=shear_result.get('alpha_c', 0),
             shear_formula_type=shear_result.get('formula_type', 'wall'),
+            shear_Ve=shear_result.get('Ve', 0),
+            shear_uses_capacity_design=shear_result.get('uses_capacity_design', False),
             overall_status=overall_status,
             slenderness_lambda=slenderness_data.get('lambda', 0.0),
             slenderness_is_slender=slenderness_data.get('is_slender', False),

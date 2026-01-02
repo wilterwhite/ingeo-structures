@@ -276,7 +276,7 @@ class StructuralAPI {
     /**
      * Configura la viga estándar para la sesión.
      * @param {string} sessionId - ID de sesión
-     * @param {Object} beam - Configuración de viga {width, height, nbars, diam}
+     * @param {Object} beam - Configuración de viga {width, height, ln, nbars, diam}
      * @returns {Promise<Object>}
      */
     async setDefaultBeam(sessionId, beam) {
@@ -286,6 +286,7 @@ class StructuralAPI {
                 session_id: sessionId,
                 width: beam.width,
                 height: beam.height,
+                ln: beam.ln || 1500,
                 n_bars_top: beam.nbars,
                 diameter_top: beam.diam,
                 n_bars_bottom: beam.nbars,
@@ -298,13 +299,14 @@ class StructuralAPI {
      * Configura vigas específicas para un pier.
      * @param {string} sessionId - ID de sesión
      * @param {string} pierKey - Clave del pier (Story_Label)
-     * @param {Object} config - {izq: {width, height, nbars, diam}, der: {...}}
+     * @param {Object} config - {izq: {width, height, ln, nbars, diam}, der: {...}}
      * @returns {Promise<Object>}
      */
     async setPierBeam(sessionId, pierKey, config) {
         const formatBeam = (b) => b.width > 0 ? {
             width: b.width,
             height: b.height,
+            ln: b.ln || 1500,
             n_bars_top: b.nbars,
             diameter_top: b.diam,
             n_bars_bottom: b.nbars,

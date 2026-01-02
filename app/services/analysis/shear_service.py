@@ -59,7 +59,9 @@ class ShearService:
     def check_shear(
         self,
         pier: Pier,
-        pier_forces: Optional[PierForces]
+        pier_forces: Optional[PierForces],
+        Mpr_total: float = 0,
+        lu: float = 0
     ) -> Dict[str, Any]:
         """
         Verifica corte con interacción V2-V3 y retorna el caso crítico.
@@ -69,45 +71,63 @@ class ShearService:
         DCR = sqrt((Vu2/φVn2)² + (Vu3/φVn3)²) ≤ 1.0
         SF = 1/DCR
 
-        También verifica cuantía mínima según §18.10.4.3.
+        Para pilares de muro con vigas de acople (§18.10.8.1(a), §18.7.6.1):
+        Ve = Mpr_total / lu (diseño por capacidad)
+        Ve = min(Ve, Ω₀ × Vu) donde Ω₀ = 3.0
 
         Args:
             pier: Pier a verificar
             pier_forces: Fuerzas del pier (combinaciones)
+            Mpr_total: Momento probable total de vigas de acople (kN-m)
+            lu: Altura libre del pier (mm)
 
         Returns:
-            Dict con resultados de la verificación de corte incluyendo:
-            - sf: Factor de seguridad mínimo
-            - status: "OK" o "NO OK"
-            - rho_check_ok: Cumple §18.10.4.3
-            - rho_warning: Mensaje de advertencia si no cumple
-            - aci_reference: Referencia ACI usada
+            Dict con resultados de la verificación de corte
         """
+        # Resultado por defecto cuando no hay fuerzas
+        default_result = {
+            'sf': float('inf'),
+            'status': 'OK',
+            'critical_combo': 'N/A',
+            'dcr_2': 0,
+            'dcr_3': 0,
+            'dcr_combined': 0,
+            'phi_Vn_2': 0,
+            'phi_Vn_3': 0,
+            'Vu_2': 0,
+            'Vu_3': 0,
+            'Ve': 0,
+            'uses_capacity_design': False,
+            'Vc': 0,
+            'Vs': 0,
+            'alpha_c': 0,
+            'formula_type': 'N/A',
+            'rho_check_ok': True,
+            'rho_warning': '',
+            'aci_reference': ''
+        }
+
         if not pier_forces or not pier_forces.combinations:
-            return {
-                'sf': float('inf'),
-                'status': 'OK',
-                'critical_combo': 'N/A',
-                'dcr_2': 0,
-                'dcr_3': 0,
-                'dcr_combined': 0,
-                'phi_Vn_2': 0,
-                'phi_Vn_3': 0,
-                'Vu_2': 0,
-                'Vu_3': 0,
-                'Vc': 0,
-                'Vs': 0,
-                'alpha_c': 0,
-                'formula_type': 'N/A',
-                'rho_check_ok': True,
-                'rho_warning': '',
-                'aci_reference': ''
-            }
+            return default_result
+
+        # Clasificar si es pilar de muro
+        classification = self.classify_wall(pier)
+        is_wall_pier = self._wall_classification.is_wall_pier(classification)
+
+        # Determinar si usar diseño por capacidad
+        use_capacity_design = is_wall_pier and Mpr_total > 0 and lu > 0
+        Ve_capacity = 0
+        if use_capacity_design:
+            # Ve = Mpr_total / lu (convertir lu de mm a m)
+            lu_m = lu / 1000
+            # Mpr_total está en kN-m, Ve sale en kN, convertir a tonf
+            Ve_capacity = (Mpr_total / lu_m) / 9.80665  # kN a tonf
 
         # Variables para tracking del caso crítico
         min_sf = float('inf')
         critical_result = None
         critical_combo_name = ''
+        Ve_used = 0
 
         # Obtener cuantía vertical del pier para verificación §18.10.4.3
         rho_v = pier.rho_vertical
@@ -117,9 +137,21 @@ class ShearService:
             P = -combo.P  # Positivo = compresión
             Vu2 = abs(combo.V2)
             Vu3 = abs(combo.V3)
+            Vu_max = max(Vu2, Vu3)
+
+            # Calcular Ve si usa diseño por capacidad
+            if use_capacity_design:
+                # Ve = min(Ve_capacity, Ω₀ × Vu) donde Ω₀ = 3.0
+                Ve = min(Ve_capacity, 3.0 * Vu_max)
+                # Usar Ve para ambas direcciones (conservador)
+                Vu2_check = Ve if Vu2 > 0 else 0
+                Vu3_check = Ve if Vu3 > 0 else 0
+            else:
+                Vu2_check = Vu2
+                Vu3_check = Vu3
+                Ve = 0
 
             # Verificar corte combinado para esta combinación
-            # Incluye rho_v para verificar §18.10.4.3
             combined_result = self._shear_verification.verify_combined_shear(
                 lw=pier.width,
                 tw=pier.thickness,
@@ -127,11 +159,11 @@ class ShearService:
                 fc=pier.fc,
                 fy=pier.fy,
                 rho_h=pier.rho_horizontal,
-                Vu2=Vu2,
-                Vu3=Vu3,
+                Vu2=Vu2_check,
+                Vu3=Vu3_check,
                 Nu=P,
                 combo_name=combo.name,
-                rho_v=rho_v  # Nuevo: para verificar cuantía mínima
+                rho_v=rho_v
             )
 
             # Actualizar si es más crítico (menor SF = mayor DCR)
@@ -139,6 +171,7 @@ class ShearService:
                 min_sf = combined_result.sf
                 critical_result = combined_result
                 critical_combo_name = combo.name
+                Ve_used = Ve if use_capacity_design else 0
 
         status = "OK" if min_sf >= 1.0 else "NO OK"
 
@@ -162,11 +195,12 @@ class ShearService:
             'phi_Vn_3': critical_result.result_V3.phi_Vn if critical_result else 0,
             'Vu_2': critical_result.result_V2.Vu if critical_result else 0,
             'Vu_3': critical_result.result_V3.Vu if critical_result else 0,
+            'Ve': round(Ve_used, 2),
+            'uses_capacity_design': use_capacity_design,
             'Vc': critical_result.result_V2.Vc if critical_result else 0,
             'Vs': critical_result.result_V2.Vs if critical_result else 0,
             'alpha_c': critical_result.result_V2.alpha_c if critical_result else 0,
             'formula_type': critical_result.result_V2.formula_type if critical_result else 'N/A',
-            # Nuevos campos para cuantía mínima §18.10.4.3
             'rho_check_ok': rho_check_ok,
             'rho_warning': rho_warning,
             'aci_reference': aci_reference

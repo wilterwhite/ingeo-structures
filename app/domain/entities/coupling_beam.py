@@ -19,6 +19,7 @@ class CouplingBeamConfig:
     Atributos geometricos:
         width: Ancho de la viga (mm)
         height: Altura de la viga (mm)
+        ln: Largo libre de la viga (mm) - distancia entre caras de muros
 
     Armadura longitudinal:
         n_bars_top: Numero de barras superiores
@@ -39,6 +40,7 @@ class CouplingBeamConfig:
     # Geometria
     width: float = 200.0      # mm
     height: float = 500.0     # mm
+    ln: float = 1500.0        # mm - largo libre (claro entre muros)
 
     # Armadura superior
     n_bars_top: int = 3
@@ -144,10 +146,17 @@ class CouplingBeamConfig:
         """Momento probable maximo (el mayor de positivo y negativo) en kN-m."""
         return max(self.Mpr_positive, self.Mpr_negative)
 
+    @property
+    def ln_h_ratio(self) -> float:
+        """Relacion ln/h para clasificacion de viga."""
+        return self.ln / self.height if self.height > 0 else 0
+
     def get_summary(self) -> dict:
         """Retorna resumen de la configuracion."""
         return {
             'geometry': f'{self.width:.0f}x{self.height:.0f} mm',
+            'ln_mm': round(self.ln, 0),
+            'ln_h_ratio': round(self.ln_h_ratio, 2),
             'top': f'{self.n_bars_top}φ{self.diameter_top}',
             'bottom': f'{self.n_bars_bottom}φ{self.diameter_bottom}',
             'stirrups': f'φ{self.stirrup_diameter}@{self.stirrup_spacing:.0f} ({self.n_legs}R)',

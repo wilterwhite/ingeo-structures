@@ -12,7 +12,7 @@ class ResultsTable {
         this.plotsCache = {};
 
         // Estado de vigas
-        this.standardBeam = { width: 200, height: 500, nbars: 2, diam: 12 };
+        this.standardBeam = { width: 200, height: 500, ln: 1500, nbars: 2, diam: 12 };
         this.customBeamPiers = new Set();  // Piers con vigas personalizadas
         this.pierBeamConfigs = {};  // Configuración de vigas por pier
     }
@@ -379,6 +379,12 @@ class ResultsTable {
                     ${[12,16,18,20,22,25].map(d => `<option value="${d}" ${d === beam.diam ? 'selected' : ''}>φ${d}</option>`).join('')}
                 </select>
             </div>
+            <div class="viga-row">
+                <span>L=</span>
+                <select class="edit-viga-ln-${side}" title="Largo libre (mm)">
+                    ${[1000,1200,1500,1800,2000,2500].map(l => `<option value="${l}" ${l === beam.ln ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
+            </div>
             ${side === 'der' ? `<button class="btn-toggle-beam ${isCustom ? 'unlocked' : ''}" data-pier="${pierKey}" title="${isCustom ? 'Volver a estándar' : 'Especificar vigas'}">${isCustom ? '✓' : '⚙'}</button>` : ''}
         `;
 
@@ -464,6 +470,7 @@ class ResultsTable {
         // Leer valores actuales
         const width = parseInt(cell.querySelector(`.edit-viga-width-${side}`)?.value) || 0;
         const height = parseInt(cell.querySelector(`.edit-viga-height-${side}`)?.value) || 0;
+        const ln = parseInt(cell.querySelector(`.edit-viga-ln-${side}`)?.value) || 1500;
         const nbars = parseInt(cell.querySelector(`.edit-viga-nbars-${side}`)?.value) || 2;
         const diam = parseInt(cell.querySelector(`.edit-viga-diam-${side}`)?.value) || 12;
 
@@ -471,7 +478,7 @@ class ResultsTable {
         if (!this.pierBeamConfigs[pierKey]) {
             this.pierBeamConfigs[pierKey] = { izq: { ...this.standardBeam }, der: { ...this.standardBeam } };
         }
-        this.pierBeamConfigs[pierKey][side] = { width, height, nbars, diam };
+        this.pierBeamConfigs[pierKey][side] = { width, height, ln, nbars, diam };
 
         // Enviar al backend
         this.savePierBeamConfig(pierKey);

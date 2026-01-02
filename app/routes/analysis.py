@@ -559,6 +559,7 @@ def set_default_beam():
             "session_id": "uuid-xxx",
             "width": 200,
             "height": 500,
+            "ln": 1500,
             "n_bars_top": 2,
             "diameter_top": 12,
             "n_bars_bottom": 2,
@@ -583,6 +584,7 @@ def set_default_beam():
             session_id=session_id,
             width=float(data.get('width', 200)),
             height=float(data.get('height', 500)),
+            ln=float(data.get('ln', 1500)),
             n_bars_top=int(data.get('n_bars_top', 2)),
             diameter_top=int(data.get('diameter_top', 12)),
             n_bars_bottom=int(data.get('n_bars_bottom', 2)),
@@ -643,6 +645,7 @@ def set_pier_beam():
             beam_left_config = {
                 'width': float(bl.get('width', 200)),
                 'height': float(bl.get('height', 500)),
+                'ln': float(bl.get('ln', 1500)),
                 'n_bars_top': int(bl.get('n_bars_top', 2)),
                 'diameter_top': int(bl.get('diameter_top', 12)),
                 'n_bars_bottom': int(bl.get('n_bars_bottom', 2)),
@@ -654,6 +657,7 @@ def set_pier_beam():
             beam_right_config = {
                 'width': float(br.get('width', 200)),
                 'height': float(br.get('height', 500)),
+                'ln': float(br.get('ln', 1500)),
                 'n_bars_top': int(br.get('n_bars_top', 2)),
                 'diameter_top': int(br.get('diameter_top', 12)),
                 'n_bars_bottom': int(br.get('n_bars_bottom', 2)),

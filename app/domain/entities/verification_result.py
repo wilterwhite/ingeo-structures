@@ -60,6 +60,10 @@ class VerificationResult:
     # Resumen
     overall_status: str         # "OK" o "NO OK"
 
+    # Diseño por capacidad (§18.10.8.1(a), §18.7.6.1)
+    shear_Ve: float = 0.0                    # Cortante de diseño Ve = Mpr/lu (tonf)
+    shear_uses_capacity_design: bool = False # Si usa diseño por capacidad
+
     # Esbeltez (campos con defaults al final)
     slenderness_lambda: float = 0.0     # Ratio de esbeltez k*lu/r
     slenderness_is_slender: bool = False  # True si lambda > 22
@@ -200,6 +204,8 @@ class VerificationResult:
                 'phi_Vn_3': round(self.shear_phi_Vn_3, 1),
                 'Vu_2': round(self.shear_Vu_2, 1),
                 'Vu_3': round(self.shear_Vu_3, 1),
+                'Ve': round(self.shear_Ve, 2),
+                'uses_capacity_design': self.shear_uses_capacity_design,
                 'Vc': round(self.shear_Vc, 2),
                 'Vs': round(self.shear_Vs, 2),
                 'alpha_c': round(self.shear_alpha_c, 3),

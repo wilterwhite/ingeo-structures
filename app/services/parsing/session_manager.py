@@ -212,16 +212,17 @@ class SessionManager:
     def set_default_coupling_beam(
         self,
         session_id: str,
-        config: dict
+        **kwargs
     ) -> bool:
         """
         Configura la viga de acople generica por defecto.
 
         Args:
             session_id: ID de sesión
-            config: Diccionario con configuración:
+            **kwargs: Configuración de la viga:
                 - width: Ancho (mm)
                 - height: Altura (mm)
+                - ln: Largo libre (mm)
                 - n_bars_top: Número de barras superiores
                 - diameter_top: Diámetro superior (mm)
                 - n_bars_bottom: Número de barras inferiores
@@ -240,18 +241,19 @@ class SessionManager:
             return False
 
         beam = CouplingBeamConfig(
-            width=config.get('width', 200),
-            height=config.get('height', 500),
-            n_bars_top=config.get('n_bars_top', 3),
-            diameter_top=config.get('diameter_top', 16),
-            n_bars_bottom=config.get('n_bars_bottom', 3),
-            diameter_bottom=config.get('diameter_bottom', 16),
-            stirrup_diameter=config.get('stirrup_diameter', 10),
-            stirrup_spacing=config.get('stirrup_spacing', 150),
-            n_legs=config.get('n_legs', 2),
-            fy=config.get('fy', 420),
-            fc=config.get('fc', 25),
-            cover=config.get('cover', 40),
+            width=kwargs.get('width', 200),
+            height=kwargs.get('height', 500),
+            ln=kwargs.get('ln', 1500),
+            n_bars_top=kwargs.get('n_bars_top', 3),
+            diameter_top=kwargs.get('diameter_top', 16),
+            n_bars_bottom=kwargs.get('n_bars_bottom', 3),
+            diameter_bottom=kwargs.get('diameter_bottom', 16),
+            stirrup_diameter=kwargs.get('stirrup_diameter', 10),
+            stirrup_spacing=kwargs.get('stirrup_spacing', 150),
+            n_legs=kwargs.get('n_legs', 2),
+            fy=kwargs.get('fy', 420),
+            fc=kwargs.get('fc', 25),
+            cover=kwargs.get('cover', 40),
         )
 
         parsed_data.default_coupling_beam = beam

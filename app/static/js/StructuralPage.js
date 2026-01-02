@@ -76,6 +76,7 @@ class StructuralPage {
             // Viga estándar
             stdBeamWidth: document.getElementById('std-beam-width'),
             stdBeamHeight: document.getElementById('std-beam-height'),
+            stdBeamLn: document.getElementById('std-beam-ln'),
             stdBeamNbars: document.getElementById('std-beam-nbars'),
             stdBeamDiam: document.getElementById('std-beam-diam'),
 
@@ -181,6 +182,7 @@ class StructuralPage {
         // Viga estándar - actualizar cuando cambian los valores
         this.elements.stdBeamWidth?.addEventListener('change', () => this.onStandardBeamChange());
         this.elements.stdBeamHeight?.addEventListener('change', () => this.onStandardBeamChange());
+        this.elements.stdBeamLn?.addEventListener('change', () => this.onStandardBeamChange());
         this.elements.stdBeamNbars?.addEventListener('change', () => this.onStandardBeamChange());
         this.elements.stdBeamDiam?.addEventListener('change', () => this.onStandardBeamChange());
 
@@ -584,6 +586,7 @@ class StructuralPage {
         const beam = {
             width: parseInt(this.elements.stdBeamWidth?.value) || 200,
             height: parseInt(this.elements.stdBeamHeight?.value) || 500,
+            ln: parseInt(this.elements.stdBeamLn?.value) || 1500,
             nbars: parseInt(this.elements.stdBeamNbars?.value) || 2,
             diam: parseInt(this.elements.stdBeamDiam?.value) || 12
         };
