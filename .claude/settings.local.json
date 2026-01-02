@@ -45,7 +45,16 @@
       "Bash(app/domain/calculations/wall_continuity.py )",
       "Bash(app/domain/constants/units.py )",
       "Bash(app/services/parsing/session_manager.py)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(git rm:*)",
+      "Bash(wc:*)",
+      "Bash(dir /s \"C:\\\\Users\\\\willi\\\\Github\\\\ingeo-structures\\\\app\\\\domain\")",
+      "Bash(tree:*)",
+      "Bash(dir /s \"C:\\\\Users\\\\willi\\\\Github\\\\ingeo-structures\\\\app\\\\domain\\\\chapter18\")",
+      "Bash(app/domain/constants/shear.py )",
+      "Bash(app/domain/shear/results.py )",
+      "Bash(app/domain/shear/verification.py )",
+      "Bash(tests/domain/shear/test_alpha_sh_materials.py)"
     ]
   }
 }

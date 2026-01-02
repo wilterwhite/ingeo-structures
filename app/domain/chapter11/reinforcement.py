@@ -16,6 +16,7 @@ from enum import Enum
 import math
 
 from ..constants.materials import SteelGrade
+from ..constants.reinforcement import is_rho_v_ge_rho_h_required
 
 if TYPE_CHECKING:
     from ..entities.pier import Pier
@@ -346,10 +347,9 @@ class ReinforcementLimitsService:
         rho_h_ok = rho_h >= rho_h_min
 
         # Requisito adicional: si hw/lw <= 2.0, rho_v >= rho_h
-        if hw_lw <= 2.0:
-            rho_v_ge_rho_h = rho_v >= rho_h
-        else:
-            rho_v_ge_rho_h = True  # No aplica
+        # Usa función compartida de constants/reinforcement.py
+        rho_v_ge_rho_h_required = is_rho_v_ge_rho_h_required(hw, lw)
+        rho_v_ge_rho_h = rho_v >= rho_h if rho_v_ge_rho_h_required else True
 
         is_ok = rho_v_ok and rho_h_ok and rho_v_ge_rho_h
 

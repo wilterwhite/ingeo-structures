@@ -31,6 +31,8 @@ from ...domain.chapter18 import (
     BoundaryElementService,
     BoundaryElementMethod,
     BoundaryElementResult,
+    CouplingBeamService,
+    CouplingBeamDesignResult,
 )
 from ...domain.chapter18.amplification import ShearAmplificationResult
 
@@ -55,6 +57,7 @@ class ShearService:
         self._wall_classification = WallClassificationService()
         self._shear_amplification = ShearAmplificationService()
         self._boundary_element = BoundaryElementService()
+        self._coupling_beam = CouplingBeamService()
 
     def check_shear(
         self,
@@ -676,3 +679,110 @@ class ShearService:
             'amplification': amplification,
             'boundary_element': boundary
         }
+
+    # =========================================================================
+    # VIGAS DE ACOPLAMIENTO (§18.10.7)
+    # =========================================================================
+
+    def check_coupling_beam(
+        self,
+        ln: float,
+        h: float,
+        bw: float,
+        Vu: float,
+        fc: float,
+        fy_diagonal: float,
+        fyt: float,
+        lambda_factor: float = 1.0
+    ) -> CouplingBeamDesignResult:
+        """
+        Verifica viga de acoplamiento según ACI 318-25 §18.10.7.
+
+        Clasifica la viga por ln/h y determina el tipo de refuerzo:
+        - ln/h < 2: Requiere refuerzo diagonal
+        - ln/h >= 4: Puede usar refuerzo longitudinal convencional
+        - 2 <= ln/h < 4: Cualquiera de los dos
+
+        Args:
+            ln: Claro libre de la viga (mm)
+            h: Peralte de la viga (mm)
+            bw: Ancho de la viga (mm)
+            Vu: Cortante último (tonf)
+            fc: f'c del hormigón (MPa)
+            fy_diagonal: Fluencia del refuerzo diagonal (MPa)
+            fyt: Fluencia del refuerzo transversal (MPa)
+            lambda_factor: Factor para concreto liviano (default 1.0)
+
+        Returns:
+            CouplingBeamDesignResult con diseño completo
+        """
+        return self._coupling_beam.design_coupling_beam(
+            ln=ln,
+            h=h,
+            bw=bw,
+            Vu=Vu,
+            fc=fc,
+            fy_diagonal=fy_diagonal,
+            fyt=fyt,
+            lambda_factor=lambda_factor
+        )
+
+    def get_coupling_beam_dict(
+        self,
+        ln: float,
+        h: float,
+        bw: float,
+        Vu: float,
+        fc: float,
+        fy_diagonal: float,
+        fyt: float
+    ) -> Dict[str, Any]:
+        """
+        Obtiene la verificación de viga de acople como diccionario.
+
+        Args:
+            ln: Claro libre de la viga (mm)
+            h: Peralte de la viga (mm)
+            bw: Ancho de la viga (mm)
+            Vu: Cortante último (tonf)
+            fc: f'c del hormigón (MPa)
+            fy_diagonal: Fluencia del refuerzo diagonal (MPa)
+            fyt: Fluencia del refuerzo transversal (MPa)
+
+        Returns:
+            Dict con información de la viga de acoplamiento
+        """
+        result = self.check_coupling_beam(
+            ln=ln, h=h, bw=bw, Vu=Vu,
+            fc=fc, fy_diagonal=fy_diagonal, fyt=fyt
+        )
+
+        response = {
+            'beam_type': result.classification.beam_type.value,
+            'ln_h_ratio': round(result.classification.ln_h_ratio, 2),
+            'reinforcement_type': result.reinforcement_type.value,
+            'Vu': result.Vu,
+            'phi_Vn': result.phi_Vn,
+            'dcr': result.dcr,
+            'is_ok': result.is_ok,
+            'warnings': result.warnings,
+            'aci_reference': result.aci_reference
+        }
+
+        if result.shear_result:
+            response['shear'] = {
+                'Avd': result.shear_result.Avd,
+                'alpha_deg': result.shear_result.alpha_deg,
+                'Vn_calc': result.shear_result.Vn_calc,
+                'Vn_max': result.shear_result.Vn_max,
+                'phi_Vn': result.shear_result.phi_Vn
+            }
+
+        if result.confinement:
+            response['confinement'] = {
+                'option': result.confinement.confinement_option.value,
+                'Ash_required': result.confinement.Ash_required,
+                'spacing_max': result.confinement.spacing_max
+            }
+
+        return response

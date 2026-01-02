@@ -1,75 +1,25 @@
-# app/domain/chapter18/amplification.py
+# app/domain/chapter18/amplification/service.py
 """
-Amplificación de cortante para muros estructurales especiales según ACI 318-25.
+Servicio de amplificación de cortante para muros especiales ACI 318-25.
 
-Referencias ACI 318-25:
+Referencias:
 - §18.10.3.3: Amplificación de cortante (Ve = Omega_v × omega_v × Vu)
-- Tabla 18.10.3.3.3: Factores Omega_v y omega_v
 - §18.10.2: Requisitos de refuerzo para muros especiales
 """
 import math
-from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional
 
-from ..constants.shear import (
-    OMEGA_V_MIN,
-    OMEGA_V_MAX,
-    OMEGA_V_DYN_COEF,
-    OMEGA_V_DYN_BASE,
-    OMEGA_V_DYN_MIN,
-    OMEGA_0_DEFAULT,
-    WALL_PIER_HW_LW_LIMIT,
+from ...constants.shear import OMEGA_0_DEFAULT
+from ...constants.seismic import SeismicDesignCategory, WallCategory
+from ...constants.units import N_TO_TONF
+from ...constants.reinforcement import is_rho_v_ge_rho_h_required
+from ..results import (
+    ShearAmplificationResult,
+    ShearAmplificationFactors,
+    SpecialWallRequirements,
 )
-from ..constants.seismic import SeismicDesignCategory, WallCategory
-from ..constants.units import N_TO_TONF
+from .factors import calculate_omega_v, calculate_omega_v_dyn, calculate_factors
 
-
-# =============================================================================
-# Dataclasses
-# =============================================================================
-
-@dataclass
-class ShearAmplificationResult:
-    """Resultado de la amplificación de cortante §18.10.3.3."""
-    Vu_original: float      # Cortante original del análisis (tonf)
-    Ve: float               # Cortante de diseño amplificado (tonf)
-    Omega_v: float          # Factor de sobrerresistencia a flexión
-    omega_v_dyn: float      # Factor de amplificación dinámica
-    amplification: float    # Factor total (Omega_v × omega_v_dyn)
-    hwcs_lw: float          # Relación hwcs/lw
-    hn_ft: Optional[float]  # Altura del edificio en pies
-    applies: bool           # Si aplica la amplificación
-    aci_reference: str      # Referencia ACI
-
-
-@dataclass
-class ShearAmplificationFactors:
-    """Factores de amplificación según Tabla 18.10.3.3.3."""
-    Omega_v: float          # Factor de sobrerresistencia a flexión
-    omega_v_dyn: float      # Factor de amplificación dinámica
-    combined: float         # Omega_v × omega_v_dyn
-    hwcs_lw: float          # Relación altura/longitud
-    hn_ft: float            # Altura del edificio (pies)
-    aci_reference: str      # Referencia ACI
-
-
-@dataclass
-class SpecialWallRequirements:
-    """Requisitos para muros estructurales especiales (ACI 318-25 §18.10.2)."""
-    rho_l_min: float                    # Cuantía longitudinal mínima
-    rho_t_min: float                    # Cuantía transversal mínima
-    spacing_max_mm: float               # Espaciamiento máximo (mm)
-    requires_double_curtain: bool       # Si requiere doble cortina
-    double_curtain_reason: str          # Razón de doble cortina
-    rho_l_ge_rho_t: bool               # Si aplica rho_l >= rho_t
-    is_ok: bool                         # Si cumple todos los requisitos
-    warnings: List[str] = field(default_factory=list)
-    aci_reference: str = ""
-
-
-# =============================================================================
-# Servicio Principal
-# =============================================================================
 
 class ShearAmplificationService:
     """
@@ -79,13 +29,6 @@ class ShearAmplificationService:
     §18.10.3.2 (pilares de muro), el cortante de diseño debe amplificarse:
 
         Ve = Omega_v × omega_v × Vu,Eh
-
-    Tabla 18.10.3.3.3:
-    | hwcs/lw    | Omega_v           | omega_v                      |
-    |------------|-------------------|------------------------------|
-    | <= 1.0     | 1.0               | 1.0                          |
-    | 1.0 - 2.0  | interpolación     | 1.0                          |
-    | >= 2.0     | 1.5               | 0.8 + 0.09×hn^(1/3) >= 1.0   |
 
     Alternativa (§18.10.3.3.4): Se permite usar Omega_v × omega_v = Omega_o
     """
@@ -100,28 +43,8 @@ class ShearAmplificationService:
     # =========================================================================
 
     def calculate_omega_v(self, hwcs: float, lw: float) -> float:
-        """
-        Calcula factor de sobrerresistencia Omega_v según Tabla 18.10.3.3.3.
-
-        Args:
-            hwcs: Altura del muro desde sección crítica (mm)
-            lw: Longitud del muro (mm)
-
-        Returns:
-            Factor Omega_v (1.0 a 1.5)
-        """
-        if lw <= 0:
-            return OMEGA_V_MIN
-
-        ratio = hwcs / lw
-
-        if ratio <= 1.0:
-            return OMEGA_V_MIN
-        elif ratio >= WALL_PIER_HW_LW_LIMIT:
-            return OMEGA_V_MAX
-        else:
-            # Interpolación lineal entre 1.0 y 2.0
-            return OMEGA_V_MIN + (OMEGA_V_MAX - OMEGA_V_MIN) * (ratio - 1.0)
+        """Calcula factor Omega_v. Ver factors.calculate_omega_v."""
+        return calculate_omega_v(hwcs, lw)
 
     def calculate_omega_v_dyn(
         self,
@@ -129,31 +52,8 @@ class ShearAmplificationService:
         lw: float,
         hn_ft: Optional[float] = None
     ) -> float:
-        """
-        Calcula factor de amplificación dinámica omega_v según Tabla 18.10.3.3.3.
-
-        Args:
-            hwcs: Altura del muro desde sección crítica (mm)
-            lw: Longitud del muro (mm)
-            hn_ft: Altura total del edificio en pies
-
-        Returns:
-            Factor omega_v (>= 1.0)
-        """
-        if lw <= 0:
-            return OMEGA_V_DYN_MIN
-
-        ratio = hwcs / lw
-
-        if ratio < WALL_PIER_HW_LW_LIMIT:
-            return OMEGA_V_DYN_MIN
-
-        # Para hwcs/lw >= 2.0: omega_v = 0.8 + 0.09 × hn^(1/3) >= 1.0
-        if hn_ft is None or hn_ft <= 0:
-            return OMEGA_V_DYN_MIN
-
-        omega_v_dyn = OMEGA_V_DYN_BASE + OMEGA_V_DYN_COEF * (hn_ft ** (1/3))
-        return max(OMEGA_V_DYN_MIN, omega_v_dyn)
+        """Calcula factor omega_v. Ver factors.calculate_omega_v_dyn."""
+        return calculate_omega_v_dyn(hwcs, lw, hn_ft)
 
     def calculate_factors(
         self,
@@ -161,35 +61,8 @@ class ShearAmplificationService:
         lw: float,
         hn_ft: float = 0
     ) -> ShearAmplificationFactors:
-        """
-        Calcula factores de amplificación según Tabla 18.10.3.3.3.
-
-        Args:
-            hwcs: Altura del muro desde sección crítica (mm)
-            lw: Longitud del muro (mm)
-            hn_ft: Altura del edificio en pies
-
-        Returns:
-            ShearAmplificationFactors con los factores calculados
-        """
-        if lw <= 0:
-            return ShearAmplificationFactors(
-                Omega_v=1.0, omega_v_dyn=1.0, combined=1.0,
-                hwcs_lw=0, hn_ft=hn_ft,
-                aci_reference="ACI 318-25 Tabla 18.10.3.3.3"
-            )
-
-        Omega_v = self.calculate_omega_v(hwcs, lw)
-        omega_v_dyn = self.calculate_omega_v_dyn(hwcs, lw, hn_ft if hn_ft > 0 else None)
-
-        return ShearAmplificationFactors(
-            Omega_v=round(Omega_v, 3),
-            omega_v_dyn=round(omega_v_dyn, 3),
-            combined=round(Omega_v * omega_v_dyn, 3),
-            hwcs_lw=round(hwcs / lw, 2),
-            hn_ft=hn_ft,
-            aci_reference="ACI 318-25 Tabla 18.10.3.3.3"
-        )
+        """Calcula factores. Ver factors.calculate_factors."""
+        return calculate_factors(hwcs, lw, hn_ft)
 
     def calculate_amplified_shear(
         self,
@@ -223,8 +96,8 @@ class ShearAmplificationService:
             amplification = omega_0
             aci_reference = "ACI 318-25 §18.10.3.3.4 (Omega_0)"
         else:
-            Omega_v = self.calculate_omega_v(hwcs, lw)
-            omega_v_dyn = self.calculate_omega_v_dyn(hwcs, lw, hn_ft)
+            Omega_v = calculate_omega_v(hwcs, lw)
+            omega_v_dyn = calculate_omega_v_dyn(hwcs, lw, hn_ft)
             amplification = Omega_v * omega_v_dyn
             aci_reference = "ACI 318-25 §18.10.3.3, Tabla 18.10.3.3.3"
 
@@ -338,7 +211,8 @@ class ShearAmplificationService:
             warnings.append(f"Se requiere doble cortina: {double_reason}")
 
         # Verificar rho_l >= rho_t para muros bajos (§18.10.4.3)
-        rho_l_ge_rho_t_required = hw_lw <= 2.0
+        # Usa función compartida de constants/reinforcement.py
+        rho_l_ge_rho_t_required = is_rho_v_ge_rho_h_required(hw, lw)
         rho_l_ge_rho_t_ok = rho_l >= rho_t if rho_l_ge_rho_t_required else True
 
         if rho_l_ge_rho_t_required and not rho_l_ge_rho_t_ok:
@@ -405,8 +279,6 @@ class ShearAmplificationService:
 
 
 # =============================================================================
-# Aliases para compatibilidad (deprecated)
+# Alias para compatibilidad
 # =============================================================================
-
-# Alias para método renombrado
 ShearAmplificationService.calculate_amplification_factors = ShearAmplificationService.calculate_factors

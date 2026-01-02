@@ -18,6 +18,9 @@ from ..constants.shear import (
     WALL_PIER_ALTERNATE_LIMIT,
 )
 
+# Espesor mínimo para columnas sísmicas (§18.7.2.1)
+COLUMN_MIN_THICKNESS_MM = 300.0
+
 
 class ElementType(Enum):
     """
@@ -173,3 +176,15 @@ class WallClassificationService:
     def is_squat_wall(self, classification: WallClassification) -> bool:
         """Verifica si es un muro rechoncho (hw/lw < 2.0)."""
         return classification.hw_lw < WALL_PIER_HW_LW_LIMIT
+
+    def check_column_min_thickness(self, bw: float) -> tuple:
+        """
+        Verifica espesor mínimo 300mm para columnas sísmicas (§18.7.2.1).
+
+        Args:
+            bw: Espesor del elemento (mm)
+
+        Returns:
+            Tupla (cumple, espesor_mínimo_requerido)
+        """
+        return (bw >= COLUMN_MIN_THICKNESS_MM, COLUMN_MIN_THICKNESS_MM)
