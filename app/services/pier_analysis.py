@@ -802,6 +802,8 @@ class PierAnalysisService:
             flexure_Mu=flexure_result['Mu'],
             flexure_exceeds_axial=flexure_result.get('exceeds_axial_capacity', False),
             flexure_phi_Pn_max=flexure_result.get('phi_Pn_max', 0.0),
+            flexure_has_tension=flexure_result.get('has_tension', False),
+            flexure_tension_combos=flexure_result.get('tension_combos', 0),
             shear_sf=shear_result['sf'],
             shear_status=shear_result['status'],
             critical_combo_shear=shear_result['critical_combo'],

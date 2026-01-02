@@ -73,6 +73,12 @@ class StructuralPage {
             toggleAllCombosBtn: document.getElementById('toggle-all-combos-btn'),
             toggleCombosIcon: document.getElementById('toggle-combos-icon'),
 
+            // Viga estándar
+            stdBeamWidth: document.getElementById('std-beam-width'),
+            stdBeamHeight: document.getElementById('std-beam-height'),
+            stdBeamNbars: document.getElementById('std-beam-nbars'),
+            stdBeamDiam: document.getElementById('std-beam-diam'),
+
             // Stats
             statTotal: document.getElementById('stat-total'),
             statOk: document.getElementById('stat-ok'),
@@ -171,6 +177,12 @@ class StructuralPage {
         this.elements.statusFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.toggleAllCombosBtn?.addEventListener('click', () => this.toggleAllCombinations());
         this.elements.generateReportBtn?.addEventListener('click', () => this.openReportModal());
+
+        // Viga estándar - actualizar cuando cambian los valores
+        this.elements.stdBeamWidth?.addEventListener('change', () => this.onStandardBeamChange());
+        this.elements.stdBeamHeight?.addEventListener('change', () => this.onStandardBeamChange());
+        this.elements.stdBeamNbars?.addEventListener('change', () => this.onStandardBeamChange());
+        this.elements.stdBeamDiam?.addEventListener('change', () => this.onStandardBeamChange());
 
         // Botones de navegación
         document.getElementById('new-file-btn')?.addEventListener('click', () => {
@@ -559,6 +571,25 @@ class StructuralPage {
             return;
         }
         this.reportModal.open(totalPiers);
+    }
+
+    // =========================================================================
+    // Viga Estándar
+    // =========================================================================
+
+    /**
+     * Maneja cambios en la viga estándar.
+     */
+    onStandardBeamChange() {
+        const beam = {
+            width: parseInt(this.elements.stdBeamWidth?.value) || 200,
+            height: parseInt(this.elements.stdBeamHeight?.value) || 500,
+            nbars: parseInt(this.elements.stdBeamNbars?.value) || 2,
+            diam: parseInt(this.elements.stdBeamDiam?.value) || 12
+        };
+
+        // Actualizar en ResultsTable (propaga a celdas bloqueadas y guarda en backend)
+        this.resultsTable.updateStandardBeam(beam);
     }
 
     async showProposedSectionDiagram(pierKey, pierLabel, proposedConfig) {

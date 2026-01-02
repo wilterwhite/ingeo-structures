@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INGEO Structures - ACI 318-25</title>
-    <link rel="stylesheet" href="{{ url_for('structural_static', filename='css/structural.css') }}?v=10">
+    <link rel="stylesheet" href="{{ url_for('structural_static', filename='css/structural.css') }}?v=12">
 </head>
 <body>
     <div class="container">
@@ -192,6 +192,41 @@
                             <option value="FAIL">Fail</option>
                         </select>
                     </div>
+                    <div class="toolbar-divider"></div>
+
+                    <!-- Viga Estándar -->
+                    <div class="standard-beam-config">
+                        <span class="beam-label">Viga Estándar:</span>
+                        <select id="std-beam-width" title="Ancho (mm)">
+                            <option value="150">150</option>
+                            <option value="200" selected>200</option>
+                            <option value="250">250</option>
+                            <option value="300">300</option>
+                        </select>
+                        <span>×</span>
+                        <select id="std-beam-height" title="Alto (mm)">
+                            <option value="400">400</option>
+                            <option value="500" selected>500</option>
+                            <option value="600">600</option>
+                            <option value="700">700</option>
+                        </select>
+                        <span class="beam-separator">|</span>
+                        <select id="std-beam-nbars" title="Nº barras">
+                            <option value="2" selected>2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                        </select>
+                        <span>φ</span>
+                        <select id="std-beam-diam" title="Diámetro barras">
+                            <option value="12" selected>12</option>
+                            <option value="16">16</option>
+                            <option value="18">18</option>
+                            <option value="20">20</option>
+                            <option value="22">22</option>
+                        </select>
+                    </div>
+
                     <div class="toolbar-divider"></div>
                     <button class="btn btn-sm" id="toggle-all-combos-btn" title="Expandir/Colapsar todas las combinaciones">
                         <span id="toggle-combos-icon">▶</span> Expandir todo
@@ -494,12 +529,12 @@
     </div>
 
     <!-- JavaScript Modules -->
-    <script src="{{ url_for('structural_static', filename='js/StructuralAPI.js') }}?v=10"></script>
-    <script src="{{ url_for('structural_static', filename='js/PlotModal.js') }}?v=10"></script>
-    <script src="{{ url_for('structural_static', filename='js/PiersTable.js') }}?v=10"></script>
-    <script src="{{ url_for('structural_static', filename='js/ResultsTable.js') }}?v=10"></script>
-    <script src="{{ url_for('structural_static', filename='js/ReportModal.js') }}?v=10"></script>
-    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}?v=10"></script>
+    <script src="{{ url_for('structural_static', filename='js/StructuralAPI.js') }}?v=12"></script>
+    <script src="{{ url_for('structural_static', filename='js/PlotModal.js') }}?v=12"></script>
+    <script src="{{ url_for('structural_static', filename='js/PiersTable.js') }}?v=12"></script>
+    <script src="{{ url_for('structural_static', filename='js/ResultsTable.js') }}?v=12"></script>
+    <script src="{{ url_for('structural_static', filename='js/ReportModal.js') }}?v=12"></script>
+    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}?v=12"></script>
     <script>
         // Inicializar la página cuando el DOM esté listo
         document.addEventListener('DOMContentLoaded', () => {

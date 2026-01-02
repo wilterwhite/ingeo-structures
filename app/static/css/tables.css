@@ -315,6 +315,20 @@
     font-size: 0.75rem;
 }
 
+/* Advertencia: Combinaciones con tracción (Pu < 0) */
+.tension-warning {
+    display: inline-block;
+    background: #fef3c7;
+    color: #b45309;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: 4px;
+    cursor: help;
+    vertical-align: middle;
+}
+
 .capacity-info {
     font-size: 0.7rem;
     color: var(--primary-color);
@@ -654,5 +668,86 @@
 .viga-cell span {
     font-size: 0.6rem;
     color: var(--text-muted);
+}
+
+/* Viga bloqueada (hereda de estándar) */
+.viga-cell.locked select {
+    background: #f5f5f5;
+    color: #999;
+    pointer-events: none;
+    border-color: #ddd;
+}
+
+.viga-cell.locked span {
+    color: #bbb;
+}
+
+/* Botón desbloquear/bloquear viga */
+.btn-toggle-beam {
+    display: block;
+    margin-top: 3px;
+    padding: 2px 6px;
+    font-size: 0.6rem;
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    cursor: pointer;
+    color: #666;
+    text-align: center;
+}
+
+.btn-toggle-beam:hover {
+    background: #e0e0e0;
+    border-color: #ccc;
+}
+
+.btn-toggle-beam.unlocked {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+/* ==========================================================================
+   STANDARD BEAM CONFIG (toolbar)
+   ========================================================================== */
+
+.standard-beam-config {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: #f8f9fa;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 0.8rem;
+}
+
+.standard-beam-config .beam-label {
+    font-weight: 500;
+    color: var(--text-color);
+    margin-right: 4px;
+}
+
+.standard-beam-config select {
+    padding: 3px 4px;
+    font-size: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: white;
+    min-width: 45px;
+}
+
+.standard-beam-config select:hover {
+    border-color: var(--primary-color);
+}
+
+.standard-beam-config span {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.standard-beam-config .beam-separator {
+    margin: 0 4px;
+    color: #ccc;
 }
 

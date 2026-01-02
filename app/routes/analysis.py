@@ -549,6 +549,136 @@ def get_section_diagram():
         }), 500
 
 
+@bp.route('/set-default-beam', methods=['POST'])
+def set_default_beam():
+    """
+    Configura la viga estándar para la sesión.
+
+    Request (JSON):
+        {
+            "session_id": "uuid-xxx",
+            "width": 200,
+            "height": 500,
+            "n_bars_top": 2,
+            "diameter_top": 12,
+            "n_bars_bottom": 2,
+            "diameter_bottom": 12
+        }
+
+    Response:
+        { "success": true }
+    """
+    try:
+        data = request.get_json() or {}
+
+        session_id = data.get('session_id')
+        if not session_id:
+            return jsonify({
+                'success': False,
+                'error': 'Se requiere session_id'
+            }), 400
+
+        service = get_analysis_service()
+        service._session_manager.set_default_coupling_beam(
+            session_id=session_id,
+            width=float(data.get('width', 200)),
+            height=float(data.get('height', 500)),
+            n_bars_top=int(data.get('n_bars_top', 2)),
+            diameter_top=int(data.get('diameter_top', 12)),
+            n_bars_bottom=int(data.get('n_bars_bottom', 2)),
+            diameter_bottom=int(data.get('diameter_bottom', 12))
+        )
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error: {str(e)}'
+        }), 500
+
+
+@bp.route('/set-pier-beam', methods=['POST'])
+def set_pier_beam():
+    """
+    Configura vigas específicas para un pier.
+
+    Request (JSON):
+        {
+            "session_id": "uuid-xxx",
+            "pier_key": "Story_PierLabel",
+            "has_beam_left": true,
+            "has_beam_right": true,
+            "beam_left": { "width": 200, "height": 500, ... },
+            "beam_right": { "width": 200, "height": 500, ... }
+        }
+
+    Response:
+        { "success": true }
+    """
+    try:
+        data = request.get_json() or {}
+
+        session_id = data.get('session_id')
+        pier_key = data.get('pier_key')
+
+        if not session_id:
+            return jsonify({
+                'success': False,
+                'error': 'Se requiere session_id'
+            }), 400
+
+        if not pier_key:
+            return jsonify({
+                'success': False,
+                'error': 'Se requiere pier_key'
+            }), 400
+
+        # Formatear config de vigas
+        beam_left_config = None
+        beam_right_config = None
+
+        if data.get('beam_left'):
+            bl = data['beam_left']
+            beam_left_config = {
+                'width': float(bl.get('width', 200)),
+                'height': float(bl.get('height', 500)),
+                'n_bars_top': int(bl.get('n_bars_top', 2)),
+                'diameter_top': int(bl.get('diameter_top', 12)),
+                'n_bars_bottom': int(bl.get('n_bars_bottom', 2)),
+                'diameter_bottom': int(bl.get('diameter_bottom', 12))
+            }
+
+        if data.get('beam_right'):
+            br = data['beam_right']
+            beam_right_config = {
+                'width': float(br.get('width', 200)),
+                'height': float(br.get('height', 500)),
+                'n_bars_top': int(br.get('n_bars_top', 2)),
+                'diameter_top': int(br.get('diameter_top', 12)),
+                'n_bars_bottom': int(br.get('n_bars_bottom', 2)),
+                'diameter_bottom': int(br.get('diameter_bottom', 12))
+            }
+
+        service = get_analysis_service()
+        service._session_manager.set_pier_coupling_config(
+            session_id=session_id,
+            pier_key=pier_key,
+            has_beam_left=data.get('has_beam_left', True),
+            has_beam_right=data.get('has_beam_right', True),
+            beam_left_config=beam_left_config,
+            beam_right_config=beam_right_config
+        )
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error: {str(e)}'
+        }), 500
+
+
 @bp.route('/generate-report', methods=['POST'])
 def generate_report():
     """

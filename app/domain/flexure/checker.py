@@ -24,6 +24,8 @@ class FlexureCheckResult:
     is_inside: bool          # Si el punto crítico está dentro de la curva
     exceeds_axial_capacity: bool = False  # Si Pu > φPn,max
     phi_Pn_max: float = 0.0  # Capacidad axial máxima (tonf)
+    has_tension: bool = False  # Si alguna combinación tiene Pu < 0 (tracción)
+    tension_combos: int = 0    # Número de combinaciones con tracción
 
 
 class FlexureChecker:
@@ -253,8 +255,13 @@ class FlexureChecker:
         critical_Pu = 0.0
         critical_Mu = 0.0
         critical_is_inside = True
+        tension_count = 0
 
         for Pu, Mu, combo_name in demand_points:
+            # Contar combinaciones con tracción (Pu < 0)
+            if Pu < 0:
+                tension_count += 1
+
             sf, is_inside = FlexureChecker.calculate_safety_factor(points, Pu, Mu)
             if sf < min_sf:
                 min_sf = sf
@@ -281,5 +288,7 @@ class FlexureChecker:
             critical_Mu=critical_Mu,
             is_inside=critical_is_inside,
             exceeds_axial_capacity=exceeds_axial,
-            phi_Pn_max=phi_Pn_max
+            phi_Pn_max=phi_Pn_max,
+            has_tension=tension_count > 0,
+            tension_combos=tension_count
         )

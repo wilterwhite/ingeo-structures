@@ -122,12 +122,14 @@ class FlexureService:
         # Verificar
         if demand_points:
             (sf, status, critical, phi_Mn_0, phi_Mn_at_Pu,
-             critical_Pu, critical_Mu, exceeds_axial, phi_Pn_max) = \
+             critical_Pu, critical_Mu, exceeds_axial, phi_Pn_max,
+             has_tension, tension_combos) = \
                 self._interaction_service.check_flexure(interaction_points, demand_points)
         else:
             sf, status, critical = float('inf'), "OK", "N/A"
             phi_Mn_0, phi_Mn_at_Pu, critical_Pu, critical_Mu = 0.0, 0.0, 0.0, 0.0
             exceeds_axial, phi_Pn_max = False, 0.0
+            has_tension, tension_combos = False, 0
 
         return {
             'sf': sf,
@@ -141,7 +143,9 @@ class FlexureService:
             'demand_points': demand_points,
             'slenderness': slenderness_data,
             'exceeds_axial_capacity': exceeds_axial,  # Si Pu > φPn,max
-            'phi_Pn_max': phi_Pn_max                  # Capacidad axial máxima
+            'phi_Pn_max': phi_Pn_max,                 # Capacidad axial máxima
+            'has_tension': has_tension,               # Si hay combinaciones con tracción
+            'tension_combos': tension_combos          # Número de combos con tracción
         }
 
     def get_capacities(self, pier: Pier) -> Dict[str, Any]:

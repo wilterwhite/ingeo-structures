@@ -369,6 +369,8 @@ class InteractionDiagramService:
             - critical_Mu: Momento crítico
             - exceeds_axial: Si Pu > φPn,max
             - phi_Pn_max: Capacidad axial máxima
+            - has_tension: Si alguna combinación tiene Pu < 0
+            - tension_combos: Número de combinaciones con tracción
         """
         result = FlexureChecker.check_flexure(points, demand_points)
         return (
@@ -380,5 +382,7 @@ class InteractionDiagramService:
             result.critical_Pu,
             result.critical_Mu,
             result.exceeds_axial_capacity,
-            result.phi_Pn_max
+            result.phi_Pn_max,
+            result.has_tension,
+            result.tension_combos
         )

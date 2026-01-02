@@ -10,6 +10,11 @@ class ResultsTable {
         this.expandedPiers = new Set();
         this.combinationsCache = {};
         this.plotsCache = {};
+
+        // Estado de vigas
+        this.standardBeam = { width: 200, height: 500, nbars: 2, diam: 12 };
+        this.customBeamPiers = new Set();  // Piers con vigas personalizadas
+        this.pierBeamConfigs = {};  // Configuración de vigas por pier
     }
 
     // =========================================================================
@@ -346,8 +351,11 @@ class ResultsTable {
     }
 
     createVigaCell(pierKey, side) {
+        const isCustom = this.customBeamPiers.has(pierKey);
+        const beam = this.getBeamConfig(pierKey, side);
+
         const td = document.createElement('td');
-        td.className = 'viga-cell';
+        td.className = `viga-cell ${isCustom ? '' : 'locked'}`;
         td.dataset.pierKey = pierKey;
         td.dataset.side = side;
 
@@ -355,31 +363,177 @@ class ResultsTable {
             <div class="viga-row">
                 <select class="edit-viga-width-${side}" title="Ancho (mm)">
                     <option value="0">-</option>
-                    ${[150,200,250,300].map(w => `<option value="${w}" ${w === 200 ? 'selected' : ''}>${w}</option>`).join('')}
+                    ${[150,200,250,300].map(w => `<option value="${w}" ${w === beam.width ? 'selected' : ''}>${w}</option>`).join('')}
                 </select>
                 <span>×</span>
                 <select class="edit-viga-height-${side}" title="Alto (mm)">
                     <option value="0">-</option>
-                    ${[400,500,600,700,800].map(h => `<option value="${h}" ${h === 500 ? 'selected' : ''}>${h}</option>`).join('')}
+                    ${[400,500,600,700,800].map(h => `<option value="${h}" ${h === beam.height ? 'selected' : ''}>${h}</option>`).join('')}
                 </select>
             </div>
             <div class="viga-row">
                 <select class="edit-viga-nbars-${side}" title="Nº barras">
-                    ${[2,3,4,5,6].map(n => `<option value="${n}" ${n === 3 ? 'selected' : ''}>${n}</option>`).join('')}
+                    ${[2,3,4,5,6].map(n => `<option value="${n}" ${n === beam.nbars ? 'selected' : ''}>${n}</option>`).join('')}
                 </select>
                 <select class="edit-viga-diam-${side}" title="φ barras">
-                    ${[12,16,18,20,22,25].map(d => `<option value="${d}" ${d === 16 ? 'selected' : ''}>φ${d}</option>`).join('')}
+                    ${[12,16,18,20,22,25].map(d => `<option value="${d}" ${d === beam.diam ? 'selected' : ''}>φ${d}</option>`).join('')}
                 </select>
             </div>
+            ${side === 'der' ? `<button class="btn-toggle-beam ${isCustom ? 'unlocked' : ''}" data-pier="${pierKey}" title="${isCustom ? 'Volver a estándar' : 'Especificar vigas'}">${isCustom ? '✓' : '⚙'}</button>` : ''}
         `;
+
+        // Agregar event listener al botón de toggle (solo en lado derecho)
+        if (side === 'der') {
+            const btn = td.querySelector('.btn-toggle-beam');
+            btn?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.togglePierBeamLock(pierKey);
+            });
+        }
+
+        // Agregar event listeners para guardar cambios si está desbloqueado
+        if (isCustom) {
+            td.querySelectorAll('select').forEach(select => {
+                select.addEventListener('change', () => this.onBeamChange(pierKey, side));
+            });
+        }
+
         return td;
     }
 
+    /**
+     * Obtiene la configuración de viga para un pier/lado.
+     */
+    getBeamConfig(pierKey, side) {
+        // Si tiene config personalizada, usarla
+        if (this.customBeamPiers.has(pierKey) && this.pierBeamConfigs[pierKey]?.[side]) {
+            return this.pierBeamConfigs[pierKey][side];
+        }
+        // Si no, usar la estándar
+        return this.standardBeam;
+    }
+
+    /**
+     * Alterna el estado bloqueado/desbloqueado de vigas de un pier.
+     */
+    togglePierBeamLock(pierKey) {
+        if (this.customBeamPiers.has(pierKey)) {
+            // Volver a estándar
+            this.customBeamPiers.delete(pierKey);
+            delete this.pierBeamConfigs[pierKey];
+        } else {
+            // Desbloquear - inicializar con valores actuales (estándar)
+            this.customBeamPiers.add(pierKey);
+            this.pierBeamConfigs[pierKey] = {
+                izq: { ...this.standardBeam },
+                der: { ...this.standardBeam }
+            };
+        }
+
+        // Re-renderizar las celdas de viga de este pier
+        this.updatePierBeamCells(pierKey);
+    }
+
+    /**
+     * Actualiza las celdas de viga de un pier específico.
+     */
+    updatePierBeamCells(pierKey) {
+        const row = document.querySelector(`tr[data-pier-key="${pierKey}"]`);
+        if (!row) return;
+
+        // Encontrar las celdas de viga (posiciones 4 y 5)
+        const cells = row.querySelectorAll('.viga-cell');
+        if (cells.length >= 2) {
+            const newIzq = this.createVigaCell(pierKey, 'izq');
+            const newDer = this.createVigaCell(pierKey, 'der');
+            cells[0].replaceWith(newIzq);
+            cells[1].replaceWith(newDer);
+        }
+    }
+
+    /**
+     * Maneja cambios en los selects de viga.
+     */
+    onBeamChange(pierKey, side) {
+        const row = document.querySelector(`tr[data-pier-key="${pierKey}"]`);
+        if (!row) return;
+
+        const cell = row.querySelector(`.viga-cell[data-side="${side}"]`);
+        if (!cell) return;
+
+        // Leer valores actuales
+        const width = parseInt(cell.querySelector(`.edit-viga-width-${side}`)?.value) || 0;
+        const height = parseInt(cell.querySelector(`.edit-viga-height-${side}`)?.value) || 0;
+        const nbars = parseInt(cell.querySelector(`.edit-viga-nbars-${side}`)?.value) || 2;
+        const diam = parseInt(cell.querySelector(`.edit-viga-diam-${side}`)?.value) || 12;
+
+        // Guardar en config local
+        if (!this.pierBeamConfigs[pierKey]) {
+            this.pierBeamConfigs[pierKey] = { izq: { ...this.standardBeam }, der: { ...this.standardBeam } };
+        }
+        this.pierBeamConfigs[pierKey][side] = { width, height, nbars, diam };
+
+        // Enviar al backend
+        this.savePierBeamConfig(pierKey);
+    }
+
+    /**
+     * Guarda la configuración de viga de un pier en el backend.
+     */
+    async savePierBeamConfig(pierKey) {
+        const config = this.pierBeamConfigs[pierKey];
+        if (!config) return;
+
+        try {
+            await this.page.api.setPierBeam(this.sessionId, pierKey, config);
+        } catch (error) {
+            console.error('Error guardando config de viga:', error);
+        }
+    }
+
+    /**
+     * Actualiza la viga estándar y propaga a piers bloqueados.
+     */
+    updateStandardBeam(beam) {
+        this.standardBeam = { ...beam };
+
+        // Actualizar todas las celdas de viga bloqueadas
+        document.querySelectorAll('.viga-cell.locked').forEach(cell => {
+            const pierKey = cell.dataset.pierKey;
+            const side = cell.dataset.side;
+            const newCell = this.createVigaCell(pierKey, side);
+            cell.replaceWith(newCell);
+        });
+
+        // Guardar en backend
+        this.saveStandardBeam();
+    }
+
+    /**
+     * Guarda la viga estándar en el backend.
+     */
+    async saveStandardBeam() {
+        try {
+            await this.page.api.setDefaultBeam(this.sessionId, this.standardBeam);
+        } catch (error) {
+            console.error('Error guardando viga estándar:', error);
+        }
+    }
+
     createFlexureSfCell(result) {
+        const hasTension = result.flexure.has_tension || false;
+        const tensionCombos = result.flexure.tension_combos || 0;
+
         const td = document.createElement('td');
         td.className = `fs-value ${this.getFsClass(result.flexure.sf)}`;
+
+        let tensionWarning = '';
+        if (hasTension) {
+            tensionWarning = `<span class="tension-warning" title="${tensionCombos} combinación(es) con tracción (Pu<0)">⚡${tensionCombos}</span>`;
+        }
+
         td.innerHTML = `
-            <span class="fs-number">${result.flexure.sf}</span>
+            <span class="fs-number">${result.flexure.sf}</span>${tensionWarning}
             <span class="critical-combo">${this.truncateCombo(result.flexure.critical_combo)}</span>
         `;
         return td;

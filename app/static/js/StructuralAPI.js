@@ -270,6 +270,61 @@ class StructuralAPI {
     }
 
     // =========================================================================
+    // Vigas de Acople
+    // =========================================================================
+
+    /**
+     * Configura la viga estándar para la sesión.
+     * @param {string} sessionId - ID de sesión
+     * @param {Object} beam - Configuración de viga {width, height, nbars, diam}
+     * @returns {Promise<Object>}
+     */
+    async setDefaultBeam(sessionId, beam) {
+        return this.request('/set-default-beam', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                width: beam.width,
+                height: beam.height,
+                n_bars_top: beam.nbars,
+                diameter_top: beam.diam,
+                n_bars_bottom: beam.nbars,
+                diameter_bottom: beam.diam
+            })
+        });
+    }
+
+    /**
+     * Configura vigas específicas para un pier.
+     * @param {string} sessionId - ID de sesión
+     * @param {string} pierKey - Clave del pier (Story_Label)
+     * @param {Object} config - {izq: {width, height, nbars, diam}, der: {...}}
+     * @returns {Promise<Object>}
+     */
+    async setPierBeam(sessionId, pierKey, config) {
+        const formatBeam = (b) => b.width > 0 ? {
+            width: b.width,
+            height: b.height,
+            n_bars_top: b.nbars,
+            diameter_top: b.diam,
+            n_bars_bottom: b.nbars,
+            diameter_bottom: b.diam
+        } : null;
+
+        return this.request('/set-pier-beam', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                pier_key: pierKey,
+                has_beam_left: config.izq?.width > 0,
+                has_beam_right: config.der?.width > 0,
+                beam_left: formatBeam(config.izq),
+                beam_right: formatBeam(config.der)
+            })
+        });
+    }
+
+    // =========================================================================
     // Health Check
     // =========================================================================
 

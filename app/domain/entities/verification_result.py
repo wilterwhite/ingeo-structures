@@ -65,6 +65,12 @@ class VerificationResult:
     slenderness_is_slender: bool = False  # True si lambda > 22
     slenderness_reduction: float = 1.0  # Factor de reduccion por pandeo
 
+    # Tracción
+    flexure_exceeds_axial: bool = False  # Si Pu > φPn,max
+    flexure_phi_Pn_max: float = 0.0      # Capacidad axial máxima (tonf)
+    flexure_has_tension: bool = False    # Si hay combinaciones con Pu < 0
+    flexure_tension_combos: int = 0      # Número de combos con tracción
+
     # Gráfico (opcional)
     pm_plot_base64: str = ""
 
@@ -179,7 +185,9 @@ class VerificationResult:
                 'Pu': round(self.flexure_Pu, 1),
                 'Mu': round(self.flexure_Mu, 1),
                 'exceeds_axial': self.flexure_exceeds_axial,      # Si Pu > φPn,max
-                'phi_Pn_max': round(self.flexure_phi_Pn_max, 1)   # Capacidad axial máxima
+                'phi_Pn_max': round(self.flexure_phi_Pn_max, 1),  # Capacidad axial máxima
+                'has_tension': self.flexure_has_tension,          # Si hay combinaciones con tracción
+                'tension_combos': self.flexure_tension_combos     # Número de combos con tracción
             },
             'shear': {
                 'sf': self._format_sf(self.shear_sf),
