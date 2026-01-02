@@ -2,9 +2,17 @@
 """
 Parser de archivos Excel exportados de ETABS.
 
-Orquesta la lectura de las tablas de ETABS usando los módulos:
-- material_mapper: Conversión de nombres de materiales a f'c
-- table_extractor: Búsqueda de tablas dentro de hojas Excel
+Orquesta la lectura de las tablas de ETABS usando los modulos:
+- material_mapper: Conversion de nombres de materiales a f'c
+- table_extractor: Busqueda de tablas dentro de hojas Excel
+- column_parser: Parser de columnas
+- beam_parser: Parser de vigas (frame y spandrels)
+
+Tablas soportadas:
+- Piers: Wall Property Definitions, Pier Section Properties, Pier Forces
+- Columnas: Frame Section Property Definitions - Concrete Rectangular, Element Forces - Columns
+- Vigas: Frame Section Property Definitions - Concrete Rectangular, Element Forces - Beams
+- Spandrels: Spandrel Section Properties, Spandrel Forces
 """
 from io import BytesIO
 from typing import Dict, List, Any
@@ -17,6 +25,28 @@ from .table_extractor import (
     find_table_in_sheet,
     find_table_by_sheet_name
 )
+from .column_parser import ColumnParser
+from .beam_parser import BeamParser
+
+
+# Nombres de tablas soportadas (para mostrar al usuario)
+SUPPORTED_TABLES = {
+    'piers': [
+        'Wall Property Definitions',
+        'Pier Section Properties',
+        'Pier Forces'
+    ],
+    'columns': [
+        'Frame Section Property Definitions - Concrete Rectangular',
+        'Element Forces - Columns'
+    ],
+    'beams': [
+        'Frame Section Property Definitions - Concrete Rectangular',
+        'Element Forces - Beams',
+        'Spandrel Section Properties',
+        'Spandrel Forces'
+    ]
+}
 
 
 # =============================================================================
@@ -25,17 +55,23 @@ from .table_extractor import (
 
 class EtabsExcelParser:
     """
-    Parser para archivos Excel de ETABS con tablas de muros.
+    Parser para archivos Excel de ETABS.
 
-    Espera encontrar las siguientes tablas (hojas o secciones):
-    1. Wall Property Definitions - Propiedades de materiales
-    2. Pier Section Properties - Geometría de piers
-    3. Pier Forces - Fuerzas por combinación de carga
+    Detecta automaticamente las tablas presentes y parsea:
+    - Piers: Wall Property Definitions, Pier Section Properties, Pier Forces
+    - Columnas: Frame Sec Def - Conc Rect, Element Forces - Columns
+    - Vigas: Frame Sec Def - Conc Rect, Element Forces - Beams, Spandrels
     """
+
+    def __init__(self):
+        self.column_parser = ColumnParser()
+        self.beam_parser = BeamParser()
 
     def parse_excel(self, file_content: bytes) -> ParsedData:
         """
         Parsea el archivo Excel de ETABS.
+
+        Detecta automaticamente que tablas estan presentes y las procesa.
 
         Args:
             file_content: Contenido binario del archivo Excel
@@ -49,16 +85,25 @@ class EtabsExcelParser:
         raw_data: Dict[str, pd.DataFrame] = {}
         materials: Dict[str, float] = {}
 
-        # Buscar tablas en todas las hojas
+        # DataFrames para cada tabla
+        # Piers
         wall_props_df = None
         pier_props_df = None
         pier_forces_df = None
+        # Columnas y Vigas
+        frame_section_df = None
+        column_forces_df = None
+        beam_forces_df = None
+        # Spandrels
+        spandrel_props_df = None
+        spandrel_forces_df = None
 
+        # Buscar tablas en todas las hojas
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name, header=None)
             raw_data[sheet_name] = df
 
-            # Buscar tablas con marcadores "TABLE:"
+            # Piers
             if wall_props_df is None:
                 wall_props_df = find_table_in_sheet(df, "Wall Property Definitions")
 
@@ -68,7 +113,28 @@ class EtabsExcelParser:
             if pier_forces_df is None:
                 pier_forces_df = find_table_in_sheet(df, "Pier Forces")
 
-        # Fallback: buscar por nombre de hoja
+            # Frame sections (columnas y vigas)
+            if frame_section_df is None:
+                frame_section_df = find_table_in_sheet(
+                    df, "Frame Section Property Definitions - Concrete Rectangular"
+                )
+
+            # Columnas
+            if column_forces_df is None:
+                column_forces_df = find_table_in_sheet(df, "Element Forces - Columns")
+
+            # Vigas
+            if beam_forces_df is None:
+                beam_forces_df = find_table_in_sheet(df, "Element Forces - Beams")
+
+            # Spandrels
+            if spandrel_props_df is None:
+                spandrel_props_df = find_table_in_sheet(df, "Spandrel Section Properties")
+
+            if spandrel_forces_df is None:
+                spandrel_forces_df = find_table_in_sheet(df, "Spandrel Forces")
+
+        # Fallback: buscar por nombre de hoja (piers)
         if wall_props_df is None:
             wall_props_df = find_table_by_sheet_name(excel_file, ['wall', 'prop'])
 
@@ -82,22 +148,55 @@ class EtabsExcelParser:
         if wall_props_df is not None:
             materials = self._parse_materials(wall_props_df)
 
-        # Procesar piers
-        piers, stories = self._parse_piers(pier_props_df, materials)
+        # Tambien obtener materiales de frame sections si existen
+        if frame_section_df is not None:
+            frame_materials = self._parse_frame_materials(frame_section_df)
+            materials.update(frame_materials)
 
-        # Procesar fuerzas
+        # Procesar piers
+        piers, pier_stories = self._parse_piers(pier_props_df, materials)
         pier_forces = self._parse_forces(pier_forces_df)
+
+        # Procesar columnas
+        columns = {}
+        column_forces = {}
+        column_stories = []
+        if column_forces_df is not None:
+            columns, column_forces, column_stories = self.column_parser.parse_columns(
+                frame_section_df, column_forces_df, materials
+            )
+
+        # Procesar vigas
+        beams = {}
+        beam_forces = {}
+        beam_stories = []
+        if beam_forces_df is not None or spandrel_forces_df is not None:
+            beams, beam_forces, beam_stories = self.beam_parser.parse_beams(
+                frame_section_df, beam_forces_df,
+                spandrel_props_df, spandrel_forces_df,
+                materials
+            )
+
+        # Combinar stories
+        all_stories = pier_stories.copy()
+        for s in column_stories + beam_stories:
+            if s not in all_stories:
+                all_stories.append(s)
 
         return ParsedData(
             piers=piers,
             pier_forces=pier_forces,
+            columns=columns,
+            column_forces=column_forces,
+            beams=beams,
+            beam_forces=beam_forces,
             materials=materials,
-            stories=stories,
+            stories=all_stories,
             raw_data=raw_data
         )
 
     def _parse_materials(self, df: pd.DataFrame) -> Dict[str, float]:
-        """Extrae el mapeo de nombres de materiales a f'c."""
+        """Extrae el mapeo de nombres de materiales a f'c desde Wall Property Definitions."""
         materials = {}
         df = normalize_columns(df)
 
@@ -107,6 +206,23 @@ class EtabsExcelParser:
             if name:
                 fc = parse_material_to_fc(material)
                 materials[name] = fc
+                materials[material] = fc
+
+        return materials
+
+    def _parse_frame_materials(self, df: pd.DataFrame) -> Dict[str, float]:
+        """Extrae materiales desde Frame Section Definitions."""
+        materials = {}
+
+        if df is None:
+            return materials
+
+        df = normalize_columns(df)
+
+        for _, row in df.iterrows():
+            material = str(row.get('material', ''))
+            if material and material != 'nan':
+                fc = parse_material_to_fc(material)
                 materials[material] = fc
 
         return materials

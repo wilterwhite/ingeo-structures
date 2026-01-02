@@ -1,0 +1,161 @@
+# app/domain/entities/beam.py
+"""
+Entidad Beam: representa una viga de hormigon armado desde ETABS.
+Soporta vigas tipo frame y spandrels (vigas de acople tipo shell).
+"""
+from dataclasses import dataclass, field
+from typing import Optional
+from enum import Enum
+
+from ..constants.materials import get_bar_area
+
+
+class BeamSource(Enum):
+    """Origen de la viga en ETABS."""
+    FRAME = "frame"         # Viga tipo frame (Element Forces - Beams)
+    SPANDREL = "spandrel"   # Viga de acople tipo shell (Spandrel Forces)
+
+
+@dataclass
+class Beam:
+    """
+    Representa una viga de hormigon armado desde ETABS.
+
+    Unidades:
+    - Dimensiones: mm
+    - Esfuerzos: MPa
+    - Areas: mm2
+
+    Soporta dos fuentes:
+    - Frame beams: vigas modeladas como elementos lineales
+    - Spandrels: vigas de acople modeladas como shells (entre piers)
+    """
+    label: str              # "B1" o "S1" (nombre en ETABS)
+    story: str              # "Story4"
+
+    # Geometria (mm)
+    length: float           # Luz de la viga (longitud)
+    depth: float            # Altura de la viga (peralte)
+    width: float            # Ancho de la viga (espesor)
+
+    # Propiedades del material (MPa)
+    fc: float               # f'c del hormigon
+    fy: float = 420.0       # fy del acero (default A630-420H)
+
+    # Origen y seccion
+    source: BeamSource = BeamSource.FRAME   # frame o spandrel
+    section_name: str = ""                  # Nombre seccion ETABS
+
+    # Armadura transversal (para verificacion de cortante)
+    stirrup_diameter: int = 10      # Diametro estribo (mm)
+    stirrup_spacing: int = 150      # Espaciamiento estribos (mm)
+    n_stirrup_legs: int = 2         # Numero de ramas del estribo
+
+    # Armadura longitudinal (para referencia, no se usa en cortante)
+    n_bars_top: int = 3             # Barras superiores
+    n_bars_bottom: int = 3          # Barras inferiores
+    diameter_top: int = 16          # Diametro barras superiores
+    diameter_bottom: int = 16       # Diametro barras inferiores
+
+    # Otros
+    cover: float = 40.0             # Recubrimiento (mm)
+
+    # Areas de barra precalculadas
+    _bar_area_stirrup: float = field(default=78.5, repr=False)
+
+    def __post_init__(self):
+        """Calcula areas de barra segun diametros."""
+        self._bar_area_stirrup = get_bar_area(self.stirrup_diameter, 78.5)
+
+    # =========================================================================
+    # Propiedades de Armadura para Cortante
+    # =========================================================================
+
+    @property
+    def Av(self) -> float:
+        """Area de refuerzo transversal (mm2)."""
+        return self.n_stirrup_legs * self._bar_area_stirrup
+
+    @property
+    def rho_transversal(self) -> float:
+        """Cuantia de refuerzo transversal."""
+        return self.Av / (self.width * self.stirrup_spacing)
+
+    @property
+    def reinforcement_description(self) -> str:
+        """Descripcion legible de la armadura transversal."""
+        legs = f"{self.n_stirrup_legs}R" if self.n_stirrup_legs > 2 else ""
+        return f"{legs}E{self.stirrup_diameter}@{self.stirrup_spacing}"
+
+    # =========================================================================
+    # Propiedades Geometricas
+    # =========================================================================
+
+    @property
+    def Ag(self) -> float:
+        """Area bruta de la viga (mm2)."""
+        return self.depth * self.width
+
+    @property
+    def d(self) -> float:
+        """Profundidad efectiva (mm)."""
+        return self.depth - self.cover
+
+    @property
+    def bw(self) -> float:
+        """Ancho del alma para calculo de cortante (mm)."""
+        return self.width
+
+    @property
+    def aspect_ratio(self) -> float:
+        """Relacion luz/peralte (ln/h)."""
+        return self.length / self.depth if self.depth > 0 else 0
+
+    @property
+    def is_deep(self) -> bool:
+        """True si es viga profunda (ln/h < 4)."""
+        return self.aspect_ratio < 4.0
+
+    @property
+    def is_spandrel(self) -> bool:
+        """True si es un spandrel (viga de acople tipo shell)."""
+        return self.source == BeamSource.SPANDREL
+
+    # =========================================================================
+    # Metodos de Actualizacion
+    # =========================================================================
+
+    def update_reinforcement(
+        self,
+        stirrup_diameter: Optional[int] = None,
+        stirrup_spacing: Optional[int] = None,
+        n_stirrup_legs: Optional[int] = None,
+        n_bars_top: Optional[int] = None,
+        n_bars_bottom: Optional[int] = None,
+        diameter_top: Optional[int] = None,
+        diameter_bottom: Optional[int] = None,
+        fy: Optional[float] = None,
+        cover: Optional[float] = None
+    ):
+        """
+        Actualiza la configuracion de armadura.
+        """
+        if stirrup_diameter is not None:
+            self.stirrup_diameter = stirrup_diameter
+            self._bar_area_stirrup = get_bar_area(stirrup_diameter, 78.5)
+        if stirrup_spacing is not None:
+            self.stirrup_spacing = stirrup_spacing
+        if n_stirrup_legs is not None:
+            self.n_stirrup_legs = n_stirrup_legs
+        if n_bars_top is not None:
+            self.n_bars_top = n_bars_top
+        if n_bars_bottom is not None:
+            self.n_bars_bottom = n_bars_bottom
+        if diameter_top is not None:
+            self.diameter_top = diameter_top
+        if diameter_bottom is not None:
+            self.diameter_bottom = diameter_bottom
+        if fy is not None:
+            self.fy = fy
+        if cover is not None:
+            self.cover = cover

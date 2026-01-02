@@ -343,6 +343,56 @@ header:not(.app-header) p {
     font-size: 0.85rem;
 }
 
+.upload-area .tables-hint {
+    margin-top: 15px;
+    text-align: left;
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.upload-area .tables-hint summary {
+    cursor: pointer;
+    text-align: center;
+    color: var(--primary-color);
+}
+
+.upload-area .tables-hint summary:hover {
+    text-decoration: underline;
+}
+
+.upload-area .tables-list {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    font-size: 0.8rem;
+}
+
+.upload-area .table-group {
+    margin-bottom: 8px;
+}
+
+.upload-area .table-group:last-child {
+    margin-bottom: 0;
+}
+
+.upload-area .table-group strong {
+    color: var(--text-color);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.upload-area .table-group ul {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--text-muted);
+}
+
+.upload-area .table-group li {
+    margin-bottom: 2px;
+}
+
 .upload-area input[type="file"] {
     display: none;
 }

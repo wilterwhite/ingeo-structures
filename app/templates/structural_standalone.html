@@ -24,7 +24,35 @@
                 <div class="upload-area" id="upload-area">
                     <div class="icon">📄</div>
                     <p>Arrastra tu archivo Excel aquí o haz clic para seleccionar</p>
-                    <p class="hint">Debe contener las tablas: Pier Section Properties y Pier Forces</p>
+                    <details class="tables-hint">
+                        <summary class="hint">Ver tablas ETABS soportadas</summary>
+                        <div class="tables-list">
+                            <div class="table-group">
+                                <strong>Piers (Muros):</strong>
+                                <ul>
+                                    <li>Wall Property Definitions</li>
+                                    <li>Pier Section Properties</li>
+                                    <li>Pier Forces</li>
+                                </ul>
+                            </div>
+                            <div class="table-group">
+                                <strong>Columnas:</strong>
+                                <ul>
+                                    <li>Frame Section Property Definitions - Concrete Rectangular</li>
+                                    <li>Element Forces - Columns</li>
+                                </ul>
+                            </div>
+                            <div class="table-group">
+                                <strong>Vigas:</strong>
+                                <ul>
+                                    <li>Frame Section Property Definitions - Concrete Rectangular</li>
+                                    <li>Element Forces - Beams</li>
+                                    <li>Spandrel Section Properties</li>
+                                    <li>Spandrel Forces</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </details>
                     <input type="file" id="file-input" accept=".xlsx">
                 </div>
                 <div class="loading" id="upload-loading">

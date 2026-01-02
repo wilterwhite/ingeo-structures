@@ -1,10 +1,20 @@
-# INGEO Structures - Verificación de Muros ACI 318-25
+# INGEO Structures - Verificación Estructural ACI 318-25
 
-Aplicación web para verificación estructural de muros (piers) de hormigón armado según ACI 318-25.
+Aplicación web para verificación estructural de elementos de hormigón armado según ACI 318-25.
+
+## Elementos Soportados
+
+| Elemento | Verificaciones | Tablas ETABS |
+|----------|----------------|--------------|
+| **Piers (Muros)** | Flexocompresión P-M + Cortante V2-V3 | Pier Section Properties, Pier Forces |
+| **Columnas** | Flexocompresión P-M + Cortante V2-V3 | Frame Sec Def - Conc Rect, Element Forces - Columns |
+| **Vigas** | Cortante (solo por ahora) | Frame Sec Def - Conc Rect, Element Forces - Beams |
+| **Spandrels** | Cortante (vigas de acople) | Spandrel Section Properties, Spandrel Forces |
 
 ## Características
 
 - Importación directa de archivos Excel exportados de ETABS
+- Detección automática de tablas disponibles (piers, columnas, vigas)
 - Verificación de flexocompresión con diagrama de interacción P-M
 - Verificación de corte bidireccional (V2-V3) con DCR combinado
 - Análisis de esbeltez y magnificación de momentos
@@ -84,7 +94,11 @@ Contiene **requisitos sísmicos especiales** para SDC D, E, F:
 | Entidad | Descripción |
 |---------|-------------|
 | `Pier` | Muro con geometría, materiales y armadura |
-| `PierForces` | Colección de combinaciones de carga |
+| `PierForces` | Colección de combinaciones de carga para piers |
+| `Column` | Columna con geometría, materiales y armadura |
+| `ColumnForces` | Colección de combinaciones de carga para columnas |
+| `Beam` | Viga (frame o spandrel) con geometría y armadura |
+| `BeamForces` | Colección de combinaciones de carga para vigas |
 | `LoadCombination` | P, M2, M3, V2, V3 de una combinación |
 | `VerificationResult` | Resultado completo de verificación |
 | `DesignProposal` | Propuesta de diseño cuando falla |
@@ -126,6 +140,22 @@ SF < 1.0 o DCR > 1.0 → Analiza modo de falla → Propuesta automática
 - **Corte falla** → Reduce espaciamiento o aumenta diámetro de malla
 - **Combinado** → Mejora ambos iterativamente
 - **Esbeltez** → Propone aumento de espesor
+
+### `BeamService`
+```
+Beam + Fuerzas → Vc + Vs → DCR de corte
+```
+- Calcula Vc = 0.17λ√f'c × bw × d
+- Calcula Vs = Av × fy × d / s
+- Verifica φVn ≥ Vu para cada combinación
+
+### `ColumnService`
+```
+Column + Fuerzas → P-M Diagram + Corte V2-V3 → SF y DCR
+```
+- Genera diagrama P-M de capacidad para ambas direcciones
+- Verifica cortante en V2 y V3 con interacción SRSS
+- Calcula esbeltez y factor de reducción por pandeo
 
 ### `ACI318_25_Service`
 Integra verificaciones adicionales del Capítulo 18:
@@ -232,6 +262,43 @@ pytest tests/ -v
 pytest tests/test_proposal_service.py -v
 pytest tests/domain/flexure/test_slenderness.py -v
 ```
+
+## Limitaciones Conocidas
+
+### Secciones Soportadas
+- **Piers y Spandrels**: Solo secciones lineales (rectangulares)
+- **Columnas**: Solo secciones rectangulares de concreto
+- **Vigas**: Solo secciones rectangulares de concreto
+- **NO soportado**: Secciones en T, L, C, o formas compuestas
+
+### Alcance de Verificación por Elemento
+
+| Elemento | Verificación Implementada | Pendiente |
+|----------|---------------------------|-----------|
+| **Piers** | Flexocompresión + Cortante + Esbeltez + Requisitos sísmicos (§18.10) | - |
+| **Columnas** | Flexocompresión básica + Cortante | Requisitos sísmicos (§18.7) |
+| **Vigas** | Cortante | Flexión, Deflexiones |
+
+### Tablas ETABS Requeridas
+
+Para que el sistema procese cada tipo de elemento, se requieren las siguientes tablas:
+
+**Piers:**
+- `Wall Property Definitions` - Materiales de muros
+- `Pier Section Properties` - Geometría de piers
+- `Pier Forces` - Fuerzas por combinación
+
+**Columnas:**
+- `Frame Section Property Definitions - Concrete Rectangular` - Secciones (con Design Type = "Column")
+- `Element Forces - Columns` - Fuerzas por combinación
+
+**Vigas:**
+- `Frame Section Property Definitions - Concrete Rectangular` - Secciones (con Design Type = "Beam")
+- `Element Forces - Beams` - Fuerzas por combinación
+
+**Spandrels (Vigas de Acople):**
+- `Spandrel Section Properties` - Geometría
+- `Spandrel Forces` - Fuerzas por combinación
 
 ## Referencias
 

@@ -8,6 +8,13 @@ from .statistics_service import StatisticsService
 from .proposal_service import ProposalService
 from .pier_verification_service import PierVerificationService
 from .pier_capacity_service import PierCapacityService
+from .beam_service import BeamService, BeamShearResult
+from .column_service import (
+    ColumnService,
+    ColumnFlexureResult,
+    ColumnShearResult,
+    ColumnSlendernessResult,
+)
 
 __all__ = [
     'FlexureService',
@@ -15,5 +22,11 @@ __all__ = [
     'StatisticsService',
     'ProposalService',
     'PierVerificationService',
-    'PierCapacityService'
+    'PierCapacityService',
+    'BeamService',
+    'BeamShearResult',
+    'ColumnService',
+    'ColumnFlexureResult',
+    'ColumnShearResult',
+    'ColumnSlendernessResult',
 ]

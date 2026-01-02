@@ -1,10 +1,19 @@
 # app/domain/entities/__init__.py
 """
-Entidades de dominio para el análisis estructural de muros.
+Entidades de dominio para el analisis estructural.
+
+Soporta:
+- Piers (muros de hormigon armado)
+- Columnas de hormigon armado
+- Vigas de hormigon armado (frame y spandrels)
 """
 from .pier import Pier
 from .load_combination import LoadCombination
 from .pier_forces import PierForces
+from .column import Column
+from .column_forces import ColumnForces
+from .beam import Beam, BeamSource
+from .beam_forces import BeamForces
 from .verification_result import VerificationResult
 from .parsed_data import ParsedData
 from .design_proposal import (
@@ -16,9 +25,18 @@ from .design_proposal import (
 from .coupling_beam import CouplingBeamConfig, PierCouplingConfig
 
 __all__ = [
+    # Piers
     'Pier',
-    'LoadCombination',
     'PierForces',
+    # Columnas
+    'Column',
+    'ColumnForces',
+    # Vigas
+    'Beam',
+    'BeamSource',
+    'BeamForces',
+    # Comunes
+    'LoadCombination',
     'VerificationResult',
     'ParsedData',
     'DesignProposal',
