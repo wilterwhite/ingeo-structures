@@ -76,7 +76,9 @@ def upload_excel():
 
     try:
         # Leer contenido
+        print(f"[Upload] Recibiendo archivo: {file.filename}")
         file_content = file.read()
+        print(f"[Upload] Tamaño: {len(file_content) / 1024:.1f} KB")
 
         # Obtener hn_ft opcional (altura del edificio en pies)
         hn_ft = None
@@ -89,6 +91,7 @@ def upload_excel():
 
         # Generar session_id
         session_id = str(uuid.uuid4())
+        print(f"[Upload] Iniciando parseo... session_id={session_id[:8]}")
 
         # Parsear (ahora acepta hn_ft como parámetro opcional)
         service = get_analysis_service()
@@ -96,9 +99,17 @@ def upload_excel():
             file_content, session_id, hn_ft=hn_ft
         )
 
+        summary = result.get('summary', {})
+        print(f"[Upload] Parseo completado:")
+        print(f"         - Piers: {summary.get('total_piers', 0)}")
+        print(f"         - Columnas: {summary.get('total_columns', 0)}")
+        print(f"         - Vigas: {summary.get('total_beams', 0)}")
         return jsonify(result)
 
     except Exception as e:
+        import traceback
+        print(f"[Upload] ERROR: {str(e)}")
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': f'Error al procesar el archivo: {str(e)}'

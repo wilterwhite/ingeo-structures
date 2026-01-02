@@ -340,7 +340,7 @@ class EtabsExcelParser:
 
     def get_summary(self, data: ParsedData) -> Dict[str, Any]:
         """Genera un resumen de los datos parseados."""
-        # Extraer ejes y grillas únicos
+        # Extraer ejes y grillas únicos de piers
         axes = set()
         grillas = set()
         for pier in data.piers.values():
@@ -349,8 +349,11 @@ class EtabsExcelParser:
             if pier.grilla:
                 grillas.add(pier.grilla)
 
-        return {
+        # Construir resumen base
+        summary = {
             'total_piers': len(data.piers),
+            'total_columns': len(data.columns) if data.columns else 0,
+            'total_beams': len(data.beams) if data.beams else 0,
             'total_stories': len(data.stories),
             'stories': data.stories,
             'axes': sorted(list(axes)),
@@ -394,3 +397,53 @@ class EtabsExcelParser:
                 for key, pier in data.piers.items()
             ]
         }
+
+        # Agregar columnas si existen
+        if data.columns:
+            summary['columns_list'] = [
+                {
+                    'key': key,
+                    'label': col.label,
+                    'story': col.story,
+                    'section': col.section_name,
+                    'depth_m': col.depth / 1000,
+                    'width_m': col.width / 1000,
+                    'height_m': col.height / 1000,
+                    'fc_MPa': col.fc,
+                    'fy_MPa': col.fy,
+                    'n_bars_depth': col.n_bars_depth,
+                    'n_bars_width': col.n_bars_width,
+                    'diameter_long': col.diameter_long,
+                    'stirrup_diameter': col.stirrup_diameter,
+                    'stirrup_spacing': col.stirrup_spacing,
+                    'As_longitudinal_mm2': col.As_longitudinal,
+                    'rho_longitudinal': col.rho_longitudinal,
+                    'reinforcement_desc': col.reinforcement_description
+                }
+                for key, col in data.columns.items()
+            ]
+
+        # Agregar vigas si existen
+        if data.beams:
+            summary['beams_list'] = [
+                {
+                    'key': key,
+                    'label': beam.label,
+                    'story': beam.story,
+                    'source': beam.source.value,  # 'frame' o 'spandrel'
+                    'section': beam.section_name,
+                    'length_m': beam.length / 1000,
+                    'depth_m': beam.depth / 1000,
+                    'width_m': beam.width / 1000,
+                    'fc_MPa': beam.fc,
+                    'fy_MPa': beam.fy,
+                    'stirrup_diameter': beam.stirrup_diameter,
+                    'stirrup_spacing': beam.stirrup_spacing,
+                    'n_stirrup_legs': beam.n_stirrup_legs,
+                    'Av_mm2': beam.Av,
+                    'reinforcement_desc': beam.reinforcement_description
+                }
+                for key, beam in data.beams.items()
+            ]
+
+        return summary
