@@ -72,15 +72,23 @@ class WallPierService:
     def calculate_design_shear(
         self,
         Vu: float,
-        use_capacity_design: bool = True,
+        lu: float = 0,
         Mpr_top: float = 0,
         Mpr_bottom: float = 0,
-        lu: float = 0,
         Omega_o: float = 3.0
     ) -> WallPierShearDesign:
-        """Calcula el cortante de diseño para el pilar."""
+        """
+        Calcula el cortante de diseño Ve para el pilar.
+
+        Delega a calculate_design_shear() de shear_design.py.
+        El diseño por capacidad se aplica automáticamente si Mpr > 0 y lu > 0.
+        """
         return calculate_design_shear(
-            Vu, use_capacity_design, Mpr_top, Mpr_bottom, lu, Omega_o
+            Vu=Vu,
+            lu=lu,
+            Mpr_top=Mpr_top,
+            Mpr_bottom=Mpr_bottom,
+            Omega_o=Omega_o
         )
 
     def verify_shear_strength(
@@ -233,8 +241,14 @@ class WallPierService:
         classification = self.classify_wall_pier(hw, lw, bw)
 
         # Calcular cortante de diseño
+        # Nota: lu = hw para pilares de muro
+        # Si use_capacity_design=False, no pasar Mpr para desactivar diseño por capacidad
         shear_design = self.calculate_design_shear(
-            Vu, use_capacity_design, Mpr_top, Mpr_bottom, hw, Omega_o
+            Vu=Vu,
+            lu=hw,
+            Mpr_top=Mpr_top if use_capacity_design else 0,
+            Mpr_bottom=Mpr_bottom if use_capacity_design else 0,
+            Omega_o=Omega_o
         )
 
         # Verificar resistencia al cortante

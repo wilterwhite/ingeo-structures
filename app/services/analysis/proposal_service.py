@@ -18,6 +18,7 @@ from dataclasses import replace
 from ...domain.entities import Pier, PierForces
 from ...domain.constants.materials import get_bar_area
 from ...domain.constants.phi_chapter21 import RHO_MAX
+from ...domain.constants.reinforcement import RHO_MIN
 from ...domain.entities.design_proposal import (
     DesignProposal,
     ReinforcementConfig,

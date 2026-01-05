@@ -12,6 +12,7 @@ import pandas as pd
 from ...domain.entities.beam import Beam, BeamSource
 from ...domain.entities.beam_forces import BeamForces
 from ...domain.entities.load_combination import LoadCombination
+from ...domain.constants.reinforcement import FY_DEFAULT_MPA
 from .material_mapper import parse_material_to_fc
 from .table_extractor import normalize_columns
 

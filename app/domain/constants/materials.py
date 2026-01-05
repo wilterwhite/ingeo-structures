@@ -150,3 +150,40 @@ def get_effective_fyt_confinement(fyt: float) -> float:
         fyt efectivo limitado a 690 MPa
     """
     return min(fyt, FYT_MAX_CONFINEMENT_MPA)
+
+
+# =============================================================================
+# BLOQUE DE ESFUERZOS DE WHITNEY
+# =============================================================================
+
+def calculate_beta1(fc_mpa: float) -> float:
+    """
+    Calcula el factor beta1 para el bloque de esfuerzos de Whitney.
+
+    Segun ACI 318-25 §22.2.2.4.3:
+    - fc <= 28 MPa (4000 psi): beta1 = 0.85
+    - fc >= 55 MPa (8000 psi): beta1 = 0.65
+    - Entre 28 y 55 MPa: interpolacion lineal
+
+    La formula reduce beta1 en 0.05 por cada 7 MPa (1000 psi) sobre 28 MPa.
+
+    Args:
+        fc_mpa: Resistencia especificada del concreto en MPa
+
+    Returns:
+        Factor beta1 (entre 0.65 y 0.85)
+
+    Examples:
+        >>> calculate_beta1(25)  # f'c = 25 MPa
+        0.85
+        >>> calculate_beta1(35)  # f'c = 35 MPa
+        0.80
+        >>> calculate_beta1(60)  # f'c = 60 MPa
+        0.65
+    """
+    if fc_mpa <= 28:
+        return 0.85
+    elif fc_mpa >= 55:
+        return 0.65
+    else:
+        return 0.85 - 0.05 * (fc_mpa - 28) / 7

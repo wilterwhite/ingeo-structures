@@ -91,6 +91,8 @@ from .materials import (
     get_effective_fc_shear,
     get_effective_fyt_shear,
     get_effective_fyt_confinement,
+    # Bloque de Whitney (§22.2.2.4.3)
+    calculate_beta1,
 )
 from .stiffness import (
     WALL_STIFFNESS_FACTOR,

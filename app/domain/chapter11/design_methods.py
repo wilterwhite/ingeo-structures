@@ -20,6 +20,7 @@ import math
 
 from ..constants.units import N_TO_TONF
 from ..constants.phi_chapter21 import PHI_COMPRESSION, PHI_TENSION
+from ..constants.materials import calculate_beta1
 
 if TYPE_CHECKING:
     from ..entities.pier import Pier
@@ -357,13 +358,8 @@ class WallDesignMethodsService:
         Returns:
             c en mm
         """
-        # Beta1
-        if fc_mpa <= 28:
-            beta1 = 0.85
-        elif fc_mpa >= 55:
-            beta1 = 0.65
-        else:
-            beta1 = 0.85 - 0.05 * (fc_mpa - 28) / 7
+        # Beta1 - usar función centralizada
+        beta1 = calculate_beta1(fc_mpa)
 
         # Equilibrio simplificado
         # Fuerza de compresion = Fuerza del acero + Carga axial

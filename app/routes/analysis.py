@@ -106,6 +106,7 @@ def upload_excel():
         logger.info(f"         - Piers: {summary.get('total_piers', 0)}")
         logger.info(f"         - Columnas: {summary.get('total_columns', 0)}")
         logger.info(f"         - Vigas: {summary.get('total_beams', 0)}")
+        logger.info(f"         - Losas: {summary.get('total_slabs', 0)}")
         return jsonify(result)
 
     except Exception as e:
@@ -209,6 +210,7 @@ def analyze_stream():
         generate_plots = data.get('generate_plots', True)
         moment_axis = data.get('moment_axis', 'M3')
         angle_deg = data.get('angle_deg', 0)
+        materials_config = data.get('materials_config', {})
 
         service = get_analysis_service()
 
@@ -219,7 +221,8 @@ def analyze_stream():
                     pier_updates=pier_updates,
                     generate_plots=generate_plots,
                     moment_axis=moment_axis,
-                    angle_deg=angle_deg
+                    angle_deg=angle_deg,
+                    materials_config=materials_config
                 ):
                     yield f"data: {json.dumps(event)}\n\n"
             except Exception as e:
@@ -616,7 +619,7 @@ def set_default_beam():
 @bp.route('/set-pier-beam', methods=['POST'])
 def set_pier_beam():
     """
-    Configura vigas específicas para un pier.
+    Configura vigas de acople para un pier y retorna el resultado re-analizado.
 
     Request (JSON):
         {
@@ -629,7 +632,10 @@ def set_pier_beam():
         }
 
     Response:
-        { "success": true }
+        {
+            "success": true,
+            "result": { ... resultado actualizado del pier ... }
+        }
     """
     try:
         data = request.get_json() or {}
@@ -650,44 +656,42 @@ def set_pier_beam():
             }), 400
 
         # Formatear config de vigas
-        beam_left_config = None
-        beam_right_config = None
-
-        if data.get('beam_left'):
-            bl = data['beam_left']
-            beam_left_config = {
-                'width': float(bl.get('width', 200)),
-                'height': float(bl.get('height', 500)),
-                'ln': float(bl.get('ln', 1500)),
-                'n_bars_top': int(bl.get('n_bars_top', 2)),
-                'diameter_top': int(bl.get('diameter_top', 12)),
-                'n_bars_bottom': int(bl.get('n_bars_bottom', 2)),
-                'diameter_bottom': int(bl.get('diameter_bottom', 12))
-            }
-
-        if data.get('beam_right'):
-            br = data['beam_right']
-            beam_right_config = {
-                'width': float(br.get('width', 200)),
-                'height': float(br.get('height', 500)),
-                'ln': float(br.get('ln', 1500)),
-                'n_bars_top': int(br.get('n_bars_top', 2)),
-                'diameter_top': int(br.get('diameter_top', 12)),
-                'n_bars_bottom': int(br.get('n_bars_bottom', 2)),
-                'diameter_bottom': int(br.get('diameter_bottom', 12))
+        def parse_beam_config(beam_data):
+            if not beam_data:
+                return None
+            return {
+                'width': float(beam_data.get('width', 200)),
+                'height': float(beam_data.get('height', 500)),
+                'ln': float(beam_data.get('ln', 1500)),
+                'n_bars_top': int(beam_data.get('n_bars_top', 2)),
+                'diameter_top': int(beam_data.get('diameter_top', 12)),
+                'n_bars_bottom': int(beam_data.get('n_bars_bottom', 2)),
+                'diameter_bottom': int(beam_data.get('diameter_bottom', 12))
             }
 
         service = get_analysis_service()
+
+        # 1. Guardar configuración de vigas
         service.set_pier_coupling_config(
             session_id=session_id,
             pier_key=pier_key,
             has_beam_left=data.get('has_beam_left', True),
             has_beam_right=data.get('has_beam_right', True),
-            beam_left_config=beam_left_config,
-            beam_right_config=beam_right_config
+            beam_left_config=parse_beam_config(data.get('beam_left')),
+            beam_right_config=parse_beam_config(data.get('beam_right'))
         )
 
-        return jsonify({'success': True})
+        # 2. Re-analizar el pier y retornar resultado actualizado
+        result = service.analyze_single_pier(
+            session_id=session_id,
+            pier_key=pier_key,
+            generate_plot=True
+        )
+
+        return jsonify({
+            'success': True,
+            'result': result
+        })
 
     except Exception as e:
         return jsonify({
@@ -813,3 +817,327 @@ def health_check():
         'module': 'structural',
         'version': '1.0.0'
     })
+
+
+# =============================================================================
+# Endpoints para Losas
+# =============================================================================
+
+@bp.route('/analyze-slabs', methods=['POST'])
+def analyze_slabs():
+    """
+    Analiza losas de la sesión actual.
+
+    Request (JSON):
+        {
+            "session_id": "uuid-xxx",
+            "slab_updates": [  // Opcional - actualizar propiedades de losas
+                {
+                    "key": "S02_CL_C3",
+                    "slab_type": "one_way",  // o "two_way"
+                    "diameter_main": 16,
+                    "spacing_main": 150
+                }
+            ],
+            "lambda_factor": 1.0  // Opcional - factor por concreto liviano
+        }
+
+    Response:
+        {
+            "success": true,
+            "results": [...],
+            "statistics": {
+                "total_slabs": 5,
+                "ok_count": 3,
+                "fail_count": 2,
+                "pass_rate": 60.0
+            }
+        }
+    """
+    from ..services.analysis.slab_service import SlabService
+    from ..domain.entities.slab import SlabType
+
+    try:
+        data = request.get_json() or {}
+        session_id = data.get('session_id')
+
+        if not session_id:
+            return jsonify({
+                'success': False,
+                'error': 'Se requiere session_id'
+            }), 400
+
+        service = get_analysis_service()
+        parsed_data = service.get_session_data(session_id)
+
+        if not parsed_data:
+            return jsonify({
+                'success': False,
+                'error': 'Sesión no encontrada o expirada'
+            }), 404
+
+        if not parsed_data.has_slabs:
+            return jsonify({
+                'success': False,
+                'error': 'No hay losas en esta sesión. Asegúrese de cargar un archivo con tabla "Section Cut Forces - Analysis".'
+            }), 400
+
+        # Aplicar actualizaciones a las losas si se proporcionan
+        slab_updates = data.get('slab_updates', [])
+        for update in slab_updates:
+            slab_key = update.get('key')
+            if slab_key and slab_key in parsed_data.slabs:
+                slab = parsed_data.slabs[slab_key]
+
+                # Actualizar tipo de losa
+                slab_type_str = update.get('slab_type')
+                if slab_type_str:
+                    slab.slab_type = (
+                        SlabType.TWO_WAY if slab_type_str == 'two_way'
+                        else SlabType.ONE_WAY
+                    )
+
+                # Actualizar refuerzo
+                if 'diameter_main' in update:
+                    slab.update_reinforcement(diameter_main=int(update['diameter_main']))
+                if 'spacing_main' in update:
+                    slab.update_reinforcement(spacing_main=int(update['spacing_main']))
+                if 'diameter_temp' in update:
+                    slab.update_reinforcement(diameter_temp=int(update['diameter_temp']))
+                if 'spacing_temp' in update:
+                    slab.update_reinforcement(spacing_temp=int(update['spacing_temp']))
+
+                # Actualizar columna (para punzonamiento)
+                if 'column_width' in update:
+                    slab.update_column_info(column_width=float(update['column_width']))
+                if 'column_depth' in update:
+                    slab.update_column_info(column_depth=float(update['column_depth']))
+
+        # Crear servicio de losas
+        lambda_factor = float(data.get('lambda_factor', 1.0))
+        slab_service = SlabService(lambda_factor=lambda_factor)
+
+        # Ejecutar verificaciones
+        results = slab_service.verify_all_slabs(parsed_data.slabs, parsed_data.slab_forces)
+        statistics = slab_service.get_summary(parsed_data.slabs, parsed_data.slab_forces)
+
+        # Convertir a lista para JSON
+        results_list = list(results.values())
+
+        return jsonify({
+            'success': True,
+            'results': results_list,
+            'statistics': statistics
+        })
+
+    except Exception as e:
+        import traceback
+        logger.error(f"[AnalyzeSlabs] ERROR: {str(e)}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Error al analizar losas: {str(e)}'
+        }), 500
+
+
+@bp.route('/slab-capacities', methods=['POST'])
+def get_slab_capacities():
+    """
+    Obtiene las capacidades de una losa específica.
+
+    Request (JSON):
+        {
+            "session_id": "uuid-xxx",
+            "slab_key": "S02_CL_C3"
+        }
+
+    Response:
+        {
+            "success": true,
+            "slab": {
+                "label": "CL @ C3",
+                "story": "S02",
+                "thickness": 290,
+                "width": 1500,
+                ...
+            },
+            "capacities": {
+                "phi_Mn": 5.54,
+                "phi_Vn": 17.82,
+                ...
+            }
+        }
+    """
+    from ..services.analysis.slab_service import SlabService
+
+    try:
+        data = request.get_json() or {}
+        session_id = data.get('session_id')
+        slab_key = data.get('slab_key')
+
+        if not session_id or not slab_key:
+            return jsonify({
+                'success': False,
+                'error': 'Se requiere session_id y slab_key'
+            }), 400
+
+        service = get_analysis_service()
+        parsed_data = service.get_session_data(session_id)
+
+        if not parsed_data:
+            return jsonify({
+                'success': False,
+                'error': 'Sesión no encontrada o expirada'
+            }), 404
+
+        if slab_key not in parsed_data.slabs:
+            return jsonify({
+                'success': False,
+                'error': f'Losa "{slab_key}" no encontrada'
+            }), 404
+
+        slab = parsed_data.slabs[slab_key]
+        slab_forces = parsed_data.slab_forces.get(slab_key)
+
+        # Crear servicio y obtener verificación completa
+        slab_service = SlabService()
+        result = slab_service.verify_slab(slab, slab_forces)
+
+        # Datos de la losa
+        slab_info = {
+            'label': slab.label,
+            'story': slab.story,
+            'slab_type': slab.slab_type.value,
+            'thickness_mm': slab.thickness,
+            'width_mm': slab.width,
+            'span_mm': slab.span_length,
+            'fc_MPa': slab.fc,
+            'fy_MPa': slab.fy,
+            'd_mm': round(slab.d, 1),
+            'cover_mm': slab.cover,
+            # Refuerzo
+            'diameter_main': slab.diameter_main,
+            'spacing_main': slab.spacing_main,
+            'As_main_mm2_m': round(slab.As_main, 1),
+            'rho_main': round(slab.rho_main, 5),
+            'diameter_temp': slab.diameter_temp,
+            'spacing_temp': slab.spacing_temp,
+            'As_temp_mm2_m': round(slab.As_temp, 1),
+            # Columna (para punzonamiento)
+            'column_width_mm': slab.column_width,
+            'column_depth_mm': slab.column_depth,
+            'is_interior_column': slab.is_interior_column
+        }
+
+        return jsonify({
+            'success': True,
+            'slab': slab_info,
+            'verification': result
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error: {str(e)}'
+        }), 500
+
+
+@bp.route('/analyze-punching', methods=['POST'])
+def analyze_punching():
+    """
+    Analiza punzonamiento para losas 2-Way.
+
+    Request (JSON):
+        {
+            "session_id": "uuid-xxx",
+            "slab_key": "S02_CL_C3",  // Opcional - si no se especifica, analiza todas
+            "column_c1": 400,          // Opcional - dimensión columna (mm)
+            "column_c2": 400,          // Opcional
+            "position": "interior"     // interior, edge, corner
+        }
+
+    Response:
+        {
+            "success": true,
+            "result": {...}  // o "results": [...] si se analizan todas
+        }
+    """
+    from ..services.analysis.punching_service import PunchingService
+    from ..domain.chapter8.punching import ColumnPosition
+
+    try:
+        data = request.get_json() or {}
+        session_id = data.get('session_id')
+
+        if not session_id:
+            return jsonify({
+                'success': False,
+                'error': 'Se requiere session_id'
+            }), 400
+
+        service = get_analysis_service()
+        parsed_data = service.get_session_data(session_id)
+
+        if not parsed_data:
+            return jsonify({
+                'success': False,
+                'error': 'Sesión no encontrada o expirada'
+            }), 404
+
+        # Crear servicio de punzonamiento
+        punching_service = PunchingService()
+
+        # Parsear posición de columna
+        position_str = data.get('position', 'interior').lower()
+        position_map = {
+            'interior': ColumnPosition.INTERIOR,
+            'edge': ColumnPosition.EDGE,
+            'corner': ColumnPosition.CORNER
+        }
+        position = position_map.get(position_str, ColumnPosition.INTERIOR)
+
+        slab_key = data.get('slab_key')
+
+        if slab_key:
+            # Analizar una losa específica
+            if slab_key not in parsed_data.slabs:
+                return jsonify({
+                    'success': False,
+                    'error': f'Losa "{slab_key}" no encontrada'
+                }), 404
+
+            slab = parsed_data.slabs[slab_key]
+            slab_forces = parsed_data.slab_forces.get(slab_key)
+
+            result = punching_service.check_punching(
+                slab=slab,
+                slab_forces=slab_forces,
+                column_c1_mm=data.get('column_c1'),
+                column_c2_mm=data.get('column_c2'),
+                position=position
+            )
+
+            return jsonify({
+                'success': True,
+                'result': result
+            })
+        else:
+            # Analizar todas las losas 2-Way
+            results = punching_service.check_all_punching(
+                parsed_data.slabs, parsed_data.slab_forces
+            )
+            statistics = punching_service.get_summary(
+                parsed_data.slabs, parsed_data.slab_forces
+            )
+
+            return jsonify({
+                'success': True,
+                'results': list(results.values()),
+                'statistics': statistics
+            })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error: {str(e)}'
+        }), 500

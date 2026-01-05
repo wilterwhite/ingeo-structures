@@ -104,7 +104,7 @@ class TestColumnServiceFlexure:
 
         # Sin fuerzas, debe retornar OK
         assert result['status'] == 'OK'
-        assert result['sf'] == float('inf')
+        assert result['sf'] == '>100'
         assert result['phi_Pn_max'] > 0
         assert result['phi_Mn_M3'] > 0
 

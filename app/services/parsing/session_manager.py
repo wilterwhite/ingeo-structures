@@ -8,6 +8,7 @@ from typing import Dict, Optional, Any
 from .excel_parser import EtabsExcelParser, ParsedData
 from ...domain.calculations import WallContinuityService
 from ...domain.entities.coupling_beam import CouplingBeamConfig, PierCouplingConfig
+from ...domain.constants.reinforcement import FY_DEFAULT_MPA
 
 
 class SessionManager:

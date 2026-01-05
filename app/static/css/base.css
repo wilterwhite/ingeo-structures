@@ -74,6 +74,189 @@ body {
     font-weight: 400;
 }
 
+.header-spacer {
+    flex: 1;
+}
+
+/* ==========================================================================
+   MAIN NAVIGATION
+   ========================================================================== */
+
+.main-nav {
+    display: flex;
+    gap: 4px;
+    margin-left: 24px;
+}
+
+.nav-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: var(--border-radius);
+    transition: all 0.2s;
+}
+
+.nav-tab:hover {
+    background: rgba(37, 99, 235, 0.08);
+    color: var(--text-color);
+}
+
+.nav-tab.active {
+    background: var(--primary-color);
+    color: white;
+}
+
+.nav-tab .nav-icon {
+    font-size: 1rem;
+}
+
+.nav-tab .nav-label {
+    font-size: 0.85rem;
+}
+
+/* ==========================================================================
+   PAGE CONTAINERS
+   ========================================================================== */
+
+.page-container {
+    animation: fadeIn 0.2s ease-out;
+}
+
+.page-container.hidden {
+    display: none;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   CONFIG PAGE
+   ========================================================================== */
+
+.config-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.config-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.config-section h4 {
+    font-size: 1rem;
+    margin-bottom: 8px;
+    color: var(--text-color);
+}
+
+.config-section .section-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+}
+
+.disabled-section {
+    opacity: 0.6;
+}
+
+.disabled-section h4 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.coming-soon {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    background: var(--bg-color);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.disabled-content {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.no-data-msg {
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 30px 20px;
+    background: var(--bg-color);
+    border-radius: var(--border-radius);
+}
+
+.no-data-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    padding: 40px;
+}
+
+/* Materials Table */
+.materials-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.materials-table th,
+.materials-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.materials-table th {
+    background: var(--bg-color);
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.materials-table td {
+    font-size: 0.9rem;
+}
+
+.materials-table select {
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    background: white;
+    min-width: 150px;
+}
+
+.materials-table .lambda-value {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.materials-table .element-count {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* Beams Page Placeholder */
+.beams-page-placeholder {
+    text-align: center;
+    padding: 40px 20px;
+}
+
 /* ==========================================================================
    CARDS
    ========================================================================== */

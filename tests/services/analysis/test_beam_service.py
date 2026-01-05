@@ -149,7 +149,7 @@ class TestBeamServiceBasics:
         result = self.service.check_shear(beam, None)
 
         assert result['status'] == 'OK'
-        assert result['sf'] == float('inf')
+        assert result['sf'] == '>100'
         assert result['critical_combo'] == 'N/A'
 
     def test_empty_combinations(self):
@@ -173,7 +173,7 @@ class TestBeamServiceBasics:
         result = self.service.check_shear(beam, forces)
 
         assert result['status'] == 'OK'
-        assert result['sf'] == float('inf')
+        assert result['sf'] == '>100'
 
 
 class TestBeamServiceSpandrels:

@@ -35,6 +35,7 @@ from ...domain.chapter18 import (
     CouplingBeamDesignResult,
 )
 from ...domain.chapter18.amplification import ShearAmplificationResult
+from ...domain.chapter18.piers.shear_design import calculate_design_shear
 
 
 class ShearService:
@@ -64,7 +65,8 @@ class ShearService:
         pier: Pier,
         pier_forces: Optional[PierForces],
         Mpr_total: float = 0,
-        lu: float = 0
+        lu: float = 0,
+        lambda_factor: float = 1.0
     ) -> Dict[str, Any]:
         """
         Verifica corte con interacción V2-V3 y retorna el caso crítico.
@@ -83,6 +85,7 @@ class ShearService:
             pier_forces: Fuerzas del pier (combinaciones)
             Mpr_total: Momento probable total de vigas de acople (kN-m)
             lu: Altura libre del pier (mm)
+            lambda_factor: Factor de concreto liviano (1.0=normal, 0.85=arena, 0.75=todo liviano)
 
         Returns:
             Dict con resultados de la verificación de corte
@@ -113,24 +116,18 @@ class ShearService:
         if not pier_forces or not pier_forces.combinations:
             return default_result
 
-        # Clasificar si es pilar de muro
+        # Clasificar elemento (para información, no para decidir diseño por capacidad)
         classification = self.classify_wall(pier)
-        is_wall_pier = self._wall_classification.is_wall_pier(classification)
 
-        # Determinar si usar diseño por capacidad
-        use_capacity_design = is_wall_pier and Mpr_total > 0 and lu > 0
-        Ve_capacity = 0
-        if use_capacity_design:
-            # Ve = Mpr_total / lu (convertir lu de mm a m)
-            lu_m = lu / 1000
-            # Mpr_total está en kN-m, Ve sale en kN, convertir a tonf
-            Ve_capacity = (Mpr_total / lu_m) / 9.80665  # kN a tonf
+        # Convertir Mpr_total de kN-m a tonf-m para usar función de chapter18
+        Mpr_total_tonf_m = Mpr_total / 9.80665 if Mpr_total > 0 else 0
 
         # Variables para tracking del caso crítico
         min_sf = float('inf')
         critical_result = None
         critical_combo_name = ''
         Ve_used = 0
+        use_capacity_design = False
 
         # Obtener cuantía vertical del pier para verificación §18.10.4.3
         rho_v = pier.rho_vertical
@@ -142,17 +139,27 @@ class ShearService:
             Vu3 = abs(combo.V3)
             Vu_max = max(Vu2, Vu3)
 
-            # Calcular Ve si usa diseño por capacidad
+            # Calcular Ve usando función centralizada de chapter18
+            # Aplica diseño por capacidad si Mpr_total > 0 y lu > 0
+            # Según ACI 318-25 §18.7.6.1 (columnas) y §18.10.8.1(a) (wall piers)
+            design_shear = calculate_design_shear(
+                Vu=Vu_max,
+                lu=lu,
+                Mpr_total=Mpr_total_tonf_m,
+                Omega_o=3.0
+            )
+
+            Ve = design_shear.Ve
+            use_capacity_design = design_shear.use_capacity_design
+
+            # Determinar cortantes a verificar
             if use_capacity_design:
-                # Ve = min(Ve_capacity, Ω₀ × Vu) donde Ω₀ = 3.0
-                Ve = min(Ve_capacity, 3.0 * Vu_max)
                 # Usar Ve para ambas direcciones (conservador)
                 Vu2_check = Ve if Vu2 > 0 else 0
                 Vu3_check = Ve if Vu3 > 0 else 0
             else:
                 Vu2_check = Vu2
                 Vu3_check = Vu3
-                Ve = 0
 
             # Verificar corte combinado para esta combinación
             combined_result = self._shear_verification.verify_combined_shear(
@@ -166,7 +173,8 @@ class ShearService:
                 Vu3=Vu3_check,
                 Nu=P,
                 combo_name=combo.name,
-                rho_v=rho_v
+                rho_v=rho_v,
+                lambda_factor=lambda_factor
             )
 
             # Actualizar si es más crítico (menor SF = mayor DCR)

@@ -16,6 +16,7 @@ from ..constants.phi_chapter21 import (
     EPSILON_T_LIMIT,
     calculate_phi_flexure,
 )
+from ..constants.materials import calculate_beta1 as _calculate_beta1
 from .checker import FlexureChecker
 
 
@@ -52,20 +53,17 @@ class InteractionDiagramService:
 
     def calculate_beta1(self, fc: float) -> float:
         """
-        Calcula β1 según ACI 318-25.
+        Calcula β1 según ACI 318-25 §22.2.2.4.3.
+
+        Delega a la función centralizada en constants/materials.py.
 
         Args:
             fc: Resistencia del hormigón (MPa)
 
         Returns:
-            β1: Factor del bloque de compresión equivalente
+            β1: Factor del bloque de compresión equivalente (0.65-0.85)
         """
-        if fc <= 28:
-            return 0.85
-        elif fc >= 55:
-            return 0.65
-        else:
-            return 0.85 - 0.05 * (fc - 28) / 7
+        return _calculate_beta1(fc)
 
     def calculate_phi(self, epsilon_t: float) -> float:
         """

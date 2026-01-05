@@ -19,6 +19,7 @@ from typing import Dict, List, Any
 import pandas as pd
 
 from ...domain.entities import Pier, LoadCombination, PierForces, ParsedData
+from ...domain.constants.reinforcement import FY_DEFAULT_MPA
 from .material_mapper import parse_material_to_fc
 from .table_extractor import (
     normalize_columns,
@@ -27,6 +28,7 @@ from .table_extractor import (
 )
 from .column_parser import ColumnParser
 from .beam_parser import BeamParser
+from .slab_parser import SlabParser
 
 
 # Nombres de tablas soportadas (para mostrar al usuario)
@@ -45,6 +47,9 @@ SUPPORTED_TABLES = {
         'Element Forces - Beams',
         'Spandrel Section Properties',
         'Spandrel Forces'
+    ],
+    'slabs': [
+        'Section Cut Forces - Analysis'
     ]
 }
 
@@ -66,6 +71,7 @@ class EtabsExcelParser:
     def __init__(self):
         self.column_parser = ColumnParser()
         self.beam_parser = BeamParser()
+        self.slab_parser = SlabParser()
 
     def parse_excel(self, file_content: bytes) -> ParsedData:
         """
@@ -97,6 +103,8 @@ class EtabsExcelParser:
         # Spandrels
         spandrel_props_df = None
         spandrel_forces_df = None
+        # Losas (Section Cuts)
+        section_cut_df = None
 
         # Buscar tablas en todas las hojas
         for sheet_name in excel_file.sheet_names:
@@ -133,6 +141,10 @@ class EtabsExcelParser:
 
             if spandrel_forces_df is None:
                 spandrel_forces_df = find_table_in_sheet(df, "Spandrel Forces")
+
+            # Losas (Section Cut Forces)
+            if section_cut_df is None:
+                section_cut_df = find_table_in_sheet(df, "Section Cut Forces - Analysis")
 
         # Fallback: buscar por nombre de hoja (piers)
         if wall_props_df is None:
@@ -177,9 +189,18 @@ class EtabsExcelParser:
                 materials
             )
 
+        # Procesar losas
+        slabs = {}
+        slab_forces = {}
+        slab_stories = []
+        if section_cut_df is not None:
+            slabs, slab_forces, slab_stories = self.slab_parser.parse_slabs(
+                section_cut_df, materials
+            )
+
         # Combinar stories
         all_stories = pier_stories.copy()
-        for s in column_stories + beam_stories:
+        for s in column_stories + beam_stories + slab_stories:
             if s not in all_stories:
                 all_stories.append(s)
 
@@ -190,6 +211,8 @@ class EtabsExcelParser:
             column_forces=column_forces,
             beams=beams,
             beam_forces=beam_forces,
+            slabs=slabs,
+            slab_forces=slab_forces,
             materials=materials,
             stories=all_stories,
             raw_data=raw_data
@@ -354,6 +377,7 @@ class EtabsExcelParser:
             'total_piers': len(data.piers),
             'total_columns': len(data.columns) if data.columns else 0,
             'total_beams': len(data.beams) if data.beams else 0,
+            'total_slabs': len(data.slabs) if data.slabs else 0,
             'total_stories': len(data.stories),
             'stories': data.stories,
             'axes': sorted(list(axes)),
@@ -444,6 +468,32 @@ class EtabsExcelParser:
                     'reinforcement_desc': beam.reinforcement_description
                 }
                 for key, beam in data.beams.items()
+            ]
+
+        # Agregar losas si existen
+        if data.slabs:
+            summary['slabs_list'] = [
+                {
+                    'key': key,
+                    'label': slab.label,
+                    'story': slab.story,
+                    'slab_type': slab.slab_type.value,
+                    'axis_slab': slab.axis_slab,
+                    'location': slab.location,
+                    'thickness_m': slab.thickness / 1000,
+                    'width_m': slab.width / 1000,
+                    'span_m': slab.span_length / 1000,
+                    'fc_MPa': slab.fc,
+                    'fy_MPa': slab.fy,
+                    'diameter_main': slab.diameter_main,
+                    'spacing_main': slab.spacing_main,
+                    'diameter_temp': slab.diameter_temp,
+                    'spacing_temp': slab.spacing_temp,
+                    'As_main_mm2_m': slab.As_main,
+                    'rho_main': slab.rho_main,
+                    'reinforcement_desc': slab.reinforcement_description
+                }
+                for key, slab in data.slabs.items()
             ]
 
         return summary

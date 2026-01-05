@@ -30,6 +30,8 @@ from .analysis.pier_verification_service import PierVerificationService
 from .analysis.pier_capacity_service import PierCapacityService
 from .analysis.column_service import ColumnService
 from .analysis.beam_service import BeamService
+from .analysis.slab_service import SlabService
+from .analysis.punching_service import PunchingService
 from ..domain.entities import Pier, VerificationResult, PierForces
 from ..domain.flexure import InteractionDiagramService, SlendernessService, SteelLayer
 from ..domain.chapter11 import WallType, WallCastType
@@ -60,7 +62,9 @@ class PierAnalysisService:
         verification_service: Optional[PierVerificationService] = None,
         capacity_service: Optional[PierCapacityService] = None,
         column_service: Optional[ColumnService] = None,
-        beam_service: Optional[BeamService] = None
+        beam_service: Optional[BeamService] = None,
+        slab_service: Optional[SlabService] = None,
+        punching_service: Optional[PunchingService] = None
     ):
         """
         Inicializa el servicio de analisis.
@@ -107,9 +111,11 @@ class PierAnalysisService:
         )
         self._column_service = column_service or ColumnService()
         self._beam_service = beam_service or BeamService()
+        self._slab_service = slab_service or SlabService()
+        self._punching_service = punching_service or PunchingService()
 
     # =========================================================================
-    # Helpers - Conversión de Resultados
+    # Helpers - Conversion de Resultados
     # =========================================================================
 
     def _convert_column_result_to_unified(
@@ -332,6 +338,7 @@ class PierAnalysisService:
         self,
         piers: Dict[str, Pier],
         parsed_data: Any,
+        session_id: str,
         generate_plots: bool = False,
         moment_axis: str = 'M3',
         angle_deg: float = 0
@@ -342,6 +349,7 @@ class PierAnalysisService:
         Args:
             piers: Diccionario de piers a analizar {key: Pier}
             parsed_data: Datos parseados de la sesión
+            session_id: ID de sesión para obtener configuración de vigas
             generate_plots: Generar gráficos P-M individuales
             moment_axis: Eje de momento
             angle_deg: Ángulo para vista combinada
@@ -472,6 +480,7 @@ class PierAnalysisService:
         results = self._analyze_piers_batch(
             piers=parsed_data.piers,
             parsed_data=parsed_data,
+            session_id=session_id,
             generate_plots=generate_plots,
             moment_axis=moment_axis,
             angle_deg=angle_deg
@@ -498,10 +507,15 @@ class PierAnalysisService:
         pier_updates: Optional[List[Dict]] = None,
         generate_plots: bool = True,
         moment_axis: str = 'M3',
-        angle_deg: float = 0
+        angle_deg: float = 0,
+        materials_config: Optional[Dict] = None
     ):
         """
         Ejecuta el análisis estructural con progreso (generador para SSE).
+
+        Args:
+            materials_config: Configuración de materiales con lambda por tipo de concreto.
+                Format: {material_name: {fc, type, lambda}, ...}
 
         Yields:
             Dict con eventos de progreso:
@@ -509,6 +523,28 @@ class PierAnalysisService:
             - {"type": "complete", "result": {...}}
             - {"type": "error", "message": "..."}
         """
+        materials_config = materials_config or {}
+
+        def get_lambda_for_pier(pier) -> float:
+            """Obtiene el factor lambda para un pier basado en su material."""
+            # Buscar por nombre de material si está definido
+            material_name = getattr(pier, 'material', None)
+            fc = pier.fc
+
+            # Intentar buscar por nombre exacto
+            if material_name and material_name in materials_config:
+                mat_info = materials_config[material_name]
+                return mat_info.get('lambda', 1.0)
+
+            # Intentar buscar por nombre aproximado basado en f'c
+            approx_name = f"C{int(round(fc))}"
+            if approx_name in materials_config:
+                mat_info = materials_config[approx_name]
+                return mat_info.get('lambda', 1.0)
+
+            # Default: concreto normal
+            return 1.0
+
         # Validar sesión
         error = self._validate_session(session_id)
         if error:
@@ -559,6 +595,9 @@ class PierAnalysisService:
                 continuity_info = parsed_data.continuity_info[key]
                 hwcs = continuity_info.hwcs
 
+            # Obtener lambda para este pier
+            lambda_factor = get_lambda_for_pier(pier)
+
             # Analizar pier
             result = self._analyze_pier(
                 pier=pier,
@@ -570,7 +609,8 @@ class PierAnalysisService:
                 hn_ft=hn_ft,
                 continuity_info=continuity_info,
                 session_id=session_id,
-                pier_key=key
+                pier_key=key,
+                lambda_factor=lambda_factor
             )
             results.append(result)
 
@@ -628,7 +668,53 @@ class PierAnalysisService:
             )
             beam_results.append(unified_result)
 
-        # Calcular estadísticas de piers
+        # =====================================================================
+        # FASE 4: Analizar LOSAS
+        # =====================================================================
+        slab_results = []
+        slabs = parsed_data.slabs or {}
+        slab_forces_dict = parsed_data.slab_forces or {}
+        total_slabs = len(slabs)
+
+        if total_slabs > 0:
+            for i, (key, slab) in enumerate(slabs.items(), 1):
+                # Enviar progreso
+                yield {
+                    "type": "progress",
+                    "current": total_piers + total_columns + total_beams + i,
+                    "total": total_elements + total_beams + total_slabs,
+                    "pier": f"Losa: {slab.story} - {slab.label}"
+                }
+
+                # Obtener fuerzas de la losa
+                slab_forces = slab_forces_dict.get(key)
+
+                # Verificar losa (flexion, cortante, espesor)
+                slab_result = self._slab_service.verify_slab(slab, slab_forces)
+
+                # Verificar punzonamiento si es 2-Way
+                punching_result = self._punching_service.check_punching(
+                    slab, slab_forces
+                )
+
+                # Combinar resultados
+                unified_result = {
+                    'slab_key': key,
+                    'label': slab.label,
+                    'story': slab.story,
+                    'slab_type': slab.slab_type.value if hasattr(slab.slab_type, 'value') else str(slab.slab_type),
+                    'thickness': slab.thickness,
+                    'width': slab.width,
+                    'thickness_check': slab_result.get('thickness_check', {}),
+                    'flexure': slab_result.get('flexure', {}),
+                    'shear': slab_result.get('shear_one_way', {}),
+                    'reinforcement': slab_result.get('reinforcement', {}),
+                    'punching': punching_result,
+                    'overall_status': slab_result.get('overall_status', 'N/A')
+                }
+                slab_results.append(unified_result)
+
+        # Calcular estadisticas de piers
         statistics = self._statistics_service.calculate_statistics(results)
 
         # Agregar estadísticas de columnas
@@ -642,7 +728,7 @@ class PierAnalysisService:
                 'pass_rate': round(col_ok / len(column_results) * 100, 1) if column_results else 100
             }
 
-        # Agregar estadísticas de vigas
+        # Agregar estadisticas de vigas
         if beam_results:
             beam_ok = sum(1 for r in beam_results if r['overall_status'] == 'OK')
             beam_fail = len(beam_results) - beam_ok
@@ -653,7 +739,18 @@ class PierAnalysisService:
                 'pass_rate': round(beam_ok / len(beam_results) * 100, 1) if beam_results else 100
             }
 
-        # Generar gráfico resumen (solo para piers por ahora)
+        # Agregar estadisticas de losas
+        if slab_results:
+            slab_ok = sum(1 for r in slab_results if r['overall_status'] == 'OK')
+            slab_fail = len(slab_results) - slab_ok
+            statistics['slabs'] = {
+                'total': len(slab_results),
+                'ok': slab_ok,
+                'fail': slab_fail,
+                'pass_rate': round(slab_ok / len(slab_results) * 100, 1) if slab_results else 100
+            }
+
+        # Generar grafico resumen (solo para piers por ahora)
         summary_plot = None
         if generate_plots and results:
             yield {
@@ -683,6 +780,7 @@ class PierAnalysisService:
                 'statistics': statistics,
                 'results': all_results,
                 'beam_results': beam_results,  # Vigas separadas (tabla diferente)
+                'slab_results': slab_results,  # Losas separadas (tabla diferente)
                 'summary_plot': summary_plot
             }
         }
@@ -887,10 +985,14 @@ class PierAnalysisService:
         hn_ft: Optional[float] = None,
         continuity_info: Optional[Any] = None,
         session_id: Optional[str] = None,
-        pier_key: Optional[str] = None
+        pier_key: Optional[str] = None,
+        lambda_factor: float = 1.0
     ) -> VerificationResult:
         """
         Ejecuta el análisis estructural de un pier individual.
+
+        Args:
+            lambda_factor: Factor de concreto liviano (1.0=normal, 0.85=arena liviana, 0.75=todo liviano)
 
         Incluye verificaciones ACI 318-25:
         - Flexocompresión
@@ -927,7 +1029,8 @@ class PierAnalysisService:
         shear_result = self._shear_service.check_shear(
             pier, pier_forces,
             Mpr_total=Mpr_total,
-            lu=pier.height  # Altura del pier = luz libre
+            lu=pier.height,  # Altura del pier = luz libre
+            lambda_factor=lambda_factor
         )
 
         # 4. Clasificación del muro (ACI 318-25 §18.10.8)
@@ -1164,6 +1267,7 @@ class PierAnalysisService:
         results = self._analyze_piers_batch(
             piers=filtered_piers,
             parsed_data=parsed_data,
+            session_id=session_id,
             generate_plots=False,
             moment_axis='M3',
             angle_deg=0
@@ -1298,16 +1402,70 @@ class PierAnalysisService:
         self,
         session_id: str,
         pier_key: str,
-        has_coupling: bool,
-        coupling_beam_config: Optional[Dict] = None
+        has_beam_left: bool = True,
+        has_beam_right: bool = True,
+        beam_left_config: Optional[Dict] = None,
+        beam_right_config: Optional[Dict] = None
     ) -> None:
-        """Configura si un pier tiene viga de acople y su configuracion."""
+        """Configura las vigas de acople para un pier específico."""
         self._session_manager.set_pier_coupling_config(
             session_id=session_id,
             pier_key=pier_key,
-            has_coupling=has_coupling,
-            coupling_beam_config=coupling_beam_config
+            has_beam_left=has_beam_left,
+            has_beam_right=has_beam_right,
+            beam_left_config=beam_left_config,
+            beam_right_config=beam_right_config
         )
+
+    def analyze_single_pier(
+        self,
+        session_id: str,
+        pier_key: str,
+        generate_plot: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Re-analiza un pier individual y retorna su resultado.
+
+        Args:
+            session_id: ID de sesión
+            pier_key: Clave del pier
+            generate_plot: Generar gráfico P-M
+
+        Returns:
+            Diccionario con el resultado del pier (formato VerificationResult.to_dict())
+        """
+        error = self._validate_pier(session_id, pier_key)
+        if error:
+            return error
+
+        parsed_data = self._session_manager.get_session(session_id)
+        pier = parsed_data.piers.get(pier_key)
+        pier_forces = parsed_data.pier_forces.get(pier_key)
+
+        # Obtener hwcs y hn_ft
+        hwcs = None
+        hn_ft = None
+        continuity_info = None
+        if parsed_data.continuity_info and pier_key in parsed_data.continuity_info:
+            continuity_info = parsed_data.continuity_info[pier_key]
+            hwcs = continuity_info.hwcs
+        if parsed_data.building_info:
+            hn_ft = parsed_data.building_info.hn_ft
+
+        result = self._analyze_pier(
+            pier=pier,
+            pier_forces=pier_forces,
+            generate_plot=generate_plot,
+            moment_axis='M3',
+            angle_deg=0,
+            hwcs=hwcs,
+            hn_ft=hn_ft,
+            continuity_info=continuity_info,
+            session_id=session_id,
+            pier_key=pier_key
+        )
+
+        return result.to_dict()
 
     def get_session_data(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Obtiene los datos de una sesion."""

@@ -143,7 +143,8 @@ class ShearVerificationService:
         Nu: float = 0,
         bcf: float = 0,
         tcf: float = 0,
-        is_lightweight: bool = False
+        is_lightweight: bool = False,
+        lambda_factor: float = 1.0
     ) -> Tuple[float, float, float, float, float, float]:
         """
         Calcula Vn para MUROS segun Ec. 18.10.4.1 y 11.5.4.4.
@@ -173,6 +174,7 @@ class ShearVerificationService:
             bcf: Ancho del ala comprimida (mm), 0 si no hay ala
             tcf: Espesor del ala comprimida (mm), 0 si no hay ala
             is_lightweight: True si es concreto liviano
+            lambda_factor: Factor de concreto liviano (1.0=normal, 0.85=arena, 0.75=todo liviano)
 
         Returns:
             Tuple (Vc, Vs, Vn, Vn_max, alpha_c, alpha_sh) en tonf
@@ -190,7 +192,7 @@ class ShearVerificationService:
         # Calcula alpha_sh para limite de Vn (§18.10.4.4)
         alpha_sh = calculate_alpha_sh(bw=tw, bcf=bcf, tcf=tcf, lw=lw)
 
-        Vc = Acv * alpha_c * LAMBDA_NORMAL * math.sqrt(fc_eff)
+        Vc = Acv * alpha_c * lambda_factor * math.sqrt(fc_eff)
         Vs = Acv * rho_h * fy_eff
         Vn = Vc + Vs
 
@@ -269,7 +271,8 @@ class ShearVerificationService:
         rho_v: Optional[float] = None,
         bcf: float = 0,
         tcf: float = 0,
-        is_lightweight: bool = False
+        is_lightweight: bool = False,
+        lambda_factor: float = 1.0
     ) -> ShearResult:
         """
         Verifica resistencia al corte del muro o columna.
@@ -297,7 +300,8 @@ class ShearVerificationService:
         if self.is_wall(lw, tw):
             Vc, Vs, Vn, Vn_max, alpha_c, alpha_sh = self.calculate_Vn_wall(
                 lw, tw, hw, fc, fy, rho_h, Nu=Nu_N,
-                bcf=bcf, tcf=tcf, is_lightweight=is_lightweight
+                bcf=bcf, tcf=tcf, is_lightweight=is_lightweight,
+                lambda_factor=lambda_factor
             )
             formula_type = "wall"
             aci_reference = "ACI 318-25 11.5.4.3, 18.10.4.1, 18.10.4.4"
@@ -377,7 +381,8 @@ class ShearVerificationService:
         Vu3: float,
         Nu: float = 0,
         combo_name: str = "",
-        rho_v: Optional[float] = None
+        rho_v: Optional[float] = None,
+        lambda_factor: float = 1.0
     ) -> CombinedShearResult:
         """
         Verifica interaccion V2-V3 con SRSS.
@@ -386,12 +391,12 @@ class ShearVerificationService:
         """
         result_V2 = self.verify_shear(
             lw=lw, tw=tw, hw=hw, fc=fc, fy=fy, rho_h=rho_h,
-            Vu=Vu2, Nu=Nu, rho_v=rho_v
+            Vu=Vu2, Nu=Nu, rho_v=rho_v, lambda_factor=lambda_factor
         )
 
         result_V3 = self.verify_shear(
             lw=tw, tw=lw, hw=hw, fc=fc, fy=fy, rho_h=rho_h,
-            Vu=Vu3, Nu=Nu, rho_v=rho_v
+            Vu=Vu3, Nu=Nu, rho_v=rho_v, lambda_factor=lambda_factor
         )
 
         dcr_2 = abs(Vu2) / result_V2.phi_Vn if result_V2.phi_Vn > 0 else 0
@@ -416,7 +421,8 @@ class ShearVerificationService:
         Vu_total: float,
         Nu: float = 0,
         rho_v: Optional[float] = None,
-        is_lightweight: bool = False
+        is_lightweight: bool = False,
+        lambda_factor: float = 1.0
     ) -> WallGroupShearResult:
         """
         Verifica grupo de segmentos segun 18.10.4.4.
@@ -446,7 +452,7 @@ class ShearVerificationService:
             result = self.verify_shear(
                 lw=lw, tw=tw, hw=hw, fc=fc, fy=fy, rho_h=rho_h,
                 Vu=Vu_total * area_ratio, Nu=Nu * area_ratio, rho_v=rho_v,
-                is_lightweight=is_lightweight
+                is_lightweight=is_lightweight, lambda_factor=lambda_factor
             )
             segment_results.append(result)
             Vn_total += result.Vn

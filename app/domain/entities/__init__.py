@@ -6,6 +6,7 @@ Soporta:
 - Piers (muros de hormigon armado)
 - Columnas de hormigon armado
 - Vigas de hormigon armado (frame y spandrels)
+- Losas de hormigon armado (1-Way y 2-Way)
 """
 from .pier import Pier
 from .load_combination import LoadCombination
@@ -14,6 +15,8 @@ from .column import Column
 from .column_forces import ColumnForces
 from .beam import Beam, BeamSource
 from .beam_forces import BeamForces
+from .slab import Slab, SlabType, SupportCondition
+from .slab_forces import SlabForces, SlabSectionCut
 from .verification_result import VerificationResult
 from .parsed_data import ParsedData
 from .design_proposal import (
@@ -35,6 +38,12 @@ __all__ = [
     'Beam',
     'BeamSource',
     'BeamForces',
+    # Losas
+    'Slab',
+    'SlabType',
+    'SupportCondition',
+    'SlabForces',
+    'SlabSectionCut',
     # Comunes
     'LoadCombination',
     'VerificationResult',

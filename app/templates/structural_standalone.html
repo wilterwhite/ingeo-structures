@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INGEO Structures - ACI 318-25</title>
-    <link rel="stylesheet" href="{{ url_for('structural_static', filename='css/structural.css') }}?v=12">
+    <link rel="stylesheet" href="{{ url_for('structural_static', filename='css/structural.css') }}?v=15">
 </head>
 <body>
     <div class="container">
@@ -13,198 +13,132 @@
                 <span class="brand-name">INGEO</span>
                 <span class="brand-product">Structures</span>
             </div>
-            <div class="header-divider"></div>
-            <div class="header-subtitle">Verificador de Muros ACI 318-25</div>
+            <nav class="main-nav">
+                <button class="nav-tab active" data-page="config-page" title="Configuración general del proyecto">
+                    <span class="nav-icon">⚙</span>
+                    <span class="nav-label">Config</span>
+                </button>
+                <button class="nav-tab" data-page="walls-page" title="Diseño de muros y columnas">
+                    <span class="nav-icon">🧱</span>
+                    <span class="nav-label">Muros/Cols</span>
+                </button>
+                <button class="nav-tab" data-page="beams-page" title="Diseño de vigas">
+                    <span class="nav-icon">📏</span>
+                    <span class="nav-label">Vigas</span>
+                </button>
+                <button class="nav-tab" data-page="slabs-page" title="Diseño de losas">
+                    <span class="nav-icon">▭</span>
+                    <span class="nav-label">Losas</span>
+                </button>
+            </nav>
+            <div class="header-spacer"></div>
+            <div class="header-subtitle">ACI 318-25</div>
         </header>
 
-        <!-- Step 1: Upload -->
-        <div class="card" id="upload-section">
-            <div class="card-header">1. Cargar archivo Excel de ETABS</div>
-            <div class="card-body">
-                <div class="upload-area" id="upload-area">
-                    <div class="icon">📄</div>
-                    <p>Arrastra tu archivo Excel aquí o haz clic para seleccionar</p>
-                    <p class="hint">Tablas ETABS requeridas:</p>
-                    <img src="{{ url_for('structural_static', filename='img/Tablas_Etabs.png') }}?v=3"
-                         alt="Tablas ETABS soportadas"
-                         class="etabs-tables-img">
-                    <input type="file" id="file-input" accept=".xlsx">
+        <!-- ================================================================
+             PAGE: CONFIGURACIÓN GENERAL
+             ================================================================ -->
+        <div class="page-container" id="config-page">
+            <!-- Step 1: Upload -->
+            <div class="card" id="upload-section">
+                <div class="card-header">1. Cargar archivo Excel de ETABS</div>
+                <div class="card-body">
+                    <div class="upload-area" id="upload-area">
+                        <div class="icon">📄</div>
+                        <p>Arrastra tu archivo Excel aquí o haz clic para seleccionar</p>
+                        <p class="hint">Tablas ETABS requeridas:</p>
+                        <img src="{{ url_for('structural_static', filename='img/Tablas_Etabs.png') }}?v=3"
+                             alt="Tablas ETABS soportadas"
+                             class="etabs-tables-img">
+                        <input type="file" id="file-input" accept=".xlsx">
+                    </div>
+                    <div class="loading" id="upload-loading">
+                        <div class="spinner"></div>
+                        <p>Procesando archivo...</p>
+                    </div>
                 </div>
-                <div class="loading" id="upload-loading">
-                    <div class="spinner"></div>
-                    <p>Procesando archivo...</p>
+            </div>
+
+            <!-- Config card (shown after upload) -->
+            <div class="card hidden" id="config-card">
+                <div class="card-header">2. Configuración del Proyecto</div>
+                <div class="card-body">
+                    <!-- Materiales -->
+                    <div class="config-section">
+                        <h4>Materiales de Concreto</h4>
+                        <p class="section-hint">Indica el tipo de concreto para cada material. Esto afecta el factor λ en los cálculos de cortante.</p>
+
+                        <div class="table-wrapper" id="materials-table-wrapper">
+                            <table class="materials-table" id="materials-table">
+                                <thead>
+                                    <tr>
+                                        <th>Material</th>
+                                        <th>f'c (MPa)</th>
+                                        <th>Tipo de Concreto</th>
+                                        <th title="Factor de modificación para concreto ligero (ACI 318-25 §19.2.4)">λ</th>
+                                        <th>Elementos</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="materials-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Zona Sísmica (futuro) -->
+                    <div class="config-section disabled-section">
+                        <h4>Zona Sísmica <span class="coming-soon">(próximamente)</span></h4>
+                        <p class="section-hint">Configuración de zona sísmica según NCh 433 para cálculo de espectro de diseño.</p>
+                        <div class="disabled-content">
+                            <div class="control-group">
+                                <label>Zona:</label>
+                                <select disabled>
+                                    <option>Zona 1</option>
+                                    <option>Zona 2</option>
+                                    <option>Zona 3</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Tipo de suelo:</label>
+                                <select disabled>
+                                    <option>A - Roca</option>
+                                    <option>B - Suelo muy denso</option>
+                                    <option>C - Suelo denso</option>
+                                    <option>D - Suelo blando</option>
+                                    <option>E - Suelo especial</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-secondary" id="new-file-btn">Cargar otro archivo</button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Step 2: Review Elements -->
-        <div class="card hidden" id="piers-section">
-            <div class="card-header">2. Revisar Elementos y Armaduras</div>
+        <!-- ================================================================
+             PAGE: MUROS Y COLUMNAS
+             ================================================================ -->
+        <div class="page-container hidden" id="walls-page">
+
+        <!-- Placeholder when no data -->
+        <div class="card" id="walls-placeholder">
             <div class="card-body">
-                <div class="section-info" id="elements-summary">
-                    <div class="elements-counts">
-                        <span class="element-count" id="pier-count-wrapper">
-                            <strong id="pier-count">0</strong> piers
-                        </span>
-                        <span class="element-count hidden" id="column-count-wrapper">
-                            <strong id="column-count">0</strong> columnas
-                        </span>
-                        <span class="element-count hidden" id="beam-count-wrapper">
-                            <strong id="beam-count">0</strong> vigas
-                        </span>
-                    </div>
-                    <p class="section-hint">Por defecto se usa armadura mínima.</p>
-                </div>
-
-                <!-- Filters for Piers -->
-                <div class="filters-bar" id="piers-filters">
-                    <div class="filter-group">
-                        <label>Grilla:</label>
-                        <select id="piers-grilla-filter">
-                            <option value="">Todas</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Piso:</label>
-                        <select id="piers-story-filter">
-                            <option value="">Todos</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Eje:</label>
-                        <select id="piers-axis-filter">
-                            <option value="">Todos</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Global Reinforcement Config -->
-                <div class="global-config">
-                    <h4>Configuración Global de Armadura</h4>
-                    <div class="config-controls">
-                        <div class="control-group">
-                            <label>Mallas:</label>
-                            <select id="global-meshes">
-                                <option value="1">1 (central)</option>
-                                <option value="2" selected>2 (doble cara)</option>
-                            </select>
-                        </div>
-                        <div class="control-group">
-                            <label>Diámetro:</label>
-                            <select id="global-diameter">
-                                <option value="6">φ6</option>
-                                <option value="8" selected>φ8</option>
-                                <option value="10">φ10</option>
-                                <option value="12">φ12</option>
-                                <option value="16">φ16</option>
-                                <option value="20">φ20</option>
-                                <option value="22">φ22</option>
-                                <option value="25">φ25</option>
-                            </select>
-                        </div>
-                        <div class="control-group">
-                            <label>Espaciamiento:</label>
-                            <select id="global-spacing">
-                                <option value="100">@100</option>
-                                <option value="150">@150</option>
-                                <option value="200" selected>@200</option>
-                                <option value="250">@250</option>
-                                <option value="300">@300</option>
-                            </select>
-                        </div>
-                        <div class="control-group">
-                            <label>φ Borde:</label>
-                            <select id="global-edge-diameter">
-                                <option value="10" selected>φ10</option>
-                                <option value="12">φ12</option>
-                                <option value="16">φ16</option>
-                                <option value="20">φ20</option>
-                                <option value="22">φ22</option>
-                                <option value="25">φ25</option>
-                            </select>
-                        </div>
-                        <div class="control-group">
-                            <label>Recub. (mm):</label>
-                            <select id="global-cover">
-                                <option value="20">20</option>
-                                <option value="25" selected>25</option>
-                                <option value="30">30</option>
-                                <option value="40">40</option>
-                                <option value="50">50</option>
-                            </select>
-                        </div>
-                        <button class="btn btn-secondary btn-sm" id="apply-global-btn">Aplicar a todos</button>
-                    </div>
-                </div>
-
-                <div class="table-wrapper">
-                    <table class="pier-edit-table" id="piers-table">
-                        <thead>
-                            <tr>
-                                <th>Piso</th>
-                                <th>Pier</th>
-                                <th>Largo (m)</th>
-                                <th>Espesor (m)</th>
-                                <th>f'c (MPa)</th>
-                                <th>Mallas</th>
-                                <th>φ Vert</th>
-                                <th>@ Vert</th>
-                                <th>φ Horiz</th>
-                                <th>@ Horiz</th>
-                                <th>φ Borde</th>
-                                <th title="Recubrimiento (mm)">Rec.</th>
-                                <th>As (mm²/m)</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-
-                <div class="action-bar">
-                    <button class="btn btn-secondary" id="new-file-btn">Cargar otro archivo</button>
+                <div class="no-data-placeholder">
+                    <p class="no-data-msg">Carga un archivo de ETABS en la pestaña <strong>Config</strong> para comenzar.</p>
                 </div>
             </div>
         </div>
 
-        <!-- Step 3: Results -->
+        <!-- Results -->
         <div class="card hidden" id="results-section">
-            <div class="card-header">3. Resultados del Análisis</div>
+            <div class="card-header">Muros y Columnas</div>
             <div class="card-body">
-                <!-- Elementos detectados -->
-                <div class="elements-summary-bar" id="elements-summary-results">
-                    <span class="elements-label">Elementos detectados:</span>
-                    <span class="element-badge" id="pier-badge">
-                        <strong id="pier-count-results">0</strong> piers
-                    </span>
-                    <span class="element-badge hidden" id="column-badge">
-                        <strong id="column-count-results">0</strong> columnas
-                    </span>
-                    <span class="element-badge hidden" id="beam-badge">
-                        <strong id="beam-count-results">0</strong> vigas
-                    </span>
-                </div>
-
-                <!-- Tabs de navegación -->
-                <div class="results-tabs">
-                    <button class="tab-btn active" data-tab="walls-tab">
-                        <span class="tab-icon">🧱</span>
-                        <span class="tab-label">Muros y Columnas</span>
-                        <span class="tab-count" id="walls-tab-count">0</span>
-                    </button>
-                    <button class="tab-btn" data-tab="beams-tab">
-                        <span class="tab-icon">📏</span>
-                        <span class="tab-label">Vigas</span>
-                        <span class="tab-count" id="beams-tab-count">0</span>
-                    </button>
-                </div>
-
-                <!-- TAB: Muros y Columnas -->
-                <div class="tab-panel active" id="walls-tab">
-
-                <!-- Stats + Filters (una sola fila) -->
+                <!-- Stats + Filters -->
                 <div class="toolbar-bar">
                     <div class="stats-inline">
-                        <span class="stat-item"><strong id="stat-total">0</strong> verificados</span>
+                        <span class="stat-item"><strong id="stat-total">0</strong> elementos</span>
                         <span class="stat-item stat-ok"><strong id="stat-ok">0</strong> OK</span>
                         <span class="stat-item stat-fail"><strong id="stat-fail">0</strong> Fail</span>
                         <span class="stat-item"><strong id="stat-rate">0%</strong></span>
@@ -236,11 +170,19 @@
                             <option value="FAIL">Fail</option>
                         </select>
                     </div>
+                    <div class="filter-group">
+                        <label>Tipo:</label>
+                        <select id="element-type-filter">
+                            <option value="">Todos</option>
+                            <option value="pier">Pier</option>
+                            <option value="column">Columna</option>
+                        </select>
+                    </div>
                     <div class="toolbar-divider"></div>
 
-                    <!-- Viga Estándar -->
+                    <!-- Viga de acople (para muros acoplados) -->
                     <div class="standard-beam-config">
-                        <span class="beam-label">Viga Estándar:</span>
+                        <span class="beam-label">Viga acople:</span>
                         <select id="std-beam-width" title="Ancho (mm)">
                             <option value="150">150</option>
                             <option value="200" selected>200</option>
@@ -288,7 +230,6 @@
                     <button class="btn btn-sm btn-primary" id="generate-report-btn" title="Generar informe PDF">
                         Generar Informe
                     </button>
-                    <span class="plane-indicator">M3</span>
                 </div>
 
                 <!-- Results Table -->
@@ -296,7 +237,7 @@
                     <table class="results-table" id="results-table">
                         <thead>
                             <tr>
-                                <th title="Piso / Pier / Dimensiones">Pier</th>
+                                <th title="Piso / Pier / Dimensiones">Elemento</th>
                                 <th title="Altura desde sección crítica (continuidad del muro)">hwcs</th>
                                 <th title="Malla distribuida vertical/horizontal">Malla</th>
                                 <th title="Elemento de borde">Borde</th>
@@ -314,47 +255,142 @@
                     </table>
                 </div>
 
-                <!-- Summary Plot (below table) -->
+                <!-- Summary Plot -->
                 <div class="summary-plot" id="summary-plot-container"></div>
-
-                </div><!-- Fin TAB: Muros y Columnas -->
-
-                <!-- TAB: Vigas -->
-                <div class="tab-panel" id="beams-tab">
-                    <div class="beams-toolbar">
-                        <div class="stats-inline">
-                            <span class="stat-item"><strong id="beam-stat-total">0</strong> vigas</span>
-                            <span class="stat-item stat-ok"><strong id="beam-stat-ok">0</strong> OK</span>
-                            <span class="stat-item stat-fail"><strong id="beam-stat-fail">0</strong> Fail</span>
-                            <span class="stat-item"><strong id="beam-stat-rate">0%</strong></span>
-                        </div>
-                    </div>
-                    <div class="table-wrapper">
-                        <table class="results-table beams-table" id="beams-table">
-                            <thead>
-                                <tr>
-                                    <th title="Piso / Viga / Tipo">Viga</th>
-                                    <th title="Dimensiones de la sección">Sección</th>
-                                    <th title="Armadura transversal">Estribos</th>
-                                    <th title="Resistencia de diseño">φVn (t)</th>
-                                    <th title="Demanda máxima">Vu (t)</th>
-                                    <th title="Factor de seguridad">FS</th>
-                                    <th title="Demand/Capacity Ratio">DCR</th>
-                                    <th title="Combinación crítica">Combo</th>
-                                    <th>Estado</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div><!-- Fin TAB: Vigas -->
 
                 <div class="action-bar">
                     <button class="btn btn-secondary" id="new-analysis-btn">Nuevo Análisis</button>
                 </div>
             </div>
         </div>
-    </div>
+
+        </div><!-- Fin PAGE: Muros y Columnas -->
+
+        <!-- ================================================================
+             PAGE: VIGAS
+             ================================================================ -->
+        <div class="page-container hidden" id="beams-page">
+
+        <!-- Placeholder when no data -->
+        <div class="card" id="beams-placeholder">
+            <div class="card-body">
+                <div class="no-data-placeholder">
+                    <p class="no-data-msg">Carga un archivo de ETABS en la pestaña <strong>Config</strong> para comenzar.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Beams Results -->
+        <div class="card hidden" id="beams-results-section">
+            <div class="card-header">Vigas</div>
+            <div class="card-body">
+                <!-- Stats -->
+                <div class="toolbar-bar">
+                    <div class="stats-inline">
+                        <span class="stat-item"><strong id="beam-stat-total">0</strong> vigas</span>
+                        <span class="stat-item stat-ok"><strong id="beam-stat-ok">0</strong> OK</span>
+                        <span class="stat-item stat-fail"><strong id="beam-stat-fail">0</strong> Fail</span>
+                        <span class="stat-item"><strong id="beam-stat-rate">0%</strong></span>
+                    </div>
+                </div>
+
+                <!-- Beams Table -->
+                <div class="table-wrapper">
+                    <table class="results-table beams-table" id="beams-table">
+                        <thead>
+                            <tr>
+                                <th title="Piso / Viga / Tipo">Viga</th>
+                                <th title="Dimensiones de la sección">Sección</th>
+                                <th title="Armadura transversal">Estribos</th>
+                                <th title="Resistencia de diseño">φVn (t)</th>
+                                <th title="Demanda máxima">Vu (t)</th>
+                                <th title="Factor de seguridad">FS</th>
+                                <th title="Demand/Capacity Ratio">DCR</th>
+                                <th title="Combinación crítica">Combo</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        </div>
+
+        <!-- ================================================================
+             PAGE: LOSAS
+             ================================================================ -->
+        <div class="page-container hidden" id="slabs-page">
+
+        <!-- Placeholder when no data -->
+        <div class="card" id="slabs-placeholder">
+            <div class="card-body">
+                <div class="no-data-placeholder">
+                    <p class="no-data-msg">Carga un archivo de ETABS en la pestaña <strong>Config</strong> para comenzar.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slabs Results -->
+        <div class="card hidden" id="slabs-results-section">
+            <div class="card-header">Losas</div>
+            <div class="card-body">
+                <!-- Stats + Filters -->
+                <div class="toolbar-bar">
+                    <div class="stats-inline">
+                        <span class="stat-item"><strong id="slab-stat-total">0</strong> losas</span>
+                        <span class="stat-item stat-ok"><strong id="slab-stat-ok">0</strong> OK</span>
+                        <span class="stat-item stat-fail"><strong id="slab-stat-fail">0</strong> Fail</span>
+                        <span class="stat-item"><strong id="slab-stat-rate">0%</strong></span>
+                    </div>
+                    <div class="toolbar-divider"></div>
+                    <div class="filter-group">
+                        <label>Tipo:</label>
+                        <select id="slab-type-filter">
+                            <option value="">Todos</option>
+                            <option value="ONE_WAY">1-Way</option>
+                            <option value="TWO_WAY">2-Way</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Estado:</label>
+                        <select id="slab-status-filter">
+                            <option value="">Todos</option>
+                            <option value="OK">OK</option>
+                            <option value="FAIL">Fail</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Slabs Table -->
+                <div class="table-wrapper">
+                    <table class="results-table slabs-table" id="slabs-table">
+                        <thead>
+                            <tr>
+                                <th title="Piso / Losa / Tipo">Losa</th>
+                                <th title="Espesor de la losa">h (cm)</th>
+                                <th title="Ancho del corte">b (cm)</th>
+                                <th title="Verificación de espesor mínimo">h min</th>
+                                <th title="Resistencia de diseño a flexión">φMn (t-m)</th>
+                                <th title="Demanda de momento">Mu (t-m)</th>
+                                <th title="Factor de seguridad flexión">FS Flex.</th>
+                                <th title="Resistencia de diseño a cortante">φVn (t)</th>
+                                <th title="Demanda de cortante">Vu (t)</th>
+                                <th title="Factor de seguridad cortante">FS Corte</th>
+                                <th title="Punzonamiento (solo 2-Way)">Punz.</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        </div>
+
+    </div><!-- Fin container -->
 
     <!-- Modal for PM Diagram with Combination Navigator -->
     <div class="modal" id="plot-modal">
@@ -619,12 +655,12 @@
     <script src="{{ url_for('structural_static', filename='js/Utils.js') }}?v=1"></script>
     <script src="{{ url_for('structural_static', filename='js/StructuralAPI.js') }}?v=12"></script>
     <script src="{{ url_for('structural_static', filename='js/PlotModal.js') }}?v=12"></script>
-    <script src="{{ url_for('structural_static', filename='js/PiersTable.js') }}?v=12"></script>
     <script src="{{ url_for('structural_static', filename='js/RowFactory.js') }}?v=1"></script>
-    <script src="{{ url_for('structural_static', filename='js/ResultsTable.js') }}?v=17"></script>
+    <script src="{{ url_for('structural_static', filename='js/ResultsTable.js') }}?v=19"></script>
     <script src="{{ url_for('structural_static', filename='js/BeamsTable.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/SlabsTable.js') }}?v=1"></script>
     <script src="{{ url_for('structural_static', filename='js/ReportModal.js') }}?v=12"></script>
-    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}?v=18"></script>
+    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}?v=24"></script>
     <script>
         // Inicializar la página cuando el DOM esté listo
         document.addEventListener('DOMContentLoaded', () => {

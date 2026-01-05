@@ -21,7 +21,7 @@
 .pier-edit-table td,
 .results-table th,
 .results-table td {
-    padding: 10px 12px;
+    padding: 6px 8px;
     text-align: left;
     border-bottom: 1px solid var(--border-color);
 }
@@ -196,13 +196,20 @@
 .viga-row { gap: 1px; justify-content: center; }
 .viga-cell select { padding: 2px 3px; min-width: 32px; }
 .viga-cell span { font-size: 0.6rem; color: var(--text-muted); }
-.viga-cell.locked select {
-    background: #f5f5f5;
-    color: #999;
-    pointer-events: none;
-    border-color: #ddd;
+
+/* Viga usando valores generales (verde claro) */
+.viga-cell.using-default select {
+    background: #ecfdf5;
+    border-color: #86efac;
 }
-.viga-cell.locked span { color: #bbb; }
+.viga-cell.using-default span { color: #16a34a; }
+
+/* Viga con valores personalizados (naranja) */
+.viga-cell.using-custom select {
+    background: #fff7ed;
+    border-color: #fdba74;
+}
+.viga-cell.using-custom span { color: #ea580c; }
 
 /* Longitudinal (columnas) */
 .longitudinal-cell .long-row { gap: 4px; margin-bottom: 3px; }
@@ -313,6 +320,13 @@
 .element-type-badge.type-column { background: #d1fae5; color: #065f46; }
 .element-type-badge.type-frame { background: #fef3c7; color: #92400e; }
 .element-type-badge.type-spandrel { background: #ede9fe; color: #5b21b6; }
+.element-type-badge.type-1way { background: #fce7f3; color: #9d174d; }
+.element-type-badge.type-2way { background: #ccfbf1; color: #0f766e; }
+
+/* Check status badges */
+.check-ok { color: var(--success-color, #059669); font-weight: 500; }
+.check-fail { color: var(--danger-color, #dc2626); font-weight: 500; }
+.na { color: var(--text-muted, #6b7280); font-style: italic; }
 
 /* Tension warning */
 .tension-warning {
@@ -479,28 +493,6 @@
     text-align: left;
 }
 
-/* ==========================================================================
-   TOGGLE BEAM BUTTON
-   ========================================================================== */
-
-.btn-toggle-beam {
-    display: block;
-    margin-top: 3px;
-    padding: 2px 6px;
-    font-size: 0.6rem;
-    background: #f0f0f0;
-    border: 1px solid #ddd;
-    border-radius: 3px;
-    cursor: pointer;
-    color: #666;
-    text-align: center;
-}
-.btn-toggle-beam:hover { background: #e0e0e0; border-color: #ccc; }
-.btn-toggle-beam.unlocked {
-    background: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-}
 
 /* ==========================================================================
    STANDARD BEAM CONFIG (toolbar)
@@ -629,3 +621,42 @@
 .beam-row.status-fail { background: rgba(239, 68, 68, 0.05); }
 .beam-row.status-ok:hover { background: rgba(16, 185, 129, 0.05); }
 .beam-row.status-fail:hover { background: rgba(239, 68, 68, 0.08); }
+
+/* ==========================================================================
+   FLOATING RECALC BUTTON
+   ========================================================================== */
+
+.floating-recalc-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1000;
+    padding: 12px 20px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.2s ease;
+}
+
+.floating-recalc-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.floating-recalc-btn.hidden {
+    display: none;
+}
+
+.floating-recalc-btn .pending-count {
+    font-weight: 700;
+}
+
+/* Fila con cambios pendientes */
+.pier-row.pending-recalc {
+    background: rgba(251, 191, 36, 0.1);  /* Amarillo suave */
+}
+
+.pier-row.pending-recalc .viga-cell {
+    border-left: 3px solid var(--warning-color);
+}

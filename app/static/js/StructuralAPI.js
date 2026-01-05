@@ -327,6 +327,50 @@ class StructuralAPI {
     }
 
     // =========================================================================
+    // Losas
+    // =========================================================================
+
+    /**
+     * Analiza todas las losas de la sesion.
+     * @param {string} sessionId - ID de sesion
+     * @returns {Promise<Object>} Resultados del analisis de losas
+     */
+    async analyzeSlabs(sessionId) {
+        return this.request('/analyze-slabs', {
+            method: 'POST',
+            body: JSON.stringify({ session_id: sessionId })
+        });
+    }
+
+    /**
+     * Obtiene las capacidades de una losa especifica.
+     * @param {string} sessionId - ID de sesion
+     * @param {string} slabKey - Clave de la losa
+     * @returns {Promise<Object>} Capacidades de la losa
+     */
+    async getSlabCapacities(sessionId, slabKey) {
+        return this.request('/slab-capacities', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                slab_key: slabKey
+            })
+        });
+    }
+
+    /**
+     * Verifica punzonamiento para losas 2-Way.
+     * @param {string} sessionId - ID de sesion
+     * @returns {Promise<Object>} Resultados de punzonamiento
+     */
+    async analyzePunching(sessionId) {
+        return this.request('/analyze-punching', {
+            method: 'POST',
+            body: JSON.stringify({ session_id: sessionId })
+        });
+    }
+
+    // =========================================================================
     // Health Check
     // =========================================================================
 

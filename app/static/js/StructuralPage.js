@@ -11,21 +11,27 @@ class StructuralPage {
         this.piersData = [];
         this.columnsData = [];
         this.beamsData = [];
+        this.slabsData = [];
         this.results = [];
         this.columnResults = [];
         this.beamResults = [];
-        this.filters = { grilla: '', story: '', axis: '', status: '' };
+        this.slabResults = [];
+        this.filters = { grilla: '', story: '', axis: '', status: '', elementType: '' };
         this.uniqueGrillas = [];
         this.uniqueStories = [];
         this.uniqueAxes = [];
+
+        // Materiales y configuración
+        this.materials = {};  // { materialName: { fc, type: 'normal'|'sand_lightweight'|'all_lightweight', lambda } }
+        this.currentPage = 'config-page';
 
         // Elementos DOM
         this.elements = {};
 
         // Componentes (se inicializan en init())
-        this.piersTable = null;
         this.resultsTable = null;
         this.beamsTable = null;
+        this.slabsTable = null;
         this.plotModal = null;
         this.reportModal = null;
     }
@@ -42,31 +48,32 @@ class StructuralPage {
 
     cacheElements() {
         this.elements = {
-            // Secciones
+            // Config page
             uploadSection: document.getElementById('upload-section'),
-            piersSection: document.getElementById('piers-section'),
-            resultsSection: document.getElementById('results-section'),
+            configCard: document.getElementById('config-card'),
 
             // Upload
             uploadArea: document.getElementById('upload-area'),
             fileInput: document.getElementById('file-input'),
             uploadLoading: document.getElementById('upload-loading'),
 
-            // Piers
-            piersTable: document.getElementById('piers-table')?.querySelector('tbody'),
-            pierCount: document.getElementById('pier-count'),
-            piersGrillaFilter: document.getElementById('piers-grilla-filter'),
-            piersStoryFilter: document.getElementById('piers-story-filter'),
-            piersAxisFilter: document.getElementById('piers-axis-filter'),
+            // Walls page
+            wallsPlaceholder: document.getElementById('walls-placeholder'),
+            resultsSection: document.getElementById('results-section'),
 
-            // Configuración global
-            globalMeshes: document.getElementById('global-meshes'),
-            globalDiameter: document.getElementById('global-diameter'),
-            globalSpacing: document.getElementById('global-spacing'),
-            globalEdgeDiameter: document.getElementById('global-edge-diameter'),
-            globalCover: document.getElementById('global-cover'),
-            applyGlobalBtn: document.getElementById('apply-global-btn'),
-            reanalyzeBtn: document.getElementById('reanalyze-btn'),
+            // Beams page
+            beamsPlaceholder: document.getElementById('beams-placeholder'),
+            beamsResultsSection: document.getElementById('beams-results-section'),
+
+            // Slabs page
+            slabsPlaceholder: document.getElementById('slabs-placeholder'),
+            slabsResultsSection: document.getElementById('slabs-results-section'),
+
+            // Paginas principales
+            configPage: document.getElementById('config-page'),
+            wallsPage: document.getElementById('walls-page'),
+            beamsPage: document.getElementById('beams-page'),
+            slabsPage: document.getElementById('slabs-page'),
 
             // Resultados
             resultsTable: document.getElementById('results-table')?.querySelector('tbody'),
@@ -75,6 +82,7 @@ class StructuralPage {
             storyFilter: document.getElementById('story-filter'),
             axisFilter: document.getElementById('axis-filter'),
             statusFilter: document.getElementById('status-filter'),
+            elementTypeFilter: document.getElementById('element-type-filter'),
             toggleAllCombosBtn: document.getElementById('toggle-all-combos-btn'),
             toggleCombosIcon: document.getElementById('toggle-combos-icon'),
 
@@ -104,14 +112,19 @@ class StructuralPage {
             sectionModalImg: document.getElementById('section-modal-img'),
 
             // Report
-            generateReportBtn: document.getElementById('generate-report-btn')
+            generateReportBtn: document.getElementById('generate-report-btn'),
+
+            // Materiales (Config page)
+            materialsTableWrapper: document.getElementById('materials-table-wrapper'),
+            materialsTbody: document.getElementById('materials-tbody')
         };
     }
 
     initComponents() {
-        this.piersTable = new PiersTable(this);
         this.resultsTable = new ResultsTable(this);
         this.beamsTable = new BeamsTable(this);
+        this.slabsTable = new SlabsTable(this);
+        this.slabsTable.bindFilterEvents();
         this.plotModal = new PlotModal(this);
         this.plotModal.init();
         this.reportModal = new ReportModal(this);
@@ -144,6 +157,11 @@ class StructuralPage {
     }
 
     bindEvents() {
+        // Navegación principal (tabs de páginas)
+        document.querySelectorAll('.main-nav .nav-tab').forEach(tab => {
+            tab.addEventListener('click', () => this.navigateToPage(tab.dataset.page));
+        });
+
         // Upload area
         this.elements.uploadArea?.addEventListener('click', () => {
             this.elements.fileInput?.click();
@@ -172,53 +190,83 @@ class StructuralPage {
             }
         });
 
-        // Delegación a componentes
-        this.elements.piersGrillaFilter?.addEventListener('change', () => this.piersTable.onGrillaChange());
-        this.elements.piersStoryFilter?.addEventListener('change', () => this.piersTable.filter());
-        this.elements.piersAxisFilter?.addEventListener('change', () => this.piersTable.filter());
-        this.elements.applyGlobalBtn?.addEventListener('click', () => this.piersTable.applyGlobalConfig());
-        this.elements.reanalyzeBtn?.addEventListener('click', () => this.reanalyze());
+        // Filtros de resultados
         this.elements.grillaFilter?.addEventListener('change', () => this.resultsTable.onGrillaChange());
         this.elements.storyFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.axisFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.statusFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
+        this.elements.elementTypeFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.toggleAllCombosBtn?.addEventListener('click', () => this.toggleAllCombinations());
         this.elements.generateReportBtn?.addEventListener('click', () => this.openReportModal());
 
-        // Viga estándar - actualizar cuando cambian los valores
+        // Viga estándar (para muros acoplados)
         this.elements.stdBeamWidth?.addEventListener('change', () => this.onStandardBeamChange());
         this.elements.stdBeamHeight?.addEventListener('change', () => this.onStandardBeamChange());
         this.elements.stdBeamLn?.addEventListener('change', () => this.onStandardBeamChange());
         this.elements.stdBeamNbars?.addEventListener('change', () => this.onStandardBeamChange());
         this.elements.stdBeamDiam?.addEventListener('change', () => this.onStandardBeamChange());
 
-        // Tabs de resultados
-        document.querySelectorAll('.results-tabs .tab-btn').forEach(btn => {
-            btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
-        });
-
         // Botones de navegación
         document.getElementById('new-file-btn')?.addEventListener('click', () => {
+            this.reset();
             this.showSection('upload');
+            this.navigateToPage('config-page');
         });
 
         document.getElementById('new-analysis-btn')?.addEventListener('click', () => {
             this.reset();
             this.showSection('upload');
+            this.navigateToPage('config-page');
         });
     }
 
     // =========================================================================
-    // Navegación
+    // Navegación Principal (Páginas)
+    // =========================================================================
+
+    navigateToPage(pageId) {
+        // Actualizar tabs
+        document.querySelectorAll('.main-nav .nav-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.page === pageId);
+        });
+
+        // Mostrar/ocultar paginas
+        this.elements.configPage?.classList.toggle('hidden', pageId !== 'config-page');
+        this.elements.wallsPage?.classList.toggle('hidden', pageId !== 'walls-page');
+        this.elements.beamsPage?.classList.toggle('hidden', pageId !== 'beams-page');
+        this.elements.slabsPage?.classList.toggle('hidden', pageId !== 'slabs-page');
+
+        this.currentPage = pageId;
+    }
+
+    // =========================================================================
+    // Navegación de Secciones
     // =========================================================================
 
     showSection(section) {
+        // Config page
         this.elements.uploadSection?.classList.toggle('hidden', section !== 'upload');
-        this.elements.piersSection?.classList.toggle('hidden', section !== 'piers');
+        this.elements.configCard?.classList.toggle('hidden', section === 'upload');
+
+        // Walls page
+        this.elements.wallsPlaceholder?.classList.toggle('hidden', section !== 'upload');
         this.elements.resultsSection?.classList.toggle('hidden', section !== 'results');
+
+        // Beams page
+        this.elements.beamsPlaceholder?.classList.toggle('hidden', section !== 'upload');
+        this.elements.beamsResultsSection?.classList.toggle('hidden', section !== 'results');
+
+        // Slabs page
+        this.elements.slabsPlaceholder?.classList.toggle('hidden', section !== 'upload');
+        this.elements.slabsResultsSection?.classList.toggle('hidden', section !== 'results');
 
         if (section === 'upload') {
             this.resetUploadArea();
+        }
+
+        // Navegar a la página de muros después de análisis
+        if (section === 'results') {
+            this.navigateToPage('walls-page');
         }
     }
 
@@ -230,86 +278,161 @@ class StructuralPage {
         }
     }
 
-    switchTab(tabId) {
-        // Actualizar botones
-        document.querySelectorAll('.results-tabs .tab-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.tab === tabId);
-        });
-
-        // Actualizar paneles
-        document.querySelectorAll('.tab-panel').forEach(panel => {
-            panel.classList.toggle('active', panel.id === tabId);
-        });
-    }
-
-    updateTabCounts() {
-        // Contar muros + columnas
-        const wallsCount = this.results.length;
-        const wallsCountEl = document.getElementById('walls-tab-count');
-        if (wallsCountEl) wallsCountEl.textContent = wallsCount;
-
-        // Contar vigas
-        const beamsCount = this.beamResults.length;
-        const beamsCountEl = document.getElementById('beams-tab-count');
-        if (beamsCountEl) beamsCountEl.textContent = beamsCount;
-    }
-
     reset() {
         this.sessionId = null;
         this.piersData = [];
         this.columnsData = [];
         this.beamsData = [];
+        this.slabsData = [];
         this.results = [];
         this.columnResults = [];
         this.beamResults = [];
-        this.filters = { grilla: '', story: '', axis: '', status: '' };
+        this.slabResults = [];
+        this.filters = { grilla: '', story: '', axis: '', status: '', elementType: '' };
         this.uniqueGrillas = [];
         this.uniqueStories = [];
         this.uniqueAxes = [];
+        this.materials = {};
         this.resultsTable.reset();
         this.beamsTable.clear();
+        this.slabsTable.clear();
+        this.updateMaterialsTable();
+    }
+
+    // =========================================================================
+    // Gestión de Materiales
+    // =========================================================================
+
+    /**
+     * Extrae los materiales únicos de los datos cargados y actualiza la tabla.
+     */
+    extractMaterials() {
+        const materialsMap = {};
+
+        // Extraer de piers
+        this.piersData.forEach(pier => {
+            const fc = pier.fc || pier.fc_mpa || 28;  // Default 28 MPa
+            const matName = pier.material || `C${Math.round(fc)}`;
+            if (!materialsMap[matName]) {
+                materialsMap[matName] = { fc, count: 0, type: 'normal', lambda: 1.0 };
+            }
+            materialsMap[matName].count++;
+        });
+
+        // Extraer de columnas
+        this.columnsData.forEach(col => {
+            const fc = col.fc || col.fc_mpa || 28;
+            const matName = col.material || `C${Math.round(fc)}`;
+            if (!materialsMap[matName]) {
+                materialsMap[matName] = { fc, count: 0, type: 'normal', lambda: 1.0 };
+            }
+            materialsMap[matName].count++;
+        });
+
+        // Preservar configuración existente si ya estaba definida
+        Object.keys(materialsMap).forEach(name => {
+            if (this.materials[name]) {
+                materialsMap[name].type = this.materials[name].type;
+                materialsMap[name].lambda = this.materials[name].lambda;
+            }
+        });
+
+        this.materials = materialsMap;
+        this.updateMaterialsTable();
+    }
+
+    /**
+     * Actualiza la tabla de materiales en la página de configuración.
+     */
+    updateMaterialsTable() {
+        const tbody = this.elements.materialsTbody;
+        if (!tbody) return;
+
+        const materialNames = Object.keys(this.materials);
+
+        if (materialNames.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="no-data-msg">No hay materiales cargados</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = materialNames.map(name => {
+            const mat = this.materials[name];
+            const fcDisplay = mat.fc ? mat.fc.toFixed(1) : '—';
+            return `
+                <tr data-material="${name}">
+                    <td><strong>${name}</strong></td>
+                    <td>${fcDisplay} MPa</td>
+                    <td>
+                        <select class="material-type-select" data-material="${name}">
+                            <option value="normal" ${mat.type === 'normal' ? 'selected' : ''}>Normal</option>
+                            <option value="sand_lightweight" ${mat.type === 'sand_lightweight' ? 'selected' : ''}>Arena liviana (λ=0.85)</option>
+                            <option value="all_lightweight" ${mat.type === 'all_lightweight' ? 'selected' : ''}>Todo liviano (λ=0.75)</option>
+                        </select>
+                    </td>
+                    <td class="lambda-value">${mat.lambda.toFixed(2)}</td>
+                    <td class="element-count">${mat.count} elementos</td>
+                </tr>
+            `;
+        }).join('');
+
+        // Bind eventos para cambios de tipo
+        tbody.querySelectorAll('.material-type-select').forEach(select => {
+            select.addEventListener('change', (e) => this.onMaterialTypeChange(e));
+        });
+    }
+
+    /**
+     * Maneja el cambio de tipo de concreto para un material.
+     */
+    onMaterialTypeChange(event) {
+        const select = event.target;
+        const materialName = select.dataset.material;
+        const newType = select.value;
+
+        // Calcular lambda según el tipo
+        const lambdaValues = {
+            'normal': 1.0,
+            'sand_lightweight': 0.85,
+            'all_lightweight': 0.75
+        };
+
+        this.materials[materialName].type = newType;
+        this.materials[materialName].lambda = lambdaValues[newType];
+
+        // Actualizar celda de lambda
+        const row = select.closest('tr');
+        const lambdaCell = row.querySelector('.lambda-value');
+        if (lambdaCell) {
+            lambdaCell.textContent = this.materials[materialName].lambda.toFixed(2);
+        }
+
+        console.log(`[Config] Material ${materialName} cambiado a ${newType}, λ=${lambdaValues[newType]}`);
+    }
+
+    /**
+     * Obtiene el lambda para un material específico.
+     */
+    getLambdaForMaterial(materialName, fc) {
+        // Buscar por nombre
+        if (this.materials[materialName]) {
+            return this.materials[materialName].lambda;
+        }
+        // Buscar por fc aproximado
+        const approxName = `C${Math.round(fc)}`;
+        if (this.materials[approxName]) {
+            return this.materials[approxName].lambda;
+        }
+        // Default
+        return 1.0;
     }
 
     updateElementCounts() {
-        console.log('[UI] updateElementCounts called', {
+        console.log('[Upload] Elementos cargados:', {
             piers: this.piersData.length,
             columns: this.columnsData.length,
-            beams: this.beamsData.length
+            beams: this.beamsData.length,
+            slabs: this.slabsData.length
         });
-
-        // Piers - sección de piers
-        const pierCount = document.getElementById('pier-count');
-        const pierWrapper = document.getElementById('pier-count-wrapper');
-        if (pierCount) pierCount.textContent = this.piersData.length;
-        if (pierWrapper) pierWrapper.classList.toggle('hidden', this.piersData.length === 0);
-
-        // Columns - sección de piers
-        const columnCount = document.getElementById('column-count');
-        const columnWrapper = document.getElementById('column-count-wrapper');
-        if (columnCount) columnCount.textContent = this.columnsData.length;
-        if (columnWrapper) columnWrapper.classList.toggle('hidden', this.columnsData.length === 0);
-
-        // Beams - sección de piers
-        const beamCount = document.getElementById('beam-count');
-        const beamWrapper = document.getElementById('beam-count-wrapper');
-        if (beamCount) beamCount.textContent = this.beamsData.length;
-        if (beamWrapper) beamWrapper.classList.toggle('hidden', this.beamsData.length === 0);
-
-        // También actualizar sección de resultados
-        const pierCountResults = document.getElementById('pier-count-results');
-        const pierBadge = document.getElementById('pier-badge');
-        if (pierCountResults) pierCountResults.textContent = this.piersData.length;
-        if (pierBadge) pierBadge.classList.toggle('hidden', this.piersData.length === 0);
-
-        const columnCountResults = document.getElementById('column-count-results');
-        const columnBadge = document.getElementById('column-badge');
-        if (columnCountResults) columnCountResults.textContent = this.columnsData.length;
-        if (columnBadge) columnBadge.classList.toggle('hidden', this.columnsData.length === 0);
-
-        const beamCountResults = document.getElementById('beam-count-results');
-        const beamBadge = document.getElementById('beam-badge');
-        if (beamCountResults) beamCountResults.textContent = this.beamsData.length;
-        if (beamBadge) beamBadge.classList.toggle('hidden', this.beamsData.length === 0);
     }
 
     // =========================================================================
@@ -352,6 +475,7 @@ class StructuralPage {
             this.piersData = uploadData.summary.piers_list || [];
             this.columnsData = uploadData.summary.columns_list || [];
             this.beamsData = uploadData.summary.beams_list || [];
+            this.slabsData = uploadData.summary.slabs_list || [];
             this.uniqueGrillas = uploadData.summary.grillas || [];
             this.uniqueStories = uploadData.summary.stories || [];
             this.uniqueAxes = uploadData.summary.axes || [];
@@ -360,11 +484,15 @@ class StructuralPage {
             console.log('[Upload] Parsed data:', {
                 piers: this.piersData.length,
                 columns: this.columnsData.length,
-                beams: this.beamsData.length
+                beams: this.beamsData.length,
+                slabs: this.slabsData.length
             });
 
             // Actualizar conteos en la UI
             this.updateElementCounts();
+
+            // Extraer materiales para la página de configuración
+            this.extractMaterials();
 
             // Mostrar progreso
             this.showProgressModal();
@@ -375,7 +503,8 @@ class StructuralPage {
                 pier_updates: [],
                 generate_plots: true,
                 moment_axis: 'M3',
-                angle_deg: 0
+                angle_deg: 0,
+                materials_config: this.materials
             });
 
         } catch (error) {
@@ -430,6 +559,7 @@ class StructuralPage {
                         this.results = data.results;
                         this.columnResults = data.column_results || [];
                         this.beamResults = data.beam_results || [];
+                        this.slabResults = data.slab_results || [];
 
                         // Log results para debug
                         if (this.columnResults.length > 0) {
@@ -438,14 +568,15 @@ class StructuralPage {
                         if (this.beamResults.length > 0) {
                             console.log('[Analysis] Beam results:', this.beamResults.length);
                         }
+                        if (this.slabResults.length > 0) {
+                            console.log('[Analysis] Slab results:', this.slabResults.length);
+                        }
 
                         this.resultsTable.populateFilters();
                         this.resultsTable.render(data);
                         this.beamsTable.renderTable(this.beamResults);
-                        this.updateTabCounts();
+                        this.slabsTable.renderTable(this.slabResults);
                         this.showSection('results');
-                        this.piersTable.populateFilters();
-                        this.piersTable.render();
                         resolve(data);
                     } else {
                         reject(new Error(data.error || 'Error en análisis'));
@@ -461,30 +592,18 @@ class StructuralPage {
     }
 
     async reanalyze() {
-        const btn = this.elements.reanalyzeBtn;
-        if (btn) {
-            btn.disabled = true;
-            btn.textContent = 'Analizando...';
-        }
-
-        const updates = this.piersTable.getUpdates();
         this.showProgressModal();
-
         try {
             await this.runAnalysisWithProgress({
                 session_id: this.sessionId,
-                pier_updates: updates,
+                pier_updates: [],
                 generate_plots: true,
                 moment_axis: 'M3',
-                angle_deg: 0
+                angle_deg: 0,
+                materials_config: this.materials
             });
         } catch (error) {
             alert('Error: ' + error.message);
-        } finally {
-            if (btn) {
-                btn.disabled = false;
-                btn.textContent = 'Reanalizar';
-            }
         }
     }
 

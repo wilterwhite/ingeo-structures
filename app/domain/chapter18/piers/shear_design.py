@@ -5,7 +5,12 @@ Diseño por cortante de pilares de muro según ACI 318-25 §18.10.8.1.
 Incluye:
 - Cortante de diseño Ve (capacidad o amplificado)
 - Verificación de resistencia φVn
+
+Referencias:
+- §18.10.8.1(a): Wall piers - cortante según §18.7.6.1 o Ω₀×Vu
+- §18.7.6.1: Columnas especiales - Ve basado en Mpr de vigas
 """
+from typing import Optional
 from ...shear.verification import ShearVerificationService
 from ...constants.shear import PHI_SHEAR
 from ..results import WallPierShearDesign
@@ -13,52 +18,65 @@ from ..results import WallPierShearDesign
 
 def calculate_design_shear(
     Vu: float,
-    use_capacity_design: bool = True,
+    lu: float = 0,
+    Mpr_total: Optional[float] = None,
     Mpr_top: float = 0,
     Mpr_bottom: float = 0,
-    lu: float = 0,
     Omega_o: float = 3.0
 ) -> WallPierShearDesign:
     """
-    Calcula el cortante de diseño para el pilar.
+    Calcula el cortante de diseño Ve según ACI 318-25.
 
-    Según 18.10.8.1(a):
-    - Cortante según 18.7.6.1 (diseño por capacidad), O
-    - Ve <= Omega_o * Vu del análisis
+    Aplica diseño por capacidad (§18.7.6.1, §18.10.8.1(a)) cuando hay
+    vigas de acople que transmiten momento al elemento.
 
-    Para 18.7.6.1:
-    Ve = (Mpr_top + Mpr_bottom) / lu
+    Ecuación de diseño por capacidad:
+        Ve = Mpr_total / lu  (donde Mpr_total = Mpr_izq + Mpr_der de vigas)
+
+    Con límite superior:
+        Ve = min(Ve_capacity, Ω₀ × Vu)
 
     Args:
         Vu: Cortante del análisis (tonf)
-        use_capacity_design: Si usar diseño por capacidad
+        lu: Altura libre del elemento (mm)
+        Mpr_total: Momento probable total de vigas de acople (tonf-m).
+                   Si se proporciona, se usa directamente.
+                   Si no, se usa Mpr_top + Mpr_bottom.
         Mpr_top: Momento probable en extremo superior (tonf-m)
         Mpr_bottom: Momento probable en extremo inferior (tonf-m)
-        lu: Altura libre del pilar (mm)
-        Omega_o: Factor de sobrerresistencia del código general
+        Omega_o: Factor de sobrerresistencia (default 3.0 para SFRS)
 
     Returns:
-        WallPierShearDesign con cortante de diseño
+        WallPierShearDesign con cortante de diseño Ve
     """
-    if use_capacity_design and lu > 0:
-        # Diseño por capacidad: Ve = (Mpr_top + Mpr_bottom) / lu
-        # Convertir lu a m para unidades consistentes
+    # Determinar Mpr a usar
+    if Mpr_total is not None:
+        Mpr_sum = Mpr_total
+    else:
+        Mpr_sum = Mpr_top + Mpr_bottom
+
+    # Determinar si aplica diseño por capacidad
+    use_capacity_design = Mpr_sum > 0 and lu > 0
+
+    if use_capacity_design:
+        # Ve = Mpr / lu (convertir lu de mm a m)
         lu_m = lu / 1000
-        Ve_capacity = (Mpr_top + Mpr_bottom) / lu_m
+        Ve_capacity = Mpr_sum / lu_m
+        # Límite superior: Ve <= Ω₀ × Vu
         Ve = min(Ve_capacity, Omega_o * Vu)
     else:
-        # Alternativa: Ve = Omega_o * Vu
-        Ve = Omega_o * Vu
+        # Sin vigas de acople: Ve = Vu (del análisis)
+        Ve = Vu
 
     return WallPierShearDesign(
         Vu=Vu,
         Ve=round(Ve, 2),
         Omega_o=Omega_o,
         use_capacity_design=use_capacity_design,
-        phi_Vn=0,  # Se llena después
+        phi_Vn=0,  # Se llena en verify_shear_strength
         dcr=0,
         is_ok=True,
-        aci_reference="ACI 318-25 18.10.8.1(a), 18.7.6.1"
+        aci_reference="ACI 318-25 §18.7.6.1, §18.10.8.1(a)"
     )
 
 

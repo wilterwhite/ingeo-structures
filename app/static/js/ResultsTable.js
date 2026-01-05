@@ -16,6 +16,62 @@ class ResultsTable {
         this.standardBeam = { width: 200, height: 500, ln: 1500, nbars: 2, diam: 12 };
         this.customBeamPiers = new Set();
         this.pierBeamConfigs = {};
+        this.pendingRecalcPiers = new Set();  // Piers con cambios pendientes de recalcular
+        this.vigaChangeTimers = {};  // Debounce timers para cambios de viga
+
+        // Crear botón flotante de recalcular
+        this.createRecalcButton();
+    }
+
+    createRecalcButton() {
+        const btn = document.createElement('button');
+        btn.id = 'recalc-floating-btn';
+        btn.className = 'btn btn-primary floating-recalc-btn hidden';
+        btn.innerHTML = '🔄 Recalcular (<span class="pending-count">0</span>)';
+        btn.title = 'Recalcular piers con cambios pendientes';
+        btn.addEventListener('click', () => this.recalculatePendingPiers());
+        document.body.appendChild(btn);
+        this.recalcButton = btn;
+    }
+
+    updateRecalcButton() {
+        const count = this.pendingRecalcPiers.size;
+        if (this.recalcButton) {
+            this.recalcButton.querySelector('.pending-count').textContent = count;
+            this.recalcButton.classList.toggle('hidden', count === 0);
+        }
+    }
+
+    async recalculatePendingPiers() {
+        if (this.pendingRecalcPiers.size === 0) return;
+
+        const piersToRecalc = [...this.pendingRecalcPiers];
+        this.pendingRecalcPiers.clear();
+        this.updateRecalcButton();
+
+        // Remover clase pending-recalc de todas las filas
+        piersToRecalc.forEach(pierKey => {
+            const row = document.querySelector(`tr[data-pier-key="${pierKey}"]`);
+            if (row) row.classList.remove('pending-recalc');
+        });
+
+        // Mostrar loading
+        if (this.recalcButton) {
+            this.recalcButton.disabled = true;
+            this.recalcButton.innerHTML = `⏳ Calculando (${piersToRecalc.length})...`;
+        }
+
+        try {
+            // Recalcular cada pier secuencialmente
+            for (const pierKey of piersToRecalc) {
+                await this.savePierBeamConfig(pierKey);
+            }
+        } finally {
+            if (this.recalcButton) {
+                this.recalcButton.disabled = false;
+                this.recalcButton.innerHTML = '🔄 Recalcular (<span class="pending-count">0</span>)';
+            }
+        }
     }
 
     // =========================================================================
@@ -99,6 +155,7 @@ class ResultsTable {
         this.page.filters.story = this.elements.storyFilter?.value || '';
         this.page.filters.axis = this.elements.axisFilter?.value || '';
         this.page.filters.status = this.elements.statusFilter?.value || '';
+        this.page.filters.elementType = this.elements.elementTypeFilter?.value || '';
 
         const filtered = this.getFilteredResults();
         this.renderTable(filtered);
@@ -123,6 +180,10 @@ class ResultsTable {
                 const isOk = result.overall_status === 'OK';
                 if (this.filters.status === 'OK' && !isOk) return false;
                 if (this.filters.status === 'FAIL' && isOk) return false;
+            }
+            if (this.filters.elementType) {
+                const elementType = result.element_type || 'pier';
+                if (elementType !== this.filters.elementType) return false;
             }
             return true;
         });
@@ -221,7 +282,7 @@ class ResultsTable {
         const beam = this.getBeamConfig(pierKey, side);
 
         const td = document.createElement('td');
-        td.className = `viga-cell ${isCustom ? '' : 'locked'}`;
+        td.className = `viga-cell ${isCustom ? 'using-custom' : 'using-default'}`;
         td.dataset.pierKey = pierKey;
         td.dataset.side = side;
 
@@ -251,22 +312,34 @@ class ResultsTable {
                     ${BEAM_OPTIONS.lengths.map(l => `<option value="${l}" ${l === beam.ln ? 'selected' : ''}>${l}</option>`).join('')}
                 </select>
             </div>
-            ${side === 'der' ? `<button class="btn-toggle-beam ${isCustom ? 'unlocked' : ''}" data-pier="${pierKey}" title="${isCustom ? 'Volver a estándar' : 'Especificar vigas'}">${isCustom ? '✓' : '⚙'}</button>` : ''}
         `;
 
-        if (side === 'der') {
-            const btn = td.querySelector('.btn-toggle-beam');
-            btn?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.togglePierBeamLock(pierKey);
-            });
-        }
+        // Siempre permitir edición - al cambiar, marcar como custom y pendiente de recálculo
+        td.querySelectorAll('select').forEach(select => {
+            select.addEventListener('change', () => {
+                // Marcar como custom inmediatamente (feedback visual)
+                if (!this.customBeamPiers.has(pierKey)) {
+                    this.customBeamPiers.add(pierKey);
+                    this.pierBeamConfigs[pierKey] = {
+                        izq: { ...this.standardBeam },
+                        der: { ...this.standardBeam }
+                    };
+                    // Actualizar ambas celdas para mostrar naranja
+                    this.updatePierBeamCells(pierKey);
+                }
 
-        if (isCustom) {
-            td.querySelectorAll('select').forEach(select => {
-                select.addEventListener('change', () => this.onBeamChange(pierKey, side));
+                // Guardar config localmente
+                this.onBeamChange(pierKey, side, false);  // false = no guardar en servidor
+
+                // Agregar a pendientes y mostrar botón
+                this.pendingRecalcPiers.add(pierKey);
+                this.updateRecalcButton();
+
+                // Marcar fila como pendiente
+                const row = document.querySelector(`tr[data-pier-key="${pierKey}"]`);
+                if (row) row.classList.add('pending-recalc');
             });
-        }
+        });
 
         return td;
     }
@@ -305,7 +378,7 @@ class ResultsTable {
         }
     }
 
-    onBeamChange(pierKey, side) {
+    onBeamChange(pierKey, side, saveToServer = true) {
         const row = document.querySelector(`tr[data-pier-key="${pierKey}"]`);
         if (!row) return;
 
@@ -322,16 +395,41 @@ class ResultsTable {
             this.pierBeamConfigs[pierKey] = { izq: { ...this.standardBeam }, der: { ...this.standardBeam } };
         }
         this.pierBeamConfigs[pierKey][side] = { width, height, ln, nbars, diam };
-        this.savePierBeamConfig(pierKey);
+
+        // Solo guardar en servidor si se solicita (botón recalcular)
+        if (saveToServer) {
+            this.savePierBeamConfig(pierKey);
+        }
     }
 
     async savePierBeamConfig(pierKey) {
         const config = this.pierBeamConfigs[pierKey];
         if (!config) return;
+
+        const row = this.elements.resultsTable?.querySelector(`.pier-row[data-pier-key="${pierKey}"]`);
+        if (row) row.style.opacity = '0.5';
+
         try {
-            await structuralAPI.setPierBeam(this.sessionId, pierKey, config);
+            // El endpoint guarda config Y retorna resultado actualizado
+            const response = await structuralAPI.setPierBeam(this.sessionId, pierKey, config);
+
+            if (response.success && response.result) {
+                // Actualizar resultado en page.results
+                const idx = this.page.results.findIndex(r => r.key === pierKey);
+                if (idx >= 0) {
+                    this.page.results[idx] = response.result;
+                }
+                // Limpiar cache y re-renderizar
+                delete this.combinationsCache[pierKey];
+                const filtered = this.getFilteredResults();
+                this.renderTable(filtered);
+                this.updateStatistics(this.calculateStatistics(filtered));
+                this.updateSummaryPlot();
+            }
         } catch (error) {
             console.error('Error guardando config de viga:', error);
+        } finally {
+            if (row) row.style.opacity = '1';
         }
     }
 
