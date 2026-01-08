@@ -26,6 +26,13 @@ class PunchingService:
     Solo aplica para losas clasificadas como TWO_WAY.
     """
 
+    # Mapeo de strings a enum para uso desde routes
+    POSITION_MAP = {
+        'interior': ColumnPosition.INTERIOR,
+        'edge': ColumnPosition.EDGE,
+        'corner': ColumnPosition.CORNER
+    }
+
     def __init__(self, lambda_factor: float = LAMBDA_NORMAL):
         """
         Inicializa el servicio.
@@ -34,6 +41,11 @@ class PunchingService:
             lambda_factor: Factor por tipo de concreto (1.0 normal)
         """
         self.lambda_factor = lambda_factor
+
+    @classmethod
+    def parse_position(cls, position_str: str) -> ColumnPosition:
+        """Convierte string a ColumnPosition enum."""
+        return cls.POSITION_MAP.get(position_str.lower(), ColumnPosition.INTERIOR)
 
     def check_punching(
         self,

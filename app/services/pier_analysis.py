@@ -1004,3 +1004,118 @@ class PierAnalysisService:
         """Obtiene los datos de una sesion."""
         return self._session_manager.get_session(session_id)
 
+    # =========================================================================
+    # API Publica - Actualizacion de Losas
+    # =========================================================================
+
+    def update_slab(
+        self,
+        session_id: str,
+        slab_key: str,
+        slab_type: Optional[str] = None,
+        diameter_main: Optional[int] = None,
+        spacing_main: Optional[int] = None,
+        diameter_temp: Optional[int] = None,
+        spacing_temp: Optional[int] = None,
+        column_width: Optional[float] = None,
+        column_depth: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Actualiza propiedades de una losa.
+
+        Args:
+            session_id: ID de sesion
+            slab_key: Clave de la losa
+            slab_type: 'one_way' o 'two_way'
+            diameter_main: Diametro armadura principal (mm)
+            spacing_main: Espaciamiento armadura principal (mm)
+            diameter_temp: Diametro armadura temperatura (mm)
+            spacing_temp: Espaciamiento armadura temperatura (mm)
+            column_width: Ancho columna para punzonamiento (mm)
+            column_depth: Profundidad columna para punzonamiento (mm)
+
+        Returns:
+            Dict con success y mensaje
+        """
+        from ..domain.entities.slab import SlabType
+
+        parsed_data = self._session_manager.get_session(session_id)
+        if not parsed_data:
+            return {'success': False, 'error': 'Sesion no encontrada'}
+
+        if slab_key not in parsed_data.slabs:
+            return {'success': False, 'error': f'Losa {slab_key} no encontrada'}
+
+        slab = parsed_data.slabs[slab_key]
+
+        # Actualizar tipo de losa
+        if slab_type:
+            slab.slab_type = (
+                SlabType.TWO_WAY if slab_type == 'two_way'
+                else SlabType.ONE_WAY
+            )
+
+        # Actualizar refuerzo
+        if diameter_main is not None:
+            slab.update_reinforcement(diameter_main=diameter_main)
+        if spacing_main is not None:
+            slab.update_reinforcement(spacing_main=spacing_main)
+        if diameter_temp is not None:
+            slab.update_reinforcement(diameter_temp=diameter_temp)
+        if spacing_temp is not None:
+            slab.update_reinforcement(spacing_temp=spacing_temp)
+
+        # Actualizar columna
+        if column_width is not None:
+            slab.update_column_info(column_width=column_width)
+        if column_depth is not None:
+            slab.update_column_info(column_depth=column_depth)
+
+        return {'success': True, 'message': f'Losa {slab_key} actualizada'}
+
+    def update_slabs_batch(
+        self,
+        session_id: str,
+        slab_updates: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Actualiza multiples losas en batch.
+
+        Args:
+            session_id: ID de sesion
+            slab_updates: Lista de dicts con 'key' y propiedades a actualizar
+
+        Returns:
+            Dict con success y conteo de actualizaciones
+        """
+        updated_count = 0
+        errors = []
+
+        for update in slab_updates:
+            slab_key = update.get('key')
+            if not slab_key:
+                continue
+
+            result = self.update_slab(
+                session_id=session_id,
+                slab_key=slab_key,
+                slab_type=update.get('slab_type'),
+                diameter_main=update.get('diameter_main'),
+                spacing_main=update.get('spacing_main'),
+                diameter_temp=update.get('diameter_temp'),
+                spacing_temp=update.get('spacing_temp'),
+                column_width=update.get('column_width'),
+                column_depth=update.get('column_depth')
+            )
+
+            if result.get('success'):
+                updated_count += 1
+            else:
+                errors.append(result.get('error', 'Error desconocido'))
+
+        return {
+            'success': len(errors) == 0,
+            'updated_count': updated_count,
+            'errors': errors if errors else None
+        }
+

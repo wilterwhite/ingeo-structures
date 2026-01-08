@@ -905,7 +905,6 @@ def analyze_slabs():
         }
     """
     from ..services.analysis.slab_service import SlabService
-    from ..domain.entities.slab import SlabType
 
     try:
         data = request.get_json() or {}
@@ -934,34 +933,8 @@ def analyze_slabs():
 
         # Aplicar actualizaciones a las losas si se proporcionan
         slab_updates = data.get('slab_updates', [])
-        for update in slab_updates:
-            slab_key = update.get('key')
-            if slab_key and slab_key in parsed_data.slabs:
-                slab = parsed_data.slabs[slab_key]
-
-                # Actualizar tipo de losa
-                slab_type_str = update.get('slab_type')
-                if slab_type_str:
-                    slab.slab_type = (
-                        SlabType.TWO_WAY if slab_type_str == 'two_way'
-                        else SlabType.ONE_WAY
-                    )
-
-                # Actualizar refuerzo
-                if 'diameter_main' in update:
-                    slab.update_reinforcement(diameter_main=int(update['diameter_main']))
-                if 'spacing_main' in update:
-                    slab.update_reinforcement(spacing_main=int(update['spacing_main']))
-                if 'diameter_temp' in update:
-                    slab.update_reinforcement(diameter_temp=int(update['diameter_temp']))
-                if 'spacing_temp' in update:
-                    slab.update_reinforcement(spacing_temp=int(update['spacing_temp']))
-
-                # Actualizar columna (para punzonamiento)
-                if 'column_width' in update:
-                    slab.update_column_info(column_width=float(update['column_width']))
-                if 'column_depth' in update:
-                    slab.update_column_info(column_depth=float(update['column_depth']))
+        if slab_updates:
+            service.update_slabs_batch(session_id, slab_updates)
 
         # Crear servicio de losas
         lambda_factor = float(data.get('lambda_factor', 1.0))
@@ -1113,7 +1086,6 @@ def analyze_punching():
         }
     """
     from ..services.analysis.punching_service import PunchingService
-    from ..domain.chapter8.punching import ColumnPosition
 
     try:
         data = request.get_json() or {}
@@ -1138,13 +1110,8 @@ def analyze_punching():
         punching_service = PunchingService()
 
         # Parsear posición de columna
-        position_str = data.get('position', 'interior').lower()
-        position_map = {
-            'interior': ColumnPosition.INTERIOR,
-            'edge': ColumnPosition.EDGE,
-            'corner': ColumnPosition.CORNER
-        }
-        position = position_map.get(position_str, ColumnPosition.INTERIOR)
+        position_str = data.get('position', 'interior')
+        position = PunchingService.parse_position(position_str)
 
         slab_key = data.get('slab_key')
 
