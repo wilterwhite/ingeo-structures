@@ -39,6 +39,7 @@ from ...domain.chapter18 import (
 from ...domain.shear import ShearVerificationService
 from ...domain.flexure import SlendernessService
 from ...domain.constants import SeismicDesignCategory, WallCategory, N_TO_TONF, NMM_TO_TONFM
+from ...domain.constants.shear import PHI_SHEAR
 from .force_extractors import extract_max_forces
 
 
@@ -149,7 +150,7 @@ class PierVerificationService:
             Vu=Vu,
             rho_v=pier.rho_vertical
         )
-        phi_Vc = shear_result.Vc * 0.75
+        phi_Vc = shear_result.Vc * PHI_SHEAR
         requires_shear_reinf = Vu > 0.5 * phi_Vc
 
         # 2. Verificar límites de diseño (11.3, 11.7)

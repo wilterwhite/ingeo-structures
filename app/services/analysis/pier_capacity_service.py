@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional, List, Tuple
 
 from ..parsing.session_manager import SessionManager
 from ...domain.constants.units import TONF_TO_N, TONFM_TO_NMM
+from ...domain.constants.shear import PHI_SHEAR
 
 
 @dataclass
@@ -496,10 +497,9 @@ class PierCapacityService:
                 critical_combo = f"{combo.name} ({combo.location})"
                 break
 
-        # Calcular φVc (con φ = 0.75)
-        phi = 0.75
-        phi_Vc_2 = Vc_2 * phi if Vc_2 else phi_Vn_2 - (Vs_2 * phi if Vs_2 else 0)
-        phi_Vc_3 = Vc_3 * phi if Vc_3 else phi_Vn_3 - (Vs_3 * phi if Vs_3 else 0)
+        # Calcular φVc (φ = 0.75 segun ACI 318-25 §21.2.1)
+        phi_Vc_2 = Vc_2 * PHI_SHEAR if Vc_2 else phi_Vn_2 - (Vs_2 * PHI_SHEAR if Vs_2 else 0)
+        phi_Vc_3 = Vc_3 * PHI_SHEAR if Vc_3 else phi_Vn_3 - (Vs_3 * PHI_SHEAR if Vs_3 else 0)
 
         rows = []
 
@@ -795,8 +795,7 @@ class PierCapacityService:
         Vc_2 = shear_cap.get('Vc_2', 0)
         Vc_3 = shear_cap.get('Vc_3', 0)
 
-        phi = 0.75
-        # Calcular D/C para cada dirección
+        # Calcular D/C para cada dirección (phi ya incluido en phi_Vn_*)
         dcr_2 = V2 / phi_Vn_2 if phi_Vn_2 > 0 else 0
         dcr_3 = V3 / phi_Vn_3 if phi_Vn_3 > 0 else 0
 
