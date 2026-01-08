@@ -286,6 +286,39 @@ class PierAnalysisService:
             'summary_plot': summary_plot
         }
 
+    def _get_lambda_for_element(
+        self,
+        element,
+        materials_config: Dict[str, Any]
+    ) -> float:
+        """
+        Obtiene el factor lambda para un elemento basado en su material.
+
+        Args:
+            element: Pier, Column u otro elemento con atributos 'material' y 'fc'
+            materials_config: Config de materiales {name: {fc, type, lambda}}
+
+        Returns:
+            Factor lambda (1.0 para concreto normal)
+        """
+        # Buscar por nombre de material si está definido
+        material_name = getattr(element, 'material', None)
+        fc = element.fc
+
+        # Intentar buscar por nombre exacto
+        if material_name and material_name in materials_config:
+            mat_info = materials_config[material_name]
+            return mat_info.get('lambda', 1.0)
+
+        # Intentar buscar por nombre aproximado basado en f'c
+        approx_name = f"C{int(round(fc))}"
+        if approx_name in materials_config:
+            mat_info = materials_config[approx_name]
+            return mat_info.get('lambda', 1.0)
+
+        # Default: concreto normal
+        return 1.0
+
     def analyze_with_progress(
         self,
         session_id: str,
@@ -309,26 +342,6 @@ class PierAnalysisService:
             - {"type": "error", "message": "..."}
         """
         materials_config = materials_config or {}
-
-        def get_lambda_for_pier(pier) -> float:
-            """Obtiene el factor lambda para un pier basado en su material."""
-            # Buscar por nombre de material si está definido
-            material_name = getattr(pier, 'material', None)
-            fc = pier.fc
-
-            # Intentar buscar por nombre exacto
-            if material_name and material_name in materials_config:
-                mat_info = materials_config[material_name]
-                return mat_info.get('lambda', 1.0)
-
-            # Intentar buscar por nombre aproximado basado en f'c
-            approx_name = f"C{int(round(fc))}"
-            if approx_name in materials_config:
-                mat_info = materials_config[approx_name]
-                return mat_info.get('lambda', 1.0)
-
-            # Default: concreto normal
-            return 1.0
 
         # Validar sesión
         error = self._validate_session(session_id)
@@ -381,7 +394,7 @@ class PierAnalysisService:
                 hwcs = continuity_info.hwcs
 
             # Obtener lambda para este pier
-            lambda_factor = get_lambda_for_pier(pier)
+            lambda_factor = self._get_lambda_for_element(pier, materials_config)
 
             # Analizar pier
             result = self._element_service.verify(
