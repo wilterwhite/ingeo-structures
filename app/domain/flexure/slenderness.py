@@ -13,7 +13,7 @@ Referencias:
 - ACI 318-25 Tabla 6.6.3.1.1(a): Rigidez efectiva
 """
 import math
-from app.domain.constants.stiffness import (
+from ..constants.stiffness import (
     WALL_STIFFNESS_FACTOR,
     M2_MIN_ECCENTRICITY_BASE,
     M2_MIN_ECCENTRICITY_FACTOR,

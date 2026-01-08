@@ -7,9 +7,8 @@ Usa constantes centralizadas de domain/constants/materials.py.
 """
 from dataclasses import dataclass
 
-from app.domain.constants.reinforcement import RHO_MIN, FY_DEFAULT_MPA
-
-from app.domain.constants.materials import BAR_AREAS, AVAILABLE_DIAMETERS
+from ...domain.constants.reinforcement import RHO_MIN, FY_DEFAULT_MPA
+from ...domain.constants.materials import BAR_AREAS, AVAILABLE_DIAMETERS
 
 # Diámetro por defecto (más común para mínimo)
 DEFAULT_DIAMETER = 8
