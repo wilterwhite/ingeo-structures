@@ -147,7 +147,9 @@ class BidirectionalShearResult:
     """Referencia ACI 318-25."""
 
 
-# Alias para compatibilidad hacia atrás
+# Alias para uso en ElementVerificationResult y servicios de verificacion.
+# Nota: domain/shear/results.py tiene su propio ShearResult para cortante
+# unidireccional. Este BidirectionalShearResult es para verificacion con V2+V3.
 ShearResult = BidirectionalShearResult
 
 
