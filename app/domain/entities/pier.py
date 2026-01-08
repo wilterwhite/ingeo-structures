@@ -55,6 +55,10 @@ class Pier:
     cover: float = 25.0     # Recubrimiento (mm) - 2.5cm default
     axis_angle: float = 0.0 # Ángulo del eje local
 
+    # Clasificacion sismica (para cortante)
+    # True = diseño sismico especial (§18.7.6/§18.10.4), False = no sismico (§22.5/§11.5)
+    is_seismic: bool = True
+
     # Áreas de barra precalculadas (se calculan en __post_init__)
     _bar_area_v: float = field(default=50.3, repr=False)  # φ8 por defecto
     _bar_area_h: float = field(default=50.3, repr=False)
@@ -173,12 +177,22 @@ class Pier:
 
     @property
     def rho_vertical(self) -> float:
-        """Cuantía de acero vertical."""
+        """Cuantía de acero vertical total (malla + borde)."""
         return (self.As_vertical + self.As_edge_total) / self.Ag
 
     @property
+    def rho_mesh_vertical(self) -> float:
+        """
+        Cuantía de acero vertical distribuido (solo malla, sin barras de borde).
+
+        Según ACI 318-25 §18.10.2.1, el refuerzo distribuido mínimo
+        debe ser ρℓ ≥ 0.0025, calculado solo con las mallas.
+        """
+        return self.As_vertical / self.Ag
+
+    @property
     def rho_horizontal(self) -> float:
-        """Cuantía de acero horizontal."""
+        """Cuantía de acero horizontal (malla distribuida)."""
         return self.As_horizontal / (self.thickness * 1000)
 
     @property
@@ -202,6 +216,71 @@ class Pier:
         return self.n_edge_bars
 
     @property
+    def As_boundary_left(self) -> float:
+        """
+        Area de acero en zona de extremo izquierdo (0.15×lw) segun §18.10.2.4.
+
+        Incluye:
+        - Barras de borde (todas las n_edge_bars del extremo izquierdo)
+        - Barras de malla dentro de la zona de 0.15×lw
+
+        La zona de extremo empieza en x=0 (borde izquierdo) y termina en x=0.15×lw.
+        """
+        return self._calculate_boundary_zone_steel(is_left=True)
+
+    @property
+    def As_boundary_right(self) -> float:
+        """
+        Area de acero en zona de extremo derecho (0.15×lw) segun §18.10.2.4.
+
+        Incluye:
+        - Barras de borde (todas las n_edge_bars del extremo derecho)
+        - Barras de malla dentro de la zona de 0.15×lw
+
+        La zona de extremo empieza en x=(lw - 0.15×lw) y termina en x=lw.
+        """
+        return self._calculate_boundary_zone_steel(is_left=False)
+
+    def _calculate_boundary_zone_steel(self, is_left: bool) -> float:
+        """
+        Calcula el area de acero dentro de la zona de extremo (0.15×lw).
+
+        Args:
+            is_left: True para extremo izquierdo, False para derecho
+
+        Returns:
+            Area de acero en mm² dentro de la zona de extremo
+        """
+        boundary_length = 0.15 * self.width
+
+        # 1. Barras de borde: todas estan dentro de la zona de extremo
+        As_edge = self.As_edge_per_end
+
+        # 2. Barras de malla dentro de la zona
+        # Las barras de malla empiezan en x=cover y se repiten cada spacing_v
+        # Primera barra intermedia en x = cover + spacing_v
+        As_mesh = 0.0
+        if self.spacing_v > 0:
+            # Calcular cuantas barras de malla caen dentro de boundary_length
+            if is_left:
+                # Zona izquierda: desde 0 hasta boundary_length
+                # Primera barra de malla en cover, luego cada spacing_v
+                x = self.cover
+                while x < boundary_length and x < (self.width - self.cover):
+                    As_mesh += self.n_meshes * self._bar_area_v
+                    x += self.spacing_v
+            else:
+                # Zona derecha: desde (width - boundary_length) hasta width
+                start_zone = self.width - boundary_length
+                # Ultima barra en width - cover, y hacia atras cada spacing_v
+                x = self.width - self.cover
+                while x > start_zone and x > self.cover:
+                    As_mesh += self.n_meshes * self._bar_area_v
+                    x -= self.spacing_v
+
+        return As_edge + As_mesh
+
+    @property
     def As_flexure_total(self) -> float:
         """
         Área de acero total para flexión (mm²).
@@ -219,9 +298,13 @@ class Pier:
         n_intermediate = self.n_intermediate_bars * self.n_meshes
         return n_edge + n_intermediate
 
-    def get_steel_layers(self) -> List['SteelLayer']:
+    def get_steel_layers(self, direction: str = 'primary') -> List['SteelLayer']:
         """
         Genera las capas de acero con sus posiciones reales para el diagrama P-M.
+
+        Args:
+            direction: 'primary' para eje fuerte (M3), 'secondary' para eje debil (M2)
+                       Para muros, primary siempre usa la distribucion normal.
 
         Returns:
             Lista de SteelLayer ordenadas por posición.
@@ -235,6 +318,8 @@ class Pier:
             [SteelLayer(40, 157), SteelLayer(240, 100.6), ...]
         """
         from ..calculations.steel_layer_calculator import SteelLayerCalculator
+        # Para muros, usamos la misma distribucion independiente de direction
+        # (el refuerzo es simetrico en ambas caras)
         return SteelLayerCalculator.calculate_from_pier(self)
 
     @property
@@ -354,4 +439,27 @@ class Pier:
         self._bar_area_h = self._bar_area_v
         self.spacing_v = self._calculate_min_spacing()
         self.spacing_h = self.spacing_v
+
+    # =========================================================================
+    # Métodos para Protocol FlexuralElement
+    # =========================================================================
+
+    def get_section_dimensions(self, direction: str = 'primary') -> tuple:
+        """
+        Obtiene las dimensiones de la seccion para la curva P-M.
+
+        Para muros/piers:
+        - 'primary': flexion en el plano del muro (eje fuerte M3)
+        - 'secondary': flexion fuera del plano (eje debil M2)
+
+        Args:
+            direction: 'primary' o 'secondary'
+
+        Returns:
+            Tuple (width, thickness) en mm
+        """
+        if direction == 'primary':
+            return (self.width, self.thickness)
+        else:
+            return (self.thickness, self.width)
 

@@ -4,11 +4,14 @@ Entidad Beam: representa una viga de hormigon armado desde ETABS.
 Soporta vigas tipo frame y spandrels (vigas de acople tipo shell).
 """
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List, Tuple, TYPE_CHECKING
 from enum import Enum
 
 from ..constants.materials import get_bar_area
 from ..constants.reinforcement import FY_DEFAULT_MPA, COVER_DEFAULT_BEAM_MM
+
+if TYPE_CHECKING:
+    from ..flexure import SteelLayer
 
 
 class BeamSource(Enum):
@@ -121,6 +124,56 @@ class Beam:
     def is_spandrel(self) -> bool:
         """True si es un spandrel (viga de acople tipo shell)."""
         return self.source == BeamSource.SPANDREL
+
+    @property
+    def height(self) -> float:
+        """Altura para Protocol FlexuralElement (usa length de la viga)."""
+        return self.length
+
+    # =========================================================================
+    # Implementacion de FlexuralElement Protocol
+    # =========================================================================
+
+    @property
+    def As_flexure_total(self) -> float:
+        """Area total de acero longitudinal (mm2)."""
+        As_top = self.n_bars_top * get_bar_area(self.diameter_top)
+        As_bottom = self.n_bars_bottom * get_bar_area(self.diameter_bottom)
+        return As_top + As_bottom
+
+    def get_steel_layers(self, direction: str = 'primary') -> List['SteelLayer']:
+        """
+        Capas de acero para diagrama de interaccion.
+
+        Para vigas, direction no tiene efecto significativo ya que
+        tipicamente se flexionan solo en un plano.
+
+        Returns:
+            Lista con 2 capas: superior (compresion) e inferior (traccion)
+        """
+        from ..flexure import SteelLayer
+
+        # Capa superior (compresion bajo momento positivo)
+        d_top = self.cover + self.diameter_top / 2
+        As_top = self.n_bars_top * get_bar_area(self.diameter_top)
+
+        # Capa inferior (traccion bajo momento positivo)
+        d_bottom = self.depth - self.cover - self.diameter_bottom / 2
+        As_bottom = self.n_bars_bottom * get_bar_area(self.diameter_bottom)
+
+        return [
+            SteelLayer(d_top, As_top),
+            SteelLayer(d_bottom, As_bottom)
+        ]
+
+    def get_section_dimensions(self, direction: str = 'primary') -> Tuple[float, float]:
+        """
+        Dimensiones para curva P-M: (ancho, peralte).
+
+        Para vigas, siempre retorna (width, depth) ya que
+        tipicamente se flexionan solo en un plano (M3).
+        """
+        return (self.width, self.depth)
 
     # =========================================================================
     # Metodos de Actualizacion

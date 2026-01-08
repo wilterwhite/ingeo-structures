@@ -512,6 +512,56 @@ def get_pier_capacities():
         }), 500
 
 
+@bp.route('/combination-details', methods=['POST'])
+def get_combination_details():
+    """
+    Obtiene los detalles de diseño para una combinación específica.
+
+    Request (JSON):
+        {
+            "session_id": "uuid-xxx",
+            "pier_key": "Story_PierLabel",
+            "combo_index": 0
+        }
+
+    Response:
+        {
+            "success": true,
+            "combo_name": "DWalS5",
+            "combo_location": "Bottom",
+            "forces": { "P": ..., "M2": ..., "M3": ..., "V2": ..., "V3": ... },
+            "flexure": { ... },
+            "shear": { "rows": [...] },
+            "boundary": { "rows": [...] }
+        }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+        session_id = data.get('session_id')
+        pier_key = data.get('pier_key')
+        combo_index = data.get('combo_index', 0)
+
+        if not session_id or not pier_key:
+            return jsonify({
+                'success': False,
+                'error': 'session_id and pier_key are required'
+            }), 400
+
+        service = get_analysis_service()
+        result = service.get_combination_details(session_id, pier_key, combo_index)
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error: {str(e)}'
+        }), 500
+
+
 @bp.route('/section-diagram', methods=['POST'])
 def get_section_diagram():
     """

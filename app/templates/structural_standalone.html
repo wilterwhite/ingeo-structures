@@ -224,9 +224,6 @@
                     </div>
 
                     <div class="toolbar-divider"></div>
-                    <button class="btn btn-sm" id="toggle-all-combos-btn" title="Expandir/Colapsar todas las combinaciones">
-                        <span id="toggle-combos-icon">▶</span> Expandir todo
-                    </button>
                     <button class="btn btn-sm btn-primary" id="generate-report-btn" title="Generar informe PDF">
                         Generar Informe
                     </button>
@@ -243,9 +240,9 @@
                                 <th title="Elemento de borde">Borde</th>
                                 <th title="Viga de acople izquierda">V.Izq</th>
                                 <th title="Viga de acople derecha">V.Der</th>
-                                <th>FS Flex.</th>
+                                <th title="Demand/Capacity ratio - Flexión">D/C Flex.</th>
                                 <th>Cap. Flexión</th>
-                                <th>FS Corte</th>
+                                <th title="Demand/Capacity ratio - Corte">D/C Corte</th>
                                 <th>Cap. Corte</th>
                                 <th title="Propuesta de diseño si falla">Propuesta</th>
                                 <th>Acciones</th>
@@ -436,120 +433,230 @@
         </div>
     </div>
 
-    <!-- Modal for Pier Details/Capacities -->
+    <!-- Modal for Pier Details/Capacities (ETABS Style) -->
     <div class="modal" id="pier-details-modal">
         <button class="modal-close">×</button>
-        <div class="modal-content pier-details-content">
-            <h3 id="pier-details-title">Detalles del Pier</h3>
+        <div class="modal-content pier-details-etabs">
+            <h3 id="pier-details-title">INGEO Shear Wall Design - ACI 318-25</h3>
             <div id="pier-details-loading" class="loading">
                 <div class="spinner"></div>
                 <p>Cargando datos...</p>
             </div>
             <div id="pier-details-body" class="pier-details-body">
-                <!-- Información Geométrica -->
-                <div class="details-section">
-                    <h4>Geometría</h4>
-                    <div class="details-grid">
-                        <div class="detail-item">
-                            <span class="detail-label">Largo (lw)</span>
-                            <span class="detail-value" id="detail-width">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Espesor (tw)</span>
-                            <span class="detail-value" id="detail-thickness">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Altura (hw)</span>
-                            <span class="detail-value" id="detail-height">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">f'c</span>
-                            <span class="detail-value" id="detail-fc">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">fy</span>
-                            <span class="detail-value" id="detail-fy">-</span>
-                        </div>
+
+                <!-- Selector de Combinación -->
+                <div class="combo-selector-section">
+                    <label for="pier-combo-selector">Combinación de carga:</label>
+                    <select id="pier-combo-selector">
+                        <option value="-1">Cargando...</option>
+                    </select>
+                    <span id="combo-critical-badge" class="critical-badge hidden">CRÍTICA</span>
+                    <div id="combo-forces-display" class="combo-forces-display">
+                        <span>P=<strong id="combo-P">-</strong>t</span>
+                        <span>M2=<strong id="combo-M2">-</strong>t-m</span>
+                        <span>M3=<strong id="combo-M3">-</strong>t-m</span>
+                        <span>V2=<strong id="combo-V2">-</strong>t</span>
+                        <span>V3=<strong id="combo-V3">-</strong>t</span>
                     </div>
                 </div>
 
-                <!-- Armadura -->
-                <div class="details-section">
-                    <h4>Armadura</h4>
-                    <div class="details-grid">
-                        <div class="detail-item">
-                            <span class="detail-label">Configuración</span>
-                            <span class="detail-value" id="detail-reinf-desc">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">As vertical</span>
-                            <span class="detail-value" id="detail-as-vertical">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">As borde</span>
-                            <span class="detail-value" id="detail-as-edge">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">As total flexión</span>
-                            <span class="detail-value" id="detail-as-total">-</span>
-                        </div>
-                    </div>
+                <!-- Sección 1: Pier Details -->
+                <div class="etabs-section">
+                    <h4>Pier Details</h4>
+                    <table class="etabs-table">
+                        <thead>
+                            <tr>
+                                <th>Story</th>
+                                <th>Pier ID</th>
+                                <th>Length (m)</th>
+                                <th>Thickness (m)</th>
+                                <th>Height (m)</th>
+                                <th>Ag (m²)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td id="det-story">-</td>
+                                <td id="det-pier">-</td>
+                                <td id="det-length">-</td>
+                                <td id="det-thickness">-</td>
+                                <td id="det-height">-</td>
+                                <td id="det-ag">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
 
-                <!-- Esbeltez -->
-                <div class="details-section" id="slenderness-section">
-                    <h4>Esbeltez (ACI 318-25)</h4>
-                    <div class="details-grid">
-                        <div class="detail-item">
-                            <span class="detail-label">Lambda (k*lu/r)</span>
-                            <span class="detail-value" id="detail-lambda">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Limite</span>
-                            <span class="detail-value" id="detail-lambda-limit">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Estado</span>
-                            <span class="detail-value" id="detail-slender-status">-</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="detail-label">Reducción</span>
-                            <span class="detail-value" id="detail-slender-reduction">-</span>
-                        </div>
-                    </div>
+                <!-- Sección 2: Material Properties -->
+                <div class="etabs-section">
+                    <h4>Material Properties</h4>
+                    <table class="etabs-table">
+                        <thead>
+                            <tr>
+                                <th>f'c (MPa)</th>
+                                <th>fy (MPa)</th>
+                                <th>λ (Lt.Wt)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td id="det-fc">-</td>
+                                <td id="det-fy">-</td>
+                                <td id="det-lambda">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
 
-                <!-- Capacidades -->
-                <div class="details-section capacities-section">
-                    <h4>Capacidades Puras (sin interacción)</h4>
-                    <div class="capacities-grid">
-                        <div class="capacity-item">
-                            <span class="capacity-label">Compresión</span>
-                            <span class="capacity-value" id="detail-phi-pn">-</span>
-                            <span class="capacity-unit">tonf</span>
-                        </div>
-                        <div class="capacity-item">
-                            <span class="capacity-label">Momento M3</span>
-                            <span class="capacity-value" id="detail-phi-mn3">-</span>
-                            <span class="capacity-unit">tonf-m</span>
-                        </div>
-                        <div class="capacity-item">
-                            <span class="capacity-label">Momento M2</span>
-                            <span class="capacity-value" id="detail-phi-mn2">-</span>
-                            <span class="capacity-unit">tonf-m</span>
-                        </div>
-                        <div class="capacity-item">
-                            <span class="capacity-label">Corte V2</span>
-                            <span class="capacity-value" id="detail-phi-vn2">-</span>
-                            <span class="capacity-unit">tonf</span>
-                        </div>
-                        <div class="capacity-item">
-                            <span class="capacity-label">Corte V3</span>
-                            <span class="capacity-value" id="detail-phi-vn3">-</span>
-                            <span class="capacity-unit">tonf</span>
-                        </div>
-                    </div>
+                <!-- Sección 3: Design Code Parameters -->
+                <div class="etabs-section">
+                    <h4>Design Code Parameters (ACI 318-25)</h4>
+                    <table class="etabs-table">
+                        <thead>
+                            <tr>
+                                <th>φT</th>
+                                <th>φC</th>
+                                <th>φv</th>
+                                <th>ρ_min</th>
+                                <th>ρ_max</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>0.90</td>
+                                <td>0.65</td>
+                                <td>0.75</td>
+                                <td>0.0025</td>
+                                <td>0.04</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
+
+                <!-- Sección 4: Reinforcement -->
+                <div class="etabs-section">
+                    <h4>Reinforcement</h4>
+                    <table class="etabs-table">
+                        <thead>
+                            <tr>
+                                <th>Config</th>
+                                <th>As vert (mm²)</th>
+                                <th>As edge (mm²)</th>
+                                <th>As total (mm²)</th>
+                                <th>ρ actual</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td id="det-reinf-desc">-</td>
+                                <td id="det-as-vertical">-</td>
+                                <td id="det-as-edge">-</td>
+                                <td id="det-as-total">-</td>
+                                <td id="det-rho-actual">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <!-- Contenedor para advertencias de cuantía mínima -->
+                    <div id="det-reinf-warnings" class="reinforcement-warnings" style="display: none;"></div>
+                </div>
+
+                <!-- Sección 5: Flexural Design -->
+                <div class="etabs-section">
+                    <h4>Flexural Design for Pu, Mu2 and Mu3</h4>
+                    <table class="etabs-table">
+                        <thead>
+                            <tr>
+                                <th>Location</th>
+                                <th>D/C</th>
+                                <th>Combo</th>
+                                <th>Pu (tonf)</th>
+                                <th>Mu2 (tonf-m)</th>
+                                <th>Mu3 (tonf-m)</th>
+                                <th>φMn (tonf-m)</th>
+                                <th>c (mm)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="det-flexure-body">
+                            <tr>
+                                <td colspan="8" class="no-data">Sin datos de carga</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Sección 6: Shear Design -->
+                <div class="etabs-section">
+                    <h4>Shear Design</h4>
+                    <table class="etabs-table">
+                        <thead>
+                            <tr>
+                                <th>Direction</th>
+                                <th>D/C</th>
+                                <th>Combo</th>
+                                <th>Pu (tonf)</th>
+                                <th>Mu (tonf-m)</th>
+                                <th>Vu (tonf)</th>
+                                <th>φVc (tonf)</th>
+                                <th>φVn (tonf)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="det-shear-body">
+                            <tr>
+                                <td colspan="8" class="no-data">Sin datos de carga</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Sección 7: Boundary Element Check -->
+                <div class="etabs-section">
+                    <h4>Boundary Element Check (ACI 18.10.6.3)</h4>
+                    <table class="etabs-table">
+                        <thead>
+                            <tr>
+                                <th>Location</th>
+                                <th>Combo</th>
+                                <th>Pu (tonf)</th>
+                                <th>Mu (tonf-m)</th>
+                                <th>σ_comp (MPa)</th>
+                                <th>σ_limit (MPa)</th>
+                                <th>c (mm)</th>
+                                <th>Required?</th>
+                            </tr>
+                        </thead>
+                        <tbody id="det-boundary-body">
+                            <tr>
+                                <td colspan="8" class="no-data">Sin datos de carga</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Sección 8: Pure Capacities (resumen) -->
+                <div class="etabs-section">
+                    <h4>Pure Capacities (without interaction)</h4>
+                    <table class="etabs-table">
+                        <thead>
+                            <tr>
+                                <th>φPn,max (tonf)</th>
+                                <th>φMn3 (tonf-m)</th>
+                                <th>φMn2 (tonf-m)</th>
+                                <th>φVn2 (tonf)</th>
+                                <th>φVn3 (tonf)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td id="det-phi-pn">-</td>
+                                <td id="det-phi-mn3">-</td>
+                                <td id="det-phi-mn2">-</td>
+                                <td id="det-phi-vn2">-</td>
+                                <td id="det-phi-vn3">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
             </div>
         </div>
     </div>

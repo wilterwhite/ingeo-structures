@@ -4,12 +4,13 @@ Servicios del módulo estructural.
 
 Estructura:
 - pier_analysis.py: Orquestador principal
-- analysis/: Servicios de análisis (flexión, estadísticas)
+- analysis/: Servicios de análisis (flexocompresión, estadísticas)
 - parsing/: Servicios de parsing Excel
 - presentation/: Servicios de visualización
 """
 from .pier_analysis import PierAnalysisService
-from .analysis import FlexureService, StatisticsService
+from .factory import ServiceFactory
+from .analysis import FlexocompressionService, StatisticsService
 from .parsing import (
     EtabsExcelParser,
     ParsedData,
@@ -20,7 +21,8 @@ from .presentation import PlotGenerator
 
 __all__ = [
     'PierAnalysisService',
-    'FlexureService',
+    'ServiceFactory',
+    'FlexocompressionService',
     'StatisticsService',
     'EtabsExcelParser',
     'ParsedData',

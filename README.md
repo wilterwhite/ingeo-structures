@@ -26,186 +26,266 @@ Aplicación web para verificación estructural de elementos de hormigón armado 
 
 ```
 app/
-├── domain/                     # Lógica de negocio (cálculos ACI 318-25)
-│   ├── chapter11/              # Capítulo 11: Muros - Límites y métodos
-│   ├── chapter18/              # Capítulo 18: Muros sísmicos - Requisitos especiales
-│   ├── flexure/                # Flexocompresión: Diagramas P-M, esbeltez
-│   ├── shear/                  # Corte: Verificación, fricción, clasificación
-│   ├── entities/               # Estructuras de datos
-│   ├── constants/              # Constantes y conversión de unidades
-│   └── calculations/           # Calculadores puros
-│
-├── services/                   # Orquestación y servicios de aplicación
-│   ├── analysis/               # Servicios de análisis (SF, DCR)
-│   ├── parsing/                # Parsing de Excel ETABS
-│   └── presentation/           # Generación de gráficos
-│
-├── routes/                     # API REST (Flask)
-├── templates/                  # HTML (Jinja2)
-└── static/                     # CSS, JavaScript
+├── __init__.py                              # Flask app factory
+├── domain/                                  # Lógica de negocio ACI 318-25
+│   ├── __init__.py                          # Re-exports de dominio
+│   ├── calculations/
+│   │   ├── __init__.py
+│   │   ├── confinement.py                   # Refuerzo de confinamiento
+│   │   ├── steel_layer_calculator.py        # Capas de acero
+│   │   └── wall_continuity.py               # Continuidad vertical muros
+│   ├── chapter7/                            # Losas (Cap. 7)
+│   │   ├── __init__.py
+│   │   ├── limits.py                        # Espesores mínimos losas
+│   │   └── reinforcement.py                 # Refuerzo mínimo losas
+│   ├── chapter8/                            # Losas 2-Way (Cap. 8)
+│   │   ├── __init__.py
+│   │   ├── limits.py                        # Límites losas bidireccionales
+│   │   └── punching/
+│   │       ├── __init__.py
+│   │       ├── critical_section.py          # Sección crítica punzonamiento
+│   │       └── vc_calculation.py            # Vc punzonamiento
+│   ├── chapter11/                           # Muros (Cap. 11)
+│   │   ├── __init__.py
+│   │   ├── design_methods.py                # Método simplificado/detallado
+│   │   ├── limits.py                        # Espesores y cuantías mínimas
+│   │   └── reinforcement.py                 # Distribución de armadura
+│   ├── chapter18/                           # Requisitos sísmicos (Cap. 18)
+│   │   ├── __init__.py
+│   │   ├── results.py                       # Dataclasses de resultados
+│   │   ├── boundary_elements/               # Elementos de borde §18.10.6
+│   │   │   ├── __init__.py
+│   │   │   ├── confinement.py               # Confinamiento elementos borde
+│   │   │   ├── dimensions.py                # Dimensiones elementos borde
+│   │   │   ├── displacement.py              # Método desplazamientos
+│   │   │   ├── service.py                   # Orquestador borde
+│   │   │   └── stress.py                    # Método tensiones
+│   │   ├── coupling_beams/                  # Vigas acople §18.10.7
+│   │   │   ├── __init__.py
+│   │   │   ├── classification.py            # Clasificación ln/h
+│   │   │   ├── confinement.py               # Confinamiento vigas
+│   │   │   ├── diagonal.py                  # Armadura diagonal
+│   │   │   └── service.py                   # Orquestador vigas acople
+│   │   ├── design_forces/                   # Fuerzas de diseño §18.10.3
+│   │   │   ├── __init__.py
+│   │   │   ├── factors.py                   # Factores Ωv, ωv
+│   │   │   └── service.py                   # Amplificación cortante
+│   │   ├── reinforcement/                   # Refuerzo sísmico
+│   │   │   ├── __init__.py
+│   │   │   ├── results.py                   # Resultados refuerzo
+│   │   │   └── service.py                   # Verificación refuerzo §18.10.2
+│   │   └── wall_piers/                      # Wall piers §18.10.8
+│   │       ├── __init__.py
+│   │       ├── boundary_zones.py            # Zonas de borde piers
+│   │       ├── classification.py            # Clasificación lw/bw
+│   │       ├── service.py                   # Orquestador wall piers
+│   │       ├── shear_design.py              # Diseño cortante piers
+│   │       └── transverse.py                # Refuerzo transversal
+│   ├── constants/
+│   │   ├── __init__.py
+│   │   ├── materials.py                     # Propiedades materiales
+│   │   ├── phi_chapter21.py                 # Factores φ Cap. 21
+│   │   ├── reinforcement.py                 # Diámetros y áreas barras
+│   │   ├── seismic.py                       # SDC y categorías muros
+│   │   ├── shear.py                         # Constantes de corte
+│   │   ├── stiffness.py                     # Factores rigidez fisurada
+│   │   └── units.py                         # Conversión unidades
+│   ├── entities/
+│   │   ├── __init__.py
+│   │   ├── beam.py                          # Entidad Beam
+│   │   ├── beam_forces.py                   # Fuerzas en vigas
+│   │   ├── column.py                        # Entidad Column
+│   │   ├── column_forces.py                 # Fuerzas en columnas
+│   │   ├── coupling_beam.py                 # Entidad CouplingBeam
+│   │   ├── design_proposal.py               # Propuesta de diseño
+│   │   ├── load_combination.py              # Combinación de carga
+│   │   ├── parsed_data.py                   # Datos parseados ETABS
+│   │   ├── pier.py                          # Entidad Pier
+│   │   ├── pier_forces.py                   # Fuerzas en piers
+│   │   ├── protocols.py                     # Protocolos/interfaces
+│   │   ├── slab.py                          # Entidad Slab
+│   │   └── slab_forces.py                   # Fuerzas en losas
+│   ├── flexure/
+│   │   ├── __init__.py
+│   │   ├── checker.py                       # Verificador flexión SF
+│   │   ├── interaction_diagram.py           # Diagrama P-M
+│   │   └── slenderness.py                   # Esbeltez y magnificación
+│   └── shear/
+│       ├── __init__.py
+│       ├── classification.py                # Clasificación muro/columna
+│       ├── results.py                       # Resultados de corte
+│       ├── shear_friction.py                # Fricción cortante
+│       └── verification.py                  # Vc + Vs verificación
+├── routes/
+│   ├── __init__.py
+│   └── analysis.py                          # Endpoints API REST
+├── services/
+│   ├── __init__.py
+│   ├── factory.py                           # Factory de servicios
+│   ├── pier_analysis.py                     # Orquestador principal
+│   ├── analysis/
+│   │   ├── __init__.py
+│   │   ├── element_classifier.py            # Clasificador elementos
+│   │   ├── element_verification_service.py  # Verificación unificada
+│   │   ├── flexocompression_service.py      # Servicio flexocompresión
+│   │   ├── pier_capacity_service.py         # Capacidades de piers
+│   │   ├── pier_verification_service.py     # Verificación ACI piers
+│   │   ├── proposal_service.py              # Propuestas automáticas
+│   │   ├── punching_service.py              # Verificación punzonamiento
+│   │   ├── shear_service.py                 # Servicio de corte
+│   │   ├── slab_service.py                  # Verificación losas
+│   │   ├── statistics_service.py            # Estadísticas y resumen
+│   │   ├── verification_config.py           # Configuración verificación
+│   │   └── verification_result.py           # Dataclasses resultados
+│   ├── parsing/
+│   │   ├── __init__.py
+│   │   ├── beam_parser.py                   # Parser vigas ETABS
+│   │   ├── column_parser.py                 # Parser columnas ETABS
+│   │   ├── excel_parser.py                  # Parser Excel principal
+│   │   ├── material_mapper.py               # Mapeo materiales
+│   │   ├── reinforcement_config.py          # Config armadura defecto
+│   │   ├── session_manager.py               # Gestor sesiones
+│   │   ├── slab_parser.py                   # Parser losas ETABS
+│   │   └── table_extractor.py               # Extractor tablas Excel
+│   ├── presentation/
+│   │   ├── __init__.py
+│   │   ├── plot_generator.py                # Generador gráficos P-M
+│   │   └── result_formatter.py              # Formateador resultados UI
+│   └── report/
+│       ├── __init__.py
+│       ├── pdf_generator.py                 # Generador PDF reportes
+│       └── report_config.py                 # Configuración reportes
+├── static/                                  # CSS, JavaScript
+└── templates/                               # HTML Jinja2
 ```
 
-## Organización del Dominio
+## Capas de la Arquitectura
 
-### `domain/chapter11/` - Muros Estructurales (ACI 318-25 Cap. 11)
+### 1. `routes/` - Capa de Presentación (API REST)
+Expone endpoints HTTP para el frontend. No contiene lógica de negocio.
 
-Contiene **límites y métodos de diseño** para muros no sísmicos:
+### 2. `services/` - Capa de Aplicación (Orquestación)
+Coordina el flujo de trabajo, gestiona sesiones y formatea resultados para la UI.
+**No implementa cálculos ACI** - delega todo al dominio.
 
-| Archivo | Contenido |
-|---------|-----------|
-| `limits.py` | Espesores mínimos, cuantías de refuerzo, espaciamientos máximos |
-| `design_methods.py` | Método simplificado vs método detallado de diseño |
-| `reinforcement.py` | Distribución de armadura, capas, recubrimientos |
+### 3. `domain/` - Capa de Dominio (Lógica de Negocio)
+Implementa todos los cálculos según ACI 318-25. Es independiente de Flask, Excel o UI.
+Los servicios de dominio son **la única fuente de verdad** para fórmulas y requisitos del código.
 
-### `domain/chapter18/` - Muros Sísmicos (ACI 318-25 Cap. 18)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  routes/analysis.py                          API REST (Flask)   │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  services/pier_analysis.py              Orquestador principal   │
+│  ├── ElementService          → Verificación unificada          │
+│  ├── PierVerificationService → Conformidad ACI Cap 11/18       │
+│  └── PierCapacityService     → Diagramas y capacidades         │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  domain/                                Lógica ACI 318-25       │
+│  ├── chapter11/    → Muros: límites, cuantías, métodos         │
+│  ├── chapter18/    → Sísmico: borde, amplificación, piers      │
+│  ├── flexure/      → P-M, esbeltez, magnificación              │
+│  └── shear/        → Vc, Vs, clasificación                     │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-Contiene **requisitos sísmicos especiales** para SDC D, E, F:
+## Servicios de Aplicación (`services/`)
 
-| Archivo | Contenido |
-|---------|-----------|
-| `piers.py` | Clasificación de wall piers (§18.10.8) |
-| `boundary_elements.py` | Elementos de borde: cuándo se requieren, dimensiones (§18.10.6) |
-| `amplification.py` | Amplificación de cortante Ωv×ωv (§18.10.3) |
-| `coupling_beams.py` | Vigas de acople: requisitos de armadura diagonal |
+| Servicio | Responsabilidad |
+|----------|-----------------|
+| `PierAnalysisService` | Orquestador principal, gestiona sesiones y flujo |
+| `ElementService` | Verificación unificada de Beam/Column/Pier (SF, DCR) |
+| `PierVerificationService` | Conformidad ACI 318-25 Caps 11 y 18 |
+| `PierCapacityService` | Genera diagramas de sección y capacidades |
+| `FlexocompressionService` | Genera curvas P-M de interacción |
+| `ShearService` | Calcula Vc + Vs y DCR de corte |
+| `ProposalService` | Genera propuestas de diseño cuando falla |
+| `StatisticsService` | Estadísticas y gráfico resumen |
+
+## Servicios de Dominio (`domain/`)
+
+### `domain/chapter11/` - Muros (Cap. 11)
+
+| Servicio | Responsabilidad |
+|----------|-----------------|
+| `WallLimitsService` | Espesores mínimos, espaciamientos máximos |
+| `ReinforcementLimitsService` | Cuantías mínimas ρ_min |
+| `WallDesignMethodsService` | Método simplificado vs detallado |
+
+### `domain/chapter18/` - Requisitos Sísmicos (Cap. 18)
+
+| Servicio | Responsabilidad |
+|----------|-----------------|
+| `ShearAmplificationService` | Amplificación Ωv×ωv (§18.10.3) |
+| `BoundaryElementService` | Elementos de borde (§18.10.6) |
+| `WallPierService` | Wall piers (§18.10.8) |
+| `CouplingBeamService` | Vigas de acople (§18.10.7) |
 
 ### `domain/flexure/` - Flexocompresión
 
-**Cálculo de capacidad** y verificación de flexión:
-
-| Archivo | Contenido |
-|---------|-----------|
-| `interaction_diagram.py` | Genera curva P-M de capacidad (φPn, φMn) |
-| `slenderness.py` | Esbeltez: λ, Pc, δns, momento mínimo M2,min, factor Cm |
-| `checker.py` | Compara demanda vs capacidad, calcula SF |
+| Servicio | Responsabilidad |
+|----------|-----------------|
+| `InteractionDiagramService` | Genera curva P-M (φPn, φMn) |
+| `SlendernessService` | Esbeltez, Pc, δns, M2,min |
+| `FlexureChecker` | Compara demanda vs capacidad |
 
 ### `domain/shear/` - Corte
 
-**Cálculo de resistencia** y verificación de corte:
-
-| Archivo | Contenido |
-|---------|-----------|
-| `verification.py` | Vc (concreto) + Vs (acero), fórmulas muro vs columna |
-| `classification.py` | Determina si usar fórmula de muro o columna |
-| `shear_friction.py` | Fricción cortante en juntas de construcción |
-| `results.py` | Estructuras de resultado de corte |
-
-### `domain/entities/` - Estructuras de Datos
-
-| Entidad | Descripción |
-|---------|-------------|
-| `Pier` | Muro con geometría, materiales y armadura |
-| `PierForces` | Colección de combinaciones de carga para piers |
-| `Column` | Columna con geometría, materiales y armadura |
-| `ColumnForces` | Colección de combinaciones de carga para columnas |
-| `Beam` | Viga (frame o spandrel) con geometría y armadura |
-| `BeamForces` | Colección de combinaciones de carga para vigas |
-| `LoadCombination` | P, M2, M3, V2, V3 de una combinación |
-| `VerificationResult` | Resultado completo de verificación |
-| `DesignProposal` | Propuesta de diseño cuando falla |
-
-### `domain/constants/` - Constantes
-
-| Archivo | Contenido |
-|---------|-----------|
-| `units.py` | Conversiones: N↔tonf, mm↔m, MPa↔psi |
-| `materials.py` | Propiedades de hormigón y acero |
-| `seismic.py` | Categorías de diseño sísmico (SDC) |
-
-## Servicios de Análisis
-
-Los servicios en `services/analysis/` **orquestan los cálculos** y producen factores de seguridad:
-
-### `FlexureService`
-```
-Pier + Fuerzas → InteractionDiagram → SlendernessService → SF de flexión
-```
-- Genera diagrama P-M de capacidad
-- Aplica magnificación de momentos si es esbelto
-- Calcula SF = φMn / Mu para cada combinación
-
-### `ShearService`
-```
-Pier + Fuerzas → Classification → Vc + Vs → DCR de corte
-```
-- Clasifica el elemento (muro vs columna)
-- Calcula Vc según tipo (αc√f'c para muros, 0.17√f'c para columnas)
-- Calcula Vs del refuerzo horizontal
-- DCR = √(DCR₂² + DCR₃²) combinando ambas direcciones
-
-### `ProposalService`
-```
-SF < 1.0 o DCR > 1.0 → Analiza modo de falla → Propuesta automática
-```
-- **Flexión falla** → Aumenta barras de borde progresivamente
-- **Corte falla** → Reduce espaciamiento o aumenta diámetro de malla
-- **Combinado** → Mejora ambos iterativamente
-- **Esbeltez** → Propone aumento de espesor
-
-### `BeamService`
-```
-Beam + Fuerzas → Vc + Vs → DCR de corte
-```
-- Calcula Vc = 0.17λ√f'c × bw × d
-- Calcula Vs = Av × fy × d / s
-- Verifica φVn ≥ Vu para cada combinación
-
-### `ColumnService`
-```
-Column + Fuerzas → P-M Diagram + Corte V2-V3 → SF y DCR
-```
-- Genera diagrama P-M de capacidad para ambas direcciones
-- Verifica cortante en V2 y V3 con interacción SRSS
-- Calcula esbeltez y factor de reducción por pandeo
-
-### `ACI318_25_Service`
-Integra verificaciones adicionales del Capítulo 18:
-- Clasificación de elementos (§18.10.8)
-- Amplificación de cortante (§18.10.3.3)
-- Elementos de borde (§18.10.6)
+| Servicio | Responsabilidad |
+|----------|-----------------|
+| `ShearVerificationService` | Calcula Vc + Vs |
+| `WallClassificationService` | Clasifica muro vs columna |
 
 ## Flujo de Verificación
 
 ```
-                    ┌─────────────────────────────────────┐
-                    │         Excel ETABS                 │
-                    │  (Pier Forces, Pier Sections)       │
-                    └─────────────────┬───────────────────┘
-                                      │
-                                      ▼
-                    ┌─────────────────────────────────────┐
-                    │         EtabsExcelParser            │
-                    │  Extrae piers, fuerzas, materiales  │
-                    └─────────────────┬───────────────────┘
-                                      │
-                                      ▼
-                    ┌─────────────────────────────────────┐
-                    │         PierAnalysisService         │
-                    │       (Orquestador principal)       │
-                    └───┬─────────────┬─────────────┬─────┘
-                        │             │             │
-           ┌────────────▼──┐   ┌──────▼──────┐   ┌──▼────────────┐
-           │FlexureService │   │ShearService │   │ACI318_25_Svc  │
-           │               │   │             │   │               │
-           │ • P-M Diagram │   │ • Vc + Vs   │   │ • Clasific.   │
-           │ • Slenderness │   │ • DCR₂, DCR₃│   │ • Amplific.   │
-           │ • SF flexión  │   │ • DCR comb. │   │ • Borde       │
-           └───────┬───────┘   └──────┬──────┘   └───────┬───────┘
-                   │                  │                  │
-                   └────────────┬─────┴──────────────────┘
-                                │
-                                ▼
-                   ┌────────────────────────┐
-                   │   ¿SF ≥ 1 y DCR ≤ 1?   │
-                   └─────────┬──────────────┘
-                             │
-              ┌──────────────┴──────────────┐
-              │ NO                          │ SÍ
-              ▼                             ▼
-    ┌─────────────────────┐       ┌─────────────────┐
-    │  ProposalService    │       │  ✓ PASA         │
-    │  Genera propuesta   │       │                 │
-    │  automática         │       │                 │
-    └─────────────────────┘       └─────────────────┘
+┌─────────────────────────────────────────┐
+│            Excel ETABS                  │
+│   (Pier Forces, Pier Sections)          │
+└──────────────────┬──────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────┐
+│         ExcelParser (parsing/)          │
+│   Extrae piers, fuerzas, materiales     │
+└──────────────────┬──────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────┐
+│      PierAnalysisService (services/)    │
+│         Orquestador principal           │
+└──────┬───────────┬───────────┬──────────┘
+       │           │           │
+       ▼           ▼           ▼
+┌────────────┐ ┌─────────┐ ┌──────────────┐
+│ ElementSvc │ │ShearSvc │ │PierVerifySvc │
+│            │ │         │ │              │
+│ • P-M      │ │ • Vc+Vs │ │ • Cap 11     │
+│ • Esbeltez │ │ • DCR   │ │ • Cap 18     │
+│ • SF       │ │         │ │ • Borde      │
+└─────┬──────┘ └────┬────┘ └──────┬───────┘
+      │             │             │
+      └──────┬──────┴─────────────┘
+             │
+             ▼
+   ┌─────────────────────┐
+   │  ¿SF ≥ 1 y DCR ≤ 1? │
+   └─────────┬───────────┘
+             │
+    ┌────────┴────────┐
+    │ NO              │ SÍ
+    ▼                 ▼
+┌──────────────┐  ┌────────┐
+│ProposalSvc   │  │ ✓ PASA │
+│Genera        │  │        │
+│propuesta     │  │        │
+└──────────────┘  └────────┘
 ```
 
 ## Ejecución

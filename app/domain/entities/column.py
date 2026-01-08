@@ -56,6 +56,9 @@ class Column:
     # Otros
     cover: float = COVER_DEFAULT_COLUMN_MM         # Recubrimiento (mm) - 4cm default para columnas
 
+    # Clasificacion sismica (para cortante)
+    is_seismic: bool = True  # True = columna sismica especial (§18.7), False = no sismica (§22.5)
+
     # Areas de barra precalculadas
     _bar_area_long: float = field(default=314.2, repr=False)  # phi20 por defecto
 
@@ -240,3 +243,46 @@ class Column:
                 ))
 
         return layers
+
+    # =========================================================================
+    # Metodos para Protocol FlexuralElement
+    # =========================================================================
+
+    @property
+    def As_flexure_total(self) -> float:
+        """Area total de acero para flexion (mm2). Alias de As_longitudinal."""
+        return self.As_longitudinal
+
+    def get_steel_layers(self, direction: str = 'primary') -> List['SteelLayer']:
+        """
+        Obtiene las capas de acero para el diagrama de interaccion.
+
+        Args:
+            direction: 'primary' para M3 (eje fuerte), 'secondary' para M2
+
+        Returns:
+            Lista de SteelLayer
+        """
+        if direction == 'primary':
+            return self.get_steel_layers_depth()
+        else:
+            return self.get_steel_layers_width()
+
+    def get_section_dimensions(self, direction: str = 'primary') -> tuple:
+        """
+        Obtiene las dimensiones de la seccion para la curva P-M.
+
+        Para columnas:
+        - 'primary': flexion alrededor del eje 3 (usa depth como ancho)
+        - 'secondary': flexion alrededor del eje 2 (usa width como ancho)
+
+        Args:
+            direction: 'primary' o 'secondary'
+
+        Returns:
+            Tuple (width, thickness) en mm
+        """
+        if direction == 'primary':
+            return (self.depth, self.width)
+        else:
+            return (self.width, self.depth)

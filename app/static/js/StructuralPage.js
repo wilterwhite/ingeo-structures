@@ -83,9 +83,6 @@ class StructuralPage {
             axisFilter: document.getElementById('axis-filter'),
             statusFilter: document.getElementById('status-filter'),
             elementTypeFilter: document.getElementById('element-type-filter'),
-            toggleAllCombosBtn: document.getElementById('toggle-all-combos-btn'),
-            toggleCombosIcon: document.getElementById('toggle-combos-icon'),
-
             // Viga estándar
             stdBeamWidth: document.getElementById('std-beam-width'),
             stdBeamHeight: document.getElementById('std-beam-height'),
@@ -196,7 +193,6 @@ class StructuralPage {
         this.elements.axisFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.statusFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
         this.elements.elementTypeFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
-        this.elements.toggleAllCombosBtn?.addEventListener('click', () => this.toggleAllCombinations());
         this.elements.generateReportBtn?.addEventListener('click', () => this.openReportModal());
 
         // Viga estándar (para muros acoplados)
@@ -608,33 +604,6 @@ class StructuralPage {
     }
 
     // =========================================================================
-    // Acciones de Pier
-    // =========================================================================
-
-    async toggleAllCombinations() {
-        const { toggleCombosIcon, toggleAllCombosBtn } = this.elements;
-
-        // Deshabilitar botón mientras carga
-        if (toggleAllCombosBtn) {
-            toggleAllCombosBtn.disabled = true;
-            toggleAllCombosBtn.innerHTML = '<span id="toggle-combos-icon">⏳</span> Cargando...';
-        }
-
-        try {
-            const allExpanded = await this.resultsTable.toggleAllExpand();
-
-            // Actualizar ícono y texto
-            if (toggleAllCombosBtn) {
-                toggleAllCombosBtn.innerHTML = `<span id="toggle-combos-icon">${allExpanded ? '▼' : '▶'}</span> ${allExpanded ? 'Colapsar todo' : 'Expandir todo'}`;
-            }
-        } finally {
-            if (toggleAllCombosBtn) {
-                toggleAllCombosBtn.disabled = false;
-            }
-        }
-    }
-
-    // =========================================================================
     // Pier Details Modal
     // =========================================================================
 
@@ -642,6 +611,10 @@ class StructuralPage {
         const { pierDetailsModal, pierDetailsTitle, pierDetailsLoading } = this.elements;
 
         if (!pierDetailsModal) return;
+
+        // Guardar referencia del pier actual para el selector de combos
+        this._currentPierKey = pierKey;
+        this._currentPierLabel = pierLabel;
 
         // Abrir modal y mostrar loading
         pierDetailsModal.classList.add('active');
@@ -652,7 +625,24 @@ class StructuralPage {
             const data = await structuralAPI.getPierCapacities(this.sessionId, pierKey);
 
             if (data.success) {
+                this._currentPierData = data;
                 this.updatePierDetailsContent(data);
+                this.populateComboSelector(data.combinations_list || []);
+
+                // Cargar datos de la primera combinación (la más crítica)
+                // para asegurar que las tablas muestren la misma combinación
+                const combinations = data.combinations_list || [];
+                if (combinations.length > 0) {
+                    const firstComboIndex = combinations[0].index;
+                    const comboDetails = await structuralAPI.getCombinationDetails(
+                        this.sessionId,
+                        pierKey,
+                        firstComboIndex
+                    );
+                    if (comboDetails.success) {
+                        this.updateDesignTablesForCombo(comboDetails);
+                    }
+                }
             } else {
                 alert('Error: ' + data.error);
                 this.closePierDetailsModal();
@@ -666,59 +656,310 @@ class StructuralPage {
         }
     }
 
-    updatePierDetailsContent(data) {
-        const { pier_info, reinforcement, slenderness, capacities } = data;
+    /**
+     * Llena el selector de combinaciones.
+     */
+    populateComboSelector(combinations) {
+        const selector = document.getElementById('pier-combo-selector');
+        const badge = document.getElementById('combo-critical-badge');
 
-        // Geometría
-        document.getElementById('detail-width').textContent = `${pier_info.width_m} m`;
-        document.getElementById('detail-thickness').textContent = `${pier_info.thickness_m} m`;
-        document.getElementById('detail-height').textContent = `${pier_info.height_m} m`;
-        document.getElementById('detail-fc').textContent = `${pier_info.fc_MPa} MPa`;
-        document.getElementById('detail-fy').textContent = `${pier_info.fy_MPa} MPa`;
+        if (!selector) return;
 
-        // Armadura
-        document.getElementById('detail-reinf-desc').textContent = reinforcement.description;
-        document.getElementById('detail-as-vertical').textContent = `${reinforcement.As_vertical_mm2} mm²`;
-        document.getElementById('detail-as-edge').textContent = `${reinforcement.As_edge_mm2} mm²`;
-        document.getElementById('detail-as-total').textContent = `${reinforcement.As_flexure_total_mm2} mm²`;
+        // Limpiar opciones anteriores
+        selector.innerHTML = '';
 
-        // Esbeltez
-        if (slenderness) {
-            document.getElementById('detail-lambda').textContent = slenderness.lambda;
-            document.getElementById('detail-lambda-limit').textContent = slenderness.limit;
+        if (!combinations || combinations.length === 0) {
+            selector.innerHTML = '<option value="-1">Sin combinaciones</option>';
+            badge?.classList.add('hidden');
+            return;
+        }
 
-            const statusEl = document.getElementById('detail-slender-status');
-            if (slenderness.is_slender) {
-                statusEl.textContent = 'ESBELTO';
-                statusEl.style.color = 'var(--warning-color)';
+        // Agregar opción por defecto (crítica)
+        const criticalCombo = combinations.find(c => c.is_critical) || combinations[0];
+        selector.innerHTML = combinations.map((combo, idx) => {
+            const isCritical = combo.is_critical_flexure || combo.is_critical_shear;
+            const criticalMark = isCritical ? ' ★' : '';
+            const criticalType = combo.is_critical_flexure && combo.is_critical_shear
+                ? ' (crit. flexión y corte)'
+                : combo.is_critical_flexure
+                    ? ' (crit. flexión)'
+                    : combo.is_critical_shear
+                        ? ' (crit. corte)'
+                        : '';
+            return `<option value="${combo.index}" ${idx === 0 ? 'selected' : ''}>
+                ${combo.full_name}${criticalMark}${criticalType}
+            </option>`;
+        }).join('');
+
+        // Mostrar badge si la primera es crítica
+        if (criticalCombo && (criticalCombo.is_critical_flexure || criticalCombo.is_critical_shear)) {
+            badge?.classList.remove('hidden');
+        } else {
+            badge?.classList.add('hidden');
+        }
+
+        // Actualizar fuerzas mostradas
+        this.updateComboForcesDisplay(criticalCombo);
+
+        // Agregar evento change
+        selector.onchange = () => this.onComboSelectorChange();
+    }
+
+    /**
+     * Actualiza el display de fuerzas de la combinación seleccionada.
+     */
+    updateComboForcesDisplay(combo) {
+        if (!combo) return;
+
+        document.getElementById('combo-P').textContent = combo.P ?? '-';
+        document.getElementById('combo-M2').textContent = combo.M2 ?? '-';
+        document.getElementById('combo-M3').textContent = combo.M3 ?? '-';
+        document.getElementById('combo-V2').textContent = combo.V2 ?? '-';
+        document.getElementById('combo-V3').textContent = combo.V3 ?? '-';
+    }
+
+    /**
+     * Maneja el cambio en el selector de combinaciones.
+     */
+    async onComboSelectorChange() {
+        const selector = document.getElementById('pier-combo-selector');
+        const badge = document.getElementById('combo-critical-badge');
+        const comboIndex = parseInt(selector.value);
+
+        if (comboIndex < 0 || !this._currentPierKey) return;
+
+        // Buscar la combinación en la lista
+        const combinations = this._currentPierData?.combinations_list || [];
+        const selectedCombo = combinations.find(c => c.index === comboIndex);
+
+        // Actualizar fuerzas
+        this.updateComboForcesDisplay(selectedCombo);
+
+        // Actualizar badge
+        if (selectedCombo && (selectedCombo.is_critical_flexure || selectedCombo.is_critical_shear)) {
+            badge?.classList.remove('hidden');
+        } else {
+            badge?.classList.add('hidden');
+        }
+
+        // Obtener detalles de la combinación seleccionada
+        try {
+            const loadingEl = document.getElementById('pier-details-loading');
+            loadingEl?.classList.add('active');
+
+            const data = await structuralAPI.getCombinationDetails(
+                this.sessionId,
+                this._currentPierKey,
+                comboIndex
+            );
+
+            if (data.success) {
+                this.updateDesignTablesForCombo(data);
             } else {
-                statusEl.textContent = 'NO ESBELTO';
-                statusEl.style.color = 'var(--success-color)';
+                console.error('Error:', data.error);
             }
+        } catch (error) {
+            console.error('Error getting combo details:', error);
+        } finally {
+            document.getElementById('pier-details-loading')?.classList.remove('active');
+        }
+    }
 
-            const reductionEl = document.getElementById('detail-slender-reduction');
-            if (slenderness.is_slender && slenderness.reduction_pct > 0) {
-                reductionEl.textContent = `-${slenderness.reduction_pct}%`;
-                reductionEl.style.color = 'var(--warning-color)';
+    /**
+     * Actualiza solo las tablas de diseño (flexión, corte, boundary) para una combinación.
+     */
+    updateDesignTablesForCombo(data) {
+        const { flexure, shear, boundary, combo_name, combo_location } = data;
+
+        // Actualizar Flexural Design
+        const flexureBody = document.getElementById('det-flexure-body');
+        if (flexure) {
+            flexureBody.innerHTML = `
+                <tr>
+                    <td>${flexure.location}</td>
+                    <td class="${this._getDcrClass(flexure.dcr)}">${flexure.dcr}</td>
+                    <td class="combo-cell">${combo_name}</td>
+                    <td>${flexure.Pu_tonf}</td>
+                    <td>${flexure.Mu2_tonf_m}</td>
+                    <td>${flexure.Mu3_tonf_m}</td>
+                    <td>${flexure.phi_Mn_tonf_m}</td>
+                    <td>${flexure.c_mm}</td>
+                </tr>
+            `;
+        }
+
+        // Actualizar Shear Design
+        const shearBody = document.getElementById('det-shear-body');
+        if (shear && shear.rows) {
+            shearBody.innerHTML = shear.rows.map(row => `
+                <tr>
+                    <td>${row.direction}</td>
+                    <td class="${this._getDcrClass(row.dcr)}">${row.dcr}</td>
+                    <td class="combo-cell">${combo_name}</td>
+                    <td>${row.Pu_tonf}</td>
+                    <td>${row.Mu_tonf_m}</td>
+                    <td>${row.Vu_tonf}</td>
+                    <td>${row.phi_Vc_tonf}</td>
+                    <td>${row.phi_Vn_tonf}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Actualizar Boundary Element Check
+        const boundaryBody = document.getElementById('det-boundary-body');
+        if (boundary && boundary.rows) {
+            boundaryBody.innerHTML = boundary.rows.map(row => `
+                <tr>
+                    <td>${row.location}</td>
+                    <td class="combo-cell">${combo_name}</td>
+                    <td>${row.Pu_tonf}</td>
+                    <td>${row.Mu_tonf_m}</td>
+                    <td>${row.sigma_comp_MPa}</td>
+                    <td>${row.sigma_limit_MPa}</td>
+                    <td>${row.c_mm}</td>
+                    <td class="${row.required === 'Yes' ? 'status-fail' : 'status-ok'}">${row.required}</td>
+                </tr>
+            `).join('');
+        }
+    }
+
+    updatePierDetailsContent(data) {
+        const { pier_info, reinforcement, slenderness, capacities,
+                flexure_design, shear_design, boundary_check } = data;
+
+        // Sección 1: Pier Details
+        document.getElementById('det-story').textContent = pier_info.story;
+        document.getElementById('det-pier').textContent = pier_info.label;
+        document.getElementById('det-length').textContent = pier_info.width_m;
+        document.getElementById('det-thickness').textContent = pier_info.thickness_m;
+        document.getElementById('det-height').textContent = pier_info.height_m;
+        document.getElementById('det-ag').textContent = pier_info.Ag_m2 ||
+            (pier_info.width_m * pier_info.thickness_m).toFixed(4);
+
+        // Sección 2: Material Properties
+        document.getElementById('det-fc').textContent = pier_info.fc_MPa;
+        document.getElementById('det-fy').textContent = pier_info.fy_MPa;
+        document.getElementById('det-lambda').textContent = pier_info.lambda || '1.0';
+
+        // Sección 4: Reinforcement
+        document.getElementById('det-reinf-desc').textContent = reinforcement.description;
+        document.getElementById('det-as-vertical').textContent = reinforcement.As_vertical_mm2;
+        document.getElementById('det-as-edge').textContent = reinforcement.As_edge_mm2;
+        document.getElementById('det-as-total').textContent = reinforcement.As_flexure_total_mm2;
+
+        // Mostrar cuantías con estado (OK o warning)
+        const rhoVEl = document.getElementById('det-rho-actual');
+        const rhoVValue = reinforcement.rho_vertical?.toFixed(5) || '—';
+        if (reinforcement.rho_v_ok === false) {
+            rhoVEl.innerHTML = `<span class="warning-text">${rhoVValue}</span>`;
+        } else {
+            rhoVEl.textContent = rhoVValue;
+        }
+
+        // Mostrar advertencias de cuantía mínima si existen
+        const warningsContainer = document.getElementById('det-reinf-warnings');
+        if (warningsContainer) {
+            if (reinforcement.warnings && reinforcement.warnings.length > 0) {
+                warningsContainer.innerHTML = reinforcement.warnings.map(w =>
+                    `<div class="warning-message">${w}</div>`
+                ).join('');
+                warningsContainer.style.display = 'block';
             } else {
-                reductionEl.textContent = 'Sin reducción';
-                reductionEl.style.color = 'inherit';
+                warningsContainer.innerHTML = '';
+                warningsContainer.style.display = 'none';
             }
         }
 
-        // Capacidades
-        // Si hay reducción por esbeltez, mostrar ambos valores
+        // Sección 5: Flexural Design
+        const flexureBody = document.getElementById('det-flexure-body');
+        if (flexure_design && flexure_design.has_data && flexure_design.rows.length > 0) {
+            flexureBody.innerHTML = flexure_design.rows.map(row => `
+                <tr>
+                    <td>${row.location}</td>
+                    <td class="${this._getDcrClass(row.dcr)}">${row.dcr}</td>
+                    <td class="combo-cell">${row.combo}</td>
+                    <td>${row.Pu_tonf}</td>
+                    <td>${row.Mu2_tonf_m}</td>
+                    <td>${row.Mu3_tonf_m}</td>
+                    <td>${row.phi_Mn_tonf_m}</td>
+                    <td>${row.c_mm}</td>
+                </tr>
+            `).join('');
+        } else {
+            flexureBody.innerHTML = '<tr><td colspan="8" class="no-data">Sin datos de carga</td></tr>';
+        }
+
+        // Sección 6: Shear Design
+        const shearBody = document.getElementById('det-shear-body');
+        if (shear_design && shear_design.has_data && shear_design.rows.length > 0) {
+            shearBody.innerHTML = shear_design.rows.map(row => `
+                <tr>
+                    <td>${row.direction}</td>
+                    <td class="${this._getDcrClass(row.dcr)}">${row.dcr}</td>
+                    <td class="combo-cell">${row.combo}</td>
+                    <td>${row.Pu_tonf}</td>
+                    <td>${row.Mu_tonf_m}</td>
+                    <td>${row.Vu_tonf}</td>
+                    <td>${row.phi_Vc_tonf}</td>
+                    <td>${row.phi_Vn_tonf}</td>
+                </tr>
+            `).join('');
+        } else {
+            shearBody.innerHTML = '<tr><td colspan="8" class="no-data">Sin datos de carga</td></tr>';
+        }
+
+        // Sección 7: Boundary Element Check
+        const boundaryBody = document.getElementById('det-boundary-body');
+        if (boundary_check && boundary_check.has_data && boundary_check.rows.length > 0) {
+            boundaryBody.innerHTML = boundary_check.rows.map(row => `
+                <tr>
+                    <td>${row.location}</td>
+                    <td class="combo-cell">${row.combo}</td>
+                    <td>${row.Pu_tonf}</td>
+                    <td>${row.Mu_tonf_m}</td>
+                    <td>${row.sigma_comp_MPa}</td>
+                    <td>${row.sigma_limit_MPa}</td>
+                    <td>${row.c_mm}</td>
+                    <td class="${row.required === 'Yes' ? 'status-fail' : 'status-ok'}">${row.required}</td>
+                </tr>
+            `).join('');
+        } else {
+            boundaryBody.innerHTML = '<tr><td colspan="8" class="no-data">Sin datos de carga</td></tr>';
+        }
+
+        // Sección 8: Pure Capacities
         if (slenderness && slenderness.is_slender) {
-            document.getElementById('detail-phi-pn').innerHTML =
-                `<span style="text-decoration: line-through; color: var(--text-muted);">${capacities.phi_Pn_max_tonf}</span>` +
+            document.getElementById('det-phi-pn').innerHTML =
+                `<span class="strikethrough">${capacities.phi_Pn_max_tonf}</span>` +
                 ` → ${capacities.phi_Pn_reduced_tonf}`;
         } else {
-            document.getElementById('detail-phi-pn').textContent = capacities.phi_Pn_max_tonf;
+            document.getElementById('det-phi-pn').textContent = capacities.phi_Pn_max_tonf;
         }
-        document.getElementById('detail-phi-mn3').textContent = capacities.phi_Mn3_tonf_m;
-        document.getElementById('detail-phi-mn2').textContent = capacities.phi_Mn2_tonf_m;
-        document.getElementById('detail-phi-vn2').textContent = capacities.phi_Vn2_tonf;
-        document.getElementById('detail-phi-vn3').textContent = capacities.phi_Vn3_tonf;
+        document.getElementById('det-phi-mn3').textContent = capacities.phi_Mn3_tonf_m;
+        document.getElementById('det-phi-mn2').textContent = capacities.phi_Mn2_tonf_m;
+        document.getElementById('det-phi-vn2').textContent = capacities.phi_Vn2_tonf;
+        document.getElementById('det-phi-vn3').textContent = capacities.phi_Vn3_tonf;
+    }
+
+    /**
+     * Retorna la clase CSS para colorear el D/C (Demand/Capacity) según su valor.
+     * D/C <= 1.0 es OK, D/C > 1.0 significa que falla.
+     */
+    _getDcrClass(dcr) {
+        if (dcr === '<0.01' || (typeof dcr === 'number' && dcr <= 1.0)) {
+            return 'status-ok';
+        }
+        return 'status-fail';
+    }
+
+    /**
+     * Retorna la clase CSS para colorear el SF según su valor.
+     */
+    _getSfClass(sf) {
+        if (sf === '>100' || (typeof sf === 'number' && sf >= 1)) {
+            return 'status-ok';
+        }
+        return 'status-fail';
     }
 
     closePierDetailsModal() {

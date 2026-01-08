@@ -191,6 +191,27 @@
     opacity: 0.6;
 }
 
+/* Advertencia cuantía mínima */
+.malla-row.rho-warning,
+.borde-row.rho-warning {
+    background: #fef3c7;
+    border-radius: 3px;
+    padding: 2px 4px;
+    margin: 1px -4px;
+}
+
+.malla-row.rho-warning select,
+.borde-row.rho-warning select {
+    border-color: #f59e0b;
+}
+
+.rho-warn-icon {
+    color: #d97706;
+    font-size: 0.8rem;
+    margin-left: 4px;
+    cursor: help;
+}
+
 /* Viga */
 .viga-cell { font-size: 0.7rem; text-align: center; }
 .viga-row { gap: 1px; justify-content: center; }

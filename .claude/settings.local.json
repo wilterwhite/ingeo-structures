@@ -59,7 +59,18 @@
       "Bash(find:*)",
       "Bash(mkdir:*)",
       "Bash(dir \"C:\\\\Users\\\\willi\\\\Github\\\\ingeo-structures\\\\docs\\\\aci 318-25\\\\summaries\" /b /ad)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(python run.py:*)",
+      "Bash(pip install:*)",
+      "Bash(python app.py:*)",
+      "Bash(timeout 5 cat:*)",
+      "Bash(wc -l \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\domain\\chapter18\"/**/*.py)",
+      "Bash(python -m py_compile:*)",
+      "Bash(python -c:*)",
+      "Bash(timeout 10 python:*)",
+      "Bash(python3:*)",
+      "Bash(grep:*)",
+      "Bash(python:*)"
     ]
   }
 }

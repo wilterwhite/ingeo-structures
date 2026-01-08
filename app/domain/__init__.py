@@ -12,7 +12,7 @@ Estructura de subcarpetas:
 - chapter11/: Requisitos generales (Cap. 11)
 - chapter18/: Requisitos sísmicos (Cap. 18)
 """
-from .entities import Pier, LoadCombination, VerificationResult, PierForces
+from .entities import Pier, LoadCombination, PierForces
 
 # Re-export desde subcarpetas - Verificación de capacidad
 from .flexure import (
@@ -52,7 +52,6 @@ __all__ = [
     # Entities
     'Pier',
     'LoadCombination',
-    'VerificationResult',
     'PierForces',
     # Flexure (capacity verification)
     'InteractionDiagramService',

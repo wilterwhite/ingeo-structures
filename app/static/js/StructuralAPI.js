@@ -216,6 +216,24 @@ class StructuralAPI {
     }
 
     /**
+     * Obtiene los detalles de diseño para una combinación específica.
+     * @param {string} sessionId - ID de sesión
+     * @param {string} pierKey - Clave del pier (Story_Label)
+     * @param {number} comboIndex - Índice de la combinación
+     * @returns {Promise<Object>} Datos de flexión, corte y boundary para la combinación
+     */
+    async getCombinationDetails(sessionId, pierKey, comboIndex) {
+        return this.request('/combination-details', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                pier_key: pierKey,
+                combo_index: comboIndex
+            })
+        });
+    }
+
+    /**
      * Obtiene el diagrama de sección transversal de un pier.
      * @param {string} sessionId - ID de sesión
      * @param {string} pierKey - Clave del pier (Story_Label)

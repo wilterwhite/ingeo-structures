@@ -81,6 +81,44 @@ class SessionManager:
         """Verifica si existe una sesión."""
         return session_id in self._cache
 
+    # =========================================================================
+    # Validación (centralizada para evitar duplicación)
+    # =========================================================================
+
+    def validate_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Valida que la sesión existe.
+
+        Returns:
+            None si la sesión es válida, o dict con error si no existe.
+        """
+        if not self.has_session(session_id):
+            return {
+                'success': False,
+                'error': 'Session not found. Please upload the file again.'
+            }
+        return None
+
+    def validate_pier(self, session_id: str, pier_key: str) -> Optional[Dict[str, Any]]:
+        """
+        Valida que el pier existe en la sesión.
+
+        Returns:
+            None si el pier es válido, o dict con error si no existe.
+        """
+        session_error = self.validate_session(session_id)
+        if session_error:
+            return session_error
+
+        pier = self.get_pier(session_id, pier_key)
+        if pier is None:
+            return {'success': False, 'error': f'Pier not found: {pier_key}'}
+        return None
+
+    # =========================================================================
+    # Gestión de Sesiones
+    # =========================================================================
+
     def clear_session(self, session_id: str) -> bool:
         """Elimina una sesión del cache."""
         if session_id in self._cache:

@@ -11,6 +11,7 @@ from .service import WallPierService
 from .classification import classify_wall_pier, COLUMN_MIN_THICKNESS_MM
 from .shear_design import calculate_design_shear, verify_shear_strength
 from .transverse import calculate_transverse_requirements, EXTENSION_MIN_MM
+from .boundary_zones import check_boundary_zone_reinforcement
 
 from ..results import (
     WallPierCategory,
@@ -19,6 +20,7 @@ from ..results import (
     WallPierShearDesign,
     WallPierTransverseReinforcement,
     WallPierBoundaryCheck,
+    BoundaryZoneCheck,
     WallPierDesignResult,
 )
 
@@ -30,6 +32,7 @@ __all__ = [
     "calculate_design_shear",
     "verify_shear_strength",
     "calculate_transverse_requirements",
+    "check_boundary_zone_reinforcement",
     # Constantes
     "COLUMN_MIN_THICKNESS_MM",
     "EXTENSION_MIN_MM",
@@ -40,5 +43,6 @@ __all__ = [
     "WallPierShearDesign",
     "WallPierTransverseReinforcement",
     "WallPierBoundaryCheck",
+    "BoundaryZoneCheck",
     "WallPierDesignResult",
 ]

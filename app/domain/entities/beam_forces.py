@@ -3,7 +3,7 @@
 Entidad BeamForces: coleccion de combinaciones de carga para una viga.
 """
 from dataclasses import dataclass, field
-from typing import List, Dict
+from typing import List, Dict, Tuple, Optional
 
 from .load_combination import LoadCombination
 
@@ -91,3 +91,33 @@ class BeamForces:
             return None
 
         return max(self.combinations, key=lambda c: abs(c.M3))
+
+    def get_critical_pm_points(
+        self,
+        moment_axis: str = 'M3',
+        angle_deg: float = 0
+    ) -> List[Tuple[float, float, str]]:
+        """
+        Retorna puntos (P, M, combo_name) para verificacion de flexocompresion.
+
+        Compatible con FlexocompressionService.check_flexure().
+        Convencion: P positivo = compresion.
+
+        Args:
+            moment_axis: Eje de momento ('M2' o 'M3'), default 'M3'
+            angle_deg: Angulo para vista combinada (no usado en vigas)
+
+        Returns:
+            Lista de tuplas (P, M, combo_name) para cada combinacion
+        """
+        if not self.combinations:
+            return []
+
+        points = []
+        for combo in self.combinations:
+            # Convertir P: ETABS usa negativo=compresion, nosotros positivo=compresion
+            P = -combo.P
+            M = abs(combo.M3) if moment_axis == 'M3' else abs(combo.M2)
+            points.append((P, M, combo.name))
+
+        return points

@@ -122,12 +122,49 @@ class WallPierBoundaryCheck:
 
 
 @dataclass
+class BoundaryZoneCheck:
+    """
+    Verificacion de refuerzo en zonas de extremo segun ACI 318-25 §18.10.2.4.
+
+    Para muros/pilares con hw/lw >= 2.0 y seccion critica unica:
+    - (a) rho >= 6*sqrt(f'c)/fy en extremos (0.15*lw x bw)
+    - (b) Extension vertical >= max(lw, Mu/3Vu)
+    - (c) No mas del 50% termina en una seccion
+    """
+    # Condiciones de aplicabilidad
+    hw_lw: float                    # Relacion hw/lw
+    applies: bool                   # True si hw/lw >= 2.0
+
+    # Requisitos de cuantia (a)
+    rho_min_boundary: float         # 6*sqrt(f'c)/fy (cuantia minima requerida)
+    rho_actual_left: float          # Cuantia actual extremo izquierdo
+    rho_actual_right: float         # Cuantia actual extremo derecho
+    rho_left_ok: bool
+    rho_right_ok: bool
+
+    # Zona de extremo
+    boundary_length: float          # 0.15 x lw (mm)
+    boundary_width: float           # bw (mm)
+
+    # Extension vertical (b)
+    extension_required: float       # max(lw, Mu/3Vu) (mm)
+    lw: float
+    Mu_3Vu: float                   # Mu/(3xVu) en mm
+
+    # Resultado global
+    is_ok: bool
+    warnings: List[str] = field(default_factory=list)
+    aci_reference: str = "ACI 318-25 §18.10.2.4"
+
+
+@dataclass
 class WallPierDesignResult:
     """Resultado completo del diseno del pilar de muro."""
     classification: WallPierClassification
     shear_design: WallPierShearDesign
     transverse: WallPierTransverseReinforcement
     boundary_check: Optional[WallPierBoundaryCheck]
+    boundary_zone_check: Optional[BoundaryZoneCheck]
     warnings: List[str]
     aci_reference: str
 

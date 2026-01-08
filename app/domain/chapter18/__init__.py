@@ -9,10 +9,11 @@ en lugar de reimplementar la lógica.
 Estructura:
 -----------
 results.py          - Dataclasses y enums para resultados
-amplification/      - Amplificación de cortante sísmico (§18.10.3.3)
+reinforcement/      - Refuerzo mínimo distribuido (§18.10.2)
+design_forces/      - Fuerzas de diseño, amplificación cortante (§18.10.3)
 boundary_elements/  - Elementos de borde (§18.10.6)
-piers/              - Pilares de muro y columnas (§18.10.8, §18.7.6)
 coupling_beams/     - Vigas de acoplamiento (§18.10.7)
+wall_piers/         - Pilares de muro y columnas (§18.10.8, §18.7.6)
 
 Funciones Clave:
 ---------------
@@ -42,14 +43,16 @@ Re-exports desde chapter11:
 - WallDesignMethodsService: Métodos simplificado/esbelto (§11.5.3, §11.8)
 """
 # Servicios desde subdirectorios
-from .amplification import ShearAmplificationService
+from .design_forces import ShearAmplificationService
 from .boundary_elements import BoundaryElementService
-from .piers import WallPierService
+from .wall_piers import WallPierService
 from .coupling_beams import CouplingBeamService
+from .reinforcement import SeismicReinforcementService, SeismicReinforcementResult
 
 # Funciones de cálculo directo (para usar desde servicios)
-from .piers.shear_design import calculate_design_shear
-from .piers.classification import classify_wall_pier
+from .wall_piers.shear_design import calculate_design_shear
+from .wall_piers.classification import classify_wall_pier
+from .wall_piers.boundary_zones import check_boundary_zone_reinforcement
 
 # Dataclasses y enums desde results.py
 from .results import (
@@ -71,6 +74,7 @@ from .results import (
     WallPierShearDesign,
     WallPierTransverseReinforcement,
     WallPierBoundaryCheck,
+    BoundaryZoneCheck,
     WallPierDesignResult,
     # Coupling Beams
     CouplingBeamType,
@@ -100,12 +104,16 @@ __all__ = [
     # Funciones de cálculo directo (usar desde servicios)
     'calculate_design_shear',
     'classify_wall_pier',
-    # amplification
+    'check_boundary_zone_reinforcement',
+    # reinforcement (§18.10.2.1)
+    'SeismicReinforcementService',
+    'SeismicReinforcementResult',
+    # design_forces (§18.10.3)
     'ShearAmplificationService',
     'ShearAmplificationResult',
     'ShearAmplificationFactors',
     'SpecialWallRequirements',
-    # boundary_elements
+    # boundary_elements (§18.10.6)
     'BoundaryElementService',
     'BoundaryElementMethod',
     'BoundaryElementResult',
@@ -113,7 +121,7 @@ __all__ = [
     'DisplacementCheckResult',
     'BoundaryElementDimensions',
     'BoundaryTransverseReinforcement',
-    # piers
+    # wall_piers (§18.10.8, §18.10.2.4)
     'WallPierService',
     'WallPierDesignResult',
     'WallPierDesignMethod',
@@ -122,7 +130,8 @@ __all__ = [
     'WallPierShearDesign',
     'WallPierTransverseReinforcement',
     'WallPierBoundaryCheck',
-    # coupling_beams
+    'BoundaryZoneCheck',
+    # coupling_beams (§18.10.7)
     'CouplingBeamService',
     'CouplingBeamDesignResult',
     'CouplingBeamType',

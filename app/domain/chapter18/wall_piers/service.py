@@ -17,11 +17,13 @@ from ..results import (
     WallPierShearDesign,
     WallPierTransverseReinforcement,
     WallPierBoundaryCheck,
+    BoundaryZoneCheck,
     WallPierDesignResult,
 )
 from .classification import classify_wall_pier, COLUMN_MIN_THICKNESS_MM
 from .shear_design import calculate_design_shear, verify_shear_strength
 from .transverse import calculate_transverse_requirements
+from .boundary_zones import check_boundary_zone_reinforcement
 
 if TYPE_CHECKING:
     from ...entities.pier import Pier
@@ -153,6 +155,43 @@ class WallPierService:
             sigma_max=stress_result.sigma_max,
             sigma_limit=stress_result.limit_require,
             aci_reference="ACI 318-25 18.10.8.1(f), 18.10.6.3"
+        )
+
+    # =========================================================================
+    # ZONAS DE EXTREMO (18.10.2.4)
+    # =========================================================================
+
+    def check_boundary_zones(
+        self,
+        pier: 'Pier',
+        Mu: float = 0,
+        Vu: float = 0
+    ) -> BoundaryZoneCheck:
+        """
+        Verifica refuerzo en zonas de extremo segun ACI 318-25 §18.10.2.4.
+
+        Para muros/pilares con hw/lw >= 2.0 y seccion critica unica:
+        - (a) rho >= 6*sqrt(f'c)/fy en extremos (0.15*lw x bw)
+        - (b) Extension vertical >= max(lw, Mu/3Vu)
+
+        Args:
+            pier: Entidad Pier con geometria y armadura
+            Mu: Momento ultimo en seccion critica (tonf-m)
+            Vu: Cortante ultimo en seccion critica (tonf)
+
+        Returns:
+            BoundaryZoneCheck con resultado de la verificacion
+        """
+        return check_boundary_zone_reinforcement(
+            hw=pier.height,
+            lw=pier.width,
+            bw=pier.thickness,
+            fc=pier.fc,
+            fy=pier.fy,
+            As_left=pier.As_boundary_left,
+            As_right=pier.As_boundary_right,
+            Mu=Mu,
+            Vu=Vu
         )
 
     # =========================================================================
@@ -311,6 +350,7 @@ class WallPierService:
             shear_design=shear_design,
             transverse=transverse,
             boundary_check=boundary_check,
+            boundary_zone_check=None,  # Requires Pier entity; use verify_from_pier
             warnings=warnings,
             aci_reference="ACI 318-25 18.10.8"
         )

@@ -7,7 +7,7 @@ from typing import Optional
 
 from .pier_analysis import PierAnalysisService
 from .parsing.session_manager import SessionManager
-from .analysis.flexure_service import FlexureService
+from .analysis.flexocompression_service import FlexocompressionService
 from .analysis.shear_service import ShearService
 from .analysis.statistics_service import StatisticsService
 from .presentation.plot_generator import PlotGenerator
@@ -32,7 +32,7 @@ class ServiceFactory:
     @staticmethod
     def create_analysis_service(
         session_manager: Optional[SessionManager] = None,
-        flexure_service: Optional[FlexureService] = None,
+        flexocompression_service: Optional[FlexocompressionService] = None,
         shear_service: Optional[ShearService] = None,
         statistics_service: Optional[StatisticsService] = None,
         slenderness_service: Optional[SlendernessService] = None,
@@ -44,7 +44,7 @@ class ServiceFactory:
 
         Args:
             session_manager: Gestor de sesiones (opcional)
-            flexure_service: Servicio de flexión (opcional)
+            flexocompression_service: Servicio de flexocompresión (opcional)
             shear_service: Servicio de corte (opcional)
             statistics_service: Servicio de estadísticas (opcional)
             slenderness_service: Servicio de esbeltez (opcional)
@@ -56,7 +56,7 @@ class ServiceFactory:
         """
         return PierAnalysisService(
             session_manager=session_manager,
-            flexure_service=flexure_service,
+            flexocompression_service=flexocompression_service,
             shear_service=shear_service,
             statistics_service=statistics_service,
             slenderness_service=slenderness_service,

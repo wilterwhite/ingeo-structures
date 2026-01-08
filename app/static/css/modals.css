@@ -578,3 +578,245 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ==========================================================================
+   PIER DETAILS MODAL - ETABS STYLE
+   ========================================================================== */
+
+.pier-details-etabs {
+    max-width: 1000px;
+    padding: 24px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.pier-details-etabs h3 {
+    margin: 0 0 20px 0;
+    color: var(--text-color);
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-align: center;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 10px;
+}
+
+.pier-details-etabs .pier-details-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Combo Selector Section */
+.combo-selector-section {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border: 1px solid #bae6fd;
+    border-radius: var(--border-radius);
+    padding: 12px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.combo-selector-section label {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-color);
+    white-space: nowrap;
+}
+
+#pier-combo-selector {
+    flex: 1;
+    min-width: 200px;
+    max-width: 400px;
+    padding: 8px 12px;
+    border: 1px solid #93c5fd;
+    border-radius: var(--border-radius);
+    font-size: 0.85rem;
+    background: white;
+    cursor: pointer;
+}
+
+#pier-combo-selector:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.critical-badge {
+    background: #dc2626;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    animation: pulse-critical 2s infinite;
+}
+
+.critical-badge.hidden {
+    display: none;
+}
+
+@keyframes pulse-critical {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.combo-forces-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.combo-forces-display span {
+    white-space: nowrap;
+}
+
+.combo-forces-display strong {
+    color: var(--text-color);
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* ETABS Section */
+.etabs-section {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}
+
+.etabs-section h4 {
+    margin: 0;
+    padding: 8px 12px;
+    background: var(--bg-color);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* ETABS Table */
+.etabs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.etabs-table th,
+.etabs-table td {
+    padding: 6px 10px;
+    text-align: center;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.etabs-table th {
+    background: #f8fafc;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: none;
+    white-space: nowrap;
+}
+
+.etabs-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.etabs-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.etabs-table td {
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* Special cells */
+.etabs-table .combo-cell {
+    text-align: left;
+    font-family: inherit;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.etabs-table .no-data {
+    text-align: center;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 20px;
+    font-family: inherit;
+}
+
+/* Status colors */
+.etabs-table .status-ok {
+    color: var(--success-color);
+    font-weight: 600;
+}
+
+.etabs-table .status-fail {
+    color: var(--error-color);
+    font-weight: 600;
+}
+
+/* Strikethrough for slenderness reduction */
+.pier-details-etabs .strikethrough {
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+/* Reinforcement warnings */
+.reinforcement-warnings {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: var(--border-radius);
+}
+
+.reinforcement-warnings .warning-message {
+    color: #92400e;
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 4px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.reinforcement-warnings .warning-message::before {
+    content: "⚠";
+    font-size: 1rem;
+}
+
+.warning-text {
+    color: #dc2626;
+    font-weight: 700;
+}
+
+/* Responsive for ETABS modal */
+@media (max-width: 768px) {
+    .pier-details-etabs {
+        padding: 16px;
+    }
+
+    .etabs-table {
+        font-size: 0.7rem;
+    }
+
+    .etabs-table th,
+    .etabs-table td {
+        padding: 4px 6px;
+    }
+
+    .etabs-section h4 {
+        font-size: 0.8rem;
+        padding: 6px 10px;
+    }
+}

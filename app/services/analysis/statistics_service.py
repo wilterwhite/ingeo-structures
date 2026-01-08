@@ -5,7 +5,7 @@ Servicio de estadísticas y generación de gráficos resumen.
 from typing import Dict, List, Any, Optional
 
 from ..presentation.plot_generator import PlotGenerator
-from ...domain.entities import VerificationResult
+from .verification_result import ElementVerificationResult
 
 
 class StatisticsService:
@@ -20,12 +20,12 @@ class StatisticsService:
     def __init__(self):
         self._plot_generator = PlotGenerator()
 
-    def calculate_statistics(self, results: List[VerificationResult]) -> Dict[str, Any]:
+    def calculate_statistics(self, results: List[ElementVerificationResult]) -> Dict[str, Any]:
         """
         Calcula estadísticas de los resultados de verificación.
 
         Args:
-            results: Lista de VerificationResult
+            results: Lista de ElementVerificationResult
 
         Returns:
             Dict con total, ok, fail, pass_rate
@@ -41,21 +41,21 @@ class StatisticsService:
             'pass_rate': ok_count / total * 100 if total > 0 else 0
         }
 
-    def generate_summary_plot(self, results: List[VerificationResult]) -> str:
+    def generate_summary_plot(self, results: List[ElementVerificationResult]) -> str:
         """
         Genera el gráfico resumen de factores de seguridad.
 
         Args:
-            results: Lista de VerificationResult
+            results: Lista de ElementVerificationResult
 
         Returns:
             Gráfico en base64
         """
         summary_data = [
             {
-                'pier_label': r.pier_label,
-                'flexure_sf': r.flexure_sf,
-                'shear_sf': r.shear_sf
+                'pier_label': r.element_info.get('label', ''),
+                'flexure_sf': r.flexure.sf,
+                'shear_sf': r.shear.sf
             }
             for r in results
         ]
@@ -75,13 +75,13 @@ class StatisticsService:
 
     def get_detailed_statistics(
         self,
-        results: List[VerificationResult]
+        results: List[ElementVerificationResult]
     ) -> Dict[str, Any]:
         """
         Calcula estadísticas detalladas por tipo de verificación.
 
         Args:
-            results: Lista de VerificationResult
+            results: Lista de ElementVerificationResult
 
         Returns:
             Dict con estadísticas detalladas
@@ -104,14 +104,14 @@ class StatisticsService:
         overall_ok = sum(1 for r in results if r.is_ok)
 
         # Estadísticas flexión
-        flexure_ok = sum(1 for r in results if r.flexure_status == "OK")
+        flexure_ok = sum(1 for r in results if r.flexure.status == "OK")
 
         # Estadísticas corte
-        shear_ok = sum(1 for r in results if r.shear_status == "OK")
+        shear_ok = sum(1 for r in results if r.shear.status == "OK")
 
         # Distribución de SF
-        flexure_sfs = [r.flexure_sf for r in results if r.flexure_sf < 100]
-        shear_sfs = [r.shear_sf for r in results if r.shear_sf < 100]
+        flexure_sfs = [r.flexure.sf for r in results if r.flexure.sf < 100]
+        shear_sfs = [r.shear.sf for r in results if r.shear.sf < 100]
 
         return {
             'total': total,
@@ -146,7 +146,7 @@ class StatisticsService:
 
     def get_critical_piers(
         self,
-        results: List[VerificationResult],
+        results: List[ElementVerificationResult],
         n: int = 5,
         sort_by: str = 'overall'
     ) -> List[Dict[str, Any]]:
@@ -154,7 +154,7 @@ class StatisticsService:
         Obtiene los N piers más críticos.
 
         Args:
-            results: Lista de VerificationResult
+            results: Lista de ElementVerificationResult
             n: Número de piers a retornar
             sort_by: 'overall', 'flexure', o 'shear'
 
@@ -165,13 +165,13 @@ class StatisticsService:
             return []
 
         # Función para obtener el SF según criterio
-        def get_sf(r: VerificationResult) -> float:
+        def get_sf(r: ElementVerificationResult) -> float:
             if sort_by == 'flexure':
-                return r.flexure_sf
+                return r.flexure.sf
             elif sort_by == 'shear':
-                return r.shear_sf
+                return r.shear.sf
             else:  # overall - el mínimo
-                return min(r.flexure_sf, r.shear_sf)
+                return min(r.flexure.sf, r.shear.sf)
 
         # Ordenar por SF ascendente (más crítico primero)
         sorted_results = sorted(results, key=get_sf)
@@ -181,11 +181,11 @@ class StatisticsService:
         for r in sorted_results[:n]:
             sf = get_sf(r)
             critical.append({
-                'pier_label': r.pier_label,
-                'story': r.story,
+                'pier_label': r.element_info.get('label', ''),
+                'story': r.element_info.get('story', ''),
                 'overall_status': r.overall_status,
-                'flexure_sf': round(r.flexure_sf, 2) if r.flexure_sf < 100 else '>100',
-                'shear_sf': round(r.shear_sf, 2) if r.shear_sf < 100 else '>100',
+                'flexure_sf': round(r.flexure.sf, 2) if r.flexure.sf < 100 else '>100',
+                'shear_sf': round(r.shear.sf, 2) if r.shear.sf < 100 else '>100',
                 'critical_sf': round(sf, 2) if sf < 100 else '>100'
             })
 

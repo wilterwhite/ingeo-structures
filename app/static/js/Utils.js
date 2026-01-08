@@ -22,6 +22,21 @@ function getFsClass(sf) {
     return 'fs-fail';
 }
 
+/**
+ * Retorna la clase CSS según el D/C (Demand/Capacity ratio).
+ * D/C <= 1.0 es OK, D/C > 1.0 es falla.
+ * @param {string|number} dcr - Demand/Capacity ratio
+ * @returns {string} Clase CSS ('fs-ok', 'fs-warn', 'fs-fail')
+ */
+function getDcrClass(dcr) {
+    if (dcr === '<0.01') return 'fs-ok';
+    const val = parseFloat(dcr);
+    if (isNaN(val)) return 'fs-fail';
+    if (val <= 0.67) return 'fs-ok';  // Equivale a SF >= 1.5
+    if (val <= 1.0) return 'fs-warn'; // Equivale a SF >= 1.0
+    return 'fs-fail';
+}
+
 // =============================================================================
 // Formateo de Textos
 // =============================================================================

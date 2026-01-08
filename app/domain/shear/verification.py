@@ -39,7 +39,62 @@ from .results import (
     ShearResult,
     CombinedShearResult,
     WallGroupShearResult,
+    SimpleShearCapacity,
 )
+
+
+def calculate_simple_shear_capacity(
+    bw: float,
+    d: float,
+    fc: float,
+    fy: float,
+    Av: float = 0.0,
+    s: float = 0.0
+) -> SimpleShearCapacity:
+    """
+    Calcula capacidad de corte simple para vigas segun ACI 318-25 §22.5.
+
+    Vc = 0.17 * lambda * sqrt(f'c) * bw * d
+    Vs = Av * fyt * d / s
+    Vs_max = 0.66 * sqrt(f'c) * bw * d
+
+    Args:
+        bw: Ancho del alma (mm)
+        d: Altura efectiva (mm)
+        fc: f'c del concreto (MPa)
+        fy: Fluencia del acero (MPa)
+        Av: Area de estribos (mm²)
+        s: Espaciamiento de estribos (mm)
+
+    Returns:
+        SimpleShearCapacity con valores en tonf
+    """
+    # Aplicar limites de materiales
+    fc_eff = get_effective_fc_shear(fc)
+    fyt_eff = get_effective_fyt_shear(fy)
+
+    # Vc (ACI 318-25 §22.5.5.1)
+    Vc_N = VC_COEF_COLUMN * LAMBDA_NORMAL * math.sqrt(fc_eff) * bw * d
+
+    # Vs (si tiene estribos)
+    Vs_N = 0.0
+    if Av > 0 and s > 0:
+        Vs_N = Av * fyt_eff * d / s
+
+    # Limite Vs
+    Vs_max_N = VS_MAX_COEF * math.sqrt(fc_eff) * bw * d
+    Vs_N = min(Vs_N, Vs_max_N)
+
+    # Capacidad de diseno
+    phi_Vn = PHI_SHEAR * (Vc_N + Vs_N) / N_TO_TONF
+
+    return SimpleShearCapacity(
+        Vc=Vc_N / N_TO_TONF,
+        Vs=Vs_N / N_TO_TONF,
+        Vs_max=Vs_max_N / N_TO_TONF,
+        phi_Vn=phi_Vn,
+        aci_reference="ACI 318-25 §22.5"
+    )
 
 
 class ShearVerificationService:
@@ -217,14 +272,29 @@ class ShearVerificationService:
         fc: float,
         fy: float,
         rho_h: float,
+        Nu: float = 0,
         cover: float = None
     ) -> Tuple[float, float, float, float, float]:
         """
         Calcula Vn para COLUMNAS/VIGAS segun Seccion 22.5.
 
-        Vc = 0.17 x lambda x sqrt(f'c) x bw x d
-        Vs = rho_t x bw x fy x d
+        Para miembros con compresion axial (ACI 318-25 §22.5.5.1):
+        Vc = 0.17 x (1 + Nu/(14*Ag)) x lambda x sqrt(f'c) x bw x d
+
+        Para miembros con tension axial (ACI 318-25 §22.5.6.1):
+        Vc = 0.17 x (1 + Nu/(3.5*Ag)) x lambda x sqrt(f'c) x bw x d >= 0
+
+        Vs = Av x fy x d / s = rho_t x bw x fy x d
         Limite: Vs <= 0.66 x sqrt(f'c) x bw x d
+
+        Args:
+            lw: Dimension mayor de la seccion (mm)
+            tw: Dimension menor de la seccion (mm)
+            fc: Resistencia del concreto (MPa)
+            fy: Resistencia del acero (MPa)
+            rho_h: Cuantia de refuerzo transversal
+            Nu: Carga axial factorada (N, positivo = compresion)
+            cover: Recubrimiento (mm)
 
         Returns:
             Tuple (Vc, Vs, Vn, Vn_max, alpha_c) en tonf
@@ -234,9 +304,21 @@ class ShearVerificationService:
 
         bw = tw
         d = max(lw - cover, lw * 0.9)
+        Ag = lw * tw  # Area bruta
+
+        # Factor por carga axial segun ACI 318-25
+        if Nu >= 0:
+            # Compresion: §22.5.5.1 - Ec. 22.5.5.1
+            # Factor = (1 + Nu/(14*Ag)) donde 14 MPa = 2000 psi
+            axial_factor = 1.0 + Nu / (14.0 * Ag) if Ag > 0 else 1.0
+        else:
+            # Tension: §22.5.6.1 - Ec. 22.5.6.1
+            # Factor = (1 + Nu/(3.5*Ag)) >= 0 donde 3.5 MPa = 500 psi
+            axial_factor = max(0.0, 1.0 + Nu / (3.5 * Ag)) if Ag > 0 else 0.0
+
         alpha_c = VC_COEF_COLUMN
 
-        Vc = VC_COEF_COLUMN * LAMBDA_NORMAL * math.sqrt(fc) * bw * d
+        Vc = VC_COEF_COLUMN * axial_factor * LAMBDA_NORMAL * math.sqrt(fc) * bw * d
         Vs = rho_h * bw * fy * d
 
         Vs_max = VS_MAX_COEF * math.sqrt(fc) * bw * d
@@ -310,10 +392,16 @@ class ShearVerificationService:
                 aci_reference += ", 11.5.4.4"
         else:
             Vc, Vs, Vn, Vn_max, alpha_c = self.calculate_Vn_column(
-                lw, tw, fc, fy, rho_h
+                lw, tw, fc, fy, rho_h, Nu=Nu_N
             )
             formula_type = "column"
-            aci_reference = "ACI 318-25 22.5.5.1"
+            # Referencia ACI segun tipo de carga axial
+            if Nu > 0:
+                aci_reference = "ACI 318-25 22.5.5.1"  # Compresion
+            elif Nu < 0:
+                aci_reference = "ACI 318-25 22.5.6.1"  # Tension
+            else:
+                aci_reference = "ACI 318-25 22.5.5.1"
 
         phi_Vn = PHI_SHEAR * Vn
         Vu_abs = abs(Vu)

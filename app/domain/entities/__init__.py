@@ -17,7 +17,6 @@ from .beam import Beam, BeamSource
 from .beam_forces import BeamForces
 from .slab import Slab, SlabType, SupportCondition
 from .slab_forces import SlabForces, SlabSectionCut
-from .verification_result import VerificationResult
 from .parsed_data import ParsedData
 from .design_proposal import (
     DesignProposal,
@@ -26,6 +25,7 @@ from .design_proposal import (
     ProposalType,
 )
 from .coupling_beam import CouplingBeamConfig, PierCouplingConfig
+from .protocols import FlexuralElement
 
 __all__ = [
     # Piers
@@ -46,7 +46,6 @@ __all__ = [
     'SlabSectionCut',
     # Comunes
     'LoadCombination',
-    'VerificationResult',
     'ParsedData',
     'DesignProposal',
     'ReinforcementConfig',
@@ -54,4 +53,6 @@ __all__ = [
     'ProposalType',
     'CouplingBeamConfig',
     'PierCouplingConfig',
+    # Protocols
+    'FlexuralElement',
 ]

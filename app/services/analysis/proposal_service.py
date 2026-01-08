@@ -30,8 +30,8 @@ from ...domain.entities.design_proposal import (
     THICKNESS_SEQUENCE,
     STIRRUP_LEGS_SEQUENCE,
 )
-from ...domain.chapter18.piers import WallPierService, WallPierCategory
-from .flexure_service import FlexureService
+from ...domain.chapter18.wall_piers import WallPierService, WallPierCategory
+from .flexocompression_service import FlexocompressionService
 from .shear_service import ShearService
 
 
@@ -63,11 +63,11 @@ class ProposalService:
 
     def __init__(
         self,
-        flexure_service: Optional[FlexureService] = None,
+        flexocompression_service: Optional[FlexocompressionService] = None,
         shear_service: Optional[ShearService] = None,
         wall_pier_service: Optional[WallPierService] = None
     ):
-        self._flexure_service = flexure_service or FlexureService()
+        self._flexo_service = flexocompression_service or FlexocompressionService()
         self._shear_service = shear_service or ShearService()
         self._wall_pier_service = wall_pier_service or WallPierService()
 
@@ -243,7 +243,9 @@ class ProposalService:
 
     def _verify_flexure(self, pier: Pier, pier_forces: Optional[PierForces]) -> float:
         """Verifica flexión y retorna SF."""
-        result = self._flexure_service.check_flexure(pier, pier_forces)
+        result = self._flexo_service.check_flexure(
+            pier, pier_forces, moment_axis='M3', direction='primary', k=0.8
+        )
         sf = result.get('sf', 0)
         return min(sf, 100)  # Cap at 100
 
@@ -1238,7 +1240,9 @@ class ProposalService:
             Tuple (verification_results, proposal)
         """
         # Verificar flexión
-        flexure_result = self._flexure_service.check_flexure(pier, pier_forces)
+        flexure_result = self._flexo_service.check_flexure(
+            pier, pier_forces, moment_axis='M3', direction='primary', k=0.8
+        )
         flexure_sf = flexure_result.get('sf', 100)
         slenderness = flexure_result.get('slenderness', {})
         slenderness_reduction = slenderness.get('reduction', 1.0)

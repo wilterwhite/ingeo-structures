@@ -310,6 +310,44 @@ class ReinforcementLimitsService:
     # VERIFICACION PARA CORTANTE EN EL PLANO
     # =========================================================================
 
+    # =========================================================================
+    # ZONAS DE EXTREMO §18.10.2.4
+    # =========================================================================
+
+    def calculate_end_zone_rho_min(self, fc_mpa: float, fy_mpa: float) -> float:
+        """
+        Calcula cuantia minima para zonas de extremo segun §18.10.2.4.
+
+        Cuando hw/lw >= 2.0, dentro de una distancia de 0.15*lw desde
+        los extremos, la cuantia minima longitudinal es:
+
+        ρ_min = 6√f'c / fy
+
+        Args:
+            fc_mpa: Resistencia del concreto (MPa)
+            fy_mpa: Fluencia del acero (MPa)
+
+        Returns:
+            Cuantia minima para zonas de extremo (adimensional)
+        """
+        if fy_mpa <= 0:
+            return self.RHO_MIN_HIGH_SHEAR  # Fallback seguro
+
+        rho_end_zone = 6 * math.sqrt(fc_mpa) / fy_mpa
+        return max(rho_end_zone, self.RHO_MIN_HIGH_SHEAR)
+
+    def get_end_zone_length(self, lw: float) -> float:
+        """
+        Obtiene longitud de zona de extremo segun §18.10.2.4.
+
+        Args:
+            lw: Longitud del muro (mm)
+
+        Returns:
+            Longitud de zona de extremo (mm) = 0.15*lw
+        """
+        return 0.15 * lw
+
     def check_shear_reinforcement(
         self,
         rho_v: float,

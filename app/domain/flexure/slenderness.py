@@ -24,10 +24,12 @@ from app.domain.constants.stiffness import (
     CM_TRANSVERSE,
 )
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
     from ..entities.pier import Pier
+    from ..entities.column import Column
+    from ..entities.protocols import FlexuralElement
 
 
 @dataclass
@@ -75,27 +77,28 @@ class SlendernessService:
 
     def analyze(
         self,
-        pier: 'Pier',
+        element: Union['Pier', 'Column', 'FlexuralElement'],
         k: float = 0.8,
         braced: bool = True,
-        Cm: float = 1.0
+        Cm: float = 1.0,
+        direction: str = 'primary'
     ) -> SlendernessResult:
         """
-        Analiza la esbeltez de un muro.
+        Analiza la esbeltez de un elemento (Pier o Column).
 
         Args:
-            pier: Entidad Pier con geometría y materiales
-            k: Factor de longitud efectiva (default 0.8 para muros arriostrados)
+            element: Pier, Column, o cualquier FlexuralElement
+            k: Factor de longitud efectiva (default 0.8 para muros, 1.0 para columnas)
             braced: True si el pórtico está arriostrado lateralmente
             Cm: Factor de momento equivalente (default 1.0 conservador)
+            direction: 'primary' o 'secondary' para obtener dimensiones
 
         Returns:
             SlendernessResult con todos los parámetros calculados
         """
-        # Geometría
-        t = pier.thickness           # Espesor (mm)
-        lu = pier.height             # Altura libre (mm)
-        b = pier.width               # Largo del muro (mm)
+        # Obtener geometria usando Protocol FlexuralElement
+        b, t = element.get_section_dimensions(direction)
+        lu = element.height
 
         # Radio de giro para sección rectangular
         # r = I/A = (b×t³/12) / (b×t) = t/√12
@@ -109,7 +112,7 @@ class SlendernessService:
         is_slender = lambda_ratio > lambda_limit
 
         # Carga crítica de Euler
-        Pc_kN = self._calculate_euler_load(pier, k)
+        Pc_kN = self._calculate_euler_load(element, k, direction)
 
         # Factor de magnificación (solo si es esbelto)
         if is_slender:
@@ -140,7 +143,12 @@ class SlendernessService:
             buckling_factor=buckling_factor
         )
 
-    def _calculate_euler_load(self, pier: 'Pier', k: float) -> float:
+    def _calculate_euler_load(
+        self,
+        element: Union['Pier', 'Column', 'FlexuralElement'],
+        k: float,
+        direction: str = 'primary'
+    ) -> float:
         """
         Calcula la carga critica de pandeo de Euler.
 
@@ -151,13 +159,21 @@ class SlendernessService:
         """
         # Modulo de elasticidad del hormigon
         # Ec = 4700*sqrt(fc) (MPa) para concreto de peso normal
-        fc = pier.fc
+        fc = element.fc
         Ec = 4700 * math.sqrt(fc)  # MPa
+
+        # Obtener dimensiones
+        if hasattr(element, 'get_section_dimensions'):
+            b, t = element.get_section_dimensions(direction)
+        elif hasattr(element, 'thickness'):
+            b = element.width
+            t = element.thickness
+        else:
+            b = element.depth if direction == 'primary' else element.width
+            t = element.width if direction == 'primary' else element.depth
 
         # Momento de inercia bruto
         # Ig = b*t^3/12 para flexion fuera del plano
-        b = pier.width      # mm
-        t = pier.thickness  # mm
         Ig = b * t**3 / 12  # mm^4
 
         # Rigidez efectiva para muros agrietados (diseno sismico)
@@ -165,8 +181,8 @@ class SlendernessService:
         EI_eff = WALL_STIFFNESS_FACTOR * Ec * Ig  # N-mm^2
 
         # Longitud efectiva
-        lu = pier.height  # mm
-        le = k * lu       # mm
+        lu = element.height  # mm
+        le = k * lu          # mm
 
         # Carga crítica de Euler
         if le > 0:

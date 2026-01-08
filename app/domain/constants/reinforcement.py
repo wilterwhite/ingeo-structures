@@ -21,6 +21,9 @@ from typing import Tuple
 # Cuantia minima de refuerzo para muros S11.6.1 y S18.10.2.1
 RHO_MIN = 0.0025
 
+# Espaciamiento maximo para muros especiales S18.10.2.1 (18 pulgadas)
+MAX_SPACING_SEISMIC_MM = 457.0
+
 # Fluencia por defecto del acero (MPa) - A630-420H
 FY_DEFAULT_MPA = 420.0
 

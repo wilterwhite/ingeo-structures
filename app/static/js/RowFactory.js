@@ -38,7 +38,7 @@ class RowFactory {
         row.appendChild(this.createInfoCell(result, 'pier'));
         row.appendChild(this.createHwcsCell(result));
         row.appendChild(this.createMallaCell(pier, pierKey, result));
-        row.appendChild(this.createBordeCell(pier, pierKey));
+        row.appendChild(this.createBordeCell(pier, pierKey, result));
         row.appendChild(this.table.createVigaCell(pierKey, 'izq'));
         row.appendChild(this.table.createVigaCell(pierKey, 'der'));
         row.appendChild(this.createFlexureSfCell(result));
@@ -90,9 +90,12 @@ class RowFactory {
         const hasTension = result.flexure?.has_tension || false;
         const tensionCombos = result.flexure?.tension_combos || 0;
         const sf = result.flexure?.sf ?? 0;
+        // Calcular D/C = 1/SF (Demand/Capacity ratio)
+        const dcr = sf > 0 ? (1 / sf) : 0;
+        const dcrDisplay = dcr < 0.01 ? '<0.01' : dcr.toFixed(2);
 
         const td = document.createElement('td');
-        td.className = `fs-value ${getFsClass(sf)}`;
+        td.className = `fs-value ${getDcrClass(dcr)}`;
 
         let tensionWarning = '';
         if (hasTension) {
@@ -100,7 +103,7 @@ class RowFactory {
         }
 
         td.innerHTML = `
-            <span class="fs-number">${sf}</span>${tensionWarning}
+            <span class="fs-number">${dcrDisplay}</span>${tensionWarning}
             <span class="critical-combo">${truncateCombo(result.flexure?.critical_combo)}</span>
         `;
         return td;
@@ -137,11 +140,15 @@ class RowFactory {
         const formulaType = result.shear?.formula_type || 'wall';
         const shearType = formulaType === 'column' ? 'COL' : 'MURO';
         const shearTitle = formulaType === 'column' ? 'Fórmula COLUMNA (ACI 22.5)' : 'Fórmula MURO (ACI 18.10.4)';
+        const sf = result.shear?.sf ?? 0;
+        // Calcular D/C = 1/SF (Demand/Capacity ratio)
+        const dcr = sf > 0 ? (1 / sf) : 0;
+        const dcrDisplay = dcr < 0.01 ? '<0.01' : dcr.toFixed(2);
 
         const td = document.createElement('td');
-        td.className = `fs-value ${getFsClass(result.shear?.sf)}`;
+        td.className = `fs-value ${getDcrClass(dcr)}`;
         td.innerHTML = `
-            <span class="fs-number">${result.shear?.sf || 0}</span>
+            <span class="fs-number">${dcrDisplay}</span>
             <span class="critical-combo">${truncateCombo(result.shear?.critical_combo)}</span>
             <span class="formula-tag formula-${formulaType}" title="${shearTitle}">${shearType}</span>
         `;
@@ -164,11 +171,8 @@ class RowFactory {
         td.className = 'actions-cell';
         td.innerHTML = `
             <div class="action-buttons-grid">
-                <button class="action-btn ${isExpanded ? 'active' : ''}" data-action="expand" title="Ver combinaciones">
-                    <span class="expand-icon">▶</span>
-                </button>
                 <button class="action-btn" data-action="section" title="Ver sección">🔲</button>
-                <button class="action-btn" data-action="info" title="Ver capacidades">ℹ️</button>
+                <button class="action-btn" data-action="info" title="Ver capacidades y combinaciones">ℹ️</button>
                 ${result.pm_plot
                     ? `<button class="action-btn" data-action="diagram" title="Diagrama P-M">📊</button>`
                     : `<button class="action-btn" disabled style="visibility:hidden">-</button>`}
@@ -211,8 +215,31 @@ class RowFactory {
         td.className = 'malla-cell';
         td.dataset.pierKey = pierKey;
 
+        // Verificar cuantías mínimas de malla (§18.10.2.1)
+        const reinf = result.reinforcement || {};
+        const rhoMeshVok = reinf.rho_mesh_v_ok !== false;  // Solo malla vertical
+        const rhoHok = reinf.rho_h_ok !== false;           // Malla horizontal
+        const spacingVok = reinf.spacing_v_ok !== false;   // Espaciamiento V <= 457mm
+        const spacingHok = reinf.spacing_h_ok !== false;   // Espaciamiento H <= 457mm
+
+        // Determinar advertencias para fila V
+        const vHasWarning = !rhoMeshVok || !spacingVok;
+        const vWarningClass = vHasWarning ? 'rho-warning' : '';
+        let vWarnings = [];
+        if (!rhoMeshVok) vWarnings.push(`ρ_malla < ${(reinf.rho_min || 0.0025) * 100}%`);
+        if (!spacingVok) vWarnings.push(`s > ${reinf.max_spacing || 457}mm`);
+        const vWarningTitle = vWarnings.length ? `${vWarnings.join(', ')} (§18.10.2.1)` : '';
+
+        // Determinar advertencias para fila H
+        const hHasWarning = !rhoHok || !spacingHok;
+        const hWarningClass = hHasWarning ? 'rho-warning' : '';
+        let hWarnings = [];
+        if (!rhoHok) hWarnings.push(`ρ < ${(reinf.rho_min || 0.0025) * 100}%`);
+        if (!spacingHok) hWarnings.push(`s > ${reinf.max_spacing || 457}mm`);
+        const hWarningTitle = hWarnings.length ? `${hWarnings.join(', ')} (§18.10.2.1)` : '';
+
         td.innerHTML = `
-            <div class="malla-row">
+            <div class="malla-row ${vWarningClass}" ${vHasWarning ? `title="${vWarningTitle}"` : ''}>
                 <select class="edit-meshes" title="Mallas">
                     ${generateOptions(MESH_OPTIONS, pier?.n_meshes, 'M')}
                 </select>
@@ -223,8 +250,9 @@ class RowFactory {
                 <select class="edit-spacing-v" title="@ Vertical">
                     ${generateSpacingOptions(SPACINGS.malla, pier?.spacing_v)}
                 </select>
+                ${vHasWarning ? '<span class="rho-warn-icon" title="' + vWarningTitle + '">⚠</span>' : ''}
             </div>
-            <div class="malla-row">
+            <div class="malla-row ${hWarningClass}" ${hHasWarning ? `title="${hWarningTitle}"` : ''}>
                 <span class="malla-spacer"></span>
                 <span class="malla-label">H</span>
                 <select class="edit-diameter-h" title="φ Horizontal">
@@ -233,27 +261,35 @@ class RowFactory {
                 <select class="edit-spacing-h" title="@ Horizontal">
                     ${generateSpacingOptions(SPACINGS.malla, pier?.spacing_h)}
                 </select>
+                ${hHasWarning ? '<span class="rho-warn-icon" title="' + hWarningTitle + '">⚠</span>' : ''}
             </div>
         `;
         return td;
     }
 
-    createBordeCell(pier, pierKey) {
+    createBordeCell(pier, pierKey, result) {
         const nEdgeBars = pier?.n_edge_bars || 2;
         const stirrupsDisabled = nEdgeBars <= 2;
+
+        // Verificar si la cuantía vertical total no cumple (malla + borde)
+        const reinf = result?.reinforcement || {};
+        const rhoVok = reinf.rho_v_ok !== false;
+        const warningClass = !rhoVok ? 'rho-warning' : '';
+        const warningTitle = !rhoVok ? `Cuantía vertical < ${(reinf.rho_min || 0.0025) * 100}% mínimo (§11.6.2)` : '';
 
         const td = document.createElement('td');
         td.className = 'borde-cell';
         td.dataset.pierKey = pierKey;
 
         td.innerHTML = `
-            <div class="borde-row">
+            <div class="borde-row ${warningClass}" ${!rhoVok ? `title="${warningTitle}"` : ''}>
                 <select class="edit-n-edge" title="Nº barras borde">
                     ${generateOptions(EDGE_BAR_COUNTS, pier?.n_edge_bars, 'φ')}
                 </select>
                 <select class="edit-edge" title="φ Borde">
                     ${generateDiameterOptions(DIAMETERS.borde, pier?.diameter_edge)}
                 </select>
+                ${!rhoVok ? '<span class="rho-warn-icon" title="ρ_v < mínimo">⚠</span>' : ''}
             </div>
             <div class="borde-row borde-estribos">
                 <span class="borde-label">E</span>
@@ -370,8 +406,7 @@ class RowFactory {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const action = btn.dataset.action;
-                if (action === 'expand') this.table.toggleExpand(elementKey);
-                else if (action === 'section') this.table.page.showSectionDiagram(elementKey, elementLabel);
+                if (action === 'section') this.table.page.showSectionDiagram(elementKey, elementLabel);
                 else if (action === 'info') this.table.page.showPierDetails(elementKey, elementLabel);
                 else if (action === 'diagram') this.table.page.plotModal.open(elementKey, elementLabel, this.table.plotsCache[elementKey]);
             });
