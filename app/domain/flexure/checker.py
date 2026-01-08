@@ -47,13 +47,13 @@ class FlexureChecker:
         """
         Calcula el factor de seguridad para un punto de demanda.
 
-        Método: Trazar una línea desde el origen pasando por el punto de demanda
-        y encontrar donde intersecta la curva de capacidad.
+        Metodo: Ray-casting desde el origen pasando por el punto de demanda.
+        Se busca la interseccion con cada segmento de la curva P-M.
         SF = distancia_capacidad / distancia_demanda
 
         Args:
-            points: Puntos del diagrama de interacción
-            Pu: Carga axial de demanda (tonf), positivo = compresión
+            points: Puntos del diagrama de interaccion
+            Pu: Carga axial de demanda (tonf), positivo = compresion
             Mu: Momento de demanda (tonf-m), siempre positivo
 
         Returns:
@@ -70,11 +70,11 @@ class FlexureChecker:
         # Obtener la curva de capacidad como lista de puntos (Mn, Pn)
         curve_points = [(p.phi_Mn, p.phi_Pn) for p in points]
 
-        # Dirección normalizada desde origen hacia punto de demanda
+        # Direccion normalizada desde origen hacia punto de demanda
         dir_M = Mu / d_demand
         dir_P = Pu / d_demand
 
-        # Buscar intersección del rayo con cada segmento de la curva
+        # Buscar interseccion del rayo con cada segmento de la curva
         best_t = None
 
         n = len(curve_points)
@@ -103,32 +103,34 @@ class FlexureChecker:
             is_inside = sf >= 0.999
             return sf, is_inside
 
-        # Fallback: buscar el punto más cercano en la misma dirección angular
-        best_dist = None
-        angle_demand = math.atan2(Pu, Mu)
+        # Si no se encontro interseccion, usar point-in-polygon como verificacion
+        # y calcular SF basado en el punto de capacidad mas cercano
+        is_inside = FlexureChecker._point_in_polygon(Mu, Pu, curve_points)
+
+        # Encontrar el punto de capacidad mas cercano al rayo de demanda
+        min_dist_to_ray = float('inf')
+        closest_capacity_dist = 0.0
 
         for M_cap, P_cap in curve_points:
-            angle_cap = math.atan2(P_cap, M_cap)
-            diff = abs(angle_cap - angle_demand)
-            if diff > math.pi:
-                diff = 2 * math.pi - diff
+            # Distancia del punto de capacidad al rayo desde origen
+            # Proyeccion del punto sobre el rayo
+            proj = (M_cap * dir_M + P_cap * dir_P)
+            if proj > 0:
+                # Punto proyectado sobre el rayo
+                proj_M = proj * dir_M
+                proj_P = proj * dir_P
+                # Distancia perpendicular al rayo
+                dist_to_ray = math.sqrt((M_cap - proj_M)**2 + (P_cap - proj_P)**2)
+                if dist_to_ray < min_dist_to_ray:
+                    min_dist_to_ray = dist_to_ray
+                    closest_capacity_dist = math.sqrt(M_cap**2 + P_cap**2)
 
-            if diff < 0.26:  # ~15 grados
-                d_cap = math.sqrt(M_cap**2 + P_cap**2)
-                if best_dist is None or d_cap < best_dist:
-                    best_dist = d_cap
-
-        if best_dist is not None:
-            sf = best_dist / d_demand
-            is_inside = sf >= 0.999
+        if closest_capacity_dist > 0:
+            sf = closest_capacity_dist / d_demand
             return sf, is_inside
 
-        # Último fallback
-        is_inside = FlexureChecker._point_in_polygon(Mu, Pu, curve_points)
-        if is_inside:
-            return 10.0, True
-        else:
-            return 0.5, False
+        # Caso extremo: no se pudo calcular - conservador
+        return 0.5, False
 
     @staticmethod
     def _point_in_polygon(

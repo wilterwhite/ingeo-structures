@@ -34,25 +34,35 @@ if TYPE_CHECKING:
 
 @dataclass
 class SlendernessResult:
-    """Resultado del análisis de esbeltez."""
-    # Parámetros geométricos
+    """
+    Resultado del analisis de esbeltez.
+
+    Esta es la definicion canonica usada por dominio y servicios.
+    """
+    # Parametros geometricos
     lu: float               # Altura libre (mm)
     t: float                # Espesor (mm)
     k: float                # Factor de longitud efectiva
     r: float                # Radio de giro (mm)
 
     # Esbeltez
-    lambda_ratio: float     # λ = k×lu/r
-    is_slender: bool        # True si λ > límite
-    lambda_limit: float     # Límite de esbeltez (22 o 34)
+    lambda_ratio: float     # lambda = k*lu/r
+    is_slender: bool        # True si lambda > limite
+    lambda_limit: float     # Limite de esbeltez (22 o 34)
 
-    # Magnificación de momentos
-    Pc_kN: float            # Carga crítica de Euler (kN)
+    # Magnificacion de momentos
+    Pc_kN: float            # Carga critica de Euler (kN)
     Cm: float               # Factor de momento equivalente
-    delta_ns: float         # Factor de magnificación (≥ 1.0)
+    delta_ns: float         # Factor de magnificacion (>= 1.0)
 
-    # Reducción por pandeo (método empírico)
-    buckling_factor: float  # Factor [1 - (k×lc/32t)²]
+    # Reduccion por pandeo (metodo empirico)
+    buckling_factor: float  # Factor [1 - (k*lc/32t)^2]
+
+    # Factor de reduccion unificado (alias de buckling_factor para compatibilidad)
+    @property
+    def reduction_factor(self) -> float:
+        """Factor de reduccion por pandeo (1.0 si no es esbelto)."""
+        return self.buckling_factor
 
 
 class SlendernessService:

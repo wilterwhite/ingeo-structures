@@ -34,33 +34,18 @@ class ReportModal {
     }
 
     bindEvents() {
-        // Cerrar modal al hacer clic fuera
-        this.elements.modal?.addEventListener('click', (e) => {
-            if (e.target === this.elements.modal) {
-                this.close();
-            }
-        });
+        // Eventos de cierre estándar (ESC, click fuera, botón X)
+        setupModalClose(this.elements.modal, () => this.close());
 
-        // Boton cerrar en modal
-        const closeBtn = this.elements.modal?.querySelector('.modal-close');
-        closeBtn?.addEventListener('click', () => this.close());
-
-        // Boton cancelar
+        // Botón cancelar
         this.elements.cancelBtn?.addEventListener('click', () => this.close());
 
-        // Boton generar
+        // Botón generar
         this.elements.generateBtn?.addEventListener('click', () => this.generate());
 
-        // Validar inputs numericos
+        // Validar inputs numéricos
         [this.elements.topLoad, this.elements.topCuantia].forEach(input => {
             input?.addEventListener('input', () => this.validateInputs());
-        });
-
-        // Tecla Escape para cerrar
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.isOpen()) {
-                this.close();
-            }
         });
     }
 

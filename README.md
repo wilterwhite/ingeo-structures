@@ -122,17 +122,19 @@ app/
 ├── services/
 │   ├── __init__.py
 │   ├── factory.py                           # Factory de servicios
-│   ├── pier_analysis.py                     # Orquestador principal
+│   ├── structural_analysis.py               # Orquestador principal
 │   ├── analysis/
 │   │   ├── __init__.py
 │   │   ├── element_classifier.py            # Clasificador elementos
 │   │   ├── element_verification_service.py  # Verificación unificada
 │   │   ├── flexocompression_service.py      # Servicio flexocompresión
-│   │   ├── pier_capacity_service.py         # Capacidades de piers
-│   │   ├── pier_verification_service.py     # Verificación ACI piers
+│   │   ├── shear/                           # Servicio de corte
+│   │   │   ├── __init__.py
+│   │   │   ├── facade.py
+│   │   │   ├── column_shear.py
+│   │   │   └── wall_shear.py
 │   │   ├── proposal_service.py              # Propuestas automáticas
 │   │   ├── punching_service.py              # Verificación punzonamiento
-│   │   ├── shear_service.py                 # Servicio de corte
 │   │   ├── slab_service.py                  # Verificación losas
 │   │   ├── statistics_service.py            # Estadísticas y resumen
 │   │   ├── verification_config.py           # Configuración verificación
@@ -149,6 +151,7 @@ app/
 │   │   └── table_extractor.py               # Extractor tablas Excel
 │   ├── presentation/
 │   │   ├── __init__.py
+│   │   ├── pier_details_formatter.py        # Formateador detalles piers
 │   │   ├── plot_generator.py                # Generador gráficos P-M
 │   │   └── result_formatter.py              # Formateador resultados UI
 │   └── report/
@@ -179,10 +182,10 @@ Los servicios de dominio son **la única fuente de verdad** para fórmulas y req
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  services/pier_analysis.py              Orquestador principal   │
+│  services/structural_analysis.py        Orquestador principal   │
 │  ├── ElementService          → Verificación unificada          │
-│  ├── PierVerificationService → Conformidad ACI Cap 11/18       │
-│  └── PierCapacityService     → Diagramas y capacidades         │
+│  ├── FlexocompressionService → Curvas P-M de interacción       │
+│  └── ShearService            → Cortante Vc + Vs                │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
@@ -199,14 +202,13 @@ Los servicios de dominio son **la única fuente de verdad** para fórmulas y req
 
 | Servicio | Responsabilidad |
 |----------|-----------------|
-| `PierAnalysisService` | Orquestador principal, gestiona sesiones y flujo |
+| `StructuralAnalysisService` | Orquestador principal, gestiona sesiones y flujo |
 | `ElementService` | Verificación unificada de Beam/Column/Pier (SF, DCR) |
-| `PierVerificationService` | Conformidad ACI 318-25 Caps 11 y 18 |
-| `PierCapacityService` | Genera diagramas de sección y capacidades |
 | `FlexocompressionService` | Genera curvas P-M de interacción |
 | `ShearService` | Calcula Vc + Vs y DCR de corte |
 | `ProposalService` | Genera propuestas de diseño cuando falla |
 | `StatisticsService` | Estadísticas y gráfico resumen |
+| `PierDetailsFormatter` | Formatea detalles de piers para UI |
 
 ## Servicios de Dominio (`domain/`)
 
@@ -257,36 +259,63 @@ Los servicios de dominio son **la única fuente de verdad** para fórmulas y req
 └──────────────────┬──────────────────────┘
                    │
                    ▼
-┌─────────────────────────────────────────┐
-│      PierAnalysisService (services/)    │
-│         Orquestador principal           │
-└──────┬───────────┬───────────┬──────────┘
-       │           │           │
-       ▼           ▼           ▼
-┌────────────┐ ┌─────────┐ ┌──────────────┐
-│ ElementSvc │ │ShearSvc │ │PierVerifySvc │
-│            │ │         │ │              │
-│ • P-M      │ │ • Vc+Vs │ │ • Cap 11     │
-│ • Esbeltez │ │ • DCR   │ │ • Cap 18     │
-│ • SF       │ │         │ │ • Borde      │
-└─────┬──────┘ └────┬────┘ └──────┬───────┘
-      │             │             │
-      └──────┬──────┴─────────────┘
-             │
-             ▼
-   ┌─────────────────────┐
-   │  ¿SF ≥ 1 y DCR ≤ 1? │
-   └─────────┬───────────┘
-             │
-    ┌────────┴────────┐
-    │ NO              │ SÍ
-    ▼                 ▼
-┌──────────────┐  ┌────────┐
-│ProposalSvc   │  │ ✓ PASA │
-│Genera        │  │        │
-│propuesta     │  │        │
-└──────────────┘  └────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  StructuralAnalysisService (services/structural_analysis)   │
+│  Orquestador de SESIÓN - gestiona estado y batch            │
+│                                                             │
+│  • Guarda datos en cache (SessionManager)                   │
+│  • Itera sobre TODOS los elementos                          │
+│  • Genera estadísticas y reportes                           │
+│                                                             │
+│    for element in [piers + columns + beams]:                │
+│        ┌─────────────────────────────────────────────────┐  │
+│        │                                                 │  │
+│        ▼                                                 │  │
+│  ┌───────────────────────────────────────────────────┐   │  │
+│  │  ElementService (analysis/element_verification)   │   │  │
+│  │  Verificador de UN elemento - sin estado          │   │  │
+│  │                                                   │   │  │
+│  │  ┌─────────────────┐ ┌────────────────┐           │   │  │
+│  │  │ FlexocompreSvc  │ │   ShearSvc     │           │   │  │
+│  │  │ • Curva P-M     │ │ • Vc + Vs      │           │   │  │
+│  │  │ • Esbeltez      │ │ • DCR          │           │   │  │
+│  │  └────────┬────────┘ └───────┬────────┘           │   │  │
+│  │           └──────┬───────────┘                    │   │  │
+│  │                  ▼                                │   │  │
+│  │     Combina SF + DCR + Checks muro                │   │  │
+│  │                  │                                │   │  │
+│  │                  ▼                                │   │  │
+│  │     ElementVerificationResult                     │   │  │
+│  └───────────────────────────────────────────────────┘   │  │
+│        │                                                 │  │
+│        └─────────────────────────────────────────────────┘  │
+│                                                             │
+│  Acumula resultados → Estadísticas                          │
+└──────────────────┬──────────────────────────────────────────┘
+                   │
+                   ▼
+         ┌─────────────────────┐
+         │  ¿SF ≥ 1 y DCR ≤ 1? │
+         └─────────┬───────────┘
+                   │
+          ┌────────┴────────┐
+          │ NO              │ SÍ
+          ▼                 ▼
+    ┌──────────────┐    ┌────────┐
+    │ ProposalSvc  │    │ ✓ PASA │
+    │ Genera       │    │        │
+    │ propuesta    │    │        │
+    └──────────────┘    └────────┘
 ```
+
+**Responsabilidades:**
+
+| Servicio | Nivel | Responsabilidad |
+|----------|-------|-----------------|
+| `StructuralAnalysisService` | Sesión | Gestiona cache, itera elementos, genera estadísticas |
+| `ElementService` | Elemento | Verifica UN elemento (Pier/Column/Beam), sin estado |
+| `FlexocompressionService` | Cálculo | Genera curva P-M, calcula SF de flexión |
+| `ShearService` | Cálculo | Calcula Vc+Vs, DCR de cortante |
 
 ## Ejecución
 
@@ -355,9 +384,9 @@ pytest tests/domain/flexure/test_slenderness.py -v
 
 | Elemento | Verificación Implementada | Pendiente |
 |----------|---------------------------|-----------|
-| **Piers** | Flexocompresión + Cortante + Esbeltez + Requisitos sísmicos (§18.10) | - |
-| **Columnas** | Flexocompresión básica + Cortante | Requisitos sísmicos (§18.7) |
-| **Vigas** | Cortante | Flexión, Deflexiones |
+| **Piers** | Flexocompresión + Cortante bidireccional + Esbeltez + Requisitos sísmicos (§18.10) | - |
+| **Columnas** | Flexocompresión + Cortante + Esbeltez | Requisitos sísmicos (§18.7) |
+| **Vigas** | Flexocompresión + Cortante | Deflexiones |
 
 ### Tablas ETABS Requeridas
 
@@ -379,12 +408,3 @@ Para que el sistema procese cada tipo de elemento, se requieren las siguientes t
 **Spandrels (Vigas de Acople):**
 - `Spandrel Section Properties` - Geometría
 - `Spandrel Forces` - Fuerzas por combinación
-
-## Referencias
-
-- ACI 318-25: Building Code Requirements for Structural Concrete
-- Capítulo 6: Análisis estructural (esbeltez, momentos de diseño)
-- Capítulo 11: Muros (límites, refuerzo distribuido)
-- Capítulo 18: Estructuras resistentes a sismo (muros especiales)
-- Capítulo 22: Resistencia de secciones (flexión, corte)
-- Apéndice E: Equivalencias de unidades SI/US

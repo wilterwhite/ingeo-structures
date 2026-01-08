@@ -146,12 +146,20 @@ class FlexocompressionService:
                 angle_deg=angle_deg
             )
 
-        # Verificar
+        # Verificar - llamar directamente a FlexureChecker (evita nivel intermedio)
         if demand_points:
-            (sf, status, critical, phi_Mn_0, phi_Mn_at_Pu,
-             critical_Pu, critical_Mu, exceeds_axial, phi_Pn_max,
-             has_tension, tension_combos) = \
-                self._interaction_service.check_flexure(interaction_points, demand_points)
+            result = FlexureChecker.check_flexure(interaction_points, demand_points)
+            sf = result.safety_factor
+            status = result.status
+            critical = result.critical_combo
+            phi_Mn_0 = result.phi_Mn_0
+            phi_Mn_at_Pu = result.phi_Mn_at_Pu
+            critical_Pu = result.critical_Pu
+            critical_Mu = result.critical_Mu
+            exceeds_axial = result.exceeds_axial_capacity
+            phi_Pn_max = result.phi_Pn_max
+            has_tension = result.has_tension
+            tension_combos = result.tension_combos
         else:
             sf, status, critical = float('inf'), "OK", "N/A"
             phi_Mn_0, phi_Mn_at_Pu, critical_Pu, critical_Mu = 0.0, 0.0, 0.0, 0.0

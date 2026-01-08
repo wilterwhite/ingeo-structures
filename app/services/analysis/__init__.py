@@ -3,11 +3,9 @@
 Servicios de análisis estructural.
 """
 from .flexocompression_service import FlexocompressionService
-from .shear_service import ShearService
+from .shear import ShearService
 from .statistics_service import StatisticsService
 from .proposal_service import ProposalService
-from .pier_verification_service import PierVerificationService
-from .pier_capacity_service import PierCapacityService
 from .element_verification_service import ElementService
 from .element_classifier import ElementClassifier, ElementType
 from .verification_config import VerificationConfig, get_config
@@ -30,8 +28,6 @@ __all__ = [
     'ShearService',
     'StatisticsService',
     'ProposalService',
-    'PierVerificationService',
-    'PierCapacityService',
     'ElementService',
     # Clasificacion
     'ElementClassifier',

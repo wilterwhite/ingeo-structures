@@ -40,29 +40,14 @@ class PlotModal {
     }
 
     bindEvents() {
-        // Cerrar modal al hacer clic fuera
-        this.elements.modal?.addEventListener('click', (e) => {
-            if (e.target === this.elements.modal) {
-                this.close();
-            }
-        });
+        // Eventos de cierre estándar (ESC, click fuera, botón X)
+        setupModalClose(this.elements.modal, () => this.close());
 
-        // Botón cerrar
-        document.querySelector('.modal-close')?.addEventListener('click', () => {
-            this.close();
-        });
-
-        // Navegación con teclado
+        // Navegación con flechas (específico de este modal)
         document.addEventListener('keydown', (e) => {
             if (!this.isOpen()) return;
-
-            if (e.key === 'ArrowLeft') {
-                this.navigate(-1);
-            } else if (e.key === 'ArrowRight') {
-                this.navigate(1);
-            } else if (e.key === 'Escape') {
-                this.close();
-            }
+            if (e.key === 'ArrowLeft') this.navigate(-1);
+            else if (e.key === 'ArrowRight') this.navigate(1);
         });
 
         // Botones de navegación

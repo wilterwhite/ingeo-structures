@@ -32,7 +32,7 @@ from ...domain.entities.design_proposal import (
 )
 from ...domain.chapter18.wall_piers import WallPierService, WallPierCategory
 from .flexocompression_service import FlexocompressionService
-from .shear_service import ShearService
+from .shear import ShearService
 
 
 class ProposalService:

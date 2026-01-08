@@ -11,6 +11,7 @@ import math
 from typing import Optional, List
 
 from ...constants.materials import SteelGrade
+from ...constants.units import N_TO_TONF
 from ..results import (
     CouplingBeamType,
     ReinforcementType,
@@ -250,7 +251,7 @@ class CouplingBeamService:
             rho_t = 0.0025  # Asumir mínimo
 
             Vn_N = (alpha_c * lambda_factor * math.sqrt(fc) + rho_t * fyt) * Acv
-            Vn = Vn_N / 9806.65
+            Vn = Vn_N / N_TO_TONF
             phi_Vn = 0.75 * Vn
 
             warnings.append(

@@ -1,8 +1,9 @@
-# app/services/analysis/pier_capacity_service.py
+# app/services/presentation/pier_details_formatter.py
 """
-Servicio de capacidades de piers.
+Formateador de detalles de piers para UI.
 
-Calcula capacidades puras (flexión, corte, esbeltez) y genera diagramas.
+Prepara datos estructurados para el modal de detalles de pier,
+incluyendo capacidades, verificaciones y tablas estilo ETABS.
 """
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, List, Tuple
@@ -79,14 +80,14 @@ def calculate_boundary_stress(
     )
 
 
-from ..presentation.plot_generator import PlotGenerator
-from .flexocompression_service import FlexocompressionService
-from .shear_service import ShearService
+from .plot_generator import PlotGenerator
+from ..analysis.flexocompression_service import FlexocompressionService
+from ..analysis.shear import ShearService
 from ...domain.flexure import SlendernessService
 from ...domain.chapter18.reinforcement import SeismicReinforcementService
 
 
-class PierCapacityService:
+class PierDetailsFormatter:
     """
     Servicio para cálculo de capacidades de piers.
 

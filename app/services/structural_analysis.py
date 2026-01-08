@@ -1,15 +1,17 @@
-# app/structural/services/pier_analysis.py
+# app/services/structural_analysis.py
 """
-Servicio principal de analisis estructural de piers.
-Orquesta el parsing, calculo y generacion de resultados.
+Servicio principal de analisis estructural.
+Orquesta el parsing, calculo y generacion de resultados para todos los elementos.
 
 Este servicio actua como orquestador, delegando a servicios especializados:
-- FlexureService: analisis de flexocompresion
+- FlexocompressionService: analisis de flexocompresion
 - ShearService: verificacion de corte
 - StatisticsService: estadisticas y graficos resumen
-- PierVerificationService: verificacion de conformidad ACI 318-25
+- ElementService: verificacion unificada de elementos (Pier, Column, Beam)
 
 Referencias ACI 318-25:
+- Capitulo 9: Vigas (Beams)
+- Capitulo 10: Columnas (Columns)
 - Capitulo 11: Muros (Walls)
 - Capitulo 18: Estructuras resistentes a sismos
 """
@@ -20,24 +22,29 @@ from .parsing.session_manager import SessionManager
 from .presentation.plot_generator import PlotGenerator
 from .presentation.result_formatter import ResultFormatter
 from .analysis.flexocompression_service import FlexocompressionService
-from .analysis.shear_service import ShearService
+from .analysis.shear import ShearService
 from .analysis.statistics_service import StatisticsService
 from .analysis.proposal_service import ProposalService
-from .analysis.pier_verification_service import PierVerificationService
-from .analysis.pier_capacity_service import PierCapacityService
+from .presentation.pier_details_formatter import PierDetailsFormatter
 from .analysis.element_verification_service import ElementService
 from .analysis.slab_service import SlabService
 from .analysis.punching_service import PunchingService
 from ..domain.entities import Pier, PierForces
 from .analysis.verification_result import ElementVerificationResult
-from ..domain.flexure import InteractionDiagramService, SlendernessService
+from ..domain.flexure import InteractionDiagramService, SlendernessService, FlexureChecker
 from ..domain.chapter11 import WallType
 from ..domain.constants import SeismicDesignCategory
 
 
-class PierAnalysisService:
+class StructuralAnalysisService:
     """
-    Servicio de análisis estructural para piers de hormigón armado.
+    Servicio principal de análisis estructural.
+
+    Orquesta el análisis de todos los elementos estructurales:
+    - Piers (muros)
+    - Columns (columnas)
+    - Beams (vigas)
+    - Slabs (losas)
 
     Responsabilidades:
     - Orquestar el flujo de análisis
@@ -55,8 +62,7 @@ class PierAnalysisService:
         interaction_service: Optional[InteractionDiagramService] = None,
         plot_generator: Optional[PlotGenerator] = None,
         proposal_service: Optional[ProposalService] = None,
-        verification_service: Optional[PierVerificationService] = None,
-        capacity_service: Optional[PierCapacityService] = None,
+        details_formatter: Optional[PierDetailsFormatter] = None,
         element_service: Optional[ElementService] = None,
         slab_service: Optional[SlabService] = None,
         punching_service: Optional[PunchingService] = None
@@ -73,8 +79,7 @@ class PierAnalysisService:
             interaction_service: Servicio de diagrama interaccion (opcional)
             plot_generator: Generador de graficos (opcional)
             proposal_service: Servicio de propuestas de diseño (opcional)
-            verification_service: Servicio de verificacion de piers (opcional)
-            capacity_service: Servicio de capacidades de piers (opcional)
+            details_formatter: Formateador de detalles de piers (opcional)
             element_service: Servicio unificado de elementos (opcional)
 
         Nota: Los servicios se crean por defecto si no se pasan.
@@ -91,10 +96,7 @@ class PierAnalysisService:
             flexocompression_service=self._flexo_service,
             shear_service=self._shear_service
         )
-        self._verification_service = verification_service or PierVerificationService(
-            session_manager=self._session_manager
-        )
-        self._capacity_service = capacity_service or PierCapacityService(
+        self._details_formatter = details_formatter or PierDetailsFormatter(
             session_manager=self._session_manager,
             flexocompression_service=self._flexo_service,
             shear_service=self._shear_service,
@@ -133,10 +135,8 @@ class PierAnalysisService:
             pier, direction='primary', apply_slenderness=apply_slenderness, k=0.8
         )
 
-        # Obtener phi_Mn_0
-        _, _, _, phi_Mn_0, _, _, _, _, _ = self._interaction_service.check_flexure(
-            interaction_points, [(0, 1, "dummy")]
-        )
+        # Obtener phi_Mn_0 directamente del FlexureChecker
+        phi_Mn_0 = FlexureChecker.get_phi_Mn_at_P0(interaction_points)
 
         return steel_layers, interaction_points, phi_Mn_0
 
@@ -501,38 +501,15 @@ class PierAnalysisService:
         # Calcular estadisticas de piers
         statistics = self._statistics_service.calculate_statistics(results)
 
-        # Agregar estadísticas de columnas
+        # Agregar estadísticas de columnas, vigas y losas usando el servicio
         if column_results:
-            col_ok = sum(1 for r in column_results if r['overall_status'] == 'OK')
-            col_fail = len(column_results) - col_ok
-            statistics['columns'] = {
-                'total': len(column_results),
-                'ok': col_ok,
-                'fail': col_fail,
-                'pass_rate': round(col_ok / len(column_results) * 100, 1) if column_results else 100
-            }
+            statistics['columns'] = self._statistics_service.calculate_dict_statistics(column_results)
 
-        # Agregar estadisticas de vigas
         if beam_results:
-            beam_ok = sum(1 for r in beam_results if r['overall_status'] == 'OK')
-            beam_fail = len(beam_results) - beam_ok
-            statistics['beams'] = {
-                'total': len(beam_results),
-                'ok': beam_ok,
-                'fail': beam_fail,
-                'pass_rate': round(beam_ok / len(beam_results) * 100, 1) if beam_results else 100
-            }
+            statistics['beams'] = self._statistics_service.calculate_dict_statistics(beam_results)
 
-        # Agregar estadisticas de losas
         if slab_results:
-            slab_ok = sum(1 for r in slab_results if r['overall_status'] == 'OK')
-            slab_fail = len(slab_results) - slab_ok
-            statistics['slabs'] = {
-                'total': len(slab_results),
-                'ok': slab_ok,
-                'fail': slab_fail,
-                'pass_rate': round(slab_ok / len(slab_results) * 100, 1) if slab_results else 100
-            }
+            statistics['slabs'] = self._statistics_service.calculate_dict_statistics(slab_results)
 
         # Generar grafico resumen (solo para piers por ahora)
         summary_plot = None
@@ -608,13 +585,13 @@ class PierAnalysisService:
         # Calcular FS para cada combinación
         combinations_with_fs = []
         for i, combo in enumerate(pier_forces.combinations):
-            # FS Flexión
+            # FS Flexión - usar FlexureChecker directamente
             P = -combo.P  # Convertir a positivo = compresión
             M = combo.moment_resultant
             demand_point = [(P, M, combo.name)]
-            flexure_sf, flexure_status, _, _, _, _, _, _, _ = self._interaction_service.check_flexure(
-                interaction_points, demand_point
-            )
+            flexure_result = FlexureChecker.check_flexure(interaction_points, demand_point)
+            flexure_sf = flexure_result.safety_factor
+            flexure_status = flexure_result.status
 
             # FS Corte V2 y V3 (usa verify_bidirectional_shear para consistencia)
             shear_v2, shear_v3 = self._shear_service.verify_bidirectional_shear(
@@ -711,13 +688,13 @@ class PierAnalysisService:
         _, interaction_points, _ = self._generate_interaction_data(pier)
         design_curve = self._interaction_service.get_design_curve(interaction_points)
 
-        # Calcular SF para esta combinación
+        # Calcular SF para esta combinación - usar FlexureChecker directamente
         P = -combo.P
         M = combo.moment_resultant
         demand_points = [(P, M, f"{combo.name} ({combo.location})")]
-        flexure_sf, flexure_status, _, _, _, _, _, _, _ = self._interaction_service.check_flexure(
-            interaction_points, demand_points
-        )
+        flexure_result = FlexureChecker.check_flexure(interaction_points, demand_points)
+        flexure_sf = flexure_result.safety_factor
+        flexure_status = flexure_result.status
 
         # Generar gráfico
         pm_plot = ""
@@ -821,7 +798,7 @@ class PierAnalysisService:
         }
 
     # =========================================================================
-    # Capacidades (delegado a PierCapacityService)
+    # Capacidades (delegado a PierDetailsFormatter)
     # =========================================================================
 
     def get_section_diagram(
@@ -831,13 +808,13 @@ class PierAnalysisService:
         proposed_config: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Genera un diagrama de la sección transversal del pier."""
-        return self._capacity_service.get_section_diagram(
+        return self._details_formatter.get_section_diagram(
             session_id, pier_key, proposed_config
         )
 
     def get_pier_capacities(self, session_id: str, pier_key: str) -> Dict[str, Any]:
         """Calcula las capacidades puras del pier (sin interacción)."""
-        return self._capacity_service.get_pier_capacities(session_id, pier_key)
+        return self._details_formatter.get_pier_capacities(session_id, pier_key)
 
     def get_combination_details(
         self,
@@ -846,80 +823,10 @@ class PierAnalysisService:
         combo_index: int
     ) -> Dict[str, Any]:
         """Obtiene los detalles de diseño para una combinación específica."""
-        return self._capacity_service.get_combination_details(
+        return self._details_formatter.get_combination_details(
             session_id, pier_key, combo_index
         )
 
-    # =========================================================================
-    # Verificacion ACI 318-25 (delegado a PierVerificationService)
-    # =========================================================================
-
-    def verify_aci_318_25(
-        self,
-        session_id: str,
-        pier_key: str,
-        wall_type: str = 'bearing',
-        cast_type: str = 'cast_in_place'
-    ) -> Dict[str, Any]:
-        """Verifica conformidad ACI 318-25 Capitulo 11 para un pier."""
-        return self._verification_service.verify_aci_318_25(
-            session_id, pier_key, wall_type, cast_type
-        )
-
-    def verify_all_piers_aci_318_25(
-        self,
-        session_id: str,
-        wall_type: str = 'bearing'
-    ) -> Dict[str, Any]:
-        """Verifica conformidad ACI 318-25 para todos los piers."""
-        return self._verification_service.verify_all_piers_aci_318_25(
-            session_id, wall_type
-        )
-
-    def verify_seismic(
-        self,
-        session_id: str,
-        pier_key: str,
-        sdc: str = 'D',
-        delta_u: float = 0,
-        hwcs: Optional[float] = None,
-        hn_ft: Optional[float] = None,
-        sigma_max: float = 0,
-        is_wall_pier: bool = False
-    ) -> Dict[str, Any]:
-        """Verifica conformidad ACI 318-25 Capitulo 18 para un pier."""
-        return self._verification_service.verify_seismic(
-            session_id, pier_key, sdc, delta_u, hwcs, hn_ft, sigma_max, is_wall_pier
-        )
-
-    def verify_combined_aci(
-        self,
-        session_id: str,
-        pier_key: str,
-        wall_type: str = 'bearing',
-        sdc: str = 'D',
-        delta_u: float = 0,
-        hwcs: Optional[float] = None,
-        hn_ft: Optional[float] = None,
-        sigma_max: float = 0,
-        is_wall_pier: bool = False
-    ) -> Dict[str, Any]:
-        """Verificacion combinada de Capitulos 11 y 18 para un pier."""
-        return self._verification_service.verify_combined_aci(
-            session_id, pier_key, wall_type, sdc, delta_u, hwcs, hn_ft,
-            sigma_max, is_wall_pier
-        )
-
-    def verify_all_piers_seismic(
-        self,
-        session_id: str,
-        sdc: str = 'D',
-        hn_ft: Optional[float] = None
-    ) -> Dict[str, Any]:
-        """Verifica conformidad sismica para todos los piers."""
-        return self._verification_service.verify_all_piers_seismic(
-            session_id, sdc, hn_ft
-        )
     # =========================================================================
     # API Publica - Configuracion de Sesion
     # =========================================================================

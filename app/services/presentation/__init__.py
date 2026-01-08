@@ -3,5 +3,6 @@
 Servicios de presentación y visualización.
 """
 from .plot_generator import PlotGenerator
+from .pier_details_formatter import PierDetailsFormatter
 
-__all__ = ['PlotGenerator']
+__all__ = ['PlotGenerator', 'PierDetailsFormatter']

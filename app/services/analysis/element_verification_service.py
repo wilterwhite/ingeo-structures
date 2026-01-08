@@ -13,7 +13,7 @@ from ...domain.entities import Beam, Column, Pier
 from ...domain.entities import BeamForces, ColumnForces, PierForces
 
 from .flexocompression_service import FlexocompressionService
-from .shear_service import ShearService
+from .shear import ShearService
 from .element_classifier import ElementClassifier, ElementType
 from .verification_config import get_config, VerificationConfig
 from ...domain.chapter11 import ReinforcementLimitsService

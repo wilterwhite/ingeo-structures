@@ -8,7 +8,7 @@ Vn = 2 * Avd * fy * sin(alpha) <= 10*sqrt(f'c)*Acw
 import math
 
 from ...constants.shear import PHI_SHEAR
-from ...constants.units import N_TO_TONF
+from ...constants.units import N_TO_TONF, TONF_TO_N
 from ..results import DiagonalShearResult
 
 
@@ -88,7 +88,7 @@ def required_diagonal_area(
         Área de refuerzo diagonal requerida en cada grupo (mm2)
     """
     # Convertir Vu a N
-    Vu_N = Vu * 9806.65
+    Vu_N = Vu * TONF_TO_N
 
     alpha_rad = math.radians(alpha_deg)
     denominator = phi * 2 * fy * math.sin(alpha_rad)

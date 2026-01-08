@@ -133,24 +133,7 @@ class StructuralPage {
     initPierDetailsModal() {
         const modal = this.elements.pierDetailsModal;
         if (!modal) return;
-
-        // Cerrar al hacer clic en el botón X
-        const closeBtn = modal.querySelector('.modal-close');
-        closeBtn?.addEventListener('click', () => this.closePierDetailsModal());
-
-        // Cerrar al hacer clic fuera del contenido
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                this.closePierDetailsModal();
-            }
-        });
-
-        // Cerrar con Escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && modal.classList.contains('active')) {
-                this.closePierDetailsModal();
-            }
-        });
+        setupModalClose(modal, () => this.closePierDetailsModal());
     }
 
     bindEvents() {
@@ -974,24 +957,7 @@ class StructuralPage {
     initSectionModal() {
         const modal = this.elements.sectionModal;
         if (!modal) return;
-
-        // Cerrar al hacer clic en el botón X
-        const closeBtn = modal.querySelector('.modal-close');
-        closeBtn?.addEventListener('click', () => this.closeSectionModal());
-
-        // Cerrar al hacer clic fuera del contenido
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                this.closeSectionModal();
-            }
-        });
-
-        // Cerrar con Escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && modal.classList.contains('active')) {
-                this.closeSectionModal();
-            }
-        });
+        setupModalClose(modal, () => this.closeSectionModal());
     }
 
     async showSectionDiagram(pierKey, pierLabel) {

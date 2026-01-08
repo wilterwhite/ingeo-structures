@@ -1,14 +1,14 @@
-# app/structural/services/factory.py
+# app/services/factory.py
 """
 Factory para crear servicios de análisis estructural.
 Centraliza la creación de servicios y sus dependencias.
 """
 from typing import Optional
 
-from .pier_analysis import PierAnalysisService
+from .structural_analysis import StructuralAnalysisService
 from .parsing.session_manager import SessionManager
 from .analysis.flexocompression_service import FlexocompressionService
-from .analysis.shear_service import ShearService
+from .analysis.shear import ShearService
 from .analysis.statistics_service import StatisticsService
 from .presentation.plot_generator import PlotGenerator
 from ..domain.flexure import InteractionDiagramService, SlendernessService
@@ -38,9 +38,9 @@ class ServiceFactory:
         slenderness_service: Optional[SlendernessService] = None,
         interaction_service: Optional[InteractionDiagramService] = None,
         plot_generator: Optional[PlotGenerator] = None
-    ) -> PierAnalysisService:
+    ) -> StructuralAnalysisService:
         """
-        Crea una instancia de PierAnalysisService.
+        Crea una instancia de StructuralAnalysisService.
 
         Args:
             session_manager: Gestor de sesiones (opcional)
@@ -52,9 +52,9 @@ class ServiceFactory:
             plot_generator: Generador de gráficos (opcional)
 
         Returns:
-            PierAnalysisService configurado
+            StructuralAnalysisService configurado
         """
-        return PierAnalysisService(
+        return StructuralAnalysisService(
             session_manager=session_manager,
             flexocompression_service=flexocompression_service,
             shear_service=shear_service,
@@ -65,6 +65,6 @@ class ServiceFactory:
         )
 
     @staticmethod
-    def create_default_analysis_service() -> PierAnalysisService:
+    def create_default_analysis_service() -> StructuralAnalysisService:
         """Crea un servicio de análisis con todas las dependencias por defecto."""
-        return PierAnalysisService()
+        return StructuralAnalysisService()

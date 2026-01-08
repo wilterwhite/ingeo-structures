@@ -7,7 +7,8 @@ import json
 import logging
 from flask import Blueprint, request, jsonify, current_app, Response
 
-from ..services.pier_analysis import PierAnalysisService
+from ..services.structural_analysis import StructuralAnalysisService
+from ..services.factory import ServiceFactory
 from ..services.report import PDFReportGenerator, ReportConfig
 
 
@@ -19,11 +20,11 @@ logger = logging.getLogger(__name__)
 _analysis_service = None
 
 
-def get_analysis_service() -> PierAnalysisService:
+def get_analysis_service() -> StructuralAnalysisService:
     """Obtiene o crea la instancia del servicio de análisis."""
     global _analysis_service
     if _analysis_service is None:
-        _analysis_service = PierAnalysisService()
+        _analysis_service = ServiceFactory.create_default_analysis_service()
     return _analysis_service
 
 
@@ -705,19 +706,7 @@ def set_pier_beam():
                 'error': 'Se requiere pier_key'
             }), 400
 
-        # Formatear config de vigas
-        def parse_beam_config(beam_data):
-            if not beam_data:
-                return None
-            return {
-                'width': float(beam_data.get('width', 200)),
-                'height': float(beam_data.get('height', 500)),
-                'ln': float(beam_data.get('ln', 1500)),
-                'n_bars_top': int(beam_data.get('n_bars_top', 2)),
-                'diameter_top': int(beam_data.get('diameter_top', 12)),
-                'n_bars_bottom': int(beam_data.get('n_bars_bottom', 2)),
-                'diameter_bottom': int(beam_data.get('diameter_bottom', 12))
-            }
+        from ..services.parsing.config_parser import parse_beam_config
 
         service = get_analysis_service()
 

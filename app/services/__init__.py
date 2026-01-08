@@ -1,14 +1,14 @@
-# app/structural/services/__init__.py
+# app/services/__init__.py
 """
 Servicios del módulo estructural.
 
 Estructura:
-- pier_analysis.py: Orquestador principal
+- structural_analysis.py: Orquestador principal
 - analysis/: Servicios de análisis (flexocompresión, estadísticas)
 - parsing/: Servicios de parsing Excel
 - presentation/: Servicios de visualización
 """
-from .pier_analysis import PierAnalysisService
+from .structural_analysis import StructuralAnalysisService
 from .factory import ServiceFactory
 from .analysis import FlexocompressionService, StatisticsService
 from .parsing import (
@@ -20,7 +20,7 @@ from .parsing import (
 from .presentation import PlotGenerator
 
 __all__ = [
-    'PierAnalysisService',
+    'StructuralAnalysisService',
     'ServiceFactory',
     'FlexocompressionService',
     'StatisticsService',

@@ -17,7 +17,6 @@ class ResultsTable {
         this.customBeamPiers = new Set();
         this.pierBeamConfigs = {};
         this.pendingRecalcPiers = new Set();  // Piers con cambios pendientes de recalcular
-        this.vigaChangeTimers = {};  // Debounce timers para cambios de viga
 
         // Crear botón flotante de recalcular
         this.createRecalcButton();

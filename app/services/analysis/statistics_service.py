@@ -144,6 +144,37 @@ class StatisticsService:
             }
         }
 
+    def calculate_dict_statistics(
+        self,
+        results: List[Dict[str, Any]],
+        status_key: str = 'overall_status'
+    ) -> Dict[str, Any]:
+        """
+        Calcula estadísticas de resultados en formato dict.
+
+        Útil para columnas, vigas, losas que retornan dicts formateados.
+
+        Args:
+            results: Lista de dicts con clave status_key
+            status_key: Clave que contiene el estado ('OK'/'NO OK')
+
+        Returns:
+            Dict con total, ok, fail, pass_rate
+        """
+        if not results:
+            return {'total': 0, 'ok': 0, 'fail': 0, 'pass_rate': 100.0}
+
+        total = len(results)
+        ok_count = sum(1 for r in results if r.get(status_key) == 'OK')
+        fail_count = total - ok_count
+
+        return {
+            'total': total,
+            'ok': ok_count,
+            'fail': fail_count,
+            'pass_rate': round(ok_count / total * 100, 1) if total > 0 else 100.0
+        }
+
     def get_critical_piers(
         self,
         results: List[ElementVerificationResult],

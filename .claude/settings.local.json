@@ -70,7 +70,14 @@
       "Bash(timeout 10 python:*)",
       "Bash(python3:*)",
       "Bash(grep:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(del \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\analysis\\section_diagram_service.py\")",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/domain/shear/test_alpha_sh_materials.py -v --tb=short)",
+      "Bash(pip show:*)",
+      "Bash(del \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\analysis\\pier_capacity_service.py\")",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -v --tb=short)",
+      "Bash(del \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\analysis\\force_extractors.py\")",
+      "Bash(.venv/Scripts/python.exe:*)"
     ]
   }
 }

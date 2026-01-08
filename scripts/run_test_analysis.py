@@ -9,7 +9,7 @@ import json
 # Agregar el path del proyecto
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.services.pier_analysis import PierAnalysisService
+from app.services.structural_analysis import StructuralAnalysisService
 
 
 def run_analysis():
@@ -31,7 +31,7 @@ def run_analysis():
         file_content = f.read()
 
     # Crear servicio y analizar
-    service = PierAnalysisService()
+    service = StructuralAnalysisService()
     session_id = "test-session"
 
     # Parsear Excel

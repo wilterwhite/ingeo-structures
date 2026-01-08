@@ -35,7 +35,7 @@ FILE_COMMENTS = {
     'units.py': 'Factores de conversión de unidades',
 
     # Services
-    'pier_analysis.py': 'Servicio principal de análisis de piers',
+    'structural_analysis.py': 'Servicio principal de análisis estructural',
     'flexure_service.py': 'Verificación de flexión con diagrama P-M',
     'shear_service.py': 'Verificación de corte según ACI 318',
     'slenderness_service.py': 'Verificación de esbeltez según ACI 318',

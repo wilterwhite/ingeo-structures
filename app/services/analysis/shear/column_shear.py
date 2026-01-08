@@ -303,6 +303,19 @@ class ColumnShearService:
         """
         Calcula capacidad de cortante simple para una columna (§22.5).
 
+        NOTA SOBRE SIMPLIFICACION:
+        Esta formula usa Vc = 0.17 * lambda * sqrt(f'c) * bw * d [Ec. 22.5.5.1]
+        que NO considera el incremento por carga axial (1 + Nu/14Ag) de §22.5.6.1.
+
+        Esto es INTENCIONAL y conservador porque:
+        1. La carga axial varia entre combinaciones de carga
+        2. Para columnas sismicas, §18.7.6.2.1 puede hacer Vc = 0 si Pu es bajo
+        3. Usar Vc base garantiza consistencia y es conservador
+
+        La version con carga axial (Vc = 0.17*(1 + Nu/14Ag)*lambda*sqrt(f'c)*bw*d)
+        esta disponible en domain/shear/verification.py para muros donde Pu
+        es mas predecible.
+
         V2: Cortante en direccion eje 2 -> usa depth como h, width como b
         V3: Cortante en direccion eje 3 -> usa width como h, depth como b
 

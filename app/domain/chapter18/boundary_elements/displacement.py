@@ -9,6 +9,7 @@ Donde delta_u / hwcs no debe tomarse menor que 0.005.
 """
 import math
 
+from ...constants.units import TONF_TO_N
 from ..results import DisplacementCheckResult
 
 
@@ -104,7 +105,7 @@ def check_drift_capacity(
         }
 
     # Convertir Ve a N para unidades consistentes
-    Ve_N = Ve * 9806.65  # tonf a N
+    Ve_N = Ve * TONF_TO_N
 
     # Calcular término de cortante
     # 8 * sqrt(f'c) * Acv en unidades SI

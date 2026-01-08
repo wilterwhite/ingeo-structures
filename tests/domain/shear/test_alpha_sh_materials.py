@@ -18,6 +18,7 @@ from app.domain.constants.materials import (
     FYT_MAX_SHEAR_MPA,
     FYT_MAX_CONFINEMENT_MPA,
 )
+from app.domain.constants.units import N_TO_TONF
 from app.domain.shear.verification import ShearVerificationService
 
 
@@ -151,7 +152,7 @@ class TestShearWithMaterialLimits:
 
         # Vn_max = alpha_sh * 0.83 * sqrt(fc) * Acv
         Acv = 2000 * 300
-        expected_Vn_max = 1.0 * 0.83 * math.sqrt(35) * Acv / 9806.65
+        expected_Vn_max = 1.0 * 0.83 * math.sqrt(35) * Acv / N_TO_TONF
         assert result.Vn_max == pytest.approx(expected_Vn_max, rel=0.01)
 
     def test_shear_result_incluye_alpha_sh(self):

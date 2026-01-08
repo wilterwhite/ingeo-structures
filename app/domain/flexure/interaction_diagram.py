@@ -214,11 +214,14 @@ class InteractionDiagramService:
         # Centro de la sección para calcular momentos
         y_centroid = h / 2
 
+        # Valor minimo de c para evitar division por numeros muy pequenos
+        c_tolerance = 1.0  # mm - minimo 1mm para estabilidad numerica
+
         for c in c_values:
-            if c <= 0:
+            if c <= c_tolerance:
                 continue
 
-            # Bloque de compresión de Whitney
+            # Bloque de compresion de Whitney
             a = beta1 * c
             if a > h:
                 a = h
@@ -346,29 +349,20 @@ class InteractionDiagramService:
         self,
         points: List[InteractionPoint],
         demand_points: List[Tuple[float, float, str]]
-    ) -> Tuple[float, str, str, float, float, float, float, bool, float]:
+    ) -> Tuple[float, str, str, float, float, float, float, bool, float, bool, int]:
         """
-        Verifica flexocompresión para múltiples puntos de demanda.
+        DEPRECATED: Usar FlexureChecker.check_flexure() directamente.
 
-        Delega a FlexureChecker para evitar duplicación de código.
+        Este metodo se mantiene solo por compatibilidad. Prefiere llamar a:
+            from app.domain.flexure import FlexureChecker
+            result = FlexureChecker.check_flexure(points, demand_points)
 
         Args:
-            points: Puntos del diagrama de interacción
+            points: Puntos del diagrama de interaccion
             demand_points: Lista de (Pu, Mu, combo_name)
 
         Returns:
-            Tuple con:
-            - min_sf: Factor de seguridad mínimo
-            - status: "OK" o "NO OK"
-            - critical_combo: Combinación crítica
-            - phi_Mn_0: Capacidad de momento a P=0 (flexión pura)
-            - phi_Mn_at_Pu: Capacidad de momento a Pu crítico
-            - critical_Pu: Carga axial crítica
-            - critical_Mu: Momento crítico
-            - exceeds_axial: Si Pu > φPn,max
-            - phi_Pn_max: Capacidad axial máxima
-            - has_tension: Si alguna combinación tiene Pu < 0
-            - tension_combos: Número de combinaciones con tracción
+            Tuple de 11 elementos (usar FlexureCheckResult directamente es mas claro)
         """
         result = FlexureChecker.check_flexure(points, demand_points)
         return (

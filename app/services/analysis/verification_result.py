@@ -13,7 +13,13 @@ from .element_classifier import ElementType
 
 @dataclass
 class SlendernessResult:
-    """Resultado de verificacion de esbeltez."""
+    """
+    Resultado simplificado de verificacion de esbeltez para servicios.
+
+    Nota: La version completa con todos los parametros de calculo esta en
+    app/domain/flexure/slenderness.py. Esta version simplificada se usa
+    en servicios donde no se requieren todos los detalles del calculo.
+    """
     lambda_ratio: float
     """Relacion de esbeltez k*lu/r."""
 
@@ -28,6 +34,12 @@ class SlendernessResult:
 
     lu: float = 0.0
     """Longitud no arriostrada (mm)."""
+
+    # Para compatibilidad con version del dominio
+    @property
+    def buckling_factor(self) -> float:
+        """Alias de reduction_factor para compatibilidad con dominio."""
+        return self.reduction_factor
 
 
 @dataclass

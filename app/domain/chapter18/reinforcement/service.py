@@ -32,7 +32,7 @@ class SeismicReinforcementService:
     Verifica refuerzo mínimo para muros estructurales especiales.
 
     Este servicio centraliza todas las verificaciones de cuantía mínima
-    que estaban dispersas en pier_analysis.py y pier_capacity_service.py.
+    según ACI 318-25 §18.10.2.
 
     Uso típico:
         service = SeismicReinforcementService()
