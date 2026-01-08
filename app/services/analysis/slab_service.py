@@ -32,13 +32,13 @@ from ...domain.chapter8.limits import (
 from ...domain.constants.materials import LAMBDA_NORMAL
 from ...domain.constants.shear import PHI_SHEAR, VC_COEF_COLUMN
 from ...domain.constants.units import N_TO_TONF, NMM_TO_TONFM
+from .formatting import format_safety_factor
 
 
+# Wrapper para compatibilidad - usa string ">100"
 def _format_sf(value: float) -> Any:
     """Formatea SF para JSON. Convierte inf a '>100'."""
-    if math.isinf(value):
-        return ">100"
-    return round(value, 2)
+    return format_safety_factor(value, as_string=True)
 
 
 @dataclass

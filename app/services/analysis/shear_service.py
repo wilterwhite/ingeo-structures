@@ -40,6 +40,7 @@ from ...domain.constants.shear import (
     VS_MAX_COEF,
 )
 from ...domain.constants.units import N_TO_TONF, TONF_TO_N, TONFM_TO_NMM
+from .formatting import format_safety_factor
 from ...domain.chapter18 import (
     ShearAmplificationService,
     BoundaryElementService,
@@ -1156,9 +1157,7 @@ class ShearService:
 
     def _format_sf(self, value: float) -> Any:
         """Formatea SF para JSON. Convierte inf a '>100'."""
-        if math.isinf(value):
-            return '>100'
-        return round(value, 2)
+        return format_safety_factor(value, as_string=True)
 
     def check_column_shear_from_pier(
         self,

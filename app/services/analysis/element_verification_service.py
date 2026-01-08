@@ -31,6 +31,7 @@ from .verification_result import (
 )
 
 from ...domain.constants.units import N_TO_TONF
+from .formatting import format_safety_factor
 
 if TYPE_CHECKING:
     from .proposal_service import ProposalService
@@ -38,11 +39,10 @@ if TYPE_CHECKING:
     from ..parsing.session_manager import SessionManager
 
 
+# Wrapper para compatibilidad con codigo existente (usa float, no string)
 def _format_sf(value: float) -> float:
     """Formatea SF: convierte inf a 100.0 para evitar problemas JSON."""
-    if math.isinf(value):
-        return 100.0
-    return round(value, 2)
+    return format_safety_factor(value, as_string=False)
 
 
 class ElementService:
