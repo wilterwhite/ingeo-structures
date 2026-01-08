@@ -77,7 +77,13 @@
       "Bash(del \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\analysis\\pier_capacity_service.py\")",
       "Bash(.venv/Scripts/python.exe -m pytest tests/ -v --tb=short)",
       "Bash(del \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\analysis\\force_extractors.py\")",
-      "Bash(.venv/Scripts/python.exe:*)"
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nRefactor: limpiar arquitectura de servicios y eliminar código muerto\n\n- Renombrar PierAnalysisService -> StructuralAnalysisService\n- Mover pier_capacity_service.py -> presentation/pier_details_formatter.py\n- Eliminar pier_verification_service.py (duplicaba ElementService)\n- Eliminar force_extractors.py (código muerto)\n- Eliminar section_diagram_service.py (no usado)\n- Eliminar shear_service.py, extraer a shear/facade.py y wall_shear.py\n- Eliminar PiersTable.js (código muerto en frontend)\n- Crear ModalUtils.js y centralizar lógica de cierre de modales\n- Actualizar README.md con arquitectura actualizada\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(tree /F \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\domain\\chapter18\")",
+      "Bash(python -m pytest tests/domain/chapter18/ -v --tb=short)",
+      "Bash(dir /s /b \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\analysis\\*.py\")",
+      "Bash(cd:*)",
+      "Bash(dir:*)"
     ]
   }
 }

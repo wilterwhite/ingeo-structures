@@ -14,11 +14,8 @@ Referencias:
 """
 import math
 from typing import List
+from ...constants.units import MPA_TO_PSI
 from ..results import BoundaryZoneCheck
-
-
-# Constantes de conversion
-MPA_TO_PSI = 145.04
 
 
 def check_boundary_zone_reinforcement(

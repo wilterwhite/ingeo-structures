@@ -1,4 +1,4 @@
-# app/domain/walls/limits.py
+# app/domain/chapter11/limits.py
 """
 Verificacion de limites de diseno para muros segun ACI 318-25 Capitulo 11.
 

@@ -9,14 +9,15 @@ Incluye:
 - Cuantía requerida Ash/(s*bc)
 """
 from ...calculations.confinement import calculate_ash_sbc
+from ...constants.units import SIX_INCH_MM, TWELVE_INCH_MM, EIGHTEEN_INCH_MM
 from ..results import (
     DesignMethod,
     WallPierClassification,
     WallPierTransverseReinforcement,
 )
 
-# Constantes
-EXTENSION_MIN_MM = 304.8  # 12" en mm
+# Alias para compatibilidad con imports existentes
+EXTENSION_MIN_MM = TWELVE_INCH_MM
 
 
 def calculate_transverse_requirements(
@@ -48,7 +49,7 @@ def calculate_transverse_requirements(
         return WallPierTransverseReinforcement(
             requires_closed_hoops=False,
             hook_type="90°",
-            spacing_max=457.2,  # 18"
+            spacing_max=EIGHTEEN_INCH_MM,
             extension_above=0,
             extension_below=0,
             Ash_sbc_required=0,
@@ -62,7 +63,7 @@ def calculate_transverse_requirements(
         hook_type = "135° o 180°"
 
     # Espaciamiento máximo (18.10.8.1(d))
-    spacing_max = 152.4  # 6"
+    spacing_max = SIX_INCH_MM
 
     # Extensión (18.10.8.1(e))
     extension = EXTENSION_MIN_MM  # 12"

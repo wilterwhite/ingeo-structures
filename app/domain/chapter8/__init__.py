@@ -17,6 +17,7 @@ from .limits import (
     get_minimum_thickness_two_way,
     check_thickness_two_way,
     TwoWaySystem,
+    PanelType,
 )
 from .punching import (
     calculate_punching_Vc,
@@ -30,6 +31,7 @@ __all__ = [
     'get_minimum_thickness_two_way',
     'check_thickness_two_way',
     'TwoWaySystem',
+    'PanelType',
     # Punzonamiento
     'calculate_punching_Vc',
     'calculate_critical_perimeter',

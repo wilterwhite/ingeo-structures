@@ -14,6 +14,7 @@ from .critical_section import (
     get_alpha_s,
     ColumnPosition,
 )
+from ...constants.shear import PHI_SHEAR
 
 
 @dataclass
@@ -135,8 +136,8 @@ def calculate_punching_Vc(
     Vc_c_kN = Vc_c_N / 1000
     Vc_kN = Vc_N / 1000
 
-    # Factor de reduccion para cortante
-    phi = 0.75
+    # Factor de reduccion para cortante (importado de constants.shear)
+    phi = PHI_SHEAR
 
     # Capacidad de diseno
     phi_Vc_kN = phi * Vc_kN
@@ -203,6 +204,8 @@ def check_punching_shear_reinforcement_needed(
         return True, "Requiere refuerzo de punzonamiento (studs o barras)"
 
 
-# Constantes
-PHI_SHEAR = 0.75  # Factor de reduccion para cortante
-VC_MAX_FACTOR = 0.66  # Factor maximo para Vc con refuerzo
+# TODO: Constante huerfana - requerida por ACI 318-25 §8.10.4.1 pero no usada aun.
+# Factor maximo para Vn con refuerzo de barras/mallas: Vn <= 6*lambda*sqrt(f'c)*bo*d
+# Para studs: Vn <= 8*lambda*sqrt(f'c)*bo*d
+VC_MAX_FACTOR_BARS = 0.50   # 6/12 en SI (equivale a 6*sqrt(f'c) en US)
+VC_MAX_FACTOR_STUDS = 0.66  # 8/12 en SI (equivale a 8*sqrt(f'c) en US)

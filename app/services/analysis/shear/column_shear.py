@@ -2,6 +2,9 @@
 """
 Servicio de verificacion de cortante para columnas.
 
+Este servicio es una FACHADA que usa la logica de dominio en:
+- app/domain/chapter18/columns/ para columnas sismicas (§18.7.6)
+
 Implementa verificacion de cortante segun ACI 318-25:
 - Columnas no sismicas: §22.5 (simplificado)
 - Columnas sismicas especiales: §18.7.6 (diseno por capacidad)
@@ -24,12 +27,17 @@ from ....domain.constants.shear import (
     VS_MAX_COEF,
 )
 from ....domain.constants.units import N_TO_TONF, TONF_TO_N
+from ....domain.chapter18.columns import SeismicColumnShearService as DomainSeismicColumnShearService
 from ..formatting import format_safety_factor
 
 
 class ColumnShearService:
     """
     Servicio para verificacion de cortante de columnas segun ACI 318-25.
+
+    Este servicio es una FACHADA que:
+    - Para columnas sismicas: delega a SeismicColumnShearService (§18.7.6)
+    - Para columnas no sismicas: usa calculo simplificado (§22.5)
 
     Responsabilidades:
     - Verificar cortante de columnas no sismicas (§22.5)
@@ -38,6 +46,10 @@ class ColumnShearService:
     - Determinar cuando Vc = 0 (§18.7.6.2.1)
     - Verificar wall piers tratados como columnas
     """
+
+    def __init__(self):
+        """Inicializa el servicio con dependencias de dominio."""
+        self._seismic_service = DomainSeismicColumnShearService()
 
     def check_column_shear(
         self,
@@ -170,6 +182,8 @@ class ColumnShearService:
         """
         Verifica cortante de columna sismica especial segun ACI 318-25 §18.7.6.
 
+        Delega la logica de calculo al servicio de dominio SeismicColumnShearService.
+
         Diseno por capacidad:
         - Ve = (Mpr_top + Mpr_bottom) / lu  [§18.7.6.1]
         - Vc = 0 si: (a) Ve >= 0.5*Vu_max Y (b) Pu < Ag*f'c/20 [§18.7.6.2.1]
@@ -189,109 +203,74 @@ class ColumnShearService:
         if not column_forces or not column_forces.combinations:
             return default_result
 
-        lu = column.height  # Altura libre (mm)
-        Ag = column.Ag      # Area bruta (mm2)
-        fc = column.fc      # f'c (MPa)
-
-        # Calcular Ve si hay momentos probables
-        Ve = 0
-        use_capacity_design = False
-        if Mpr_top > 0 or Mpr_bottom > 0:
-            # Ve en tonf: Mpr en tonf-m, lu en mm -> convertir
-            Ve = (Mpr_top + Mpr_bottom) * 1000 / lu if lu > 0 else 0
-            use_capacity_design = True
-
-        # Calcular capacidades base en ambas direcciones
-        cap_V2 = self._calc_column_capacity_simple(column, 'V2', lambda_factor)
-        cap_V3 = self._calc_column_capacity_simple(column, 'V3', lambda_factor)
-
-        # Encontrar combinacion critica
+        # Encontrar combinacion critica iterando sobre combinaciones
         max_dcr = 0
         critical_combo = ''
-        critical_Vu2 = 0
-        critical_Vu3 = 0
-        critical_P = 0
-        Vc_is_zero = False
+        critical_result = None
 
         for combo in column_forces.combinations:
             Vu2 = abs(combo.V2)
             Vu3 = abs(combo.V3)
-            Vu_max = max(Vu2, Vu3)
             Pu = -combo.P  # Positivo = compresion (tonf)
-            Pu_N = Pu * TONF_TO_N
 
-            # Determinar cortante de diseno
-            if use_capacity_design:
-                Vu2_check = max(Vu2, Ve) if Vu2 > 0 else Ve
-                Vu3_check = max(Vu3, Ve) if Vu3 > 0 else Ve
-            else:
-                Vu2_check = Vu2
-                Vu3_check = Vu3
+            # Usar servicio de dominio para verificar
+            result = self._seismic_service.verify_seismic_column_shear(
+                lu=column.height,
+                Ag=column.Ag,
+                fc=column.fc,
+                bw_V2=column.width,
+                d_V2=column.d_depth,
+                Av_V2=column.As_transversal_depth,
+                bw_V3=column.depth,
+                d_V3=column.d_width,
+                Av_V3=column.As_transversal_width,
+                fyt=column.fy,
+                s=column.stirrup_spacing,
+                Vu_V2=Vu2,
+                Vu_V3=Vu3,
+                Pu=Pu,
+                Mpr_top=Mpr_top,
+                Mpr_bottom=Mpr_bottom,
+                lambda_factor=lambda_factor
+            )
 
-            # Verificar si Vc = 0 segun §18.7.6.2.1
-            # (a) Cortante sismico >= 0.5 * Vu_max en zona lo
-            # (b) Pu < Ag * f'c / 20
-            condition_a = use_capacity_design and Ve >= 0.5 * Vu_max
-            condition_b = Pu_N < (Ag * fc / 20)
-            Vc_zero_this_combo = condition_a and condition_b
-
-            # Ajustar capacidades si Vc = 0
-            if Vc_zero_this_combo:
-                phi_Vn_V2 = PHI_SHEAR * cap_V2['Vs'] * N_TO_TONF
-                phi_Vn_V3 = PHI_SHEAR * cap_V3['Vs'] * N_TO_TONF
-            else:
-                phi_Vn_V2 = cap_V2['phi_Vn']
-                phi_Vn_V3 = cap_V3['phi_Vn']
-
-            # Calcular DCR
-            dcr_2 = Vu2_check / phi_Vn_V2 if phi_Vn_V2 > 0 else float('inf')
-            dcr_3 = Vu3_check / phi_Vn_V3 if phi_Vn_V3 > 0 else float('inf')
-            dcr_combined = math.sqrt(dcr_2**2 + dcr_3**2)
-
-            if dcr_combined > max_dcr:
-                max_dcr = dcr_combined
+            if result.dcr > max_dcr:
+                max_dcr = result.dcr
                 critical_combo = combo.name
-                critical_Vu2 = Vu2_check
-                critical_Vu3 = Vu3_check
-                critical_P = Pu
-                Vc_is_zero = Vc_zero_this_combo
+                critical_result = result
 
-        # Recalcular capacidades finales con Vc = 0 si aplica
-        if Vc_is_zero:
-            phi_Vn_V2_final = PHI_SHEAR * cap_V2['Vs'] * N_TO_TONF
-            phi_Vn_V3_final = PHI_SHEAR * cap_V3['Vs'] * N_TO_TONF
-            Vc_V2_final = 0
-            Vc_V3_final = 0
-        else:
-            phi_Vn_V2_final = cap_V2['phi_Vn']
-            phi_Vn_V3_final = cap_V3['phi_Vn']
-            Vc_V2_final = cap_V2['Vc']
-            Vc_V3_final = cap_V3['Vc']
+        if critical_result is None:
+            return default_result
 
-        dcr_V2 = critical_Vu2 / phi_Vn_V2_final if phi_Vn_V2_final > 0 else 0
-        dcr_V3 = critical_Vu3 / phi_Vn_V3_final if phi_Vn_V3_final > 0 else 0
+        # Convertir resultado de dominio a dict para API
         sf_combined = 1.0 / max_dcr if max_dcr > 0 else float('inf')
         status = 'OK' if max_dcr <= 1.0 else 'NO OK'
+
+        # Obtener Vc y Vs de las capacidades
+        Vc_V2 = critical_result.capacity_V2.Vc if critical_result.capacity_V2 else 0
+        Vs_V2 = critical_result.capacity_V2.Vs if critical_result.capacity_V2 else 0
+        Vc_V3 = critical_result.capacity_V3.Vc if critical_result.capacity_V3 else 0
+        Vs_V3 = critical_result.capacity_V3.Vs if critical_result.capacity_V3 else 0
 
         return {
             'sf': self._format_sf(sf_combined),
             'status': status,
             'critical_combo': critical_combo,
-            'dcr_V2': round(dcr_V2, 3),
-            'dcr_V3': round(dcr_V3, 3),
+            'dcr_V2': round(critical_result.Vu_V2 / critical_result.phi_Vn_V2, 3) if critical_result.phi_Vn_V2 > 0 else 0,
+            'dcr_V3': round(critical_result.Vu_V3 / critical_result.phi_Vn_V3, 3) if critical_result.phi_Vn_V3 > 0 else 0,
             'dcr_combined': round(max_dcr, 3),
-            'phi_Vn_V2': round(phi_Vn_V2_final, 2),
-            'phi_Vn_V3': round(phi_Vn_V3_final, 2),
-            'Vu_V2': round(critical_Vu2, 2),
-            'Vu_V3': round(critical_Vu3, 2),
-            'Vc_V2': round(Vc_V2_final, 2),
-            'Vs_V2': round(cap_V2['Vs'], 2),
-            'Vc_V3': round(Vc_V3_final, 2),
-            'Vs_V3': round(cap_V3['Vs'], 2),
-            'Ve': round(Ve, 2),
-            'uses_capacity_design': use_capacity_design,
-            'Vc_is_zero': Vc_is_zero,
-            'aci_reference': 'ACI 318-25 §18.7.6'
+            'phi_Vn_V2': critical_result.phi_Vn_V2,
+            'phi_Vn_V3': critical_result.phi_Vn_V3,
+            'Vu_V2': critical_result.Vu_V2,
+            'Vu_V3': critical_result.Vu_V3,
+            'Vc_V2': round(Vc_V2, 2),
+            'Vs_V2': round(Vs_V2, 2),
+            'Vc_V3': round(Vc_V3, 2),
+            'Vs_V3': round(Vs_V3, 2),
+            'Ve': critical_result.Ve,
+            'uses_capacity_design': critical_result.uses_capacity_design,
+            'Vc_is_zero': critical_result.Vc_is_zero,
+            'aci_reference': critical_result.aci_reference
         }
 
     def _calc_column_capacity_simple(

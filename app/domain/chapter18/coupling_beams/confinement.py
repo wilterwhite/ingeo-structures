@@ -18,6 +18,12 @@ from typing import List
 
 from ...calculations.confinement import calculate_ash_sbc
 from ...constants.materials import SteelGrade
+from ...constants.units import (
+    SIX_INCH_MM,
+    EIGHT_INCH_MM,
+    TWELVE_INCH_MM,
+    FOURTEEN_INCH_MM,
+)
 from ..results import ConfinementOption, DiagonalConfinementResult
 
 
@@ -52,11 +58,11 @@ def calculate_diagonal_confinement(
 
     # Espaciamiento máximo según Tabla 18.10.7.4
     if steel_grade == SteelGrade.GRADE_60:
-        spacing_max = min(6 * db_diagonal, 152.4)  # 6"
+        spacing_max = min(6 * db_diagonal, SIX_INCH_MM)
     elif steel_grade == SteelGrade.GRADE_80:
-        spacing_max = min(5 * db_diagonal, 152.4)
+        spacing_max = min(5 * db_diagonal, SIX_INCH_MM)
     else:  # GRADE_100
-        spacing_max = min(4 * db_diagonal, 152.4)
+        spacing_max = min(4 * db_diagonal, SIX_INCH_MM)
 
     if option == ConfinementOption.INDIVIDUAL:
         # Dimensiones de núcleo
@@ -64,16 +70,16 @@ def calculate_diagonal_confinement(
         core_other = bw / 5
 
         # Espaciamiento perpendicular
-        spacing_perp = 355.6  # 14"
+        spacing_perp = FOURTEEN_INCH_MM
 
         # Refuerzo perimetral
         rho_perimeter = 0.002
-        perimeter_spacing = 304.8  # 12"
+        perimeter_spacing = TWELVE_INCH_MM
 
     else:  # FULL_SECTION
         core_parallel = 0
         core_other = 0
-        spacing_perp = 203.2  # 8"
+        spacing_perp = EIGHT_INCH_MM
         rho_perimeter = 0
         perimeter_spacing = 0
 
@@ -170,12 +176,11 @@ def check_penetration_limits(
         Dict con verificación de cada límite
     """
     # Límites en mm
-    SIX_INCH = 152.4
     TWO_INCH = 50.8
     FOUR_INCH = 101.6
 
     # Diámetro máximo
-    diam_max = max(h / 6, SIX_INCH)
+    diam_max = max(h / 6, SIX_INCH_MM)
     diam_ok = diameter <= diam_max
 
     # Distancia a diagonales

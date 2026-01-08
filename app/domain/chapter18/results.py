@@ -158,6 +158,22 @@ class BoundaryZoneCheck:
 
 
 @dataclass
+class EdgePierCheck:
+    """
+    Verificacion de requisitos para pilares en borde de muro.
+
+    Segun ACI 318-25 §18.10.8.2:
+    - Proporcionar refuerzo horizontal en segmentos adyacentes
+    - Disenar para transferir cortante del pilar
+    """
+    pier_Ve: float                      # Cortante del pilar (tonf)
+    adjacent_capacity: float            # Capacidad de transferencia (tonf)
+    transfer_ok: bool                   # Si la transferencia es adecuada
+    required_transfer: float            # Transferencia requerida (tonf)
+    aci_reference: str = "ACI 318-25 18.10.8.2"
+
+
+@dataclass
 class WallPierDesignResult:
     """Resultado completo del diseno del pilar de muro."""
     classification: WallPierClassification
@@ -165,8 +181,9 @@ class WallPierDesignResult:
     transverse: WallPierTransverseReinforcement
     boundary_check: Optional[WallPierBoundaryCheck]
     boundary_zone_check: Optional[BoundaryZoneCheck]
-    warnings: List[str]
-    aci_reference: str
+    edge_pier_check: Optional[EdgePierCheck] = None
+    warnings: List[str] = field(default_factory=list)
+    aci_reference: str = ""
 
 
 # =============================================================================

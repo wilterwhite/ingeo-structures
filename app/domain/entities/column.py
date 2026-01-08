@@ -59,6 +59,16 @@ class Column:
     # Clasificacion sismica (para cortante)
     is_seismic: bool = True  # True = columna sismica especial (§18.7), False = no sismica (§22.5)
 
+    # Datos para verificacion columna fuerte-viga debil §18.7.3.2
+    # (deben ser proporcionados por el usuario o calculados externamente)
+    Mnc_top: Optional[float] = None      # Mn columna arriba del nudo (tonf-m)
+    Mnc_bottom: Optional[float] = None   # Mn columna abajo del nudo (tonf-m)
+    sum_Mnb_major: Optional[float] = None  # Suma Mn vigas en eje mayor (tonf-m)
+    sum_Mnb_minor: Optional[float] = None  # Suma Mn vigas en eje menor (tonf-m)
+
+    # Altura libre (si difiere de height)
+    lu: Optional[float] = None  # Altura libre explicita (mm), si None usa height
+
     # Areas de barra precalculadas
     _bar_area_long: float = field(default=314.2, repr=False)  # phi20 por defecto
 
@@ -148,6 +158,72 @@ class Column:
     def is_square(self) -> bool:
         """True si la columna es cuadrada."""
         return abs(self.depth - self.width) < 1.0  # tolerancia 1mm
+
+    # =========================================================================
+    # Propiedades Sismicas §18.7
+    # =========================================================================
+
+    @property
+    def lu_calculated(self) -> float:
+        """
+        Altura libre de la columna (mm) segun §18.7.
+
+        Si lu fue especificado explicitamente, lo usa.
+        Si no, usa height (simplificado, no resta vigas).
+        """
+        if self.lu is not None:
+            return self.lu
+        return self.height
+
+    @property
+    def hx(self) -> float:
+        """
+        Separacion maxima entre barras longitudinales soportadas lateralmente (mm).
+
+        Segun §18.7.5.2(f): hx no debe exceder 350mm (14 in) para columnas especiales,
+        o 200mm (8 in) si Pu > 0.3*Ag*f'c o f'c > 70 MPa.
+
+        Simplificado: asume distribucion uniforme en cada cara.
+        """
+        # Usar la mayor separacion entre las dos direcciones
+        hx_depth = self._calculate_hx_direction(self.depth, self.n_bars_depth)
+        hx_width = self._calculate_hx_direction(self.width, self.n_bars_width)
+        return max(hx_depth, hx_width)
+
+    def _calculate_hx_direction(self, dimension: float, n_bars: int) -> float:
+        """Calcula hx para una direccion."""
+        if n_bars <= 1:
+            return dimension - 2 * self.cover
+        return (dimension - 2 * self.cover) / (n_bars - 1)
+
+    @property
+    def Ash_depth(self) -> float:
+        """
+        Area de refuerzo transversal perpendicular a depth (mm2).
+
+        Para verificacion §18.7.5.4, Ash es el area de estribos
+        resistiendo cortante en la direccion considerada.
+        """
+        return self.As_transversal_depth
+
+    @property
+    def Ash_width(self) -> float:
+        """Area de refuerzo transversal perpendicular a width (mm2)."""
+        return self.As_transversal_width
+
+    @property
+    def bc_depth(self) -> float:
+        """
+        Dimension del nucleo confinado perpendicular a depth (mm).
+
+        bc = depth - 2*cover (medido a ejes de estribos).
+        """
+        return self.depth - 2 * self.cover
+
+    @property
+    def bc_width(self) -> float:
+        """Dimension del nucleo confinado perpendicular a width (mm)."""
+        return self.width - 2 * self.cover
 
     # =========================================================================
     # Metodos de Actualizacion

@@ -21,6 +21,7 @@ from ..results import (
     WallPierTransverseReinforcement,
     WallPierBoundaryCheck,
     BoundaryZoneCheck,
+    EdgePierCheck,
     WallPierDesignResult,
 )
 
@@ -44,5 +45,6 @@ __all__ = [
     "WallPierTransverseReinforcement",
     "WallPierBoundaryCheck",
     "BoundaryZoneCheck",
+    "EdgePierCheck",
     "WallPierDesignResult",
 ]

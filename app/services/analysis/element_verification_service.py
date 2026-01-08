@@ -17,6 +17,14 @@ from .shear import ShearService
 from .element_classifier import ElementClassifier, ElementType
 from .verification_config import get_config, VerificationConfig
 from ...domain.chapter11 import ReinforcementLimitsService
+from ...domain.chapter18 import (
+    SeismicReinforcementService,
+    SeismicBeamService,
+    SeismicColumnService,
+    NonSfrsService,
+    DuctileCoupledWallService,
+    SeismicCategory,
+)
 from ...domain.shear import calculate_simple_shear_capacity
 from .verification_result import (
     ElementVerificationResult,
@@ -28,6 +36,18 @@ from .verification_result import (
     BoundaryResult,
     EndZonesResult,
     MinReinforcementResult,
+    # Verificaciones sismicas
+    SeismicBeamChecks,
+    SeismicBeamDimensionalResult,
+    SeismicBeamLongitudinalResult,
+    SeismicBeamTransverseResult,
+    SeismicBeamShearResult,
+    SeismicColumnChecks,
+    SeismicColumnDimensionalResult,
+    SeismicColumnStrongResult,
+    SeismicColumnLongitudinalResult,
+    SeismicColumnTransverseResult,
+    SeismicColumnShearDetailedResult,
 )
 
 from ...domain.constants.units import N_TO_TONF
@@ -86,9 +106,16 @@ class ElementService:
         self._shear = shear_service or ShearService()
         self._classifier = ElementClassifier()
         self._reinforcement_limits = ReinforcementLimitsService()
+        self._seismic_reinforcement = SeismicReinforcementService()
         self._proposal_service = proposal_service
         self._plot_generator = plot_generator
         self._session_manager = session_manager
+
+        # Servicios sismicos chapter18
+        self._seismic_beam = SeismicBeamService()
+        self._seismic_column = SeismicColumnService()
+        self._non_sfrs = NonSfrsService()
+        self._coupled_wall = DuctileCoupledWallService()
 
     # =========================================================================
     # METODO PRINCIPAL
@@ -134,7 +161,17 @@ class ElementService:
         # 3. Verificacion de cortante
         shear = self._check_shear(element, forces, config, element_type, lambda_factor)
 
-        # 4. Verificaciones adicionales para muros
+        # 4. Verificaciones sismicas para vigas y columnas
+        seismic_beam = None
+        seismic_column = None
+
+        if isinstance(element, Beam) and getattr(element, 'is_seismic', False):
+            seismic_beam = self._check_seismic_beam(element, forces, lambda_factor)
+
+        if isinstance(element, Column) and getattr(element, 'is_seismic', False):
+            seismic_column = self._check_seismic_column(element, forces, lambda_factor)
+
+        # 5. Verificaciones adicionales para muros
         wall_checks = None
         if element_type.is_wall:
             wall_checks = self._check_wall_requirements(
@@ -142,7 +179,7 @@ class ElementService:
                 hwcs=hwcs, hn_ft=hn_ft
             )
 
-        # 5. Calcular estado general
+        # 6. Calcular estado general
         overall_status = 'OK'
         if flexure.status != 'OK' or shear.status != 'OK':
             overall_status = 'NO OK'
@@ -151,18 +188,24 @@ class ElementService:
         if wall_checks and self._wall_checks_failed(wall_checks):
             overall_status = 'NO OK'
 
+        # Verificar checks sismicos
+        if seismic_beam and not seismic_beam.overall_ok:
+            overall_status = 'NO OK'
+        if seismic_column and not seismic_column.overall_ok:
+            overall_status = 'NO OK'
+
         # SF minimo
         overall_sf = min(
             flexure.sf if not math.isinf(flexure.sf) else 100.0,
             shear.sf if not math.isinf(shear.sf) else 100.0
         )
 
-        # 6. Grafico P-M (opcional)
+        # 7. Grafico P-M (opcional)
         pm_plot = None
         if generate_plot:
             pm_plot = self._generate_pm_plot(element, forces, moment_axis)
 
-        # 7. Info del elemento
+        # 8. Info del elemento
         element_info = self._get_element_info(element, element_type)
 
         return ElementVerificationResult(
@@ -171,6 +214,8 @@ class ElementService:
             shear=shear,
             overall_status=overall_status,
             overall_sf=overall_sf,
+            seismic_beam=seismic_beam,
+            seismic_column=seismic_column,
             wall_checks=wall_checks,
             pm_plot=pm_plot,
             element_info=element_info,
@@ -499,8 +544,8 @@ class ElementService:
         if config.check_end_zones and hasattr(element, 'height') and hasattr(element, 'width'):
             hw_lw = element.height / element.width if element.width > 0 else 0
             if hw_lw >= 2.0:
-                # Usar servicio de dominio para calcular rho_min = 6*sqrt(f'c)/fy
-                rho_end_zone = self._reinforcement_limits.calculate_end_zone_rho_min(
+                # Usar servicio de chapter18 para calcular rho_min = 6*sqrt(f'c)/fy
+                rho_end_zone = self._seismic_reinforcement.calculate_end_zone_rho_min(
                     element.fc, element.fy
                 )
                 end_zones = EndZonesResult(
@@ -700,3 +745,380 @@ class ElementService:
             'min_sf': round(min_sf, 2) if not math.isinf(min_sf) else ">100",
             'critical_element': critical_key,
         }
+
+    # =========================================================================
+    # VERIFICACIONES SISMICAS §18.6 y §18.7
+    # =========================================================================
+
+    def _check_seismic_beam(
+        self,
+        beam: Beam,
+        forces: Optional[BeamForces],
+        lambda_factor: float = 1.0
+    ) -> Optional[SeismicBeamChecks]:
+        """
+        Verificacion sismica de vigas segun §18.6.
+
+        Llama al SeismicBeamService del dominio para realizar todas
+        las verificaciones aplicables.
+        """
+        try:
+            # Obtener Vu de las fuerzas
+            Vu = 0.0
+            Pu = 0.0
+            if forces and hasattr(forces, 'combinations'):
+                for combo in forces.combinations:
+                    V = abs(getattr(combo, 'V2', 0))
+                    if V > Vu:
+                        Vu = V
+                    P = abs(getattr(combo, 'P', 0))
+                    if P > Pu:
+                        Pu = P
+
+            # Calcular Mpr si no estan definidos
+            Mpr_left = beam.Mpr_left
+            Mpr_right = beam.Mpr_right
+            if Mpr_left is None or Mpr_right is None:
+                Mpr_neg, Mpr_pos = self._flexo.calculate_Mpr(beam)
+                Mpr_left = Mpr_neg if Mpr_left is None else Mpr_left
+                Mpr_right = Mpr_pos if Mpr_right is None else Mpr_right
+
+            # Llamar al servicio de dominio
+            db_long = min(beam.diameter_top, beam.diameter_bottom)
+
+            result = self._seismic_beam.verify_beam(
+                # Geometria
+                bw=beam.width,
+                h=beam.depth,
+                d=beam.d,
+                ln=beam.ln_calculated,
+                cover=beam.cover,
+                # Materiales
+                fc=beam.fc,
+                fy=beam.fy,
+                fyt=beam.fy,  # Asume mismo fy para transversal
+                # Refuerzo longitudinal
+                As_top=beam.As_top,
+                As_bottom=beam.As_bottom,
+                n_bars_top=beam.n_bars_top,
+                n_bars_bottom=beam.n_bars_bottom,
+                db_long=db_long,
+                # Refuerzo transversal
+                s_in_zone=beam.stirrup_spacing,
+                s_outside_zone=beam.stirrup_spacing,
+                Av=beam.Av,
+                first_hoop_distance=50,  # Default 50mm
+                hx=beam.hx,
+                # Fuerzas
+                Vu=Vu,
+                Mpr_left=Mpr_left,
+                Mpr_right=Mpr_right,
+                Pu=Pu,
+                # Opciones
+                category=SeismicCategory.SPECIAL,
+                lambda_factor=lambda_factor,
+            )
+
+            # Convertir resultado del dominio a dataclass de servicio
+            return self._convert_beam_result(result)
+
+        except Exception as e:
+            # Si hay error, retornar None y no bloquear verificacion
+            import logging
+            logging.warning(f"Error en verificacion sismica de viga: {e}")
+            return None
+
+    def _check_seismic_column(
+        self,
+        column: Column,
+        forces: Optional[ColumnForces],
+        lambda_factor: float = 1.0
+    ) -> Optional[SeismicColumnChecks]:
+        """
+        Verificacion sismica de columnas segun §18.7.
+
+        Llama al SeismicColumnService del dominio para realizar todas
+        las verificaciones aplicables.
+        """
+        try:
+            # Obtener fuerzas del elemento
+            Vu_V2 = 0.0
+            Vu_V3 = 0.0
+            Pu = 0.0
+            if forces and hasattr(forces, 'combinations'):
+                for combo in forces.combinations:
+                    V2 = abs(getattr(combo, 'V2', 0))
+                    V3 = abs(getattr(combo, 'V3', 0))
+                    P = abs(getattr(combo, 'P', 0))
+                    if V2 > Vu_V2:
+                        Vu_V2 = V2
+                    if V3 > Vu_V3:
+                        Vu_V3 = V3
+                    if P > Pu:
+                        Pu = P
+
+            # Usar Ash de la columna
+            Ash = column.Ash_depth  # Area en direccion de la profundidad
+
+            # Llamar al servicio de dominio
+            result = self._seismic_column.verify_column(
+                # Geometria
+                b=min(column.depth, column.width),
+                h=max(column.depth, column.width),
+                lu=column.lu_calculated,
+                cover=column.cover,
+                Ag=column.Ag,
+                # Materiales
+                fc=column.fc,
+                fy=column.fy,
+                fyt=column.fy,  # Asume mismo fy para transversal
+                # Refuerzo longitudinal
+                Ast=column.As_longitudinal,
+                n_bars=column.n_total_bars,
+                db_long=column.diameter_long,
+                # Refuerzo transversal
+                s_transverse=column.stirrup_spacing,
+                Ash=Ash,
+                hx=column.hx,
+                # Fuerzas
+                Vu_V2=Vu_V2,
+                Vu_V3=Vu_V3,
+                Pu=Pu,
+                # Columna fuerte-viga debil (si disponible)
+                Mnc_top_V2=column.Mnc_top or 0,
+                Mnc_bottom_V2=column.Mnc_bottom or 0,
+                Mnb_left_V2=(column.sum_Mnb_major or 0) / 2,  # Dividir entre las dos vigas
+                Mnb_right_V2=(column.sum_Mnb_major or 0) / 2,
+                Mnc_top_V3=column.Mnc_top or 0,  # Usa mismo Mnc para V3
+                Mnc_bottom_V3=column.Mnc_bottom or 0,
+                Mnb_left_V3=(column.sum_Mnb_minor or 0) / 2,
+                Mnb_right_V3=(column.sum_Mnb_minor or 0) / 2,
+                # Opciones
+                category=SeismicCategory.SPECIAL,
+                lambda_factor=lambda_factor,
+            )
+
+            # Convertir resultado del dominio a dataclass de servicio
+            return self._convert_column_result(result)
+
+        except Exception as e:
+            # Si hay error, retornar None y no bloquear verificacion
+            import logging
+            logging.warning(f"Error en verificacion sismica de columna: {e}")
+            return None
+
+    def _convert_beam_result(self, result) -> SeismicBeamChecks:
+        """Convierte SeismicBeamResult del dominio a SeismicBeamChecks del servicio."""
+        dimensional = None
+        # El dominio usa 'dimensional_limits', no 'dimensional'
+        dim = result.dimensional_limits
+        if dim:
+            dimensional = SeismicBeamDimensionalResult(
+                ln_d_ratio=dim.ln / dim.d if dim.d > 0 else 0,
+                ln_d_ok=dim.ln_ok,
+                bw=dim.bw,
+                bw_min=dim.bw_min,
+                bw_ok=dim.bw_ok,
+                projection_ok=dim.projection_ok,
+                overall_ok=dim.is_ok,
+            )
+
+        longitudinal = None
+        long = result.longitudinal
+        if long:
+            # Calcular rho_actual como el max de ambas cuantías
+            rho_actual = max(long.rho_top, long.rho_bottom)
+            longitudinal = SeismicBeamLongitudinalResult(
+                rho_max=long.rho_max,
+                rho_actual=rho_actual,
+                rho_ok=long.rho_ok,
+                M_pos_ratio=long.moment_ratio_face,
+                M_pos_ratio_ok=long.moment_ratio_face_ok,
+                M_any_ratio=long.moment_ratio_section,
+                M_any_ratio_ok=long.moment_ratio_section_ok,
+                overall_ok=long.is_ok,
+            )
+
+        transverse = None
+        trans = result.transverse
+        if trans:
+            transverse = SeismicBeamTransverseResult(
+                s_hoop=trans.s_in_zone,
+                s_max=trans.s_max_zone,
+                s_ok=trans.s_zone_ok,
+                hx=trans.hx_provided,
+                hx_max=trans.hx_max,
+                hx_ok=trans.hx_ok,
+                first_hoop_ok=trans.first_hoop_ok,
+                confinement_length=trans.zone_length,
+                overall_ok=trans.is_ok,
+            )
+
+        shear = None
+        sh = result.shear
+        if sh:
+            # SF = phi_Vn / Vu_design
+            sf = sh.phi_Vn / sh.Vu_design if sh.Vu_design > 0 else float('inf')
+            shear = SeismicBeamShearResult(
+                Mpr_left=0,  # Mpr no se almacena en BeamShearResult
+                Mpr_right=0,
+                Ve=sh.Ve,
+                phi_Vn=sh.phi_Vn,
+                Vc=sh.Vc,
+                Vs=sh.Vs,
+                Vc_allowed=not sh.Vc_is_zero,
+                sf=sf,
+                status='OK' if sh.is_ok else 'NO OK',
+            )
+
+        return SeismicBeamChecks(
+            dimensional=dimensional,
+            longitudinal=longitudinal,
+            transverse=transverse,
+            shear=shear,
+            seismic_category=result.category.value if hasattr(result, 'category') else 'SPECIAL',
+            overall_ok=result.is_ok,
+        )
+
+    def _convert_column_result(self, result) -> SeismicColumnChecks:
+        """Convierte SeismicColumnResult del dominio a SeismicColumnChecks del servicio."""
+        dimensional = None
+        # El dominio usa 'dimensional_limits', no 'dimensional'
+        dim = result.dimensional_limits
+        if dim:
+            dimensional = SeismicColumnDimensionalResult(
+                b_min=dim.min_dimension,
+                b_min_ok=dim.min_dimension_ok,
+                aspect_ratio=dim.aspect_ratio,
+                aspect_ratio_ok=dim.aspect_ratio_ok,
+                overall_ok=dim.is_ok,
+            )
+
+        strong_column = None
+        strong = result.strong_column_V2
+        if strong:
+            strong_column = SeismicColumnStrongResult(
+                sum_Mnc=strong.sum_Mnc,
+                sum_Mnb=strong.sum_Mnb,
+                ratio=strong.ratio,
+                is_ok=strong.is_ok,
+                exempt=False,  # Por defecto, no exento
+            )
+
+        longitudinal = None
+        long = result.longitudinal
+        if long:
+            longitudinal = SeismicColumnLongitudinalResult(
+                rho=long.rho,
+                rho_ok=long.rho_min_ok and long.rho_max_ok,
+                n_bars_ok=long.n_bars_ok,
+                overall_ok=long.is_ok,
+            )
+
+        transverse = None
+        trans = result.transverse
+        if trans:
+            transverse = SeismicColumnTransverseResult(
+                lo=trans.lo,
+                s=trans.s_provided,
+                s_max=trans.s_max,
+                s_ok=trans.s_ok,
+                hx=trans.hx_provided,
+                hx_max=trans.hx_max,
+                hx_ok=trans.hx_ok,
+                Ash_provided=trans.Ash_sbc_provided,
+                Ash_required=trans.Ash_sbc_required,
+                Ash_ok=trans.Ash_ok,
+                overall_ok=trans.is_ok,
+            )
+
+        shear = None
+        sh = result.shear
+        if sh:
+            # Calcular SF
+            sf = 1.0 / sh.dcr if sh.dcr > 0 else float('inf')
+            # Obtener Vc y Vs del capacity_V2
+            Vc = sh.capacity_V2.Vc if sh.capacity_V2 else 0
+            Vs = sh.capacity_V2.Vs if sh.capacity_V2 else 0
+            shear = SeismicColumnShearDetailedResult(
+                Mpr_top=0,  # No disponible en SeismicColumnShearResult
+                Mpr_bottom=0,
+                Ve=sh.Ve,
+                phi_Vn=sh.phi_Vn_V2,
+                Vc=Vc,
+                Vs=Vs,
+                Vc_allowed=not sh.Vc_is_zero,
+                sf=sf,
+                status='OK' if sh.is_ok else 'NO OK',
+            )
+
+        return SeismicColumnChecks(
+            dimensional=dimensional,
+            strong_column=strong_column,
+            longitudinal=longitudinal,
+            transverse=transverse,
+            shear=shear,
+            seismic_category=result.category.value if hasattr(result, 'category') else 'SPECIAL',
+            overall_ok=result.is_ok,
+        )
+
+    # =========================================================================
+    # VERIFICACIONES ADICIONALES: NON-SFRS y MUROS ACOPLADOS
+    # =========================================================================
+
+    def verify_non_sfrs(
+        self,
+        element: Union[Beam, Column],
+        delta_u: float,
+        hsx: float,
+        M_induced: float = 0,
+        V_induced: float = 0,
+        Mn: float = 0,
+        Vn: float = 0,
+    ) -> 'DriftCompatibilityResult':
+        """
+        Verificacion §18.14 para elementos no parte del SFRS.
+
+        Args:
+            element: Viga o columna a verificar
+            delta_u: Deriva de diseno (mm)
+            hsx: Altura de entrepiso (mm)
+            M_induced: Momento inducido por deriva (tonf-m)
+            V_induced: Cortante inducido por deriva (tonf)
+            Mn: Resistencia nominal a flexion (tonf-m)
+            Vn: Resistencia nominal a cortante (tonf)
+
+        Returns:
+            DriftCompatibilityResult con verificacion de compatibilidad de deriva
+        """
+        from ...domain.chapter18 import DriftCompatibilityResult
+
+        return self._non_sfrs.check_drift_compatibility(
+            delta_u=delta_u,
+            hsx=hsx,
+            M_induced=M_induced,
+            V_induced=V_induced,
+            Mn=Mn,
+            Vn=Vn,
+        )
+
+    def verify_coupled_wall_system(
+        self,
+        walls: list,
+        coupling_beams: list,
+    ) -> 'DuctileCoupledWallResult':
+        """
+        Verificacion §18.10.9 para sistema de muros acoplados ductiles.
+
+        Args:
+            walls: Lista de muros con formato:
+                [{\"wall_id\": \"W1\", \"hwcs\": 15000, \"lw\": 6000}, ...]
+            coupling_beams: Lista de vigas de acople con formato:
+                [{\"beam_id\": \"CB1\", \"level\": 1, \"ln\": 2000, \"h\": 800}, ...]
+
+        Returns:
+            DuctileCoupledWallResult con verificacion del sistema
+        """
+        from ...domain.chapter18 import DuctileCoupledWallResult
+
+        return self._coupled_wall.verify_ductile_coupled_wall(walls, coupling_beams)

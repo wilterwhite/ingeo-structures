@@ -1,4 +1,4 @@
-# app/domain/general/design_methods.py
+# app/domain/chapter11/design_methods.py
 """
 Metodos de diseno para muros segun ACI 318-25 Capitulo 11.
 
@@ -20,7 +20,13 @@ import math
 
 from ..constants.units import N_TO_TONF
 from ..constants.phi_chapter21 import PHI_COMPRESSION, PHI_TENSION
-from ..constants.materials import calculate_beta1
+from ..constants.materials import (
+    calculate_beta1,
+    calculate_Ec,
+    calculate_fr,
+    ES_MPA,
+    EPSILON_CU,
+)
 
 if TYPE_CHECKING:
     from ..entities.pier import Pier
@@ -104,11 +110,9 @@ class WallDesignMethodsService:
     - Momentos: N-mm (internamente), tonf-m (salida)
     """
 
-    # Modulo de elasticidad del acero
-    ES_MPA = 200000
-
-    # Deformacion ultima del concreto
-    EPSILON_CU = 0.003
+    # Constantes importadas desde constants.materials:
+    # ES_MPA = 200000 (§20.2.2.2)
+    # EPSILON_CU = 0.003 (§22.2.2.1)
 
     # =========================================================================
     # METODO SIMPLIFICADO 11.5.3
@@ -253,13 +257,7 @@ class WallDesignMethodsService:
     # METODO ALTERNATIVO PARA MUROS ESBELTOS 11.8
     # =========================================================================
 
-    def calculate_Ec(self, fc_mpa: float) -> float:
-        """Modulo de elasticidad del concreto (MPa)."""
-        return 4700 * math.sqrt(fc_mpa)
-
-    def calculate_fr(self, fc_mpa: float) -> float:
-        """Modulo de ruptura del concreto (MPa) segun 19.2.3."""
-        return 0.62 * math.sqrt(fc_mpa)
+    # calculate_Ec y calculate_fr importados desde constants.materials
 
     def calculate_Mcr(
         self,
@@ -280,7 +278,7 @@ class WallDesignMethodsService:
         Returns:
             Mcr en N-mm
         """
-        fr = self.calculate_fr(fc_mpa)
+        fr = calculate_fr(fc_mpa)
         Ig = lw_mm * h_mm**3 / 12
         yt = h_mm / 2
 
@@ -556,7 +554,7 @@ class WallDesignMethodsService:
         fy = pier.fy
 
         # Modulos
-        Ec = self.calculate_Ec(fc)
+        Ec = calculate_Ec(fc)
 
         # Inercia bruta
         Ig = lw * h**3 / 12
@@ -571,7 +569,7 @@ class WallDesignMethodsService:
 
         # Inercia agrietada
         Icr = self.calculate_Icr(
-            self.ES_MPA, Ec, As_tension_mm2, Pu_N, fy, h, d, c, lw
+            ES_MPA, Ec, As_tension_mm2, Pu_N, fy, h, d, c, lw
         )
 
         # Momento nominal simplificado (As*fy*(d-a/2))

@@ -125,6 +125,8 @@ def get_alpha_s(position: ColumnPosition) -> float:
     return alpha_values.get(position, 40)
 
 
+# TODO: Funcion huerfana - requerida por ACI 318-25 §8.4.2.3 pero no usada aun.
+# Exportar en __init__.py cuando se implemente verificacion de transferencia de momento.
 def get_gamma_v(
     c1_mm: float,
     c2_mm: float,

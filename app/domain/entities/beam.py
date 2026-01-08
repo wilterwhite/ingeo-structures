@@ -64,6 +64,18 @@ class Beam:
     # Otros
     cover: float = 40.0             # Recubrimiento (mm)
 
+    # Clasificacion sismica (para verificacion §18.6)
+    is_seismic: bool = True         # True = portico especial/intermedio
+
+    # Geometria para verificacion sismica §18.6
+    ln: Optional[float] = None      # Luz libre explicita (mm), si None se calcula
+    column_depth_left: float = 0    # Profundidad columna izquierda (mm)
+    column_depth_right: float = 0   # Profundidad columna derecha (mm)
+
+    # Momentos probables (calculados por FlexocompressionService) §18.6.5
+    Mpr_left: Optional[float] = None   # Mpr extremo izquierdo (tonf-m)
+    Mpr_right: Optional[float] = None  # Mpr extremo derecho (tonf-m)
+
     # Areas de barra precalculadas
     _bar_area_stirrup: float = field(default=78.5, repr=False)
 
@@ -129,6 +141,45 @@ class Beam:
     def height(self) -> float:
         """Altura para Protocol FlexuralElement (usa length de la viga)."""
         return self.length
+
+    # =========================================================================
+    # Propiedades Sismicas §18.6
+    # =========================================================================
+
+    @property
+    def ln_calculated(self) -> float:
+        """
+        Luz libre de la viga (mm) segun §18.6.2.1.
+
+        Si ln fue especificado explicitamente, lo usa.
+        Si no, calcula: length - column_depth_left/2 - column_depth_right/2
+        """
+        if self.ln is not None:
+            return self.ln
+        return self.length - self.column_depth_left / 2 - self.column_depth_right / 2
+
+    @property
+    def hx(self) -> float:
+        """
+        Separacion maxima entre barras longitudinales soportadas lateralmente (mm).
+
+        Simplificado: asume barras distribuidas uniformemente en el ancho.
+        Para §18.6.4.4: hx <= 350mm (14 in)
+        """
+        n_bars = max(self.n_bars_top, self.n_bars_bottom)
+        if n_bars <= 1:
+            return self.width - 2 * self.cover
+        return (self.width - 2 * self.cover) / (n_bars - 1)
+
+    @property
+    def As_top(self) -> float:
+        """Area de acero superior (mm2)."""
+        return self.n_bars_top * get_bar_area(self.diameter_top)
+
+    @property
+    def As_bottom(self) -> float:
+        """Area de acero inferior (mm2)."""
+        return self.n_bars_bottom * get_bar_area(self.diameter_bottom)
 
     # =========================================================================
     # Implementacion de FlexuralElement Protocol

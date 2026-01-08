@@ -13,6 +13,7 @@ Referencias ACI 318-25:
 - §11.6.2: Requisitos generales de cuantía
 """
 from typing import List, Optional, TYPE_CHECKING
+import math
 
 from .results import SeismicReinforcementResult
 from ...constants.reinforcement import (
@@ -226,3 +227,41 @@ class SeismicReinforcementService:
             'max_spacing': result.max_spacing,
             'warnings': result.warnings
         }
+
+    # =========================================================================
+    # ZONAS DE EXTREMO §18.10.2.4
+    # =========================================================================
+
+    def calculate_end_zone_rho_min(self, fc_mpa: float, fy_mpa: float) -> float:
+        """
+        Calcula cuantía mínima para zonas de extremo según §18.10.2.4.
+
+        Cuando hw/lw >= 2.0, dentro de una distancia de 0.15*lw desde
+        los extremos, la cuantía mínima longitudinal es:
+
+        ρ_min = 6√f'c / fy
+
+        Args:
+            fc_mpa: Resistencia del concreto (MPa)
+            fy_mpa: Fluencia del acero (MPa)
+
+        Returns:
+            Cuantía mínima para zonas de extremo (adimensional)
+        """
+        if fy_mpa <= 0:
+            return RHO_MIN  # Fallback seguro
+
+        rho_end_zone = 6 * math.sqrt(fc_mpa) / fy_mpa
+        return max(rho_end_zone, RHO_MIN)
+
+    def get_end_zone_length(self, lw: float) -> float:
+        """
+        Obtiene longitud de zona de extremo según §18.10.2.4.
+
+        Args:
+            lw: Longitud del muro (mm)
+
+        Returns:
+            Longitud de zona de extremo (mm) = 0.15*lw
+        """
+        return 0.15 * lw

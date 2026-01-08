@@ -273,6 +273,347 @@ class MinReinforcementResult:
     """Estado general."""
 
 
+# =============================================================================
+# VERIFICACIONES SISMICAS §18.6 (Vigas) y §18.7 (Columnas)
+# =============================================================================
+
+@dataclass
+class SeismicBeamDimensionalResult:
+    """Verificacion de limites dimensionales de vigas §18.6.2."""
+    ln_d_ratio: float
+    """Relacion luz libre / peralte efectivo."""
+
+    ln_d_min: float = 4.0
+    """Minimo requerido (4.0 para §18.6.2.1(a))."""
+
+    ln_d_ok: bool = True
+    """True si ln/d >= 4.0."""
+
+    bw: float = 0.0
+    """Ancho de la viga (mm)."""
+
+    bw_min: float = 0.0
+    """Ancho minimo requerido (mm): max(0.3h, 254mm)."""
+
+    bw_ok: bool = True
+    """True si bw >= bw_min."""
+
+    projection_ok: bool = True
+    """True si proyeccion lateral cumple §18.6.2.1(c)."""
+
+    overall_ok: bool = True
+    """True si todos los limites cumplen."""
+
+    aci_reference: str = "ACI 318-25 §18.6.2"
+
+
+@dataclass
+class SeismicBeamLongitudinalResult:
+    """Verificacion de refuerzo longitudinal de vigas §18.6.3."""
+    rho_max: float
+    """Cuantia maxima permitida."""
+
+    rho_actual: float
+    """Cuantia actual."""
+
+    rho_ok: bool = True
+    """True si rho <= rho_max."""
+
+    As_min_top: float = 0.0
+    """Area minima superior (mm2)."""
+
+    As_min_bottom: float = 0.0
+    """Area minima inferior (mm2)."""
+
+    M_pos_ratio: float = 0.0
+    """Relacion M+/M- en cara de nudo."""
+
+    M_pos_ratio_ok: bool = True
+    """True si M+ >= 0.5*M- (§18.6.3.2(a))."""
+
+    M_any_ratio: float = 0.0
+    """Relacion M_any/M_max."""
+
+    M_any_ratio_ok: bool = True
+    """True si M_any >= 0.25*M_max (§18.6.3.2(b))."""
+
+    overall_ok: bool = True
+    """True si todos los requisitos cumplen."""
+
+    aci_reference: str = "ACI 318-25 §18.6.3"
+
+
+@dataclass
+class SeismicBeamTransverseResult:
+    """Verificacion de refuerzo transversal de vigas §18.6.4."""
+    s_hoop: float
+    """Espaciamiento de estribos en zona de confinamiento (mm)."""
+
+    s_max: float
+    """Espaciamiento maximo permitido (mm): min(d/4, 6db, 150mm)."""
+
+    s_ok: bool = True
+    """True si s <= s_max."""
+
+    hx: float = 0.0
+    """Separacion maxima entre barras soportadas (mm)."""
+
+    hx_max: float = 350.0
+    """Limite hx (mm): 350mm (14 in) segun §18.6.4.4."""
+
+    hx_ok: bool = True
+    """True si hx <= hx_max."""
+
+    first_hoop_ok: bool = True
+    """True si primer estribo <= 50mm de cara de columna."""
+
+    confinement_length: float = 0.0
+    """Longitud de confinamiento requerida (mm): 2h."""
+
+    overall_ok: bool = True
+    """True si todos los requisitos cumplen."""
+
+    aci_reference: str = "ACI 318-25 §18.6.4"
+
+
+@dataclass
+class SeismicBeamShearResult:
+    """Verificacion de cortante de vigas sismicas §18.6.5."""
+    Mpr_left: float
+    """Momento probable extremo izquierdo (tonf-m)."""
+
+    Mpr_right: float
+    """Momento probable extremo derecho (tonf-m)."""
+
+    Ve: float
+    """Cortante de diseno por capacidad (tonf): (Mpr1+Mpr2)/ln."""
+
+    phi_Vn: float
+    """Capacidad de cortante de diseno (tonf)."""
+
+    Vc: float = 0.0
+    """Contribucion del concreto (tonf). 0 si cortante sismico domina."""
+
+    Vs: float = 0.0
+    """Contribucion del acero (tonf)."""
+
+    Vc_allowed: bool = True
+    """True si se permite usar Vc (§18.6.5.2)."""
+
+    sf: float = 1.0
+    """Factor de seguridad (phi_Vn / Ve)."""
+
+    status: str = "OK"
+    """Estado: 'OK' o 'NO OK'."""
+
+    aci_reference: str = "ACI 318-25 §18.6.5"
+
+
+@dataclass
+class SeismicBeamChecks:
+    """Resultado completo de verificacion sismica de vigas §18.6."""
+    dimensional: Optional[SeismicBeamDimensionalResult] = None
+    """Limites dimensionales §18.6.2."""
+
+    longitudinal: Optional[SeismicBeamLongitudinalResult] = None
+    """Refuerzo longitudinal §18.6.3."""
+
+    transverse: Optional[SeismicBeamTransverseResult] = None
+    """Refuerzo transversal §18.6.4."""
+
+    shear: Optional[SeismicBeamShearResult] = None
+    """Cortante §18.6.5."""
+
+    seismic_category: str = "SPECIAL"
+    """Categoria sismica: 'SPECIAL', 'INTERMEDIATE', 'ORDINARY'."""
+
+    overall_ok: bool = True
+    """True si todas las verificaciones pasan."""
+
+    aci_reference: str = "ACI 318-25 §18.6"
+
+
+@dataclass
+class SeismicColumnDimensionalResult:
+    """Verificacion de limites dimensionales de columnas §18.7.2."""
+    b_min: float
+    """Dimension minima de la seccion (mm)."""
+
+    b_min_req: float = 300.0
+    """Minimo requerido: 300mm (12 in) segun §18.7.2.1(a)."""
+
+    b_min_ok: bool = True
+    """True si b >= 300mm."""
+
+    aspect_ratio: float = 1.0
+    """Relacion de aspecto (menor/mayor)."""
+
+    aspect_ratio_min: float = 0.4
+    """Minimo requerido: 0.4 segun §18.7.2.1(b)."""
+
+    aspect_ratio_ok: bool = True
+    """True si aspect_ratio >= 0.4."""
+
+    overall_ok: bool = True
+    """True si todos los limites cumplen."""
+
+    aci_reference: str = "ACI 318-25 §18.7.2"
+
+
+@dataclass
+class SeismicColumnStrongResult:
+    """Verificacion columna fuerte-viga debil §18.7.3.2."""
+    sum_Mnc: float
+    """Suma de Mn de columnas en el nudo (tonf-m)."""
+
+    sum_Mnb: float
+    """Suma de Mn de vigas en el nudo (tonf-m)."""
+
+    ratio: float
+    """Relacion sum_Mnc / sum_Mnb."""
+
+    ratio_required: float = 1.2
+    """Minimo requerido: 1.2 (6/5) segun §18.7.3.2."""
+
+    is_ok: bool = True
+    """True si ratio >= 1.2."""
+
+    exempt: bool = False
+    """True si la columna esta exenta (discontinua arriba y Pu < 0.1*Ag*f'c)."""
+
+    aci_reference: str = "ACI 318-25 §18.7.3.2"
+
+
+@dataclass
+class SeismicColumnLongitudinalResult:
+    """Verificacion de refuerzo longitudinal de columnas §18.7.4."""
+    rho: float
+    """Cuantia longitudinal actual."""
+
+    rho_min: float = 0.01
+    """Cuantia minima: 0.01 (1%) segun §18.7.4.1."""
+
+    rho_max: float = 0.06
+    """Cuantia maxima: 0.06 (6%) segun §18.7.4.1."""
+
+    rho_ok: bool = True
+    """True si 0.01 <= rho <= 0.06."""
+
+    n_bars_min: int = 6
+    """Numero minimo de barras (6 para hoops circulares)."""
+
+    n_bars_ok: bool = True
+    """True si numero de barras cumple."""
+
+    overall_ok: bool = True
+    """True si todos los requisitos cumplen."""
+
+    aci_reference: str = "ACI 318-25 §18.7.4"
+
+
+@dataclass
+class SeismicColumnTransverseResult:
+    """Verificacion de refuerzo transversal de columnas §18.7.5."""
+    lo: float
+    """Longitud de confinamiento (mm): max(h, lu/6, 450mm)."""
+
+    s: float
+    """Espaciamiento de estribos actual (mm)."""
+
+    s_max: float
+    """Espaciamiento maximo en lo (mm): min(h/4, 6db, so)."""
+
+    s_ok: bool = True
+    """True si s <= s_max."""
+
+    hx: float = 0.0
+    """Separacion maxima entre barras soportadas (mm)."""
+
+    hx_max: float = 350.0
+    """Limite hx (mm): 350mm o 200mm segun condiciones."""
+
+    hx_ok: bool = True
+    """True si hx <= hx_max."""
+
+    Ash_provided: float = 0.0
+    """Area de confinamiento provista (mm2)."""
+
+    Ash_required: float = 0.0
+    """Area de confinamiento requerida (mm2) segun Tabla 18.7.5.4."""
+
+    Ash_ok: bool = True
+    """True si Ash_provided >= Ash_required."""
+
+    overall_ok: bool = True
+    """True si todos los requisitos cumplen."""
+
+    aci_reference: str = "ACI 318-25 §18.7.5"
+
+
+@dataclass
+class SeismicColumnShearDetailedResult:
+    """Verificacion de cortante de columnas sismicas §18.7.6."""
+    Mpr_top: float
+    """Momento probable en extremo superior (tonf-m)."""
+
+    Mpr_bottom: float
+    """Momento probable en extremo inferior (tonf-m)."""
+
+    Ve: float
+    """Cortante de diseno por capacidad (tonf): (Mpr_top + Mpr_bottom) / lu."""
+
+    phi_Vn: float
+    """Capacidad de cortante de diseno (tonf)."""
+
+    Vc: float = 0.0
+    """Contribucion del concreto (tonf). 0 si cortante sismico domina."""
+
+    Vs: float = 0.0
+    """Contribucion del acero (tonf)."""
+
+    Vc_allowed: bool = True
+    """True si se permite usar Vc (§18.7.6.2.1)."""
+
+    sf: float = 1.0
+    """Factor de seguridad (phi_Vn / Ve)."""
+
+    status: str = "OK"
+    """Estado: 'OK' o 'NO OK'."""
+
+    aci_reference: str = "ACI 318-25 §18.7.6"
+
+
+@dataclass
+class SeismicColumnChecks:
+    """Resultado completo de verificacion sismica de columnas §18.7."""
+    dimensional: Optional[SeismicColumnDimensionalResult] = None
+    """Limites dimensionales §18.7.2."""
+
+    strong_column: Optional[SeismicColumnStrongResult] = None
+    """Columna fuerte-viga debil §18.7.3.2."""
+
+    longitudinal: Optional[SeismicColumnLongitudinalResult] = None
+    """Refuerzo longitudinal §18.7.4."""
+
+    transverse: Optional[SeismicColumnTransverseResult] = None
+    """Refuerzo transversal §18.7.5."""
+
+    shear: Optional[SeismicColumnShearDetailedResult] = None
+    """Cortante §18.7.6."""
+
+    seismic_category: str = "SPECIAL"
+    """Categoria sismica: 'SPECIAL', 'INTERMEDIATE', 'ORDINARY'."""
+
+    overall_ok: bool = True
+    """True si todas las verificaciones pasan."""
+
+    aci_reference: str = "ACI 318-25 §18.7"
+
+
+# =============================================================================
+# VERIFICACIONES DE MUROS §18.10
+# =============================================================================
+
 @dataclass
 class WallChecks:
     """Verificaciones adicionales para muros §18.10."""
@@ -320,6 +661,15 @@ class ElementVerificationResult:
 
     overall_sf: float
     """Factor de seguridad minimo entre todas las verificaciones."""
+
+    # =========================================================================
+    # Verificaciones sismicas (vigas y columnas §18.6-18.7)
+    # =========================================================================
+    seismic_beam: Optional[SeismicBeamChecks] = None
+    """Verificaciones sismicas para vigas §18.6."""
+
+    seismic_column: Optional[SeismicColumnChecks] = None
+    """Verificaciones sismicas para columnas §18.7."""
 
     # =========================================================================
     # Verificaciones adicionales (muros)

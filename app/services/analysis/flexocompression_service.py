@@ -10,9 +10,11 @@ Centraliza la generacion de curvas de interaccion P-M y verificacion
 de flexocompresion segun ACI 318-25 Capitulo 22.
 """
 from typing import Dict, List, Any, Optional, Tuple, Union
+import math
 
-from ...domain.entities import Pier, Column, PierForces, ColumnForces
+from ...domain.entities import Pier, Column, Beam, PierForces, ColumnForces
 from ...domain.entities.protocols import FlexuralElement
+from ...domain.constants.materials import get_bar_area
 from ...domain.flexure import (
     InteractionDiagramService,
     SlendernessService,
@@ -313,3 +315,158 @@ class FlexocompressionService:
                 closest_c = point.c
 
         return closest_c if closest_c and closest_c < float('inf') else None
+
+    # =========================================================================
+    # Momento Probable (Mpr) para Vigas Sismicas §18.6.5.1
+    # =========================================================================
+
+    def calculate_Mpr(
+        self,
+        beam: Beam,
+        alpha: float = 1.25
+    ) -> Tuple[float, float]:
+        """
+        Calcula Mpr en ambos extremos de una viga segun ACI 318-25 §18.6.5.1.
+
+        El momento probable Mpr se usa para calcular el cortante de diseno Ve
+        en vigas de porticos especiales resistentes a momento.
+
+        Mpr = As * (alpha * fy) * (d - a/2)
+
+        donde:
+        - alpha = 1.25 (considera sobreresistencia del acero)
+        - a = As * (alpha * fy) / (0.85 * f'c * b)
+
+        Args:
+            beam: Viga a analizar
+            alpha: Factor de amplificacion del acero (default 1.25)
+
+        Returns:
+            Tuple (Mpr_negative, Mpr_positive) en tonf-m
+            - Mpr_negative: momento con refuerzo superior (momento negativo)
+            - Mpr_positive: momento con refuerzo inferior (momento positivo)
+        """
+        fc = beam.fc  # MPa
+        fy = beam.fy  # MPa
+        b = beam.width  # mm
+        d = beam.d  # mm (peralte efectivo)
+
+        # Area de acero superior e inferior
+        As_top = beam.As_top  # mm2
+        As_bottom = beam.As_bottom  # mm2
+
+        # Calcular Mpr para momento negativo (refuerzo superior en tension)
+        fy_amp = alpha * fy
+        a_neg = (As_top * fy_amp) / (0.85 * fc * b)
+        Mpr_neg = As_top * fy_amp * (d - a_neg / 2)  # N-mm
+
+        # Calcular Mpr para momento positivo (refuerzo inferior en tension)
+        a_pos = (As_bottom * fy_amp) / (0.85 * fc * b)
+        Mpr_pos = As_bottom * fy_amp * (d - a_pos / 2)  # N-mm
+
+        # Convertir a tonf-m
+        # N-mm -> kN-m = /1e6, kN-m -> tonf-m = /9.80665
+        conversion = 1e6 * 9.80665
+        Mpr_neg_tonf = Mpr_neg / conversion
+        Mpr_pos_tonf = Mpr_pos / conversion
+
+        return (round(Mpr_neg_tonf, 2), round(Mpr_pos_tonf, 2))
+
+    def calculate_Ve_beam(
+        self,
+        beam: Beam,
+        wu: float = 0.0
+    ) -> Tuple[float, float, float]:
+        """
+        Calcula el cortante de diseno Ve para vigas sismicas segun §18.6.5.1.
+
+        Ve = (Mpr_left + Mpr_right) / ln ± wu*ln/2
+
+        El cortante sismico se calcula asumiendo que en ambos extremos
+        se desarrollan los momentos probables Mpr con curvatura opuesta.
+
+        Args:
+            beam: Viga a analizar
+            wu: Carga distribuida factorizada (tonf/m) para gravedad
+                Segun §18.6.5.1: wu no debe incluir E
+
+        Returns:
+            Tuple (Ve_left, Ve_right, Ve_seismic) en tonf
+            - Ve_left: Cortante en extremo izquierdo
+            - Ve_right: Cortante en extremo derecho
+            - Ve_seismic: Componente sismica (Mpr_left + Mpr_right) / ln
+        """
+        # Obtener o calcular Mpr
+        if beam.Mpr_left is not None and beam.Mpr_right is not None:
+            Mpr_neg = beam.Mpr_left
+            Mpr_pos = beam.Mpr_right
+        else:
+            Mpr_neg, Mpr_pos = self.calculate_Mpr(beam)
+
+        # Luz libre en metros
+        ln_m = beam.ln_calculated / 1000
+
+        # Cortante sismico (ambos extremos desarrollan Mpr)
+        Ve_seismic = (abs(Mpr_neg) + abs(Mpr_pos)) / ln_m
+
+        # Cortante por gravedad
+        Vg = wu * ln_m / 2 if wu > 0 else 0
+
+        # Cortante total en cada extremo
+        Ve_left = Ve_seismic + Vg
+        Ve_right = Ve_seismic + Vg  # Igual para carga uniforme
+
+        return (round(Ve_left, 2), round(Ve_right, 2), round(Ve_seismic, 2))
+
+    def calculate_Mn_column_at_Pu(
+        self,
+        column: Column,
+        Pu: float,
+        direction: str = 'primary'
+    ) -> float:
+        """
+        Calcula Mn de una columna para un Pu dado.
+
+        Usado para verificacion columna fuerte-viga debil §18.7.3.2.
+        Debe usarse el Pu que resulte en el menor Mn.
+
+        Args:
+            column: Columna a analizar
+            Pu: Carga axial (tonf)
+            direction: 'primary' o 'secondary'
+
+        Returns:
+            Mn nominal (tonf-m) - sin factor phi
+        """
+        # Generar curva de interaccion sin phi (Mn nominal)
+        interaction_points, _ = self.generate_interaction_curve(
+            column,
+            direction=direction,
+            apply_slenderness=False
+        )
+
+        # Interpolar Mn en la curva
+        if not interaction_points:
+            return 0.0
+
+        # Ordenar por Pn (de mayor a menor)
+        points_sorted = sorted(interaction_points, key=lambda p: p.Pn, reverse=True)
+
+        # Buscar el rango donde cae Pu
+        for i in range(len(points_sorted) - 1):
+            p1, p2 = points_sorted[i], points_sorted[i + 1]
+            # Convertir Pn a tonf (si no lo esta)
+            Pn1 = p1.Pn if p1.Pn < 1e6 else p1.Pn / (1000 * 9.80665)
+            Pn2 = p2.Pn if p2.Pn < 1e6 else p2.Pn / (1000 * 9.80665)
+
+            if Pn1 >= Pu >= Pn2:
+                if abs(Pn1 - Pn2) < 0.001:
+                    return p1.Mn
+                ratio = (Pn1 - Pu) / (Pn1 - Pn2)
+                Mn = p1.Mn + ratio * (p2.Mn - p1.Mn)
+                return round(Mn, 2)
+
+        # Si Pu esta fuera del rango, usar extremo
+        if Pu > points_sorted[0].Pn:
+            return points_sorted[0].Mn
+        return points_sorted[-1].Mn

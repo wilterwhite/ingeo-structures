@@ -18,6 +18,7 @@ from ..results import (
     WallPierTransverseReinforcement,
     WallPierBoundaryCheck,
     BoundaryZoneCheck,
+    EdgePierCheck,
     WallPierDesignResult,
 )
 from .classification import classify_wall_pier, COLUMN_MIN_THICKNESS_MM
@@ -45,10 +46,6 @@ class WallPierService:
     - Esfuerzos: MPa
     - Fuerzas: tonf
     """
-
-    # Constantes
-    EXTENSION_MIN_MM = 304.8  # 12" en mm
-    COLUMN_MIN_THICKNESS_MM = COLUMN_MIN_THICKNESS_MM
 
     def __init__(self):
         """Inicializa los servicios dependientes."""
@@ -202,7 +199,7 @@ class WallPierService:
         self,
         pier_Ve: float,
         adjacent_segments_capacity: List[float]
-    ) -> dict:
+    ) -> EdgePierCheck:
         """
         Verifica requisitos para pilares en borde de muro.
 
@@ -216,18 +213,17 @@ class WallPierService:
                                        segmentos adyacentes (tonf)
 
         Returns:
-            Dict con verificación
+            EdgePierCheck con verificación
         """
         total_capacity = sum(adjacent_segments_capacity)
         is_ok = total_capacity >= pier_Ve
 
-        return {
-            "pier_Ve": pier_Ve,
-            "adjacent_capacity": total_capacity,
-            "transfer_ok": is_ok,
-            "required_transfer": pier_Ve,
-            "aci_reference": "ACI 318-25 18.10.8.2"
-        }
+        return EdgePierCheck(
+            pier_Ve=pier_Ve,
+            adjacent_capacity=total_capacity,
+            transfer_ok=is_ok,
+            required_transfer=pier_Ve
+        )
 
     # =========================================================================
     # DISEÑO COMPLETO
@@ -249,7 +245,11 @@ class WallPierService:
         has_single_curtain: bool = False,
         use_capacity_design: bool = True,
         Omega_o: float = 3.0,
-        lambda_factor: float = 1.0
+        lambda_factor: float = 1.0,
+        As_boundary_left: float = 0,
+        As_boundary_right: float = 0,
+        Mu: float = 0,
+        adjacent_segments_capacity: Optional[List[float]] = None
     ) -> WallPierDesignResult:
         """
         Realiza diseño completo del pilar de muro.
@@ -270,6 +270,11 @@ class WallPierService:
             use_capacity_design: Si usar diseño por capacidad
             Omega_o: Factor de sobrerresistencia
             lambda_factor: Factor para concreto liviano
+            As_boundary_left: Área de acero en extremo izquierdo (mm2), para §18.10.2.4
+            As_boundary_right: Área de acero en extremo derecho (mm2), para §18.10.2.4
+            Mu: Momento último en sección crítica (tonf-m), para §18.10.2.4
+            adjacent_segments_capacity: Capacidad de transferencia de segmentos
+                                       adyacentes (tonf), para §18.10.8.2
 
         Returns:
             WallPierDesignResult con diseño completo
@@ -345,12 +350,45 @@ class WallPierService:
                 "verificar (a)-(f)"
             )
 
+        # Verificar zonas de extremo §18.10.2.4 (si hw/lw >= 2.0)
+        boundary_zone_check = None
+        hw_lw = hw / lw if lw > 0 else 0
+        if hw_lw >= 2.0 and (As_boundary_left > 0 or As_boundary_right > 0):
+            boundary_zone_check = check_boundary_zone_reinforcement(
+                hw=hw,
+                lw=lw,
+                bw=bw,
+                fc=fc,
+                fy=fy,
+                As_left=As_boundary_left,
+                As_right=As_boundary_right,
+                Mu=Mu,
+                Vu=Vu
+            )
+            if not boundary_zone_check.is_ok:
+                warnings.extend(boundary_zone_check.warnings)
+
+        # Verificar requisitos de pilar en borde §18.10.8.2 (si se provee capacidad)
+        edge_pier_check = None
+        if adjacent_segments_capacity is not None:
+            Ve = shear_design.Ve
+            edge_pier_check = self.check_edge_pier_requirements(
+                pier_Ve=Ve,
+                adjacent_segments_capacity=adjacent_segments_capacity
+            )
+            if not edge_pier_check.transfer_ok:
+                warnings.append(
+                    f"Transferencia de cortante insuficiente: capacidad={edge_pier_check.adjacent_capacity:.1f} tonf "
+                    f"< Ve={edge_pier_check.pier_Ve:.1f} tonf (§18.10.8.2)"
+                )
+
         return WallPierDesignResult(
             classification=classification,
             shear_design=shear_design,
             transverse=transverse,
             boundary_check=boundary_check,
-            boundary_zone_check=None,  # Requires Pier entity; use verify_from_pier
+            boundary_zone_check=boundary_zone_check,
+            edge_pier_check=edge_pier_check,
             warnings=warnings,
             aci_reference="ACI 318-25 18.10.8"
         )
@@ -365,7 +403,9 @@ class WallPierService:
         Vu: float = 0,
         sigma_max: float = 0,
         Mpr_top: float = 0,
-        Mpr_bottom: float = 0
+        Mpr_bottom: float = 0,
+        Mu: float = 0,
+        adjacent_segments_capacity: Optional[List[float]] = None
     ) -> WallPierDesignResult:
         """
         Verifica un Pier como pilar de muro.
@@ -376,6 +416,9 @@ class WallPierService:
             sigma_max: Esfuerzo máximo (MPa)
             Mpr_top: Momento probable superior (tonf-m)
             Mpr_bottom: Momento probable inferior (tonf-m)
+            Mu: Momento último en sección crítica (tonf-m), para §18.10.2.4
+            adjacent_segments_capacity: Capacidad de transferencia de segmentos
+                                       adyacentes (tonf), para §18.10.8.2
 
         Returns:
             WallPierDesignResult
@@ -392,5 +435,9 @@ class WallPierService:
             sigma_max=sigma_max,
             Mpr_top=Mpr_top,
             Mpr_bottom=Mpr_bottom,
-            has_single_curtain=pier.n_meshes == 1
+            has_single_curtain=pier.n_meshes == 1,
+            As_boundary_left=pier.As_boundary_left,
+            As_boundary_right=pier.As_boundary_right,
+            Mu=Mu,
+            adjacent_segments_capacity=adjacent_segments_capacity
         )

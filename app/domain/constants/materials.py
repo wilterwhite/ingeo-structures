@@ -5,6 +5,7 @@ Constantes de materiales para diseno estructural segun ACI 318-25.
 Centraliza propiedades de materiales usadas en multiples modulos.
 """
 from enum import Enum
+import math
 
 
 class SteelGrade(Enum):
@@ -150,6 +151,63 @@ def get_effective_fyt_confinement(fyt: float) -> float:
         fyt efectivo limitado a 690 MPa
     """
     return min(fyt, FYT_MAX_CONFINEMENT_MPA)
+
+
+# =============================================================================
+# PROPIEDADES DEL ACERO (ACI 318-25 §20.2)
+# =============================================================================
+
+# Módulo de elasticidad del acero (§20.2.2.2)
+ES_MPA = 200000  # MPa (29,000 ksi)
+
+# Deformación última del concreto (§22.2.2.1)
+EPSILON_CU = 0.003
+
+
+# =============================================================================
+# PROPIEDADES DEL CONCRETO (ACI 318-25 §19.2)
+# =============================================================================
+
+def calculate_Ec(fc_mpa: float) -> float:
+    """
+    Calcula el módulo de elasticidad del concreto según §19.2.2.1.
+
+    Ec = 4700 * sqrt(f'c) para concreto de peso normal (wc = 2300 kg/m³)
+
+    Args:
+        fc_mpa: Resistencia especificada del concreto (MPa)
+
+    Returns:
+        Módulo de elasticidad Ec (MPa)
+
+    Examples:
+        >>> calculate_Ec(28)  # f'c = 28 MPa
+        24870.0
+        >>> calculate_Ec(35)  # f'c = 35 MPa
+        27806.0
+    """
+    return 4700 * math.sqrt(fc_mpa)
+
+
+def calculate_fr(fc_mpa: float) -> float:
+    """
+    Calcula el módulo de ruptura del concreto según §19.2.3.1.
+
+    fr = 0.62 * lambda * sqrt(f'c) para concreto de peso normal (lambda = 1.0)
+
+    Args:
+        fc_mpa: Resistencia especificada del concreto (MPa)
+
+    Returns:
+        Módulo de ruptura fr (MPa)
+
+    Examples:
+        >>> calculate_fr(28)  # f'c = 28 MPa
+        3.28
+        >>> calculate_fr(35)  # f'c = 35 MPa
+        3.67
+    """
+    return 0.62 * math.sqrt(fc_mpa)
 
 
 # =============================================================================

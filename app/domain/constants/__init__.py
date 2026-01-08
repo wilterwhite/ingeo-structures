@@ -95,6 +95,12 @@ from .materials import (
     get_effective_fc_shear,
     get_effective_fyt_shear,
     get_effective_fyt_confinement,
+    # Propiedades del acero (§20.2)
+    ES_MPA,
+    EPSILON_CU,
+    # Propiedades del concreto (§19.2)
+    calculate_Ec,
+    calculate_fr,
     # Bloque de Whitney (§22.2.2.4.3)
     calculate_beta1,
 )

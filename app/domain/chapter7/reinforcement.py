@@ -112,6 +112,8 @@ def get_maximum_spacing(
         return min(5 * h_mm, 450)
 
 
+# TODO: Funcion huerfana - requerida por ACI 318-25 §7.7.6.2 pero no usada aun.
+# Exportar en __init__.py cuando se implemente verificacion de T&S separada.
 def get_maximum_spacing_shrinkage(h_mm: float) -> float:
     """
     Calcula el espaciamiento maximo del refuerzo de T&S segun 7.7.6.2.1.
@@ -177,8 +179,9 @@ def check_reinforcement_limits(
     )
 
 
-# Constantes de refuerzo
-FLEXURE_RHO_MIN_GR420 = 0.0018  # Cuantia minima para Gr420
-FLEXURE_RHO_MIN_GR300 = 0.0020  # Cuantia minima para Gr300
-MAX_SPACING_FLEXURE = 450       # mm - espaciamiento maximo absoluto
-MAX_SPACING_SHRINKAGE = 450     # mm - espaciamiento maximo T&S
+# TODO: Constantes huerfanas - requeridas por ACI 318-25 pero no usadas aun.
+# Refactorizar para usar estas constantes en lugar de literales en las funciones.
+FLEXURE_RHO_MIN_GR420 = 0.0018  # Cuantia minima para Gr420 (§7.6.1.1)
+FLEXURE_RHO_MIN_GR300 = 0.0020  # Cuantia minima para Gr300 (§7.6.1.1)
+MAX_SPACING_FLEXURE = 450       # mm - espaciamiento maximo absoluto (18 in, §7.7.2.3)
+MAX_SPACING_SHRINKAGE = 450     # mm - espaciamiento maximo T&S (18 in, §7.7.6.2)

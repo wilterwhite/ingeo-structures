@@ -52,7 +52,30 @@ app/
 │   │   └── reinforcement.py                 # Distribución de armadura
 │   ├── chapter18/                           # Requisitos sísmicos (Cap. 18)
 │   │   ├── __init__.py
+│   │   ├── common/                          # Infraestructura común
+│   │   │   └── seismic_category.py          # SeismicCategory enum
 │   │   ├── results.py                       # Dataclasses de resultados
+│   │   ├── beams/                           # Vigas sísmicas §18.6
+│   │   │   ├── __init__.py
+│   │   │   ├── results.py                   # SeismicBeamResult
+│   │   │   └── service.py                   # SeismicBeamService
+│   │   ├── columns/                         # Columnas sísmicas §18.7
+│   │   │   ├── __init__.py
+│   │   │   ├── dimensional.py               # Límites dimensionales
+│   │   │   ├── flexural_strength.py         # Columna fuerte-viga débil
+│   │   │   ├── longitudinal.py              # Refuerzo longitudinal
+│   │   │   ├── results.py                   # SeismicColumnResult
+│   │   │   ├── service.py                   # SeismicColumnService
+│   │   │   ├── shear.py                     # Cortante sísmico
+│   │   │   └── transverse.py                # Refuerzo transversal
+│   │   ├── non_sfrs/                        # No-SFRS §18.14
+│   │   │   ├── __init__.py
+│   │   │   ├── results.py                   # NonSfrsResult
+│   │   │   └── service.py                   # NonSfrsService
+│   │   ├── coupled_walls/                   # Muros acoplados §18.10.9
+│   │   │   ├── __init__.py
+│   │   │   ├── results.py                   # DuctileCoupledWallResult
+│   │   │   └── service.py                   # DuctileCoupledWallService
 │   │   ├── boundary_elements/               # Elementos de borde §18.10.6
 │   │   │   ├── __init__.py
 │   │   │   ├── confinement.py               # Confinamiento elementos borde
@@ -203,8 +226,8 @@ Los servicios de dominio son **la única fuente de verdad** para fórmulas y req
 | Servicio | Responsabilidad |
 |----------|-----------------|
 | `StructuralAnalysisService` | Orquestador principal, gestiona sesiones y flujo |
-| `ElementService` | Verificación unificada de Beam/Column/Pier (SF, DCR) |
-| `FlexocompressionService` | Genera curvas P-M de interacción |
+| `ElementService` | Verificación unificada de Beam/Column/Pier (SF, DCR, sísmico) |
+| `FlexocompressionService` | Genera curvas P-M de interacción, calcula Mpr |
 | `ShearService` | Calcula Vc + Vs y DCR de corte |
 | `ProposalService` | Genera propuestas de diseño cuando falla |
 | `StatisticsService` | Estadísticas y gráfico resumen |
@@ -228,6 +251,10 @@ Los servicios de dominio son **la única fuente de verdad** para fórmulas y req
 | `BoundaryElementService` | Elementos de borde (§18.10.6) |
 | `WallPierService` | Wall piers (§18.10.8) |
 | `CouplingBeamService` | Vigas de acople (§18.10.7) |
+| `SeismicBeamService` | Vigas sísmicas §18.6 (dimensional, longitudinal, transversal, cortante) |
+| `SeismicColumnService` | Columnas sísmicas §18.7 (dimensional, columna fuerte, refuerzo, cortante) |
+| `NonSfrsService` | Elementos no-SFRS §18.14 (compatibilidad de deriva) |
+| `DuctileCoupledWallService` | Muros acoplados dúctiles §18.10.9 |
 
 ### `domain/flexure/` - Flexocompresión
 
@@ -385,8 +412,10 @@ pytest tests/domain/flexure/test_slenderness.py -v
 | Elemento | Verificación Implementada | Pendiente |
 |----------|---------------------------|-----------|
 | **Piers** | Flexocompresión + Cortante bidireccional + Esbeltez + Requisitos sísmicos (§18.10) | - |
-| **Columnas** | Flexocompresión + Cortante + Esbeltez | Requisitos sísmicos (§18.7) |
-| **Vigas** | Flexocompresión + Cortante | Deflexiones |
+| **Columnas** | Flexocompresión + Cortante + Esbeltez + Requisitos sísmicos (§18.7) | - |
+| **Vigas** | Flexocompresión + Cortante + Requisitos sísmicos (§18.6) | Deflexiones |
+| **Non-SFRS** | Compatibilidad de deriva (§18.14) | - |
+| **Muros Acoplados** | Verificación sistema dúctil (§18.10.9) | - |
 
 ### Tablas ETABS Requeridas
 

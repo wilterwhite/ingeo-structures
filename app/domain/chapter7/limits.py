@@ -182,5 +182,3 @@ def check_thickness_one_way(
     )
 
 
-# Constantes adicionales
-MINIMUM_SLAB_THICKNESS_MM = 100  # Espesor minimo absoluto recomendado

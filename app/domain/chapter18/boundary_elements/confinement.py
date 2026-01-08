@@ -12,7 +12,7 @@ import math
 
 from ...calculations.confinement import calculate_ash_sbc, calculate_rho_s
 from ...constants.materials import SteelGrade
-from ...constants.units import N_TO_TONF
+from ...constants.units import N_TO_TONF, SIX_INCH_MM, EIGHT_INCH_MM
 from ..results import BoundaryTransverseReinforcement
 
 
@@ -94,27 +94,23 @@ def max_tie_spacing(
     Returns:
         Espaciamiento máximo en mm
     """
-    # Convertir pulgadas a mm
-    SIX_INCH = 152.4
-    EIGHT_INCH = 203.2
-
     if steel_grade == SteelGrade.GRADE_60:
         if near_critical:
-            return min(6 * db, SIX_INCH)
+            return min(6 * db, SIX_INCH_MM)
         else:
-            return min(8 * db, EIGHT_INCH)
+            return min(8 * db, EIGHT_INCH_MM)
 
     elif steel_grade == SteelGrade.GRADE_80:
         if near_critical:
-            return min(5 * db, SIX_INCH)
+            return min(5 * db, SIX_INCH_MM)
         else:
-            return min(6 * db, SIX_INCH)
+            return min(6 * db, SIX_INCH_MM)
 
     else:  # GRADE_100
         if near_critical:
-            return min(4 * db, SIX_INCH)
+            return min(4 * db, SIX_INCH_MM)
         else:
-            return min(6 * db, SIX_INCH)
+            return min(6 * db, SIX_INCH_MM)
 
 
 def check_horizontal_reinforcement_termination(

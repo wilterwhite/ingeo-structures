@@ -10,6 +10,9 @@ from typing import Dict, Tuple
 from enum import Enum
 from dataclasses import dataclass
 
+# Factor de correccion por fy: definido en §7.3.1.1.1, aplicable a §8.3.1.1
+from ..chapter7.limits import get_fy_correction_factor
+
 
 class TwoWaySystem(Enum):
     """Tipo de sistema de losa 2-Way segun Tabla 8.3.1.1."""
@@ -58,19 +61,7 @@ class TwoWayThicknessResult:
     aci_reference: str     # Referencia ACI
 
 
-def get_fy_correction_factor(fy_mpa: float) -> float:
-    """
-    Calcula el factor de correccion por fy.
-
-    Para fy != 420 MPa, se corrige por (0.4 + fy/700).
-
-    Args:
-        fy_mpa: Limite de fluencia del acero (MPa)
-
-    Returns:
-        Factor de correccion (1.0 para fy=420)
-    """
-    return 0.4 + fy_mpa / 700
+# get_fy_correction_factor: importada desde chapter7.limits (§7.3.1.1.1)
 
 
 def get_minimum_thickness_two_way(

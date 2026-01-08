@@ -63,6 +63,13 @@ M_TO_FT = 1 / FT_TO_M      # 3.2808
 FT_TO_MM = FT_TO_M * 1000  # 304.8
 MM_TO_FT = 1 / FT_TO_MM    # 0.00328084
 
+# Pulgadas especificas usadas en ACI 318-25
+SIX_INCH_MM = 152.4        # 6" en mm
+EIGHT_INCH_MM = 203.2      # 8" en mm
+TWELVE_INCH_MM = 304.8     # 12" en mm
+FOURTEEN_INCH_MM = 355.6   # 14" en mm
+EIGHTEEN_INCH_MM = 457.2   # 18" en mm
+
 # =============================================================================
 # CONVERSION DE AREA
 # =============================================================================
