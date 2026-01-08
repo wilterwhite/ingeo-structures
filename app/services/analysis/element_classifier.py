@@ -4,9 +4,15 @@ Clasificador automatico de elementos estructurales segun ACI 318-25.
 
 Clasifica Beam, Column y Pier en tipos especificos para aplicar
 las verificaciones correspondientes.
+
+Usa WallClassificationService del dominio para clasificacion de piers,
+evitando duplicacion de logica.
 """
 from enum import Enum
 from typing import Union, TYPE_CHECKING
+
+from ...domain.shear import WallClassificationService
+from ...domain.shear.classification import ElementType as DomainElementType
 
 if TYPE_CHECKING:
     from ...domain.entities import Beam, Column, Pier
@@ -17,6 +23,9 @@ class ElementType(Enum):
     Tipos de elementos estructurales segun ACI 318-25.
 
     Cada tipo determina que verificaciones aplicar y con que parametros.
+
+    Nota: Para piers/muros, los valores coinciden con domain.shear.ElementType
+    para facilitar la conversion.
     """
     # Vigas - §18.6
     BEAM = "beam"
@@ -25,7 +34,7 @@ class ElementType(Enum):
     COLUMN_NONSEISMIC = "column_nonseismic"
     COLUMN_SEISMIC = "column_seismic"
 
-    # Muros y pilares de muro - §18.10
+    # Muros y pilares de muro - §18.10 (valores coinciden con domain.shear.ElementType)
     WALL_PIER_COLUMN = "wall_pier_column"      # lw/tw <= 2.5, requisitos columna
     WALL_PIER_ALTERNATE = "wall_pier_alt"      # 2.5 < lw/tw <= 6.0, §18.10.8.1
     WALL_SQUAT = "wall_squat"                  # lw/tw > 6.0, hw/lw < 2.0
@@ -76,6 +85,16 @@ class ElementType(Enum):
         return sections.get(self, "")
 
 
+# Mapeo de ElementType del dominio a ElementType de services
+_DOMAIN_TO_SERVICE_TYPE = {
+    DomainElementType.COLUMN: ElementType.COLUMN_SEISMIC,  # Default sismico
+    DomainElementType.WALL: ElementType.WALL,
+    DomainElementType.WALL_PIER_COLUMN: ElementType.WALL_PIER_COLUMN,
+    DomainElementType.WALL_PIER_ALTERNATE: ElementType.WALL_PIER_ALTERNATE,
+    DomainElementType.WALL_SQUAT: ElementType.WALL_SQUAT,
+}
+
+
 class ElementClassifier:
     """
     Clasificador automatico de elementos estructurales.
@@ -84,7 +103,14 @@ class ElementClassifier:
     - Tipo de entidad (Beam, Column, Pier)
     - Propiedades geometricas (lw/tw, hw/lw)
     - Flag sismico (is_seismic)
+
+    Para Piers, delega a WallClassificationService del dominio
+    para evitar duplicacion de la logica de clasificacion.
     """
+
+    def __init__(self):
+        """Inicializa el clasificador con el servicio de clasificacion del dominio."""
+        self._wall_classification = WallClassificationService()
 
     def classify(
         self,
@@ -120,35 +146,21 @@ class ElementClassifier:
 
     def _classify_pier(self, pier: 'Pier') -> ElementType:
         """
-        Clasifica un pier segun ACI 318-25 §18.10.8.
+        Clasifica un pier usando WallClassificationService del dominio.
 
-        Criterios:
-        - lw/tw <= 2.5: Wall pier tipo columna (requisitos de columna)
-        - 2.5 < lw/tw <= 6.0: Wall pier metodo alternativo
-        - lw/tw > 6.0 + hw/lw < 2.0: Muro rechoncho
-        - lw/tw > 6.0 + hw/lw >= 2.0: Muro esbelto
+        Delega la logica de clasificacion al dominio y mapea
+        el resultado al ElementType de services.
         """
-        # lw = ancho del muro (width)
-        # tw = espesor del muro (thickness)
-        # hw = altura del muro (height)
-        lw = pier.width
-        tw = pier.thickness
-        hw = pier.height
+        # Usar el servicio del dominio para clasificar
+        classification = self._wall_classification.classify(
+            lw=pier.width,
+            tw=pier.thickness,
+            hw=pier.height
+        )
 
-        if tw <= 0 or lw <= 0:
-            return ElementType.WALL
-
-        lw_tw = lw / tw
-        hw_lw = hw / lw if lw > 0 else 0
-
-        if lw_tw <= 2.5:
-            return ElementType.WALL_PIER_COLUMN
-        elif lw_tw <= 6.0:
-            return ElementType.WALL_PIER_ALTERNATE
-        elif hw_lw < 2.0:
-            return ElementType.WALL_SQUAT
-        else:
-            return ElementType.WALL
+        # Mapear el tipo del dominio al tipo de services
+        domain_type = classification.element_type
+        return _DOMAIN_TO_SERVICE_TYPE.get(domain_type, ElementType.WALL)
 
     def get_classification_info(
         self,
@@ -174,11 +186,14 @@ class ElementClassifier:
         }
 
         if isinstance(element, Pier):
-            lw = element.width
-            tw = element.thickness
-            hw = element.height
-            info['lw_tw'] = round(lw / tw, 2) if tw > 0 else 0
-            info['hw_lw'] = round(hw / lw, 2) if lw > 0 else 0
+            # Usar WallClassificationService para obtener ratios ya calculados
+            classification = self._wall_classification.classify(
+                lw=element.width,
+                tw=element.thickness,
+                hw=element.height
+            )
+            info['lw_tw'] = round(classification.lw_tw, 2)
+            info['hw_lw'] = round(classification.hw_lw, 2)
             info['is_wall_pier'] = element_type.is_wall_pier
 
         return info
