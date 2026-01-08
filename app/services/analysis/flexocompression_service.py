@@ -21,9 +21,7 @@ from ...domain.flexure import (
     FlexureChecker,
 )
 from ...domain.constants.phi_chapter21 import PHI_COMPRESSION
-
-# Conversion N -> tonf
-N_TO_TONF = 9806.65
+from ...domain.constants.units import N_TO_TONF
 
 
 class FlexocompressionService:

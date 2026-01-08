@@ -31,8 +31,8 @@ from ..constants.shear import (
     SHEAR_FRICTION_VN_MAX_LIMIT_MPa,
     SHEAR_FRICTION_VN_MAX_OTHER_MPa,
     SHEAR_FRICTION_FY_LIMIT_MPa,
-    N_TO_TONF,
 )
+from ..constants.units import N_TO_TONF
 
 
 class SurfaceCondition(Enum):

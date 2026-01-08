@@ -30,13 +30,12 @@ from .verification_result import (
     MinReinforcementResult,
 )
 
+from ...domain.constants.units import N_TO_TONF
+
 if TYPE_CHECKING:
     from .proposal_service import ProposalService
     from ..presentation.plot_generator import PlotGenerator
     from ..parsing.session_manager import SessionManager
-
-# Constantes de conversion
-N_TO_TONF = 9806.65
 
 
 def _format_sf(value: float) -> float:

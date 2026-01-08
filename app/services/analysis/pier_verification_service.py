@@ -39,6 +39,7 @@ from ...domain.chapter18 import (
 from ...domain.shear import ShearVerificationService
 from ...domain.flexure import SlendernessService
 from ...domain.constants import SeismicDesignCategory, WallCategory, N_TO_TONF, NMM_TO_TONFM
+from .force_extractors import extract_max_forces
 
 
 # =========================================================================
@@ -281,29 +282,13 @@ class PierVerificationService:
         if not pier_forces or not pier_forces.combinations:
             return self._verify_chapter_11(pier, wall_type=wall_type)
 
-        Vu_max = 0
-        Pu_max = 0
-        Mua_max = 0
-
-        for combo in pier_forces.combinations:
-            V2 = abs(combo.V2)
-            V3 = abs(combo.V3)
-            Vu = max(V2, V3)
-            P = abs(combo.P)
-            M = combo.moment_resultant
-
-            if Vu > Vu_max:
-                Vu_max = Vu
-            if P > Pu_max:
-                Pu_max = P
-            if M > Mua_max:
-                Mua_max = M
+        max_forces = extract_max_forces(pier_forces)
 
         return self._verify_chapter_11(
             pier=pier,
-            Vu=Vu_max,
-            Pu=Pu_max,
-            Mua=Mua_max,
+            Vu=max_forces.Vu_max,
+            Pu=max_forces.Pu_max,
+            Mua=max_forces.Mu_max,
             wall_type=wall_type
         )
 

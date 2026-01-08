@@ -8,11 +8,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, Optional, List, Tuple
 
 from ..parsing.session_manager import SessionManager
-
-
-# Constante de conversión
-TONF_TO_N = 9806.65
-TONFM_TO_NMM = 9806650
+from ...domain.constants.units import TONF_TO_N, TONFM_TO_NMM
 
 
 @dataclass

@@ -17,8 +17,11 @@ Referencias: ACI 318-25 Appendix E
 # Basado en gravedad estandar: g = 9.80665 m/s²
 # 1 tonf (metric ton-force) = 1000 kg × g = 9806.65 N
 
-N_TO_TONF = 9806.65        # 1 tonf = 9806.65 N
-TONF_TO_N = 1 / N_TO_TONF  # Para convertir tonf a N
+# NOTA: Por compatibilidad historica, N_TO_TONF tiene el valor 9806.65
+# Uso: tonf_to_N = value_tonf * N_TO_TONF
+#      N_to_tonf = value_N / N_TO_TONF
+TONF_TO_N = 9806.65        # 1 tonf = 9806.65 N (multiplicar tonf × esto = N)
+N_TO_TONF = TONF_TO_N      # Alias por compatibilidad (dividir N por esto para obtener tonf)
 
 # Otras conversiones de fuerza
 KGF_TO_N = 9.80665         # 1 kgf = 9.80665 N (exacto)
@@ -32,8 +35,11 @@ KN_TO_KIP = 1 / KIP_TO_KN
 # CONVERSION DE MOMENTO
 # =============================================================================
 
-NMM_TO_TONFM = 9806650.0   # 1 tonf-m = 9806650 N-mm
-TONFM_TO_NMM = 1 / NMM_TO_TONFM
+# NOTA: Por compatibilidad historica, NMM_TO_TONFM tiene el valor 9806650
+# Uso: tonfm_to_Nmm = value_tonfm * NMM_TO_TONFM
+#      Nmm_to_tonfm = value_Nmm / NMM_TO_TONFM
+TONFM_TO_NMM = 9806650.0   # 1 tonf-m = 9806650 N-mm (multiplicar tonf-m × esto = N-mm)
+NMM_TO_TONFM = TONFM_TO_NMM  # Alias por compatibilidad (dividir N-mm por esto para obtener tonf-m)
 
 # Otras conversiones de momento
 KIPFT_TO_KNM = 1.356       # 1 kip-ft = 1.356 kN-m

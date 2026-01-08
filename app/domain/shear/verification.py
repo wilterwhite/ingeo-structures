@@ -30,10 +30,10 @@ from ..constants.shear import (
     VS_MAX_COEF,
     ASPECT_RATIO_WALL_LIMIT,
     DEFAULT_COVER_MM,
-    N_TO_TONF,
     calculate_alpha_sh,
     ALPHA_SH_MIN,
 )
+from ..constants.units import N_TO_TONF
 from ..constants.reinforcement import check_rho_vertical_ge_horizontal
 from .results import (
     ShearResult,

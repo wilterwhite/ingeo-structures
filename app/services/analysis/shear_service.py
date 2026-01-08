@@ -38,8 +38,8 @@ from ...domain.constants.shear import (
     PHI_SHEAR,
     VC_COEF_COLUMN,
     VS_MAX_COEF,
-    N_TO_TONF,
 )
+from ...domain.constants.units import N_TO_TONF, TONF_TO_N, TONFM_TO_NMM
 from ...domain.chapter18 import (
     ShearAmplificationService,
     BoundaryElementService,
@@ -570,8 +570,8 @@ class ShearService:
             # Calcular sigma_max usando propiedades de sección bruta
             Ig = pier.thickness * pier.width**3 / 12
             y = pier.width / 2
-            Pu_N = abs(Pu) * 9806.65
-            Mu_Nmm = abs(Mu) * 9806650
+            Pu_N = abs(Pu) * TONF_TO_N
+            Mu_Nmm = abs(Mu) * TONFM_TO_NMM
             sigma_max = (Pu_N / Ag + Mu_Nmm * y / Ig) if Ag > 0 and Ig > 0 else 0
 
             return self._boundary_element.verify_boundary_element(
@@ -998,7 +998,7 @@ class ShearService:
             Vu3 = abs(combo.V3)
             Vu_max = max(Vu2, Vu3)
             Pu = -combo.P  # Positivo = compresión (tonf)
-            Pu_N = Pu * 9806.65  # Convertir a N
+            Pu_N = Pu * TONF_TO_N
 
             # Determinar cortante de diseño
             if use_capacity_design:

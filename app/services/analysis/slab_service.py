@@ -31,11 +31,7 @@ from ...domain.chapter8.limits import (
 )
 from ...domain.constants.materials import LAMBDA_NORMAL
 from ...domain.constants.shear import PHI_SHEAR, VC_COEF_COLUMN
-
-
-# Factores de conversion
-N_TO_TONF = 9806.65  # N a tonf
-NM_TO_TONFM = 9806650  # N-mm a tonf-m
+from ...domain.constants.units import N_TO_TONF, NMM_TO_TONFM
 
 
 def _format_sf(value: float) -> Any:
@@ -321,7 +317,7 @@ class SlabService:
         phi = 0.90
 
         # Convertir a tonf-m
-        phi_Mn = phi * Mn / NM_TO_TONFM
+        phi_Mn = phi * Mn / NMM_TO_TONFM
 
         return phi_Mn
 
@@ -344,7 +340,7 @@ class SlabService:
         jd = 0.9 * d
 
         # Mu en tonf-m, convertir a N-mm
-        Mu_Nmm = Mu * NM_TO_TONFM
+        Mu_Nmm = Mu * NMM_TO_TONFM
 
         As_req = Mu_Nmm / (phi * fy * jd)
 
