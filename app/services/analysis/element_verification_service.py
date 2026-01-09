@@ -13,7 +13,7 @@ from ...domain.entities import Beam, Column, Pier
 from ...domain.entities import BeamForces, ColumnForces, PierForces
 
 from .flexocompression_service import FlexocompressionService
-from .shear import ShearService
+from .shear_service import ShearService
 from .element_classifier import ElementClassifier, ElementType
 from .verification_config import get_config, VerificationConfig
 from ...domain.chapter11 import ReinforcementLimitsService
@@ -274,7 +274,7 @@ class ElementService:
             slenderness = SlendernessResult(
                 lambda_ratio=sl.get('lambda', 0),
                 is_slender=sl.get('is_slender', False),
-                reduction_factor=sl.get('reduction', 1.0),
+                delta_ns=sl.get('delta_ns', 1.0),
                 k=config.k_factor,
             )
 
@@ -522,13 +522,30 @@ class ElementService:
             )
 
         # Amplificacion §18.10.3.3
-        if config.check_amplification:
-            amp_result = self._shear.get_amplification_dict(element, hwcs, hn_ft)
+        if config.check_amplification and forces:
+            # Obtener Vu máximo de las fuerzas
+            Vu_max = 0
+            if hasattr(forces, 'combinations') and forces.combinations:
+                for combo in forces.combinations:
+                    Vu = abs(getattr(combo, 'V2', 0))
+                    if Vu > Vu_max:
+                        Vu_max = Vu
+            amp_result = self._shear.get_amplification_dict(element, Vu_max, hwcs=hwcs, hn_ft=hn_ft)
             amplification = amp_result
 
         # Elementos de borde §18.10.6
-        if config.check_boundary:
-            boundary_result = self._shear.get_boundary_element_dict(element, forces)
+        if config.check_boundary and forces:
+            # Extraer Pu y Mu críticos de las fuerzas
+            Pu_critical = 0
+            Mu_critical = 0
+            if hasattr(forces, 'combinations') and forces.combinations:
+                for combo in forces.combinations:
+                    Pu = abs(getattr(combo, 'P', 0))
+                    Mu = abs(getattr(combo, 'M3', 0))
+                    if Mu > Mu_critical:
+                        Mu_critical = Mu
+                        Pu_critical = Pu
+            boundary_result = self._shear.get_boundary_element_dict(element, Pu_critical, Mu_critical)
             if boundary_result:
                 boundary = BoundaryResult(
                     required=boundary_result.get('required', False),

@@ -12,6 +12,7 @@ from app.domain.entities.design_proposal import (
     BOUNDARY_BAR_SEQUENCE,
 )
 from app.services.analysis.proposal_service import ProposalService
+from app.domain.proposals.failure_analysis import determine_failure_mode
 
 
 @pytest.fixture
@@ -69,9 +70,9 @@ def ok_pier():
 class TestFailureModeDetection:
     """Tests para detección de modo de falla."""
 
-    def test_no_failure_detected(self, proposal_service):
+    def test_no_failure_detected(self):
         """Sin falla cuando SF >= 1.0 y DCR <= 1.0 (sin sobrediseño)."""
-        mode = proposal_service._determine_failure_mode(
+        mode = determine_failure_mode(
             flexure_sf=1.3,   # Menor que umbral de sobrediseño (1.5)
             shear_dcr=0.8,    # Mayor que umbral de sobrediseño (0.7)
             boundary_required=False,
@@ -79,9 +80,9 @@ class TestFailureModeDetection:
         )
         assert mode == FailureMode.NONE
 
-    def test_overdesigned_detected(self, proposal_service):
+    def test_overdesigned_detected(self):
         """Detecta sobrediseño cuando SF >> 1.0 y DCR muy bajo."""
-        mode = proposal_service._determine_failure_mode(
+        mode = determine_failure_mode(
             flexure_sf=2.0,   # Mayor que umbral (1.5)
             shear_dcr=0.5,    # Menor que umbral (0.7)
             boundary_required=False,
@@ -89,9 +90,9 @@ class TestFailureModeDetection:
         )
         assert mode == FailureMode.OVERDESIGNED
 
-    def test_flexure_failure_detected(self, proposal_service):
+    def test_flexure_failure_detected(self):
         """Detecta falla por flexión."""
-        mode = proposal_service._determine_failure_mode(
+        mode = determine_failure_mode(
             flexure_sf=0.8,
             shear_dcr=0.5,
             boundary_required=False,
@@ -99,9 +100,9 @@ class TestFailureModeDetection:
         )
         assert mode == FailureMode.FLEXURE
 
-    def test_shear_failure_detected(self, proposal_service):
+    def test_shear_failure_detected(self):
         """Detecta falla por corte."""
-        mode = proposal_service._determine_failure_mode(
+        mode = determine_failure_mode(
             flexure_sf=1.2,
             shear_dcr=1.3,
             boundary_required=False,
@@ -109,9 +110,9 @@ class TestFailureModeDetection:
         )
         assert mode == FailureMode.SHEAR
 
-    def test_combined_failure_detected(self, proposal_service):
+    def test_combined_failure_detected(self):
         """Detecta falla combinada."""
-        mode = proposal_service._determine_failure_mode(
+        mode = determine_failure_mode(
             flexure_sf=0.7,
             shear_dcr=1.2,
             boundary_required=False,
@@ -119,9 +120,9 @@ class TestFailureModeDetection:
         )
         assert mode == FailureMode.COMBINED
 
-    def test_slenderness_failure_detected(self, proposal_service):
+    def test_slenderness_failure_detected(self):
         """Detecta problema de esbeltez."""
-        mode = proposal_service._determine_failure_mode(
+        mode = determine_failure_mode(
             flexure_sf=0.9,
             shear_dcr=0.5,
             boundary_required=False,

@@ -4,8 +4,13 @@ Verificacion de esbeltez para muros segun ACI 318-25.
 
 Implementa:
 - Calculo de esbeltez lambda = k*lu/r
-- Magnificacion de momentos para muros esbeltos
-- Reduccion de capacidad por pandeo
+- Magnificacion de momentos para muros esbeltos (metodo ACI 6.6.4)
+
+NOTA: El metodo simplificado de ACI 11.5.3 (factor [1-(k*lc/32t)^2]) NO se
+implementa porque solo aplica a muros con carga axial casi centrada (e <= h/6).
+Esta aplicacion usa diagramas de interaccion P-M para muros sismicos con
+momentos significativos, por lo que el metodo correcto es la magnificacion
+de momentos segun ACI 6.6.4.
 
 Referencias:
 - ACI 318-25 Seccion 6.2.5: Efectos de esbeltez
@@ -35,7 +40,10 @@ if TYPE_CHECKING:
 @dataclass
 class SlendernessResult:
     """
-    Resultado del analisis de esbeltez.
+    Resultado del analisis de esbeltez segun ACI 318-25 Seccion 6.6.4.
+
+    El efecto de esbeltez se considera magnificando los momentos:
+    Mc = delta_ns * Mu
 
     Esta es la definicion canonica usada por dominio y servicios.
     """
@@ -47,22 +55,20 @@ class SlendernessResult:
 
     # Esbeltez
     lambda_ratio: float     # lambda = k*lu/r
-    is_slender: bool        # True si lambda > limite
+    is_slender: bool        # True si lambda > limite (22 para arriostrados)
     lambda_limit: float     # Limite de esbeltez (22 o 34)
 
-    # Magnificacion de momentos
+    # Magnificacion de momentos (ACI 6.6.4.5)
     Pc_kN: float            # Carga critica de Euler (kN)
-    Cm: float               # Factor de momento equivalente
+    Cm: float               # Factor de momento equivalente (1.0 conservador)
     delta_ns: float         # Factor de magnificacion (>= 1.0)
 
-    # Reduccion por pandeo (metodo empirico)
-    buckling_factor: float  # Factor [1 - (k*lc/32t)^2]
-
-    # Factor de reduccion unificado (alias de buckling_factor para compatibilidad)
     @property
-    def reduction_factor(self) -> float:
-        """Factor de reduccion por pandeo (1.0 si no es esbelto)."""
-        return self.buckling_factor
+    def magnification_pct(self) -> float:
+        """Porcentaje de magnificacion del momento (para display)."""
+        if self.delta_ns <= 1.0:
+            return 0.0
+        return (self.delta_ns - 1.0) * 100
 
 
 class SlendernessService:
@@ -130,15 +136,6 @@ class SlendernessService:
         else:
             delta_ns = 1.0
 
-        # Factor de reducción por pandeo (método empírico ACI 11.5.3.1)
-        # [1 - (k×lc/(32×t))²]
-        buckling_ratio = k * lu / (32 * t)
-        if buckling_ratio >= 1.0:
-            # El muro es demasiado esbelto para el método empírico
-            buckling_factor = 0.0
-        else:
-            buckling_factor = 1 - buckling_ratio**2
-
         return SlendernessResult(
             lu=lu,
             t=t,
@@ -150,7 +147,6 @@ class SlendernessService:
             Pc_kN=Pc_kN,
             Cm=Cm,
             delta_ns=delta_ns,
-            buckling_factor=buckling_factor
         )
 
     def _calculate_euler_load(
@@ -250,44 +246,6 @@ class SlendernessService:
             slenderness.Pc_kN,
             abs(Pu_kN)
         )
-
-    def reduce_compression_capacity(
-        self,
-        phi_Pn_max_kN: float,
-        slenderness: SlendernessResult
-    ) -> float:
-        """
-        Reduce la capacidad de compresión por efectos de pandeo.
-
-        Método híbrido:
-        - Para λ ≤ 25: Sin reducción (muro corto)
-        - Para 25 < λ ≤ 100: Reducción proporcional
-        - Para λ > 100: No permitido
-
-        Args:
-            phi_Pn_max_kN: Capacidad nominal sin reducción por pandeo (kN)
-            slenderness: Resultado del análisis de esbeltez
-
-        Returns:
-            Capacidad reducida (kN)
-        """
-        lambda_ratio = slenderness.lambda_ratio
-
-        if lambda_ratio <= 25:
-            # Muro corto - sin reducción
-            reduction_factor = 1.0
-        elif lambda_ratio > self.LAMBDA_MAX:
-            # Demasiado esbelto
-            reduction_factor = 0.0
-        else:
-            # Reducción gradual basada en el método empírico
-            # Usar el factor de pandeo pero escalado
-            reduction_factor = slenderness.buckling_factor
-
-            # Asegurar que no sea negativo
-            reduction_factor = max(reduction_factor, 0.0)
-
-        return phi_Pn_max_kN * reduction_factor
 
     def calculate_effective_stiffness(
         self,

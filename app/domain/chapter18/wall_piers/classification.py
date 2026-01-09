@@ -15,8 +15,8 @@ Tabla R18.10.1 - Provisiones de Diseño por Tipo de Segmento:
 from ...shear.classification import (
     WallClassificationService,
     ElementType,
-    COLUMN_MIN_THICKNESS_MM,
 )
+from ...constants.units import MIN_COLUMN_DIMENSION_MM
 from ..results import (
     WallPierCategory,
     DesignMethod,

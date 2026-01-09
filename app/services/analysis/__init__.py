@@ -3,7 +3,7 @@
 Servicios de análisis estructural.
 """
 from .flexocompression_service import FlexocompressionService
-from .shear import ShearService
+from .shear_service import ShearService
 from .statistics_service import StatisticsService
 from .proposal_service import ProposalService
 from .element_verification_service import ElementService

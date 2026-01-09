@@ -9,7 +9,7 @@ Soporta dos tipos de vigas:
 from typing import Dict, List, Tuple
 import pandas as pd
 
-from ...domain.entities.beam import Beam, BeamSource
+from ...domain.entities.beam import Beam, BeamSource, BeamShape
 from ...domain.entities.beam_forces import BeamForces
 from ...domain.entities.load_combination import LoadCombination
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
@@ -29,20 +29,24 @@ class BeamParser:
     def parse_beams(
         self,
         section_df: pd.DataFrame,
+        assigns_df: pd.DataFrame,
         beam_forces_df: pd.DataFrame,
         spandrel_props_df: pd.DataFrame,
         spandrel_forces_df: pd.DataFrame,
-        materials: Dict[str, float]
+        materials: Dict[str, float],
+        circular_section_df: pd.DataFrame = None
     ) -> Tuple[Dict[str, Beam], Dict[str, BeamForces], List[str]]:
         """
         Parsea vigas de ambas fuentes (frame y spandrel).
 
         Args:
-            section_df: Frame Section Property Definitions
+            section_df: Frame Section Property Definitions - Concrete Rectangular
+            assigns_df: Frame Assignments - Section Properties
             beam_forces_df: Element Forces - Beams
             spandrel_props_df: Spandrel Section Properties
             spandrel_forces_df: Spandrel Forces
             materials: Diccionario de materiales
+            circular_section_df: Frame Section Property Definitions - Concrete Circle
 
         Returns:
             Tupla (beams, beam_forces, stories)
@@ -51,10 +55,17 @@ class BeamParser:
         beam_forces: Dict[str, BeamForces] = {}
         stories: List[str] = []
 
-        # 1. Parsear frame beams
+        # 1. Parsear definiciones de secciones (rectangular y circular)
         section_defs = self._parse_section_definitions(section_df, materials)
+        circular_defs = self._parse_circular_sections(circular_section_df, materials)
+        section_defs.update(circular_defs)
+
+        # 2. Parsear asignaciones
+        section_assigns, concrete_beams = self._parse_section_assignments(assigns_df)
+
+        # 2. Parsear frame beams (solo hormigón)
         frame_beams, frame_forces, frame_stories = self._parse_frame_beams(
-            beam_forces_df, section_defs, materials
+            beam_forces_df, section_defs, section_assigns, concrete_beams, materials
         )
         beams.update(frame_beams)
         beam_forces.update(frame_forces)
@@ -80,7 +91,9 @@ class BeamParser:
         materials: Dict[str, float]
     ) -> Dict[str, dict]:
         """
-        Parsea las definiciones de secciones de vigas (frame).
+        Parsea las definiciones de secciones rectangulares de hormigón.
+        Incluye todas las secciones (vigas, columnas) porque ETABS puede
+        clasificarlas incorrectamente.
         """
         sections = {}
 
@@ -91,18 +104,20 @@ class BeamParser:
 
         for _, row in df.iterrows():
             name = str(row.get('name', ''))
-            design_type = str(row.get('design type', '')).lower()
-
-            # Solo procesar vigas
-            if 'beam' not in design_type:
-                continue
 
             if not name or name == 'nan':
                 continue
 
             # Geometria (m -> mm)
-            depth = float(row.get('depth', 0)) * 1000  # altura
-            width = float(row.get('width', 0)) * 1000  # ancho
+            try:
+                depth = float(row.get('depth', 0)) * 1000  # altura
+                width = float(row.get('width', 0)) * 1000  # ancho
+            except (ValueError, TypeError):
+                depth = 600
+                width = 300
+
+            if depth <= 0 or width <= 0:
+                continue
 
             # Material
             material_name = str(row.get('material', '4000Psi'))
@@ -112,24 +127,116 @@ class BeamParser:
                 'depth': depth,
                 'width': width,
                 'fc': fc,
-                'material': material_name
+                'material': material_name,
+                'shape': BeamShape.RECTANGULAR
             }
 
         return sections
+
+    def _parse_circular_sections(
+        self,
+        df: pd.DataFrame,
+        materials: Dict[str, float]
+    ) -> Dict[str, dict]:
+        """
+        Parsea las definiciones de secciones circulares de hormigón.
+        Tabla: Frame Section Property Definitions - Concrete Circle
+        """
+        sections = {}
+
+        if df is None:
+            return sections
+
+        df = normalize_columns(df)
+
+        for _, row in df.iterrows():
+            name = str(row.get('name', ''))
+
+            if not name or name == 'nan':
+                continue
+
+            # Geometria circular (m -> mm)
+            # La columna puede ser 'diameter' o 't3' según la versión de ETABS
+            try:
+                diameter = float(row.get('diameter', 0) or row.get('t3', 0)) * 1000
+            except (ValueError, TypeError):
+                diameter = 500
+
+            if diameter <= 0:
+                continue
+
+            # Material
+            material_name = str(row.get('material', '4000Psi'))
+            fc = materials.get(material_name, parse_material_to_fc(material_name))
+
+            # Para secciones circulares, depth = width = diameter
+            sections[name] = {
+                'depth': diameter,
+                'width': diameter,
+                'fc': fc,
+                'material': material_name,
+                'shape': BeamShape.CIRCULAR
+            }
+
+        return sections
+
+    def _parse_section_assignments(
+        self,
+        df: pd.DataFrame
+    ) -> Tuple[Dict[str, str], set]:
+        """
+        Parsea las asignaciones de secciones a elementos (Frame Assignments).
+
+        Returns:
+            Tuple of:
+            - Dict mapping 'Story_Label' -> 'Section Property Name'
+            - Set of beam_keys that are concrete (rectangular or circular)
+        """
+        assigns = {}
+        concrete_beams = set()
+
+        if df is None:
+            return assigns, concrete_beams
+
+        df = normalize_columns(df)
+
+        for _, row in df.iterrows():
+            story = str(row.get('story', ''))
+            label = str(row.get('label', ''))
+            section_prop = str(row.get('section property', '') or
+                               row.get('analytic section', '') or '')
+            shape = str(row.get('shape', '')).lower()
+
+            if not story or story == 'nan' or not label or label == 'nan':
+                continue
+
+            key = f"{story}_{label}"
+
+            # Solo incluir elementos de hormigón (rectangular o circular)
+            if 'concrete' in shape:
+                concrete_beams.add(key)
+
+            if section_prop and section_prop != 'nan':
+                assigns[key] = section_prop
+
+        return assigns, concrete_beams
 
     def _parse_frame_beams(
         self,
         df: pd.DataFrame,
         section_defs: Dict[str, dict],
+        section_assigns: Dict[str, str],
+        concrete_beams: set,
         materials: Dict[str, float]
     ) -> Tuple[Dict[str, Beam], Dict[str, BeamForces], List[str]]:
         """
-        Parsea vigas tipo frame.
+        Parsea vigas tipo frame (solo hormigón).
         """
         beams: Dict[str, Beam] = {}
         beam_forces: Dict[str, BeamForces] = {}
         stories: List[str] = []
         beam_lengths: Dict[str, Tuple[float, float]] = {}  # min, max station
+        beam_sections: Dict[str, str] = {}  # beam_key -> section_name
 
         if df is None:
             return beams, beam_forces, stories
@@ -144,6 +251,17 @@ class BeamParser:
                 continue
 
             beam_key = f"{story}_{beam_label}"
+
+            # Filtrar vigas que no son de hormigón (si tenemos info de asignaciones)
+            if concrete_beams and beam_key not in concrete_beams:
+                continue
+
+            # Capturar nombre de sección (puede estar en varias columnas)
+            section_name = str(row.get('section', '') or
+                               row.get('analytic section', '') or
+                               row.get('section property', '') or '')
+            if section_name and section_name != 'nan' and beam_key not in beam_sections:
+                beam_sections[beam_key] = section_name
 
             # Tracking de stations para calcular longitud
             try:
@@ -194,14 +312,38 @@ class BeamParser:
         for beam_key, forces in beam_forces.items():
             story, beam_label = beam_key.split('_', 1)
 
-            # Buscar seccion de viga
+            # Buscar sección específica de esta viga
             section = None
-            for sec_name, sec_props in section_defs.items():
-                section = sec_props
-                break
+            section_name = None
+
+            # 1. Primero intentar desde tabla de asignaciones
+            if beam_key in section_assigns:
+                section_name = section_assigns[beam_key]
+                if section_name in section_defs:
+                    section = section_defs[section_name]
+
+            # 2. Fallback: desde datos de Element Forces - Beams
+            if section is None and beam_key in beam_sections:
+                section_name = beam_sections[beam_key]
+                if section_name in section_defs:
+                    section = section_defs[section_name]
+
+            # 3. Fallback: matchear por nombre
+            if section is None:
+                for sec_name, sec_props in section_defs.items():
+                    if beam_label in sec_name or sec_name in beam_label:
+                        section = sec_props
+                        section_name = sec_name
+                        break
 
             if section is None:
-                section = {'depth': 600, 'width': 300, 'fc': 28}
+                section = {
+                    'depth': 600,
+                    'width': 300,
+                    'fc': 28,
+                    'shape': BeamShape.RECTANGULAR
+                }
+                section_name = 'Default'
 
             # Calcular longitud desde stations
             if beam_key in beam_lengths:
@@ -214,15 +356,20 @@ class BeamParser:
 
             forces.length = length
 
+            # Shape de la sección (default: rectangular)
+            beam_shape = section.get('shape', BeamShape.RECTANGULAR)
+
             beams[beam_key] = Beam(
                 label=beam_label,
                 story=story,
                 length=length,
                 depth=section['depth'],
                 width=section['width'],
+                shape=beam_shape,
                 fc=section['fc'],
                 fy=FY_DEFAULT_MPA,
-                source=BeamSource.FRAME
+                source=BeamSource.FRAME,
+                section_name=section_name
             )
 
         return beams, beam_forces, stories

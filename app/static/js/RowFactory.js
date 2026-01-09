@@ -36,7 +36,8 @@ class RowFactory {
         const pier = this.table.piersData.find(p => p.key === pierKey);
 
         row.appendChild(this.createInfoCell(result, 'pier'));
-        row.appendChild(this.createHwcsCell(result));
+        row.appendChild(this.createStoryCell(result));
+        row.appendChild(this.createGeometryCell(result));
         row.appendChild(this.createMallaCell(pier, pierKey, result));
         row.appendChild(this.createBordeCell(pier, pierKey, result));
         row.appendChild(this.table.createVigaCell(pierKey, 'izq'));
@@ -53,6 +54,7 @@ class RowFactory {
 
     _createColumnRow(row, result, colKey, isExpanded) {
         row.appendChild(this.createInfoCell(result, 'column'));
+        row.appendChild(this.createStoryCell(result));
         row.appendChild(this.createColumnHeightCell(result));
         row.appendChild(this.createLongitudinalCell(result, colKey));
         row.appendChild(this.createStirrupsCell(result, colKey));
@@ -80,9 +82,14 @@ class RowFactory {
         td.innerHTML = `
             <span class="element-type-badge ${typeClass}">${typeLabel}</span>
             <span class="pier-name">${result.pier_label}</span>
-            <span class="pier-story">${result.story}</span>
-            <span class="pier-dims">${result.geometry.width_m.toFixed(2)}×${result.geometry.thickness_m.toFixed(2)}</span>
         `;
+        return td;
+    }
+
+    createStoryCell(result) {
+        const td = document.createElement('td');
+        td.className = 'story-cell';
+        td.textContent = result.story || '';
         return td;
     }
 
@@ -94,44 +101,40 @@ class RowFactory {
         const dcr = sf > 0 ? (1 / sf) : 0;
         const dcrDisplay = dcr < 0.01 ? '<0.01' : dcr.toFixed(2);
 
+        // Slenderness info para tooltip (ACI 318-25 §6.6.4: Mc = δns × Mu)
+        const sl = result.slenderness || {};
+        const slenderInfo = sl.is_slender
+            ? `Esbeltez: λ=${sl.lambda} (Mu×${sl.delta_ns?.toFixed(2) || '1.00'})`
+            : `Esbeltez: λ=${sl.lambda || 0}`;
+
         const td = document.createElement('td');
         td.className = `fs-value ${getDcrClass(dcr)}`;
+        td.title = `Combo: ${result.flexure?.critical_combo || '-'}\n${slenderInfo}`;
 
         let tensionWarning = '';
         if (hasTension) {
             tensionWarning = `<span class="tension-warning" title="${tensionCombos} combinación(es) con tracción">⚡${tensionCombos}</span>`;
         }
 
-        td.innerHTML = `
-            <span class="fs-number">${dcrDisplay}</span>${tensionWarning}
-            <span class="critical-combo">${truncateCombo(result.flexure?.critical_combo)}</span>
-        `;
+        td.innerHTML = `<span class="fs-number">${dcrDisplay}</span>${tensionWarning}`;
         return td;
     }
 
     createFlexureCapCell(result) {
-        const sl = result.slenderness || {};
-        const slenderClass = sl.is_slender ? 'slender-warn' : '';
-        const slenderInfo = sl.is_slender ? `λ=${sl.lambda} (-${sl.reduction_pct}%)` : `λ=${sl.lambda || 0}`;
         const exceedsAxial = result.flexure?.exceeds_axial || false;
+        const Mu = result.flexure?.Mu || 0;
+        const phiMnPu = result.flexure?.phi_Mn_at_Pu || 0;
 
         const td = document.createElement('td');
         td.className = 'capacity-cell';
 
         if (exceedsAxial) {
-            td.innerHTML = `
-                <span class="capacity-line axial-exceeded">⚠️ Pu=${result.flexure.Pu}t > φPn=${result.flexure.phi_Pn_max}t</span>
-                <span class="capacity-line">Mu=${result.flexure.Mu}t-m</span>
-                <span class="capacity-line capacity-ref">φMn₀=${result.flexure.phi_Mn_0}t-m</span>
-                <span class="slenderness-info ${slenderClass}">${slenderInfo}</span>
-            `;
+            td.title = `Pu=${result.flexure.Pu}t > φPn_max=${result.flexure.phi_Pn_max}t`;
+            td.innerHTML = `<span class="capacity-main axial-exceeded">⚠️ Pu>φPn</span>`;
         } else {
-            td.innerHTML = `
-                <span class="capacity-line">φMn(Pu)=${result.flexure?.phi_Mn_at_Pu || 0}t-m</span>
-                <span class="capacity-line">Mu=${result.flexure?.Mu || 0}t-m</span>
-                <span class="capacity-line capacity-ref">φMn₀=${result.flexure?.phi_Mn_0 || 0}t-m</span>
-                <span class="slenderness-info ${slenderClass}">${slenderInfo}</span>
-            `;
+            const phiMn0 = result.flexure?.phi_Mn_0 || 0;
+            td.title = `φMn₀=${phiMn0}t-m (P=0)`;
+            td.innerHTML = `Mu=${Mu}t-m<br>φMn=${phiMnPu}t-m`;
         }
         return td;
     }
@@ -147,22 +150,23 @@ class RowFactory {
 
         const td = document.createElement('td');
         td.className = `fs-value ${getDcrClass(dcr)}`;
+        td.title = `Combo: ${result.shear?.critical_combo || '-'}\n${shearTitle}`;
         td.innerHTML = `
             <span class="fs-number">${dcrDisplay}</span>
-            <span class="critical-combo">${truncateCombo(result.shear?.critical_combo)}</span>
-            <span class="formula-tag formula-${formulaType}" title="${shearTitle}">${shearType}</span>
+            <span class="formula-tag formula-${formulaType}">${shearType}</span>
         `;
         return td;
     }
 
     createShearCapCell(result) {
+        const phiVn = result.shear?.phi_Vn_2 || 0;
+        const Vu = result.shear?.Vu_2 || 0;
+        const Vc = result.shear?.Vc || 0;
+        const Vs = result.shear?.Vs || 0;
+
         const td = document.createElement('td');
         td.className = 'capacity-cell';
-        td.innerHTML = `
-            <span class="capacity-line">Vc=${result.shear?.Vc || 0}t + Vs=${result.shear?.Vs || 0}t</span>
-            <span class="capacity-line">φVn=${result.shear?.phi_Vn_2 || 0}t</span>
-            <span class="dcr-info">DCR: ${formatDcr(result.shear?.dcr_combined)} (Vu=${result.shear?.Vu_2 || 0}t)</span>
-        `;
+        td.innerHTML = `φVn=${phiVn}t, Vu=${Vu}t<br>Vc=${Vc}t + Vs=${Vs}t`;
         return td;
     }
 
@@ -173,9 +177,6 @@ class RowFactory {
             <div class="action-buttons-grid">
                 <button class="action-btn" data-action="section" title="Ver sección">🔲</button>
                 <button class="action-btn" data-action="info" title="Ver capacidades y combinaciones">ℹ️</button>
-                ${result.pm_plot
-                    ? `<button class="action-btn" data-action="diagram" title="Diagrama P-M">📊</button>`
-                    : `<button class="action-btn" disabled style="visibility:hidden">-</button>`}
             </div>
         `;
         return td;
@@ -192,20 +193,26 @@ class RowFactory {
     // Celdas Específicas de Pier
     // =========================================================================
 
-    createHwcsCell(result) {
+    createGeometryCell(result) {
+        const geom = result.geometry || {};
         const cont = result.wall_continuity || {};
-        const hwcsM = cont.hwcs_m || result.geometry?.height_m || 0;
+
+        // Geometría: lw × espesor (en cm para mejor lectura)
+        const lwCm = ((geom.width_m || 0) * 100).toFixed(0);
+        const tCm = ((geom.thickness_m || 0) * 100).toFixed(0);
+
+        // hwcs
+        const hwcsM = cont.hwcs_m || geom.height_m || 0;
         const hwcsLw = cont.hwcs_lw || 0;
         const nStories = cont.n_stories || 1;
-        const storiesText = cont.is_continuous ? `${nStories} pisos` : '1 piso';
+        const storiesText = nStories > 1 ? `${nStories} pisos` : '1 piso';
 
         const td = document.createElement('td');
-        td.className = 'hwcs-cell';
-        td.title = `hwcs/lw = ${hwcsLw.toFixed(2)}`;
+        td.className = 'geometry-cell';
+        td.title = `hwcs/lw = ${hwcsLw.toFixed(2)}\n${storiesText}`;
         td.innerHTML = `
-            <span class="hwcs-value">${hwcsM.toFixed(1)}m</span>
-            <span class="hwcs-ratio">hwcs/lw=${hwcsLw.toFixed(1)}</span>
-            <span class="hwcs-stories">${storiesText}</span>
+            <span class="geom-dims">${lwCm}×${tCm} cm</span>
+            <span class="geom-hwcs">hwcs=${hwcsM.toFixed(1)}m</span>
         `;
         return td;
     }

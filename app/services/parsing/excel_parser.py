@@ -44,6 +44,7 @@ SUPPORTED_TABLES = {
     ],
     'beams': [
         'Frame Section Property Definitions - Concrete Rectangular',
+        'Frame Section Property Definitions - Concrete Circle',
         'Element Forces - Beams',
         'Spandrel Section Properties',
         'Spandrel Forces'
@@ -98,6 +99,8 @@ class EtabsExcelParser:
         pier_forces_df = None
         # Columnas y Vigas
         frame_section_df = None
+        frame_circular_df = None  # Frame Section Property Definitions - Concrete Circle
+        frame_assigns_df = None  # Frame Assignments - Section Properties
         column_forces_df = None
         beam_forces_df = None
         # Spandrels
@@ -125,6 +128,18 @@ class EtabsExcelParser:
             if frame_section_df is None:
                 frame_section_df = find_table_in_sheet(
                     df, "Frame Section Property Definitions - Concrete Rectangular"
+                )
+
+            # Frame sections circulares
+            if frame_circular_df is None:
+                frame_circular_df = find_table_in_sheet(
+                    df, "Frame Section Property Definitions - Concrete Circle"
+                )
+
+            # Frame assignments (asignación de secciones a elementos)
+            if frame_assigns_df is None:
+                frame_assigns_df = find_table_in_sheet(
+                    df, "Frame Assignments - Section Properties"
                 )
 
             # Columnas
@@ -184,9 +199,9 @@ class EtabsExcelParser:
         beam_stories = []
         if beam_forces_df is not None or spandrel_forces_df is not None:
             beams, beam_forces, beam_stories = self.beam_parser.parse_beams(
-                frame_section_df, beam_forces_df,
+                frame_section_df, frame_assigns_df, beam_forces_df,
                 spandrel_props_df, spandrel_forces_df,
-                materials
+                materials, frame_circular_df
             )
 
         # Procesar losas
@@ -455,8 +470,11 @@ class EtabsExcelParser:
                     'label': beam.label,
                     'story': beam.story,
                     'source': beam.source.value,  # 'frame' o 'spandrel'
+                    'is_custom': getattr(beam, 'is_custom', False),
                     'section': beam.section_name,
                     'length_m': beam.length / 1000,
+                    'depth': beam.depth,  # mm (para mostrar en dropdown)
+                    'width': beam.width,  # mm (para mostrar en dropdown)
                     'depth_m': beam.depth / 1000,
                     'width_m': beam.width / 1000,
                     'fc_MPa': beam.fc,

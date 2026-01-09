@@ -8,7 +8,7 @@ from typing import Optional
 from .structural_analysis import StructuralAnalysisService
 from .parsing.session_manager import SessionManager
 from .analysis.flexocompression_service import FlexocompressionService
-from .analysis.shear import ShearService
+from .analysis.shear_service import ShearService
 from .analysis.statistics_service import StatisticsService
 from .presentation.plot_generator import PlotGenerator
 from ..domain.flexure import InteractionDiagramService, SlendernessService

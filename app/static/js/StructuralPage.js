@@ -128,6 +128,7 @@ class StructuralPage {
         this.reportModal.init();
         this.initPierDetailsModal();
         this.initSectionModal();
+        this.initCustomBeamModal();
     }
 
     initPierDetailsModal() {
@@ -197,6 +198,9 @@ class StructuralPage {
             this.showSection('upload');
             this.navigateToPage('config-page');
         });
+
+        // Botón de diagrama P-M en modal de detalles
+        document.getElementById('open-pm-diagram-btn')?.addEventListener('click', () => this.openPmDiagram());
     }
 
     // =========================================================================
@@ -749,6 +753,37 @@ class StructuralPage {
     }
 
     /**
+     * Abre el modal de diagrama P-M para la combinación actualmente seleccionada.
+     */
+    async openPmDiagram() {
+        const selector = document.getElementById('pier-combo-selector');
+        const comboIndex = parseInt(selector?.value ?? 0);
+
+        if (!this._currentPierKey) return;
+
+        try {
+            const data = await structuralAPI.analyzeCombination({
+                session_id: this.sessionId,
+                pier_key: this._currentPierKey,
+                combination_index: comboIndex,
+                generate_plot: true
+            });
+
+            if (data.success && data.pm_plot) {
+                this.plotModal.open(
+                    this._currentPierKey,
+                    this._currentPierLabel,
+                    data.pm_plot
+                );
+                // Sincronizar con la combinación seleccionada después de cargar
+                setTimeout(() => this.plotModal.selectCombination(comboIndex), 100);
+            }
+        } catch (error) {
+            console.error('Error opening PM diagram:', error);
+        }
+    }
+
+    /**
      * Actualiza solo las tablas de diseño (flexión, corte, boundary) para una combinación.
      */
     updateDesignTablesForCombo(data) {
@@ -873,6 +908,13 @@ class StructuralPage {
         }
 
         // Sección 6: Shear Design
+        // Actualizar φv mostrado (§21.2.4.1: 0.60 para SPECIAL, 0.75 para otros)
+        const phiVElement = document.getElementById('det-phi-v');
+        if (phiVElement && shear_design) {
+            const phi_v = shear_design.phi_v || 0.60;
+            phiVElement.textContent = `(φv = ${phi_v.toFixed(2)})`;
+        }
+
         const shearBody = document.getElementById('det-shear-body');
         if (shear_design && shear_design.has_data && shear_design.rows.length > 0) {
             shearBody.innerHTML = shear_design.rows.map(row => `
@@ -1026,6 +1068,168 @@ class StructuralPage {
 
         // Actualizar en ResultsTable (propaga a celdas bloqueadas y guarda en backend)
         this.resultsTable.updateStandardBeam(beam);
+    }
+
+    // =========================================================================
+    // Vigas - Creación y Edición
+    // =========================================================================
+
+    /**
+     * Inicializa el modal de creación de vigas custom.
+     */
+    initCustomBeamModal() {
+        const modal = document.getElementById('custom-beam-modal');
+        const form = document.getElementById('custom-beam-form');
+        const createBtn = document.getElementById('create-custom-beam-btn');
+        const cancelBtn = document.getElementById('cancel-custom-beam');
+
+        if (!modal || !form) return;
+
+        // Abrir modal
+        createBtn?.addEventListener('click', () => this.openCustomBeamModal());
+
+        // Cerrar modal
+        cancelBtn?.addEventListener('click', () => this.closeCustomBeamModal());
+        setupModalClose(modal, () => this.closeCustomBeamModal());
+
+        // Manejar submit
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleCreateCustomBeam();
+        });
+    }
+
+    /**
+     * Abre el modal de creación de viga custom.
+     */
+    openCustomBeamModal() {
+        const modal = document.getElementById('custom-beam-modal');
+        const storySelect = document.getElementById('custom-beam-story');
+
+        if (!modal) return;
+
+        // Poblar selector de pisos
+        if (storySelect && this.uniqueStories.length > 0) {
+            storySelect.innerHTML = this.uniqueStories.map(story =>
+                `<option value="${story}">${story}</option>`
+            ).join('');
+        }
+
+        // Resetear form
+        document.getElementById('custom-beam-form')?.reset();
+
+        modal.classList.add('active');
+    }
+
+    /**
+     * Cierra el modal de creación de viga custom.
+     */
+    closeCustomBeamModal() {
+        const modal = document.getElementById('custom-beam-modal');
+        modal?.classList.remove('active');
+    }
+
+    /**
+     * Maneja la creación de una viga custom.
+     */
+    async handleCreateCustomBeam() {
+        const beamData = {
+            label: document.getElementById('custom-beam-label')?.value || 'VC1',
+            story: document.getElementById('custom-beam-story')?.value || 'Story1',
+            width: parseInt(document.getElementById('custom-beam-width')?.value) || 200,
+            depth: parseInt(document.getElementById('custom-beam-depth')?.value) || 500,
+            length: parseInt(document.getElementById('custom-beam-length')?.value) || 3000,
+            fc: parseInt(document.getElementById('custom-beam-fc')?.value) || 28,
+            n_bars_top: parseInt(document.getElementById('custom-beam-nbars-top')?.value) || 3,
+            diameter_top: parseInt(document.getElementById('custom-beam-diam-top')?.value) || 16,
+            n_bars_bottom: parseInt(document.getElementById('custom-beam-nbars-bot')?.value) || 3,
+            diameter_bottom: parseInt(document.getElementById('custom-beam-diam-bot')?.value) || 16,
+            stirrup_diameter: parseInt(document.getElementById('custom-beam-stirrup-diam')?.value) || 10,
+            stirrup_spacing: parseInt(document.getElementById('custom-beam-stirrup-spacing')?.value) || 150,
+            n_stirrup_legs: parseInt(document.getElementById('custom-beam-stirrup-legs')?.value) || 2
+        };
+
+        try {
+            const result = await structuralAPI.createCustomBeam(this.sessionId, beamData);
+
+            if (result.success) {
+                this.closeCustomBeamModal();
+                this.showNotification(`Viga ${beamData.label} creada`, 'success');
+
+                // Agregar a beamsData localmente para que aparezca en los dropdowns
+                this.beamsData.push({
+                    label: beamData.label,
+                    story: beamData.story,
+                    width: beamData.width,
+                    depth: beamData.depth,
+                    is_custom: true
+                });
+
+                // Actualizar dropdowns de vigas en la tabla de muros
+                this.resultsTable.refreshBeamSelectors();
+
+                // Re-analizar para incluir la nueva viga
+                await this.reanalyzeBeam(result.beam_key);
+            } else {
+                this.showNotification(result.error || 'Error al crear viga', 'error');
+            }
+        } catch (error) {
+            console.error('Error creating custom beam:', error);
+            this.showNotification('Error al crear viga: ' + error.message, 'error');
+        }
+    }
+
+    /**
+     * Re-analiza una viga específica después de cambiar su enfierradura.
+     * Por ahora, recalcula todas las vigas (puede optimizarse después).
+     */
+    async reanalyzeBeam(beamKey) {
+        try {
+            // Por ahora simplemente refrescamos todos los resultados de vigas
+            // Una optimización futura sería recalcular solo la viga afectada
+            const data = await structuralAPI.analyze({
+                session_id: this.sessionId,
+                pier_updates: [],
+                generate_plots: false,
+                moment_axis: 'M3',
+                angle_deg: 0,
+                materials_config: this.materials
+            });
+
+            if (data.success) {
+                this.beamResults = data.beam_results || [];
+                this.beamsTable.renderTable(this.beamResults);
+                this.showNotification('Viga actualizada', 'success');
+            }
+        } catch (error) {
+            console.error('Error reanalyzing beam:', error);
+            this.showNotification('Error al recalcular viga', 'error');
+        }
+    }
+
+    /**
+     * Muestra una notificación temporal al usuario.
+     */
+    showNotification(message, type = 'info') {
+        // Crear elemento de notificación si no existe
+        let container = document.getElementById('notification-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'notification-container';
+            document.body.appendChild(container);
+        }
+
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+
+        container.appendChild(notification);
+
+        // Auto-remover después de 3 segundos
+        setTimeout(() => {
+            notification.classList.add('fade-out');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
     }
 
     async showProposedSectionDiagram(pierKey, pierLabel, proposedConfig) {

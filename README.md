@@ -120,7 +120,7 @@ app/
 │   │   ├── column.py                        # Entidad Column
 │   │   ├── column_forces.py                 # Fuerzas en columnas
 │   │   ├── coupling_beam.py                 # Entidad CouplingBeam
-│   │   ├── design_proposal.py               # Propuesta de diseño
+│   │   ├── design_proposal.py               # Propuesta de diseño (dataclasses)
 │   │   ├── load_combination.py              # Combinación de carga
 │   │   ├── parsed_data.py                   # Datos parseados ETABS
 │   │   ├── pier.py                          # Entidad Pier
@@ -128,6 +128,19 @@ app/
 │   │   ├── protocols.py                     # Protocolos/interfaces
 │   │   ├── slab.py                          # Entidad Slab
 │   │   └── slab_forces.py                   # Fuerzas en losas
+│   ├── proposals/                           # Generación de propuestas de diseño
+│   │   ├── __init__.py
+│   │   ├── design_generator.py              # Orquestador de búsqueda iterativa
+│   │   ├── failure_analysis.py              # Detección de modo de falla
+│   │   └── strategies/                      # Estrategias por modo de falla
+│   │       ├── __init__.py
+│   │       ├── base.py                      # Utilidades comunes
+│   │       ├── flexure.py                   # Propuesta para falla por flexión
+│   │       ├── shear.py                     # Propuesta para falla por corte
+│   │       ├── combined.py                  # Propuesta para falla combinada
+│   │       ├── reduction.py                 # Optimización de sobrediseño
+│   │       ├── thickness.py                 # Aumento de espesor
+│   │       └── column_min.py                # Espesor mínimo columnas §18.7.2.1
 │   ├── flexure/
 │   │   ├── __init__.py
 │   │   ├── checker.py                       # Verificador flexión SF
@@ -153,13 +166,15 @@ app/
 │   │   ├── flexocompression_service.py      # Servicio flexocompresión
 │   │   ├── shear/                           # Servicio de corte
 │   │   │   ├── __init__.py
-│   │   │   ├── facade.py
-│   │   │   ├── column_shear.py
-│   │   │   └── wall_shear.py
-│   │   ├── proposal_service.py              # Propuestas automáticas
+│   │   │   ├── facade.py                    # ShearService (fachada principal)
+│   │   │   ├── column_shear.py              # Cortante columnas §22.5, §18.7.6
+│   │   │   ├── wall_shear.py                # Cortante muros §11.5, §18.10.4
+│   │   │   └── wall_special_elements.py     # Clasificación, amplificación, borde
+│   │   ├── proposal_service.py              # Orquestador (delega a domain/proposals/)
 │   │   ├── punching_service.py              # Verificación punzonamiento
 │   │   ├── slab_service.py                  # Verificación losas
 │   │   ├── statistics_service.py            # Estadísticas y resumen
+│   │   ├── formatting.py                    # Formateo SF y valores para JSON
 │   │   ├── verification_config.py           # Configuración verificación
 │   │   └── verification_result.py           # Dataclasses resultados
 │   ├── parsing/
@@ -229,7 +244,7 @@ Los servicios de dominio son **la única fuente de verdad** para fórmulas y req
 | `ElementService` | Verificación unificada de Beam/Column/Pier (SF, DCR, sísmico) |
 | `FlexocompressionService` | Genera curvas P-M de interacción, calcula Mpr |
 | `ShearService` | Calcula Vc + Vs y DCR de corte |
-| `ProposalService` | Genera propuestas de diseño cuando falla |
+| `ProposalService` | Orquesta generación de propuestas (delega a domain/proposals/) |
 | `StatisticsService` | Estadísticas y gráfico resumen |
 | `PierDetailsFormatter` | Formatea detalles de piers para UI |
 
@@ -241,7 +256,7 @@ Los servicios de dominio son **la única fuente de verdad** para fórmulas y req
 |----------|-----------------|
 | `WallLimitsService` | Espesores mínimos, espaciamientos máximos |
 | `ReinforcementLimitsService` | Cuantías mínimas ρ_min |
-| `WallDesignMethodsService` | Método simplificado vs detallado |
+| `SlenderWallService` | Método alternativo muros esbeltos (§11.8) |
 
 ### `domain/chapter18/` - Requisitos Sísmicos (Cap. 18)
 
@@ -269,7 +284,21 @@ Los servicios de dominio son **la única fuente de verdad** para fórmulas y req
 | Servicio | Responsabilidad |
 |----------|-----------------|
 | `ShearVerificationService` | Calcula Vc + Vs |
-| `WallClassificationService` | Clasifica muro vs columna |
+| `WallClassificationService` | Clasifica muro vs columna (Tabla R18.10.1) |
+
+### `domain/proposals/` - Generación de Propuestas
+
+Sistema de búsqueda iterativa que propone soluciones cuando un elemento falla verificación.
+
+| Componente | Responsabilidad |
+|------------|-----------------|
+| `DesignGenerator` | Orquesta estrategias según modo de falla |
+| `determine_failure_mode()` | Detecta tipo de falla (flexión, corte, combinada, sobrediseño) |
+| `strategies/flexure.py` | Aumenta barras de borde progresivamente |
+| `strategies/shear.py` | Reduce espaciamiento → aumenta diámetro → agrega malla |
+| `strategies/combined.py` | Búsqueda exhaustiva borde + malla + espesor |
+| `strategies/reduction.py` | Optimiza elementos sobrediseñados (SF >> 1.0) |
+| `strategies/column_min.py` | Aplica espesor mínimo 300mm para columnas sísmicas §18.7.2.1 |
 
 ## Flujo de Verificación
 

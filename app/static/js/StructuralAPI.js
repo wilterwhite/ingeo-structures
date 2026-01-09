@@ -314,7 +314,27 @@ class StructuralAPI {
     }
 
     /**
-     * Configura vigas específicas para un pier.
+     * Asigna vigas del catálogo a un pier.
+     * @param {string} sessionId - ID de sesión
+     * @param {string} pierKey - Clave del pier (Story_Label)
+     * @param {string} beamLeft - Key de viga izq ('generic', 'none', o beamKey)
+     * @param {string} beamRight - Key de viga der ('generic', 'none', o beamKey)
+     * @returns {Promise<Object>}
+     */
+    async assignCouplingBeam(sessionId, pierKey, beamLeft, beamRight) {
+        return this.request('/assign-coupling-beam', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                pier_key: pierKey,
+                beam_left: beamLeft,
+                beam_right: beamRight
+            })
+        });
+    }
+
+    /**
+     * Configura vigas específicas para un pier (DEPRECATED - usar assignCouplingBeam).
      * @param {string} sessionId - ID de sesión
      * @param {string} pierKey - Clave del pier (Story_Label)
      * @param {Object} config - {izq: {width, height, ln, nbars, diam}, der: {...}}
@@ -340,6 +360,44 @@ class StructuralAPI {
                 has_beam_right: config.der?.width > 0,
                 beam_left: formatBeam(config.izq),
                 beam_right: formatBeam(config.der)
+            })
+        });
+    }
+
+    // =========================================================================
+    // Vigas - Creación y Edición
+    // =========================================================================
+
+    /**
+     * Crea una viga custom.
+     * @param {string} sessionId - ID de sesión
+     * @param {Object} beamData - Datos de la viga
+     * @returns {Promise<Object>}
+     */
+    async createCustomBeam(sessionId, beamData) {
+        return this.request('/create-custom-beam', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                ...beamData
+            })
+        });
+    }
+
+    /**
+     * Actualiza la enfierradura de una viga.
+     * @param {string} sessionId - ID de sesión
+     * @param {string} beamKey - Clave de la viga (Story_Label)
+     * @param {Object} reinforcement - Datos de enfierradura
+     * @returns {Promise<Object>}
+     */
+    async updateBeamReinforcement(sessionId, beamKey, reinforcement) {
+        return this.request('/update-beam-reinforcement', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                beam_key: beamKey,
+                reinforcement
             })
         });
     }

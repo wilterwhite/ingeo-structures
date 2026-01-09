@@ -8,8 +8,9 @@ Exporta:
 - Dataclasses de resultados (desde results.py)
 """
 from .service import WallPierService
-from .classification import classify_wall_pier, COLUMN_MIN_THICKNESS_MM
+from .classification import classify_wall_pier
 from .shear_design import calculate_design_shear, verify_shear_strength
+from ...constants.units import MIN_COLUMN_DIMENSION_MM
 from .transverse import calculate_transverse_requirements, EXTENSION_MIN_MM
 from .boundary_zones import check_boundary_zone_reinforcement
 
@@ -35,7 +36,7 @@ __all__ = [
     "calculate_transverse_requirements",
     "check_boundary_zone_reinforcement",
     # Constantes
-    "COLUMN_MIN_THICKNESS_MM",
+    "MIN_COLUMN_DIMENSION_MM",
     "EXTENSION_MIN_MM",
     # Enums y Dataclasses
     "WallPierCategory",

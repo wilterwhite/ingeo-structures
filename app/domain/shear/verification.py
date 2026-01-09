@@ -32,7 +32,9 @@ from ..constants.shear import (
     DEFAULT_COVER_MM,
     calculate_alpha_sh,
     ALPHA_SH_MIN,
+    get_phi_shear,
 )
+# SeismicCategory se importa localmente donde se necesita para evitar circular imports
 from ..constants.units import N_TO_TONF
 from ..constants.reinforcement import check_rho_vertical_ge_horizontal
 from .results import (
@@ -354,7 +356,8 @@ class ShearVerificationService:
         bcf: float = 0,
         tcf: float = 0,
         is_lightweight: bool = False,
-        lambda_factor: float = 1.0
+        lambda_factor: float = 1.0,
+        seismic_category=None
     ) -> ShearResult:
         """
         Verifica resistencia al corte del muro o columna.
@@ -374,7 +377,14 @@ class ShearVerificationService:
             bcf: Ancho del ala comprimida (mm), 0 si no hay ala
             tcf: Espesor del ala comprimida (mm), 0 si no hay ala
             is_lightweight: True si es concreto liviano
+            seismic_category: Categoria sismica (SPECIAL usa phi=0.60, otros phi=0.75)
+                              Default: SPECIAL si es None
         """
+        # Default seismic_category a SPECIAL si no se proporciona
+        if seismic_category is None:
+            from ..chapter18.common import SeismicCategory
+            seismic_category = SeismicCategory.SPECIAL
+
         # Convertir Nu de tonf a N para calculo interno
         Nu_N = Nu * N_TO_TONF
         alpha_sh = ALPHA_SH_MIN  # Default para columnas
@@ -403,7 +413,9 @@ class ShearVerificationService:
             else:
                 aci_reference = "ACI 318-25 22.5.5.1"
 
-        phi_Vn = PHI_SHEAR * Vn
+        # Obtener phi segun categoria sismica (§21.2.4.1)
+        phi_v = get_phi_shear(seismic_category)
+        phi_Vn = phi_v * Vn
         Vu_abs = abs(Vu)
         sf = phi_Vn / Vu_abs if Vu_abs > 0 else float('inf')
         status = "OK" if sf >= 1.0 else "NO OK"
@@ -422,7 +434,8 @@ class ShearVerificationService:
             Vu=Vu_abs, sf=sf, status=status,
             alpha_c=alpha_c, alpha_sh=alpha_sh, hw_lw=hw_lw, formula_type=formula_type,
             rho_check_ok=rho_check_ok, rho_warning=rho_warning,
-            aci_reference=aci_reference
+            aci_reference=aci_reference,
+            phi_v=phi_v
         )
 
     def verify_bidirectional_shear(
@@ -436,7 +449,8 @@ class ShearVerificationService:
         Vu2_max: float,
         Vu3_max: float,
         Nu: float = 0,
-        rho_v: Optional[float] = None
+        rho_v: Optional[float] = None,
+        seismic_category=None
     ) -> Tuple[ShearResult, ShearResult]:
         """
         Verifica corte en ambas direcciones.
@@ -446,13 +460,13 @@ class ShearVerificationService:
         """
         result_V2 = self.verify_shear(
             lw=lw, tw=tw, hw=hw, fc=fc, fy=fy, rho_h=rho_h,
-            Vu=Vu2_max, Nu=Nu, rho_v=rho_v
+            Vu=Vu2_max, Nu=Nu, rho_v=rho_v, seismic_category=seismic_category
         )
 
         # V3: intercambiar dimensiones (el muro actua como viga)
         result_V3 = self.verify_shear(
             lw=tw, tw=lw, hw=hw, fc=fc, fy=fy, rho_h=rho_h,
-            Vu=Vu3_max, Nu=Nu, rho_v=rho_v
+            Vu=Vu3_max, Nu=Nu, rho_v=rho_v, seismic_category=seismic_category
         )
 
         return result_V2, result_V3
@@ -470,21 +484,27 @@ class ShearVerificationService:
         Nu: float = 0,
         combo_name: str = "",
         rho_v: Optional[float] = None,
-        lambda_factor: float = 1.0
+        lambda_factor: float = 1.0,
+        seismic_category=None
     ) -> CombinedShearResult:
         """
         Verifica interaccion V2-V3 con SRSS.
 
         DCR = sqrt[(Vu2/phi*Vn2)^2 + (Vu3/phi*Vn3)^2] <= 1.0
+
+        Args:
+            seismic_category: Categoria sismica (SPECIAL usa phi=0.60, otros phi=0.75)
         """
         result_V2 = self.verify_shear(
             lw=lw, tw=tw, hw=hw, fc=fc, fy=fy, rho_h=rho_h,
-            Vu=Vu2, Nu=Nu, rho_v=rho_v, lambda_factor=lambda_factor
+            Vu=Vu2, Nu=Nu, rho_v=rho_v, lambda_factor=lambda_factor,
+            seismic_category=seismic_category
         )
 
         result_V3 = self.verify_shear(
             lw=tw, tw=lw, hw=hw, fc=fc, fy=fy, rho_h=rho_h,
-            Vu=Vu3, Nu=Nu, rho_v=rho_v, lambda_factor=lambda_factor
+            Vu=Vu3, Nu=Nu, rho_v=rho_v, lambda_factor=lambda_factor,
+            seismic_category=seismic_category
         )
 
         dcr_2 = abs(Vu2) / result_V2.phi_Vn if result_V2.phi_Vn > 0 else 0
@@ -494,10 +514,14 @@ class ShearVerificationService:
         sf = 1.0 / dcr_combined if dcr_combined > 0 else float('inf')
         status = "OK" if dcr_combined <= 1.0 else "NO OK"
 
+        # Obtener phi_v (ambos resultados usan el mismo)
+        phi_v = result_V2.phi_v
+
         return CombinedShearResult(
             result_V2=result_V2, result_V3=result_V3,
             dcr_2=dcr_2, dcr_3=dcr_3, dcr_combined=dcr_combined,
-            sf=sf, status=status, combo_name=combo_name
+            sf=sf, status=status, combo_name=combo_name,
+            phi_v=phi_v
         )
 
     def verify_wall_group(
@@ -510,7 +534,8 @@ class ShearVerificationService:
         Nu: float = 0,
         rho_v: Optional[float] = None,
         is_lightweight: bool = False,
-        lambda_factor: float = 1.0
+        lambda_factor: float = 1.0,
+        seismic_category=None
     ) -> WallGroupShearResult:
         """
         Verifica grupo de segmentos segun 18.10.4.4.
@@ -523,8 +548,16 @@ class ShearVerificationService:
         if not segments:
             raise ValueError("Se requiere al menos un segmento")
 
+        # Default seismic_category a SPECIAL si no se proporciona
+        if seismic_category is None:
+            from ..chapter18.common import SeismicCategory
+            seismic_category = SeismicCategory.SPECIAL
+
         # Aplicar limite de materiales
         fc_eff = get_effective_fc_shear(fc, is_lightweight)
+
+        # Obtener phi segun categoria sismica (§21.2.4.1)
+        phi_v = get_phi_shear(seismic_category)
 
         segment_results: List[ShearResult] = []
         Acv_total = 0.0
@@ -540,7 +573,8 @@ class ShearVerificationService:
             result = self.verify_shear(
                 lw=lw, tw=tw, hw=hw, fc=fc, fy=fy, rho_h=rho_h,
                 Vu=Vu_total * area_ratio, Nu=Nu * area_ratio, rho_v=rho_v,
-                is_lightweight=is_lightweight, lambda_factor=lambda_factor
+                is_lightweight=is_lightweight, lambda_factor=lambda_factor,
+                seismic_category=seismic_category
             )
             segment_results.append(result)
             Vn_total += result.Vn
@@ -552,7 +586,7 @@ class ShearVerificationService:
         Vn_max_group = Vn_max_contributions
         controls_group_limit = Vn_total > Vn_max_group
         Vn_effective = min(Vn_total, Vn_max_group)
-        phi_Vn_effective = PHI_SHEAR * Vn_effective
+        phi_Vn_effective = phi_v * Vn_effective
 
         Vu_abs = abs(Vu_total)
         sf = phi_Vn_effective / Vu_abs if Vu_abs > 0 else float('inf')

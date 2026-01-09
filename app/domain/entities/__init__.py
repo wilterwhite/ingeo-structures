@@ -13,7 +13,7 @@ from .load_combination import LoadCombination
 from .pier_forces import PierForces
 from .column import Column
 from .column_forces import ColumnForces
-from .beam import Beam, BeamSource
+from .beam import Beam, BeamSource, BeamShape
 from .beam_forces import BeamForces
 from .slab import Slab, SlabType, SupportCondition
 from .slab_forces import SlabForces, SlabSectionCut
@@ -37,6 +37,7 @@ __all__ = [
     # Vigas
     'Beam',
     'BeamSource',
+    'BeamShape',
     'BeamForces',
     # Losas
     'Slab',

@@ -50,6 +50,10 @@ FACTORES DE REDUCCION (Seccion 21.2):
 # Re-exportar desde phi.py para compatibilidad
 from .phi_chapter21 import PHI_SHEAR
 
+# Factor reducido para elementos sísmicos especiales (§21.2.4.1)
+# Aplica a: muros estructurales especiales, vigas de acople, juntas SMF
+PHI_SHEAR_SEISMIC = 0.60
+
 
 # =============================================================================
 # COEFICIENTES PARA MUROS (ACI 318-25 Tabla 18.10.4.1)
@@ -291,3 +295,30 @@ SHEAR_FRICTION_FY_LIMIT_MPa = 420.0      # 60,000 psi = 420 MPa
 
 # Factor phi para friccion por cortante (21.2.1(b))
 PHI_SHEAR_FRICTION = PHI_SHEAR  # 0.75, mismo que cortante regular
+
+
+# =============================================================================
+# FUNCION HELPER PARA OBTENER PHI SEGUN CATEGORIA SISMICA
+# =============================================================================
+
+def get_phi_shear(seismic_category) -> float:
+    """
+    Retorna el factor de reducción φv según la categoría sísmica.
+
+    ACI 318-25 §21.2.4.1:
+    φv = 0.60 para elementos de pórticos especiales y muros estructurales
+         especiales donde la resistencia al cortante no excede Ve por capacidad.
+    φv = 0.75 para elementos intermedios u ordinarios.
+
+    Args:
+        seismic_category: SeismicCategory enum (SPECIAL, INTERMEDIATE, ORDINARY, NON_SFRS)
+
+    Returns:
+        Factor φv: 0.60 para SPECIAL, 0.75 para otros
+    """
+    # Import local para evitar dependencia circular
+    from ..chapter18.common import SeismicCategory
+
+    if seismic_category == SeismicCategory.SPECIAL:
+        return PHI_SHEAR_SEISMIC  # 0.60
+    return PHI_SHEAR  # 0.75

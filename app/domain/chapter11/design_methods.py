@@ -3,62 +3,51 @@
 Metodos de diseno para muros segun ACI 318-25 Capitulo 11.
 
 Implementa:
-- 11.5.3: Metodo simplificado para carga axial y flexion fuera del plano
 - 11.8: Metodo alternativo para muros esbeltos
 
+NOTA SOBRE METODO SIMPLIFICADO (§11.5.3):
+=========================================
+El metodo simplificado (Ec. 11.5.3.1: Pn = 0.55*f'c*Ag*[1-(k*lc/32h)^2])
+NO SE IMPLEMENTA porque:
+
+1. Solo aplica cuando la excentricidad e <= h/6 (carga casi centrada)
+   ACI 318-25 §11.5.3.1: "resultant of all factored loads is located
+   within the middle third of the wall thickness"
+
+2. Esta aplicacion usa diagramas de interaccion P-M para muros sismicos
+   con momentos significativos (SDC D, E, F segun ASCE 7), donde
+   tipicamente e >> h/6
+
+3. El metodo correcto para muros esbeltos con momentos significativos es
+   la magnificacion de momentos segun ACI 318-25 §6.6.4:
+   Mc = delta_ns * Mu
+
+4. Para verificacion de muros, usar:
+   - FlexocompressionService.check_flexure() para curva P-M completa
+   - SlendernessService.analyze() para factor de magnificacion delta_ns
+
+Ver: domain/flexure/slenderness.py para la implementacion de delta_ns.
+
 Referencias ACI 318-25:
-- Ec. 11.5.3.1: Resistencia nominal simplificada
-- Tabla 11.5.3.2: Factor de longitud efectiva k
-- Ec. 11.8.3.1a-d: Momento magnificado para muros esbeltos
+- Ec. 6.6.4.5.2: Factor de magnificacion delta_ns = Cm/(1-Pu/0.75Pc)
+- Ec. 11.8.3.1a-d: Momento magnificado para muros esbeltos (metodo 11.8)
 - Ec. 11.8.3.1c: Inercia agrietada
 - Tabla 11.8.4.1: Deflexion de servicio
 """
 from dataclasses import dataclass
-from typing import Optional, Tuple, TYPE_CHECKING
-from enum import Enum
+from typing import Optional, Tuple, TYPE_CHECKING, List
 import math
 
-from ..constants.units import N_TO_TONF
-from ..constants.phi_chapter21 import PHI_COMPRESSION, PHI_TENSION
+from ..constants.phi_chapter21 import PHI_TENSION
 from ..constants.materials import (
     calculate_beta1,
     calculate_Ec,
     calculate_fr,
     ES_MPA,
-    EPSILON_CU,
 )
 
 if TYPE_CHECKING:
     from ..entities.pier import Pier
-
-
-class BoundaryCondition(Enum):
-    """Condiciones de borde para factor k."""
-    BRACED_RESTRAINED = "braced_restrained"     # Arriostrado, restringido rotacion
-    BRACED_UNRESTRAINED = "braced_unrestrained" # Arriostrado, sin restriccion
-    UNBRACED = "unbraced"                        # No arriostrado
-
-
-@dataclass
-class SimplifiedMethodResult:
-    """Resultado del metodo simplificado 11.5.3."""
-    # Parametros de entrada
-    fc_mpa: float               # f'c (MPa)
-    Ag_mm2: float               # Area bruta (mm2)
-    k: float                    # Factor de longitud efectiva
-    lc_mm: float                # Longitud no soportada (mm)
-    h_mm: float                 # Espesor del muro (mm)
-
-    # Resultados
-    Pn_N: float                 # Resistencia nominal (N)
-    phi_Pn_N: float             # Resistencia de diseno (N)
-    Pn_tonf: float              # Resistencia nominal (tonf)
-    phi_Pn_tonf: float          # Resistencia de diseno (tonf)
-    slenderness_term: float     # Termino [1 - (k*lc/32h)^2]
-    is_applicable: bool         # Si el metodo es aplicable
-    applicability_note: str     # Nota sobre aplicabilidad
-
-    aci_reference: str          # Referencia ACI
 
 
 @dataclass
@@ -99,165 +88,28 @@ class SlenderWallResult:
     aci_reference: str          # Referencia ACI
 
 
-class WallDesignMethodsService:
+class SlenderWallService:
     """
-    Servicio para metodos de diseno de muros segun ACI 318-25.
+    Servicio para metodo alternativo de muros esbeltos segun ACI 318-25 §11.8.
 
-    Unidades:
-    - Dimensiones: mm
-    - Esfuerzos: MPa
-    - Fuerzas: N (internamente), tonf (salida)
-    - Momentos: N-mm (internamente), tonf-m (salida)
+    Este metodo es mas preciso que el metodo general (§6.6.4) porque:
+    - Calcula Icr especifico (no asume 0.35*Ig)
+    - Verifica deflexion de servicio (lc/150)
+    - Tiene condiciones de aplicabilidad explicitas
+
+    Condiciones de aplicabilidad (§11.8.1.1):
+    - Seccion transversal constante
+    - Comportamiento controlado por tension
+    - phi*Mn >= Mcr
+    - Pu <= 0.06*f'c*Ag
+    - Deflexion de servicio <= lc/150
+
+    Uso tipico:
+        service = SlenderWallService()
+        result = service.analyze(pier, Pu_N, Mua_Nmm, As_tension)
+        if result.is_applicable and result.deflection_ok:
+            # Usar momento magnificado result.Mu_Nmm
     """
-
-    # Constantes importadas desde constants.materials:
-    # ES_MPA = 200000 (§20.2.2.2)
-    # EPSILON_CU = 0.003 (§22.2.2.1)
-
-    # =========================================================================
-    # METODO SIMPLIFICADO 11.5.3
-    # =========================================================================
-
-    def get_k_factor(self, condition: BoundaryCondition) -> float:
-        """
-        Obtiene factor k segun Tabla 11.5.3.2.
-
-        Args:
-            condition: Condicion de borde
-
-        Returns:
-            Factor k
-        """
-        k_values = {
-            BoundaryCondition.BRACED_RESTRAINED: 0.8,
-            BoundaryCondition.BRACED_UNRESTRAINED: 1.0,
-            BoundaryCondition.UNBRACED: 2.0
-        }
-        return k_values.get(condition, 1.0)
-
-    def check_simplified_method_applicability(
-        self,
-        eccentricity_mm: float,
-        h_mm: float
-    ) -> Tuple[bool, str]:
-        """
-        Verifica si aplica el metodo simplificado (11.5.3.1).
-
-        Condicion: Resultante dentro del tercio medio (e <= h/6)
-
-        Args:
-            eccentricity_mm: Excentricidad de la carga (mm)
-            h_mm: Espesor del muro (mm)
-
-        Returns:
-            Tuple (es_aplicable, nota)
-        """
-        e_limit = h_mm / 6
-        is_applicable = eccentricity_mm <= e_limit
-
-        if is_applicable:
-            note = f"Aplica: e={eccentricity_mm:.1f}mm <= h/6={e_limit:.1f}mm"
-        else:
-            note = f"No aplica: e={eccentricity_mm:.1f}mm > h/6={e_limit:.1f}mm (usar metodo general)"
-
-        return (is_applicable, note)
-
-    def calculate_simplified_Pn(
-        self,
-        fc_mpa: float,
-        Ag_mm2: float,
-        k: float,
-        lc_mm: float,
-        h_mm: float,
-        eccentricity_mm: float = 0
-    ) -> SimplifiedMethodResult:
-        """
-        Calcula resistencia nominal por metodo simplificado Ec. 11.5.3.1.
-
-        Pn = 0.55 * f'c * Ag * [1 - (k*lc/(32*h))^2]
-
-        Args:
-            fc_mpa: Resistencia del concreto f'c (MPa)
-            Ag_mm2: Area bruta de la seccion (mm2)
-            k: Factor de longitud efectiva
-            lc_mm: Longitud no soportada (mm)
-            h_mm: Espesor del muro (mm)
-            eccentricity_mm: Excentricidad de la carga (mm)
-
-        Returns:
-            SimplifiedMethodResult con resultado del calculo
-        """
-        # Verificar aplicabilidad
-        is_applicable, note = self.check_simplified_method_applicability(
-            eccentricity_mm, h_mm
-        )
-
-        # Calcular termino de esbeltez
-        slenderness_ratio = k * lc_mm / (32 * h_mm)
-
-        if slenderness_ratio >= 1.0:
-            # Muro demasiado esbelto - Pn = 0
-            slenderness_term = 0.0
-            is_applicable = False
-            note = f"Muro muy esbelto: k*lc/(32h) = {slenderness_ratio:.2f} >= 1.0"
-        else:
-            slenderness_term = 1 - slenderness_ratio**2
-
-        # Resistencia nominal
-        Pn_N = 0.55 * fc_mpa * Ag_mm2 * slenderness_term
-
-        # Resistencia de diseno (phi para compresion)
-        phi_Pn_N = PHI_COMPRESSION * Pn_N
-
-        return SimplifiedMethodResult(
-            fc_mpa=fc_mpa,
-            Ag_mm2=Ag_mm2,
-            k=k,
-            lc_mm=lc_mm,
-            h_mm=h_mm,
-            Pn_N=Pn_N,
-            phi_Pn_N=phi_Pn_N,
-            Pn_tonf=Pn_N / N_TO_TONF,
-            phi_Pn_tonf=phi_Pn_N / N_TO_TONF,
-            slenderness_term=slenderness_term,
-            is_applicable=is_applicable,
-            applicability_note=note,
-            aci_reference="ACI 318-25 Ec. 11.5.3.1"
-        )
-
-    def calculate_simplified_from_pier(
-        self,
-        pier: 'Pier',
-        boundary_condition: BoundaryCondition = BoundaryCondition.BRACED_RESTRAINED,
-        eccentricity_mm: float = 0
-    ) -> SimplifiedMethodResult:
-        """
-        Calcula resistencia por metodo simplificado desde un Pier.
-
-        Args:
-            pier: Entidad Pier
-            boundary_condition: Condicion de borde
-            eccentricity_mm: Excentricidad de la carga
-
-        Returns:
-            SimplifiedMethodResult
-        """
-        k = self.get_k_factor(boundary_condition)
-
-        return self.calculate_simplified_Pn(
-            fc_mpa=pier.fc,
-            Ag_mm2=pier.Ag,
-            k=k,
-            lc_mm=pier.height,
-            h_mm=pier.thickness,
-            eccentricity_mm=eccentricity_mm
-        )
-
-    # =========================================================================
-    # METODO ALTERNATIVO PARA MUROS ESBELTOS 11.8
-    # =========================================================================
-
-    # calculate_Ec y calculate_fr importados desde constants.materials
 
     def calculate_Mcr(
         self,
@@ -356,13 +208,7 @@ class WallDesignMethodsService:
         Returns:
             c en mm
         """
-        # Beta1 - usar función centralizada
         beta1 = calculate_beta1(fc_mpa)
-
-        # Equilibrio simplificado
-        # Fuerza de compresion = Fuerza del acero + Carga axial
-        # 0.85 * fc * a * lw = As * fy + Pu
-        # a = beta1 * c
 
         numerator = As_mm2 * fy_mpa + Pu_N
         denominator = 0.85 * fc_mpa * beta1 * lw_mm
@@ -377,7 +223,7 @@ class WallDesignMethodsService:
 
         return c
 
-    def calculate_magnified_moment_direct(
+    def calculate_magnified_moment(
         self,
         Mua_Nmm: float,
         Pu_N: float,
@@ -386,7 +232,7 @@ class WallDesignMethodsService:
         Icr_mm4: float
     ) -> Tuple[float, float]:
         """
-        Calcula momento magnificado Mu directamente segun Ec. 11.8.3.1d.
+        Calcula momento magnificado Mu segun Ec. 11.8.3.1d.
 
         Mu = Mua / [1 - (5*Pu*lc^2) / (0.75*48*Ec*Icr)]
 
@@ -405,7 +251,6 @@ class WallDesignMethodsService:
         if denom_base <= 0:
             return (Mua_Nmm, 0.0)
 
-        # Denominador del factor de magnificacion
         factor_denom = 1 - (5 * Pu_N * lc_mm**2) / denom_base
 
         if factor_denom <= 0:
@@ -426,7 +271,7 @@ class WallDesignMethodsService:
         Ec_mpa: float,
         Ig_mm4: float,
         Icr_mm4: float
-    ) -> float:
+    ) -> Tuple[float, float, float]:
         """
         Calcula deflexion de servicio segun Tabla 11.8.4.1.
 
@@ -445,11 +290,11 @@ class WallDesignMethodsService:
             Icr_mm4: Inercia agrietada (mm4)
 
         Returns:
-            Delta_s en mm
+            Tuple (Delta_s, Delta_cr, Delta_n) en mm
         """
         # Deflexiones de referencia (Ec. 11.8.4.3a-b)
-        Delta_cr = (5 * Mcr_Nmm * lc_mm**2) / (48 * Ec_mpa * Ig_mm4)
-        Delta_n = (5 * Mn_Nmm * lc_mm**2) / (48 * Ec_mpa * Icr_mm4)
+        Delta_cr = (5 * Mcr_Nmm * lc_mm**2) / (48 * Ec_mpa * Ig_mm4) if Ig_mm4 > 0 else 0
+        Delta_n = (5 * Mn_Nmm * lc_mm**2) / (48 * Ec_mpa * Icr_mm4) if Icr_mm4 > 0 else 0
 
         # Umbral
         Mcr_23 = (2.0 / 3.0) * Mcr_Nmm
@@ -469,9 +314,9 @@ class WallDesignMethodsService:
             else:
                 Delta_s = Delta_n
 
-        return Delta_s
+        return (Delta_s, Delta_cr, Delta_n)
 
-    def check_slender_wall_applicability(
+    def check_applicability(
         self,
         pier: 'Pier',
         Pu_N: float,
@@ -487,7 +332,7 @@ class WallDesignMethodsService:
         (b) Comportamiento controlado por tension
         (c) phi*Mn >= Mcr
         (d) Pu <= 0.06*f'c*Ag
-        (e) Deflexion <= lc/150 (verificada separadamente)
+        (e) Deflexion <= lc/150 (verificada en analyze())
 
         Args:
             pier: Entidad Pier
@@ -509,25 +354,24 @@ class WallDesignMethodsService:
 
         # (d) Pu <= 0.06*f'c*Ag
         Pu_limit = 0.06 * pier.fc * pier.Ag
-        checks['Pu_limit'] = Pu_N <= Pu_limit
-        checks['Pu_limit_value'] = Pu_limit / N_TO_TONF
+        checks['Pu_within_limit'] = Pu_N <= Pu_limit
+        checks['Pu_limit_N'] = Pu_limit
 
         is_applicable = all([
             checks['constant_section'],
             checks['phi_Mn_ge_Mcr'],
-            checks['Pu_limit']
+            checks['Pu_within_limit']
         ])
 
         return (is_applicable, checks)
 
-    def analyze_slender_wall(
+    def analyze(
         self,
         pier: 'Pier',
         Pu_N: float,
         Mua_Nmm: float,
         As_tension_mm2: float,
         Ma_service_Nmm: float = 0,
-        Ps_service_N: float = 0,
         has_openings: bool = False
     ) -> SlenderWallResult:
         """
@@ -538,8 +382,7 @@ class WallDesignMethodsService:
             Pu_N: Carga axial factorada a media altura (N)
             Mua_Nmm: Momento factorado sin P-Delta (N-mm)
             As_tension_mm2: Area de acero en zona de traccion (mm2)
-            Ma_service_Nmm: Momento de servicio (N-mm)
-            Ps_service_N: Carga axial de servicio (N)
+            Ma_service_Nmm: Momento de servicio (N-mm), 0 para estimar
             has_openings: Tiene aberturas grandes
 
         Returns:
@@ -549,7 +392,7 @@ class WallDesignMethodsService:
         lc = pier.height
         h = pier.thickness
         lw = pier.width
-        d = pier.width - pier.cover  # Profundidad efectiva
+        d = pier.width - pier.cover
         fc = pier.fc
         fy = pier.fy
 
@@ -573,42 +416,39 @@ class WallDesignMethodsService:
         )
 
         # Momento nominal simplificado (As*fy*(d-a/2))
-        # Esto es una aproximacion; el valor exacto viene del diagrama P-M
         a = As_tension_mm2 * fy / (0.85 * fc * lw)
         Mn = As_tension_mm2 * fy * (d - a / 2)
         phi_Mn = PHI_TENSION * Mn
 
-        # Verificar aplicabilidad
-        is_applicable, checks = self.check_slender_wall_applicability(
+        # Verificar aplicabilidad (sin deflexion aun)
+        is_applicable, checks = self.check_applicability(
             pier, Pu_N, phi_Mn, Mcr, has_openings
         )
 
         # Momento magnificado
-        Mu, Delta_u = self.calculate_magnified_moment_direct(
+        Mu, Delta_u = self.calculate_magnified_moment(
             Mua_Nmm, Pu_N, lc, Ec, Icr
         )
 
         magnification = Mu / Mua_Nmm if Mua_Nmm > 0 else 1.0
 
-        # Deflexiones
-        Delta_cr = (5 * Mcr * lc**2) / (48 * Ec * Ig) if Ig > 0 else 0
-        Delta_n = (5 * Mn * lc**2) / (48 * Ec * Icr) if Icr > 0 else 0
-
-        # Deflexion de servicio (si se proporcionan cargas de servicio)
+        # Deflexion de servicio
         if Ma_service_Nmm > 0:
-            Delta_s = self.calculate_service_deflection(
+            Delta_s, Delta_cr, Delta_n = self.calculate_service_deflection(
                 Ma_service_Nmm, Mcr, Mn, lc, Ec, Ig, Icr
             )
         else:
             # Estimar como fraccion de Delta_u
-            Delta_s = Delta_u * 0.7  # Aproximacion
+            Delta_cr = (5 * Mcr * lc**2) / (48 * Ec * Ig) if Ig > 0 else 0
+            Delta_n = (5 * Mn * lc**2) / (48 * Ec * Icr) if Icr > 0 else 0
+            Delta_s = Delta_u * 0.7  # Aproximacion conservadora
 
         # Limite de deflexion
         Delta_limit = lc / 150
         deflection_ok = Delta_s <= Delta_limit
 
-        # Actualizar verificacion de deflexion en checks
-        checks['deflection'] = deflection_ok
+        # Actualizar verificacion de deflexion
+        checks['deflection_ok'] = deflection_ok
         is_applicable = is_applicable and deflection_ok
 
         return SlenderWallResult(
@@ -634,3 +474,5 @@ class WallDesignMethodsService:
             deflection_ok=deflection_ok,
             aci_reference="ACI 318-25 Seccion 11.8"
         )
+
+

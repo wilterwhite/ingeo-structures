@@ -22,7 +22,7 @@ from .parsing.session_manager import SessionManager
 from .presentation.plot_generator import PlotGenerator
 from .presentation.result_formatter import ResultFormatter
 from .analysis.flexocompression_service import FlexocompressionService
-from .analysis.shear import ShearService
+from .analysis.shear_service import ShearService
 from .analysis.statistics_service import StatisticsService
 from .analysis.proposal_service import ProposalService
 from .presentation.pier_details_formatter import PierDetailsFormatter
@@ -276,7 +276,13 @@ class StructuralAnalysisService:
         for i, r in enumerate(results):
             key = list(parsed_data.piers.keys())[i]
             pier = parsed_data.piers[key]
-            formatted = ResultFormatter.format_element_result(pier, r, key)
+            # Obtener continuity_info para este pier
+            continuity_info = None
+            if parsed_data.continuity_info and key in parsed_data.continuity_info:
+                continuity_info = parsed_data.continuity_info[key]
+            formatted = ResultFormatter.format_element_result(
+                pier, r, key, continuity_info
+            )
             pier_results.append(formatted)
 
         return {
@@ -527,7 +533,13 @@ class StructuralAnalysisService:
         piers_list = list(piers.items())
         for i, r in enumerate(results):
             key, pier = piers_list[i]
-            formatted = ResultFormatter.format_element_result(pier, r, key)
+            # Obtener continuity_info para este pier
+            continuity_info = None
+            if parsed_data.continuity_info and key in parsed_data.continuity_info:
+                continuity_info = parsed_data.continuity_info[key]
+            formatted = ResultFormatter.format_element_result(
+                pier, r, key, continuity_info
+            )
             pier_results_dicts.append(formatted)
 
         # Unificar todos los resultados
@@ -594,7 +606,7 @@ class StructuralAnalysisService:
             flexure_status = flexure_result.status
 
             # FS Corte V2 y V3 (usa verify_bidirectional_shear para consistencia)
-            shear_v2, shear_v3 = self._shear_service.verify_bidirectional_shear(
+            combined_shear = self._shear_service.verify_bidirectional_shear(
                 lw=pier.width,
                 tw=pier.thickness,
                 hw=pier.height,
@@ -605,6 +617,8 @@ class StructuralAnalysisService:
                 Vu3_max=abs(combo.V3),
                 Nu=P
             )
+            shear_v2 = combined_shear.result_V2
+            shear_v3 = combined_shear.result_V3
 
             # Estado general de esta combinación
             fs_min = min(
@@ -918,7 +932,9 @@ class StructuralAnalysisService:
             hn_ft=hn_ft
         )
 
-        return ResultFormatter.format_element_result(pier, result, pier_key)
+        return ResultFormatter.format_element_result(
+            pier, result, pier_key, continuity_info
+        )
 
     def get_session_data(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Obtiene los datos de una sesion."""

@@ -14,7 +14,7 @@ Esto es apropiado para Chile donde casi todo es sismico.
 # I_eff = factor × Ig
 WALL_STIFFNESS_FACTOR = 0.35  # Muros fisurados
 
-# Otros factores (referencia, para uso futuro)
+# Otros factores de rigidez (Tabla 6.6.3.1.1(a))
 WALL_UNCRACKED_STIFFNESS_FACTOR = 0.70  # Muros no fisurados
 COLUMN_STIFFNESS_FACTOR = 0.70          # Columnas
 BEAM_STIFFNESS_FACTOR = 0.35            # Vigas

@@ -21,7 +21,7 @@
 .pier-edit-table td,
 .results-table th,
 .results-table td {
-    padding: 6px 8px;
+    padding: 2px 4px;
     text-align: left;
     border-bottom: 1px solid var(--border-color);
 }
@@ -31,6 +31,12 @@
     background: var(--bg-color);
     font-weight: 600;
     white-space: nowrap;
+    text-align: center;
+}
+
+.results-table td {
+    text-align: center;
+    line-height: 1.2;
 }
 
 /* ==========================================================================
@@ -57,12 +63,6 @@
     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
-.pier-edit-table .as-display {
-    font-weight: 500;
-    color: var(--text-muted);
-    font-size: 0.85rem;
-}
-
 .pier-edit-table tr.highlight {
     animation: highlight-fade 2s ease-out;
 }
@@ -80,18 +80,20 @@
     table-layout: fixed;
 }
 
-.results-table th:nth-child(1), .results-table td:nth-child(1) { width: 90px; }
-.results-table th:nth-child(2), .results-table td:nth-child(2) { width: 50px; }
-.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 145px; }
-.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 110px; }
-.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 90px; }
-.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 90px; }
-.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 55px; }
-.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 100px; }
-.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 55px; }
-.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 120px; }
-.results-table th:nth-child(11), .results-table td:nth-child(11) { width: 100px; }
-.results-table th:nth-child(12), .results-table td:nth-child(12) { width: 65px; }
+/* Columnas: Elemento | Story | Geometría | Enfierradura | Borde | V.Izq | V.Der | D/C Flex | Cap.Flex | D/C Corte | Cap.Corte | Propuesta | Acciones */
+.results-table th:nth-child(1), .results-table td:nth-child(1) { width: 70px; }   /* Elemento */
+.results-table th:nth-child(2), .results-table td:nth-child(2) { width: 55px; }   /* Story */
+.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 70px; }   /* Geometría */
+.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 110px; }  /* Enfierradura */
+.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 75px; }   /* Borde */
+.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 100px; }  /* V.Izq */
+.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 100px; }  /* V.Der */
+.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 55px; }   /* D/C Flex */
+.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 95px; }   /* Cap. Flexión */
+.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 55px; } /* D/C Corte */
+.results-table th:nth-child(11), .results-table td:nth-child(11) { width: 140px; } /* Cap. Corte */
+.results-table th:nth-child(12), .results-table td:nth-child(12) { width: 70px; }  /* Propuesta */
+.results-table th:nth-child(13), .results-table td:nth-child(13) { width: 55px; }  /* Acciones */
 
 /* ==========================================================================
    REINFORCEMENT CELLS - BASE STYLES (SHARED)
@@ -117,7 +119,7 @@
     display: flex;
     gap: 2px;
     align-items: center;
-    margin-bottom: 2px;
+    margin-bottom: 0;
 }
 
 .malla-row:last-child,
@@ -212,59 +214,79 @@
     cursor: help;
 }
 
-/* Viga */
-.viga-cell { font-size: 0.7rem; text-align: center; }
-.viga-row { gap: 1px; justify-content: center; }
-.viga-cell select { padding: 2px 3px; min-width: 32px; }
-.viga-cell span { font-size: 0.6rem; color: var(--text-muted); }
-
-/* Viga usando valores generales (verde claro) */
-.viga-cell.using-default select {
-    background: #ecfdf5;
-    border-color: #86efac;
+/* Viga - Selector simple */
+.viga-cell {
+    font-size: 0.75rem;
+    text-align: center;
+    padding: 1px 4px;
 }
-.viga-cell.using-default span { color: #16a34a; }
 
-/* Viga con valores personalizados (naranja) */
-.viga-cell.using-custom select {
-    background: #fff7ed;
-    border-color: #fdba74;
+.viga-cell .beam-selector {
+    padding: 2px 4px;
+    font-size: 0.75rem;
+    min-width: 100px;
+    max-width: 140px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    cursor: pointer;
 }
-.viga-cell.using-custom span { color: #ea580c; }
+
+.viga-cell .beam-selector:hover {
+    border-color: var(--primary-color);
+}
+
+.viga-cell .beam-selector:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.viga-cell .assigned-beam-info {
+    display: block;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
 
 /* Longitudinal (columnas) */
-.longitudinal-cell .long-row { gap: 4px; margin-bottom: 3px; }
-.longitudinal-cell select { padding: 2px 4px; font-size: 0.7rem; min-width: 40px; }
+.longitudinal-cell .long-row { gap: 2px; margin-bottom: 0; }
+.longitudinal-cell select { padding: 1px 2px; font-size: 0.7rem; min-width: 40px; }
 .longitudinal-cell .as-info { font-size: 0.65rem; color: var(--text-secondary); }
 
 /* Stirrups (columnas) */
-.stirrups-cell .stirrup-row { gap: 4px; margin-bottom: 3px; }
-.stirrups-cell select { padding: 2px 4px; font-size: 0.7rem; min-width: 45px; }
+.stirrups-cell .stirrup-row { gap: 2px; margin-bottom: 0; }
+.stirrups-cell select { padding: 1px 2px; font-size: 0.7rem; min-width: 45px; }
 
 /* ==========================================================================
-   HWCS CELL
+   GEOMETRY CELL
    ========================================================================== */
 
-.hwcs-cell {
+.geometry-cell {
     font-family: 'Consolas', monospace;
     font-size: 0.8rem;
     text-align: center;
+    cursor: help;
 }
 
-.hwcs-value { font-weight: 600; color: var(--text-color); }
-.hwcs-ratio { font-size: 0.7rem; color: var(--text-muted); display: block; }
-.hwcs-stories { font-size: 0.65rem; color: var(--primary-color); display: block; }
+.geom-dims { font-weight: 600; color: var(--text-color); display: block; }
+.geom-hwcs { font-size: 0.75rem; color: var(--text-muted); display: block; }
 
 /* ==========================================================================
-   SAFETY FACTOR & STATUS
+   SAFETY FACTOR (D/C) CELLS
    ========================================================================== */
 
-.fs-value { font-weight: 600; text-align: center; }
+.fs-value {
+    font-weight: 600;
+    text-align: center;
+    cursor: help;
+}
 .fs-ok { color: var(--success-color); }
 .fs-warn { color: var(--warning-color); }
 .fs-fail { color: var(--danger-color); }
 .fs-number { font-size: 1.1rem; display: block; }
 
+/* Status classes for rows */
 .status-ok { color: var(--success-color); font-weight: 600; }
 .status-fail { color: var(--danger-color); font-weight: 600; }
 
@@ -274,42 +296,20 @@
 
 .capacity-cell {
     font-family: 'Consolas', monospace;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    vertical-align: middle;
-    line-height: 1.5;
+    font-size: 0.8rem;
+    text-align: center;
+    cursor: help;
 }
 
-.capacity-line { display: block; color: var(--primary-color); }
-.capacity-line.capacity-ref { font-size: 0.65rem; color: var(--text-muted); opacity: 0.8; }
-.capacity-line.axial-exceeded {
+.capacity-main {
+    font-weight: 600;
+    color: var(--text-color);
+    display: block;
+}
+.capacity-main.axial-exceeded {
     color: #dc2626;
     font-weight: 600;
-    background: #fef2f2;
-    padding: 2px 4px;
-    border-radius: 3px;
-    font-size: 0.75rem;
 }
-
-.critical-combo { font-size: 0.75rem; color: var(--text-muted); display: block; }
-
-.slenderness-info {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    display: block;
-    font-family: 'Consolas', monospace;
-    margin-top: 2px;
-}
-.slenderness-info.slender-warn { color: var(--warning-color); font-weight: 500; }
-
-.dcr-info {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    display: block;
-    font-family: 'Consolas', monospace;
-    margin-top: 2px;
-}
-.dcr-info.dcr-warn { color: var(--warning-color); font-weight: 500; }
 
 /* ==========================================================================
    TAGS & BADGES (SHARED PATTERN)
@@ -364,42 +364,12 @@
 }
 
 /* ==========================================================================
-   EXPANDABLE PIER ROWS
+   ROW STYLES
    ========================================================================== */
 
-.results-table .pier-row { cursor: pointer; }
 .results-table .pier-row:hover { background: rgba(37, 99, 235, 0.05); }
-
-.expand-icon { display: inline-block; width: 16px; transition: transform 0.2s; }
-.pier-row.expanded .expand-icon { transform: rotate(90deg); }
-
 .pier-row.column-type { background: rgba(16, 185, 129, 0.03); }
 .pier-row.column-type:hover { background: rgba(16, 185, 129, 0.08); }
-
-/* ==========================================================================
-   COMBINATION ROWS
-   ========================================================================== */
-
-.results-table .combo-row { background: #f8fafc; font-size: 0.85rem; }
-.results-table .combo-row:hover { background: #f1f5f9; }
-.results-table .combo-row td {
-    padding: 8px 12px;
-    border-bottom: 1px solid #e2e8f0;
-    vertical-align: middle;
-}
-.results-table .combo-row .combo-indent {
-    width: 30px;
-    border-left: 3px solid var(--primary-color);
-    background: linear-gradient(90deg, rgba(37, 99, 235, 0.05) 0%, transparent 100%);
-}
-.results-table .combo-row .combo-name { font-weight: 500; }
-.results-table .combo-row .combo-forces-cell {
-    font-family: 'Consolas', monospace;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    line-height: 1.4;
-}
-.results-table .combo-row .action-btn { padding: 2px 6px; font-size: 0.8rem; }
 
 /* ==========================================================================
    ACTION BUTTONS
@@ -408,20 +378,19 @@
 .actions-cell { white-space: nowrap; vertical-align: middle; }
 
 .action-buttons-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 3px;
-    justify-items: center;
+    display: flex;
+    gap: 2px;
+    justify-content: center;
 }
 
 .action-btn {
-    padding: 4px 8px;
+    padding: 2px 4px;
     background: var(--bg-color);
     border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border-radius: 3px;
     cursor: pointer;
     transition: all 0.15s;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
 }
 .action-btn:hover,
 .action-btn.active {
@@ -483,7 +452,7 @@
 .pier-info-cell,
 .beam-info-cell {
     font-size: 0.85rem;
-    line-height: 1.4;
+    line-height: 1.2;
 }
 
 .pier-info-cell .pier-name,
@@ -612,13 +581,24 @@
 .beams-table th:first-child,
 .beams-table td:first-child { text-align: left; }
 
-.section-cell { display: flex; flex-direction: column; gap: 2px; }
-.section-cell .section-dims { font-weight: 500; font-family: monospace; }
-.section-cell .section-length { font-size: 0.7rem; color: var(--text-muted); }
-
-.beam-row .stirrups-cell { display: flex; flex-direction: column; gap: 2px; }
-.beam-row .stirrup-config { font-family: monospace; font-weight: 500; }
-.beam-row .av-info { font-size: 0.7rem; color: var(--text-muted); }
+.beams-table .section-cell,
+.beams-table .stirrups-cell {
+    display: table-cell;
+    vertical-align: middle;
+    min-width: 80px;
+}
+.beams-table .section-cell .section-dims,
+.beams-table .stirrups-cell .stirrup-config {
+    font-weight: 500;
+    font-family: monospace;
+    display: block;
+}
+.beams-table .section-cell .section-length,
+.beams-table .stirrups-cell .av-info {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: block;
+}
 
 .capacity-value,
 .demand-value { font-family: monospace; font-weight: 500; }
@@ -626,9 +606,7 @@
 .dcr-value { font-family: monospace; }
 .dcr-ok { color: var(--success-color); }
 .dcr-warn { color: var(--warning-color); }
-.dcr-fail { color: var(--error-color); font-weight: 600; }
-
-.combo-cell .combo-name { font-size: 0.75rem; color: var(--text-muted); }
+.dcr-fail { color: var(--danger-color); font-weight: 600; }
 
 .status-badge {
     padding: 2px 8px;
@@ -642,6 +620,72 @@
 .beam-row.status-fail { background: rgba(239, 68, 68, 0.05); }
 .beam-row.status-ok:hover { background: rgba(16, 185, 129, 0.05); }
 .beam-row.status-fail:hover { background: rgba(239, 68, 68, 0.08); }
+
+.beams-table .longitudinal-cell,
+.beams-table .stirrups-cell.editable-cell {
+    padding: 0.3rem 0.5rem;
+}
+
+.beams-table .reinf-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-bottom: 2px;
+}
+
+.beams-table .reinf-row:last-child {
+    margin-bottom: 0;
+}
+
+.beams-table .reinf-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    min-width: 25px;
+    text-align: right;
+}
+
+.beams-table .reinf-sep {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin: 0 1px;
+}
+
+.beams-table .reinf-select {
+    padding: 2px 4px;
+    font-size: 0.75rem;
+    font-family: monospace;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    min-width: 40px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.beams-table .reinf-select:hover {
+    border-color: var(--primary-color);
+    background: var(--bg-primary);
+}
+
+.beams-table .reinf-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.beams-table .reinf-select.updating {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.beams-table .av-info {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 2px;
+}
 
 /* ==========================================================================
    FLOATING RECALC BUTTON
@@ -680,4 +724,124 @@
 
 .pier-row.pending-recalc .viga-cell {
     border-left: 3px solid var(--warning-color);
+}
+
+/* ==========================================================================
+   NOTIFICATIONS
+   ========================================================================== */
+
+#notification-container {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.notification {
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: slideIn 0.3s ease;
+}
+
+.notification-success {
+    background: #d1fae5;
+    color: #065f46;
+    border-left: 4px solid #10b981;
+}
+
+.notification-error {
+    background: #fee2e2;
+    color: #991b1b;
+    border-left: 4px solid #ef4444;
+}
+
+.notification-info {
+    background: #dbeafe;
+    color: #1e40af;
+    border-left: 4px solid #3b82f6;
+}
+
+.notification.fade-out {
+    animation: fadeOut 0.3s ease forwards;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; transform: translateY(-10px); }
+}
+
+/* ==========================================================================
+   CUSTOM BEAM MODAL
+   ========================================================================== */
+
+.custom-beam-content {
+    max-width: 500px;
+}
+
+.custom-beam-content h4 {
+    margin: 16px 0 8px 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 4px;
+}
+
+.custom-beam-content .form-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.custom-beam-content .form-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.custom-beam-content label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.custom-beam-content input,
+.custom-beam-content select {
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.custom-beam-content input:focus,
+.custom-beam-content select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.custom-beam-content .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Badge CUSTOM para vigas */
+.element-type-badge.type-custom {
+    background: #8b5cf6;
+    color: white;
 }

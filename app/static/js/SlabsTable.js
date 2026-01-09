@@ -86,12 +86,11 @@ class SlabsTable {
         row.appendChild(this.createThicknessCheckCell(result));
         row.appendChild(this.createFlexureCapacityCell(result));
         row.appendChild(this.createFlexureDemandCell(result));
-        row.appendChild(this.createFlexureSfCell(result));
+        row.appendChild(this.createFlexureDcrCell(result));
         row.appendChild(this.createShearCapacityCell(result));
         row.appendChild(this.createShearDemandCell(result));
-        row.appendChild(this.createShearSfCell(result));
+        row.appendChild(this.createShearDcrCell(result));
         row.appendChild(this.createPunchingCell(result));
-        row.appendChild(this.createStatusCell(result));
 
         return row;
     }
@@ -168,13 +167,14 @@ class SlabsTable {
         return td;
     }
 
-    createFlexureSfCell(result) {
+    createFlexureDcrCell(result) {
         const flex = result.flexure || {};
-        const sf = flex.sf || 0;
+        const dcr = flex.dcr || 0;
 
         const td = document.createElement('td');
-        td.className = `fs-value ${this.getFsClass(sf)}`;
-        td.innerHTML = `<span class="fs-number">${sf.toFixed(2)}</span>`;
+        const dcrClass = dcr > 1 ? 'dcr-fail' : dcr > 0.8 ? 'dcr-warn' : 'dcr-ok';
+        td.className = 'dcr-value';
+        td.innerHTML = `<span class="${dcrClass}">${dcr.toFixed(3)}</span>`;
         return td;
     }
 
@@ -198,13 +198,14 @@ class SlabsTable {
         return td;
     }
 
-    createShearSfCell(result) {
+    createShearDcrCell(result) {
         const shear = result.shear || {};
-        const sf = shear.sf || 0;
+        const dcr = shear.dcr || 0;
 
         const td = document.createElement('td');
-        td.className = `fs-value ${this.getFsClass(sf)}`;
-        td.innerHTML = `<span class="fs-number">${sf.toFixed(2)}</span>`;
+        const dcrClass = dcr > 1 ? 'dcr-fail' : dcr > 0.8 ? 'dcr-warn' : 'dcr-ok';
+        td.className = 'dcr-value';
+        td.innerHTML = `<span class="${dcrClass}">${dcr.toFixed(3)}</span>`;
         return td;
     }
 
@@ -232,25 +233,9 @@ class SlabsTable {
         return td;
     }
 
-    createStatusCell(result) {
-        const td = document.createElement('td');
-        const status = result.overall_status || 'N/A';
-        const statusClass = status === 'OK' ? 'status-ok' : 'status-fail';
-
-        td.innerHTML = `<span class="status-badge ${statusClass}">${status}</span>`;
-        return td;
-    }
-
     // =========================================================================
     // Helpers
     // =========================================================================
-
-    getFsClass(sf) {
-        if (sf >= 1.5) return 'fs-excellent';
-        if (sf >= 1.2) return 'fs-good';
-        if (sf >= 1.0) return 'fs-ok';
-        return 'fs-fail';
-    }
 
     clear() {
         const tbody = document.querySelector('#slabs-table tbody');

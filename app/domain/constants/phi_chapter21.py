@@ -39,10 +39,8 @@ PHI_TENSION = 0.90          # Sección controlada por tracción
 EPSILON_TY = 0.002          # Deformación de fluencia típica (fy ≈ 400 MPa)
 EPSILON_T_LIMIT = 0.005     # Límite para tracción controlada (epsilon_ty + 0.003)
 
-# Cuantía máxima para asegurar falla dúctil (ρmax = 4%)
-# Si se excede, la sección es controlada por compresión (φ = 0.65)
-# y se debe aumentar espesor en lugar de agregar más acero
-RHO_MAX = 0.04
+# Límite máximo de cuantía para muros estructurales (§18.10.2.1)
+RHO_MAX = 0.04              # 4% máximo de refuerzo
 
 
 # =============================================================================
@@ -58,8 +56,6 @@ PHI_TORSION = 0.75          # Torsión
 # =============================================================================
 
 PHI_BEARING = 0.65          # Aplastamiento
-PHI_STRUT_TIE = 0.75        # Modelos puntal-tensor (Cap. 23)
-PHI_PLAIN_CONCRETE = 0.60   # Concreto simple
 
 
 # =============================================================================

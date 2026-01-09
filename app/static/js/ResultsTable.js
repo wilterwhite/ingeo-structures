@@ -12,10 +12,11 @@ class ResultsTable {
         this.combinationsCache = {};
         this.plotsCache = {};
 
-        // Estado de vigas estándar
+        // Estado de vigas estándar (para "Genérica")
         this.standardBeam = { width: 200, height: 500, ln: 1500, nbars: 2, diam: 12 };
         this.customBeamPiers = new Set();
         this.pierBeamConfigs = {};
+        this.pierBeamAssignments = {};  // { pierKey: { izq: 'beamKey', der: 'beamKey' } }
         this.pendingRecalcPiers = new Set();  // Piers con cambios pendientes de recalcular
 
         // Crear botón flotante de recalcular
@@ -277,70 +278,112 @@ class ResultsTable {
     // =========================================================================
 
     createVigaCell(pierKey, side) {
-        const isCustom = this.customBeamPiers.has(pierKey);
-        const beam = this.getBeamConfig(pierKey, side);
-
         const td = document.createElement('td');
-        td.className = `viga-cell ${isCustom ? 'using-custom' : 'using-default'}`;
+        td.className = 'viga-cell';
         td.dataset.pierKey = pierKey;
         td.dataset.side = side;
 
+        // Obtener la viga actualmente asignada (si hay)
+        const assignedBeamKey = this.getAssignedBeamKey(pierKey, side);
+
+        // Construir opciones del dropdown
+        const options = this.buildBeamOptions(assignedBeamKey, pierKey, side);
+
         td.innerHTML = `
-            <div class="viga-row">
-                <select class="edit-viga-width-${side}" title="Ancho (mm)">
-                    <option value="0">-</option>
-                    ${BEAM_OPTIONS.widths.map(w => `<option value="${w}" ${w === beam.width ? 'selected' : ''}>${w}</option>`).join('')}
-                </select>
-                <span>×</span>
-                <select class="edit-viga-height-${side}" title="Alto (mm)">
-                    <option value="0">-</option>
-                    ${BEAM_OPTIONS.heights.map(h => `<option value="${h}" ${h === beam.height ? 'selected' : ''}>${h}</option>`).join('')}
-                </select>
-            </div>
-            <div class="viga-row">
-                <select class="edit-viga-nbars-${side}" title="Nº barras">
-                    ${BEAM_OPTIONS.nBars.map(n => `<option value="${n}" ${n === beam.nbars ? 'selected' : ''}>${n}</option>`).join('')}
-                </select>
-                <select class="edit-viga-diam-${side}" title="φ barras">
-                    ${generateDiameterOptions(DIAMETERS.vigas, beam.diam)}
-                </select>
-            </div>
-            <div class="viga-row">
-                <span>L=</span>
-                <select class="edit-viga-ln-${side}" title="Largo libre (mm)">
-                    ${BEAM_OPTIONS.lengths.map(l => `<option value="${l}" ${l === beam.ln ? 'selected' : ''}>${l}</option>`).join('')}
-                </select>
-            </div>
+            <select class="beam-selector" data-pier="${pierKey}" data-side="${side}" title="Seleccionar viga de acople">
+                ${options}
+            </select>
+            <span class="assigned-beam-info">${this.getBeamInfoText(assignedBeamKey)}</span>
         `;
 
-        // Siempre permitir edición - al cambiar, marcar como custom y pendiente de recálculo
-        td.querySelectorAll('select').forEach(select => {
-            select.addEventListener('change', () => {
-                // Marcar como custom inmediatamente (feedback visual)
-                if (!this.customBeamPiers.has(pierKey)) {
-                    this.customBeamPiers.add(pierKey);
-                    this.pierBeamConfigs[pierKey] = {
-                        izq: { ...this.standardBeam },
-                        der: { ...this.standardBeam }
-                    };
-                    // Actualizar ambas celdas para mostrar naranja
-                    this.updatePierBeamCells(pierKey);
-                }
-
-                // Guardar config localmente
-                this.onBeamChange(pierKey, side, false);  // false = no guardar en servidor
-
-                // Agregar a pendientes y mostrar botón
-                this.pendingRecalcPiers.add(pierKey);
-                this.updateRecalcButton();
-
-                // Marcar fila como pendiente
-                const row = document.querySelector(`tr[data-pier-key="${pierKey}"]`);
-                if (row) row.classList.add('pending-recalc');
-            });
-        });
+        // Evento de cambio
+        const select = td.querySelector('.beam-selector');
+        select.addEventListener('change', () => this.onBeamAssignmentChange(pierKey, side, select.value));
 
         return td;
+    }
+
+    /**
+     * Construye las opciones del dropdown de vigas.
+     */
+    buildBeamOptions(currentValue, pierKey, side) {
+        const otherSide = side === 'izq' ? 'der' : 'izq';
+        const otherBeamKey = this.getAssignedBeamKey(pierKey, otherSide);
+
+        let html = `
+            <option value="generic" ${currentValue === 'generic' ? 'selected' : ''}>Genérica</option>
+            <option value="none" ${currentValue === 'none' ? 'selected' : ''}>Sin viga</option>
+        `;
+
+        // Agregar vigas disponibles (ETABS + custom)
+        const beams = this.page.beamsData || [];
+        if (beams.length > 0) {
+            html += '<optgroup label="Vigas disponibles">';
+            beams.forEach(beam => {
+                const beamKey = `${beam.story}_${beam.label}`;
+                const isDisabled = beamKey === otherBeamKey;  // No permitir la misma viga en ambos lados
+                const isSelected = currentValue === beamKey;
+                const customBadge = beam.is_custom ? ' [CUSTOM]' : '';
+                html += `<option value="${beamKey}" ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}>${beam.label} - ${beam.story}${customBadge}</option>`;
+            });
+            html += '</optgroup>';
+        }
+
+        return html;
+    }
+
+    /**
+     * Obtiene la key de la viga asignada a un pier/lado.
+     */
+    getAssignedBeamKey(pierKey, side) {
+        const config = this.pierBeamAssignments?.[pierKey]?.[side];
+        return config || 'generic';  // default: genérica
+    }
+
+    /**
+     * Obtiene texto informativo de la viga asignada.
+     */
+    getBeamInfoText(beamKey) {
+        if (beamKey === 'generic') return '';
+        if (beamKey === 'none') return 'No calc';
+
+        // Buscar en beamsData
+        const beams = this.page.beamsData || [];
+        const beam = beams.find(b => `${b.story}_${b.label}` === beamKey);
+        if (beam) {
+            return `${beam.width}×${beam.depth}`;
+        }
+        return '';
+    }
+
+    /**
+     * Maneja el cambio de asignación de viga.
+     */
+    async onBeamAssignmentChange(pierKey, side, beamKey) {
+        // Guardar asignación localmente
+        if (!this.pierBeamAssignments) {
+            this.pierBeamAssignments = {};
+        }
+        if (!this.pierBeamAssignments[pierKey]) {
+            this.pierBeamAssignments[pierKey] = { izq: 'generic', der: 'generic' };
+        }
+        this.pierBeamAssignments[pierKey][side] = beamKey;
+
+        // Actualizar info text
+        const row = document.querySelector(`tr[data-pier-key="${pierKey}"]`);
+        if (row) {
+            const cell = row.querySelector(`.viga-cell[data-side="${side}"]`);
+            const infoSpan = cell?.querySelector('.assigned-beam-info');
+            if (infoSpan) {
+                infoSpan.textContent = this.getBeamInfoText(beamKey);
+            }
+
+            // Marcar como pendiente de recálculo
+            row.classList.add('pending-recalc');
+        }
+
+        this.pendingRecalcPiers.add(pierKey);
+        this.updateRecalcButton();
     }
 
     getBeamConfig(pierKey, side) {
@@ -402,15 +445,22 @@ class ResultsTable {
     }
 
     async savePierBeamConfig(pierKey) {
-        const config = this.pierBeamConfigs[pierKey];
-        if (!config) return;
+        // Usar la nueva asignación de vigas del catálogo
+        const assignment = this.pierBeamAssignments[pierKey];
+        const beamLeft = assignment?.izq || 'generic';
+        const beamRight = assignment?.der || 'generic';
 
         const row = this.elements.resultsTable?.querySelector(`.pier-row[data-pier-key="${pierKey}"]`);
         if (row) row.style.opacity = '0.5';
 
         try {
-            // El endpoint guarda config Y retorna resultado actualizado
-            const response = await structuralAPI.setPierBeam(this.sessionId, pierKey, config);
+            // Usar el nuevo endpoint de asignación de vigas
+            const response = await structuralAPI.assignCouplingBeam(
+                this.sessionId,
+                pierKey,
+                beamLeft,
+                beamRight
+            );
 
             if (response.success && response.result) {
                 // Actualizar resultado en page.results
@@ -723,5 +773,29 @@ class ResultsTable {
         this.expandedPiers.clear();
         this.combinationsCache = {};
         this.plotsCache = {};
+        this.customBeamPiers.clear();
+        this.pierBeamConfigs = {};
+        this.pierBeamAssignments = {};
+        this.pendingRecalcPiers.clear();
+        this.updateRecalcButton();
+    }
+
+    /**
+     * Actualiza los dropdowns de vigas cuando se agregan vigas custom.
+     */
+    refreshBeamSelectors() {
+        // Actualizar todos los dropdowns de vigas en la tabla
+        const vigaCells = document.querySelectorAll('.viga-cell');
+        vigaCells.forEach(cell => {
+            const pierKey = cell.dataset.pierKey;
+            const side = cell.dataset.side;
+            if (!pierKey || !side) return;
+
+            const select = cell.querySelector('.beam-selector');
+            if (select) {
+                const currentValue = select.value;
+                select.innerHTML = this.buildBeamOptions(currentValue, pierKey, side);
+            }
+        });
     }
 }

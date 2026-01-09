@@ -16,6 +16,9 @@ class SlendernessResult:
     """
     Resultado simplificado de verificacion de esbeltez para servicios.
 
+    Implementa magnificacion de momentos segun ACI 318-25 §6.6.4:
+    Mc = delta_ns * Mu
+
     Nota: La version completa con todos los parametros de calculo esta en
     app/domain/flexure/slenderness.py. Esta version simplificada se usa
     en servicios donde no se requieren todos los detalles del calculo.
@@ -26,8 +29,8 @@ class SlendernessResult:
     is_slender: bool
     """True si supera limite de esbeltez (22 para ACI 318-25)."""
 
-    reduction_factor: float
-    """Factor de reduccion por pandeo (1.0 si no es esbelto)."""
+    delta_ns: float
+    """Factor de magnificacion de momentos (>= 1.0). ACI 318-25 §6.6.4.5."""
 
     k: float = 1.0
     """Factor de longitud efectiva usado."""
@@ -35,11 +38,12 @@ class SlendernessResult:
     lu: float = 0.0
     """Longitud no arriostrada (mm)."""
 
-    # Para compatibilidad con version del dominio
     @property
-    def buckling_factor(self) -> float:
-        """Alias de reduction_factor para compatibilidad con dominio."""
-        return self.reduction_factor
+    def magnification_pct(self) -> float:
+        """Porcentaje de magnificacion del momento (para display)."""
+        if self.delta_ns <= 1.0:
+            return 0.0
+        return (self.delta_ns - 1.0) * 100
 
 
 @dataclass

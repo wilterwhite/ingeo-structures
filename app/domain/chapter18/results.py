@@ -217,6 +217,39 @@ class StressCheckResult:
 
 
 @dataclass
+class BoundaryStressAnalysis:
+    """
+    Resultado de calculo de esfuerzos en bordes para verificacion de boundary elements.
+
+    Usa formula: sigma = P/A +/- M*y/I
+
+    Args:
+        sigma_left: Esfuerzo borde izquierdo (MPa)
+        sigma_right: Esfuerzo borde derecho (MPa)
+        sigma_limit: Limite 0.2*f'c (MPa)
+        Ag: Area bruta (mm2)
+        Ig: Momento de inercia (mm4)
+        y: Distancia al borde (mm)
+    """
+    sigma_left: float   # Esfuerzo borde izquierdo (MPa)
+    sigma_right: float  # Esfuerzo borde derecho (MPa)
+    sigma_limit: float  # Limite 0.2*f'c (MPa)
+    Ag: float           # Area bruta (mm2)
+    Ig: float           # Momento de inercia (mm4)
+    y: float            # Distancia al borde (mm)
+
+    @property
+    def required_left(self) -> bool:
+        """True si se requiere elemento de borde en el lado izquierdo."""
+        return self.sigma_left >= self.sigma_limit
+
+    @property
+    def required_right(self) -> bool:
+        """True si se requiere elemento de borde en el lado derecho."""
+        return self.sigma_right >= self.sigma_limit
+
+
+@dataclass
 class BoundaryElementDimensions:
     """Dimensiones requeridas del elemento de borde."""
     length_horizontal: float    # Extension horizontal (mm)

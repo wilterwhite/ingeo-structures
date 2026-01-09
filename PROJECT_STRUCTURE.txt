@@ -1,0 +1,219 @@
+======================================================================
+  INGEO STRUCTURES - Estructura del Proyecto
+  Generado: 2026-01-08 18:54:26
+======================================================================
+
+├── .gitignore                     (  32 líneas)  # Archivos ignorados por git
+├── PROJECT_STRUCTURE.txt          ( 224 líneas)  # Archivo de texto
+├── README.md                      ( 468 líneas)  # Documentación del proyecto
+├── requirements.txt               (  16 líneas)  # Dependencias Python del proyecto
+└── run.py                         (  96 líneas)  # Punto de entrada de la aplicación
+├── app/
+│   └── __init__.py                    (   7 líneas)  # Inicialización del módulo
+│   ├── domain/
+│   │   └── __init__.py                    (  78 líneas)  # Inicialización del módulo
+│   │   ├── calculations/
+│   │   │   ├── __init__.py                    (  32 líneas)  # Inicialización del módulo
+│   │   │   ├── confinement.py                 (  98 líneas)  # Módulo Python
+│   │   │   ├── steel_layer_calculator.py      ( 104 líneas)  # Cálculo de capas de acero para P-M
+│   │   │   └── wall_continuity.py             ( 188 líneas)  # Cálculo de altura efectiva hwcs
+│   │   ├── chapter11/
+│   │   │   ├── __init__.py                    (  57 líneas)  # Inicialización del módulo
+│   │   │   ├── design_methods.py              ( 474 líneas)  # Módulo Python
+│   │   │   ├── limits.py                      ( 389 líneas)  # Módulo Python
+│   │   │   └── reinforcement.py               ( 370 líneas)  # Módulo Python
+│   │   ├── chapter18/
+│   │   │   ├── __init__.py                    ( 247 líneas)  # Inicialización del módulo
+│   │   │   └── results.py                     ( 392 líneas)  # Módulo Python
+│   │   │   ├── beams/
+│   │   │   │   ├── __init__.py                    (  30 líneas)  # Inicialización del módulo
+│   │   │   │   ├── results.py                     ( 187 líneas)  # Módulo Python
+│   │   │   │   └── service.py                     ( 518 líneas)  # Módulo Python
+│   │   │   ├── boundary_elements/
+│   │   │   │   ├── __init__.py                    (  50 líneas)  # Inicialización del módulo
+│   │   │   │   ├── confinement.py                 ( 157 líneas)  # Módulo Python
+│   │   │   │   ├── dimensions.py                  (  84 líneas)  # Módulo Python
+│   │   │   │   ├── displacement.py                ( 131 líneas)  # Módulo Python
+│   │   │   │   ├── service.py                     ( 269 líneas)  # Módulo Python
+│   │   │   │   └── stress.py                      (  86 líneas)  # Módulo Python
+│   │   │   ├── columns/
+│   │   │   │   ├── __init__.py                    (  63 líneas)  # Inicialización del módulo
+│   │   │   │   ├── dimensional.py                 (  55 líneas)  # Módulo Python
+│   │   │   │   ├── flexural_strength.py           ( 103 líneas)  # Módulo Python
+│   │   │   │   ├── longitudinal.py                (  99 líneas)  # Módulo Python
+│   │   │   │   ├── results.py                     ( 212 líneas)  # Módulo Python
+│   │   │   │   ├── service.py                     ( 299 líneas)  # Módulo Python
+│   │   │   │   ├── shear.py                       ( 258 líneas)  # Módulo Python
+│   │   │   │   └── transverse.py                  ( 324 líneas)  # Módulo Python
+│   │   │   ├── common/
+│   │   │   │   ├── __init__.py                    (  15 líneas)  # Inicialización del módulo
+│   │   │   │   ├── categories.py                  ( 109 líneas)  # Módulo Python
+│   │   │   │   └── shear_conditions.py            (  58 líneas)  # Módulo Python
+│   │   │   ├── coupled_walls/
+│   │   │   │   ├── __init__.py                    (  51 líneas)  # Inicialización del módulo
+│   │   │   │   ├── results.py                     ( 102 líneas)  # Módulo Python
+│   │   │   │   └── service.py                     ( 216 líneas)  # Módulo Python
+│   │   │   ├── coupling_beams/
+│   │   │   │   ├── __init__.py                    (  52 líneas)  # Inicialización del módulo
+│   │   │   │   ├── classification.py              (  74 líneas)  # Módulo Python
+│   │   │   │   ├── confinement.py                 ( 212 líneas)  # Módulo Python
+│   │   │   │   ├── diagonal.py                    ( 127 líneas)  # Módulo Python
+│   │   │   │   └── service.py                     ( 282 líneas)  # Módulo Python
+│   │   │   ├── design_forces/
+│   │   │   │   ├── __init__.py                    (  33 líneas)  # Inicialización del módulo
+│   │   │   │   ├── factors.py                     ( 115 líneas)  # Módulo Python
+│   │   │   │   └── service.py                     ( 282 líneas)  # Módulo Python
+│   │   │   ├── non_sfrs/
+│   │   │   │   ├── __init__.py                    (  27 líneas)  # Inicialización del módulo
+│   │   │   │   ├── results.py                     (  99 líneas)  # Módulo Python
+│   │   │   │   └── service.py                     ( 287 líneas)  # Módulo Python
+│   │   │   ├── reinforcement/
+│   │   │   │   ├── __init__.py                    (  23 líneas)  # Inicialización del módulo
+│   │   │   │   ├── results.py                     (  92 líneas)  # Módulo Python
+│   │   │   │   └── service.py                     ( 267 líneas)  # Módulo Python
+│   │   │   ├── wall_piers/
+│   │   │   │   ├── __init__.py                    (  51 líneas)  # Inicialización del módulo
+│   │   │   │   ├── boundary_zones.py              ( 136 líneas)  # Módulo Python
+│   │   │   │   ├── classification.py              ( 112 líneas)  # Módulo Python
+│   │   │   │   ├── service.py                     ( 443 líneas)  # Módulo Python
+│   │   │   │   ├── shear_design.py                ( 134 líneas)  # Módulo Python
+│   │   │   │   └── transverse.py                  (  83 líneas)  # Módulo Python
+│   │   ├── chapter7/
+│   │   │   ├── __init__.py                    (  35 líneas)  # Inicialización del módulo
+│   │   │   ├── limits.py                      ( 184 líneas)  # Módulo Python
+│   │   │   └── reinforcement.py               ( 187 líneas)  # Módulo Python
+│   │   ├── chapter8/
+│   │   │   ├── __init__.py                    (  40 líneas)  # Inicialización del módulo
+│   │   │   └── limits.py                      ( 201 líneas)  # Módulo Python
+│   │   │   ├── punching/
+│   │   │   │   ├── __init__.py                    (  30 líneas)  # Inicialización del módulo
+│   │   │   │   ├── critical_section.py            ( 161 líneas)  # Módulo Python
+│   │   │   │   └── vc_calculation.py              ( 211 líneas)  # Módulo Python
+│   │   ├── constants/
+│   │   │   ├── __init__.py                    ( 131 líneas)  # Inicialización del módulo
+│   │   │   ├── materials.py                   ( 247 líneas)  # Constantes de materiales (barras, hormigón)
+│   │   │   ├── phi_chapter21.py               ( 104 líneas)  # Módulo Python
+│   │   │   ├── reinforcement.py               (  91 líneas)  # Módulo Python
+│   │   │   ├── seismic.py                     (  67 líneas)  # Módulo Python
+│   │   │   ├── shear.py                       ( 293 líneas)  # Módulo Python
+│   │   │   ├── stiffness.py                   (  67 líneas)  # Módulo Python
+│   │   │   └── units.py                       ( 116 líneas)  # Factores de conversión de unidades
+│   │   ├── entities/
+│   │   │   ├── __init__.py                    (  58 líneas)  # Inicialización del módulo
+│   │   │   ├── beam.py                        ( 266 líneas)  # Módulo Python
+│   │   │   ├── beam_forces.py                 ( 123 líneas)  # Módulo Python
+│   │   │   ├── column.py                      ( 364 líneas)  # Módulo Python
+│   │   │   ├── column_forces.py               ( 111 líneas)  # Módulo Python
+│   │   │   ├── coupling_beam.py               ( 207 líneas)  # Configuración de vigas de acople
+│   │   │   ├── design_proposal.py             ( 232 líneas)  # Propuestas de diseño para piers que fallan
+│   │   │   ├── load_combination.py            (  50 líneas)  # Módulo Python
+│   │   │   ├── parsed_data.py                 (  99 líneas)  # Módulo Python
+│   │   │   ├── pier.py                        ( 465 líneas)  # Entidad Pier: muro de hormigón armado
+│   │   │   ├── pier_forces.py                 ( 159 líneas)  # Módulo Python
+│   │   │   ├── protocols.py                   (  71 líneas)  # Módulo Python
+│   │   │   ├── slab.py                        ( 229 líneas)  # Módulo Python
+│   │   │   └── slab_forces.py                 ( 162 líneas)  # Módulo Python
+│   │   ├── flexure/
+│   │   │   ├── __init__.py                    (  23 líneas)  # Inicialización del módulo
+│   │   │   ├── checker.py                     ( 296 líneas)  # Módulo Python
+│   │   │   ├── interaction_diagram.py         ( 380 líneas)  # Módulo Python
+│   │   │   └── slenderness.py                 ( 624 líneas)  # Módulo Python
+│   │   ├── proposals/
+│   │   │   ├── __init__.py                    (  19 líneas)  # Inicialización del módulo
+│   │   │   ├── design_generator.py            ( 300 líneas)  # Módulo Python
+│   │   │   └── failure_analysis.py            (  69 líneas)  # Módulo Python
+│   │   │   ├── strategies/
+│   │   │   │   ├── __init__.py                    (  24 líneas)  # Inicialización del módulo
+│   │   │   │   ├── base.py                        ( 109 líneas)  # Módulo Python
+│   │   │   │   ├── column_min.py                  ( 123 líneas)  # Módulo Python
+│   │   │   │   ├── combined.py                    ( 213 líneas)  # Módulo Python
+│   │   │   │   ├── flexure.py                     (  93 líneas)  # Módulo Python
+│   │   │   │   ├── reduction.py                   ( 262 líneas)  # Módulo Python
+│   │   │   │   ├── shear.py                       ( 138 líneas)  # Módulo Python
+│   │   │   │   └── thickness.py                   ( 270 líneas)  # Módulo Python
+│   │   ├── shear/
+│   │   │   ├── __init__.py                    (  44 líneas)  # Inicialización del módulo
+│   │   │   ├── classification.py              ( 188 líneas)  # Módulo Python
+│   │   │   ├── results.py                     ( 113 líneas)  # Módulo Python
+│   │   │   ├── shear_friction.py              ( 498 líneas)  # Módulo Python
+│   │   │   └── verification.py                ( 568 líneas)  # Módulo Python
+│   ├── routes/
+│   │   ├── __init__.py                    (   4 líneas)  # Inicialización del módulo
+│   │   └── analysis.py                    (1149 líneas)  # Módulo Python
+│   ├── services/
+│   │   ├── __init__.py                    (  32 líneas)  # Inicialización del módulo
+│   │   ├── factory.py                     (  70 líneas)  # Módulo Python
+│   │   └── structural_analysis.py         (1041 líneas)  # Servicio principal de análisis estructural
+│   │   ├── analysis/
+│   │   │   ├── __init__.py                    (  49 líneas)  # Inicialización del módulo
+│   │   │   ├── element_classifier.py          ( 199 líneas)  # Módulo Python
+│   │   │   ├── element_verification_service.py (1124 líneas)  # Módulo Python
+│   │   │   ├── flexocompression_service.py    ( 472 líneas)  # Módulo Python
+│   │   │   ├── formatting.py                  (  94 líneas)  # Módulo Python
+│   │   │   ├── proposal_service.py            ( 166 líneas)  # Generación de propuestas de diseño
+│   │   │   ├── punching_service.py            ( 208 líneas)  # Módulo Python
+│   │   │   ├── shear_service.py               ( 554 líneas)  # Verificación de corte según ACI 318
+│   │   │   ├── slab_service.py                ( 504 líneas)  # Módulo Python
+│   │   │   ├── statistics_service.py          ( 223 líneas)  # Módulo Python
+│   │   │   ├── verification_config.py         ( 179 líneas)  # Módulo Python
+│   │   │   └── verification_result.py         ( 710 líneas)  # Resultados de verificación estructural
+│   │   ├── parsing/
+│   │   │   ├── __init__.py                    (  21 líneas)  # Inicialización del módulo
+│   │   │   ├── beam_parser.py                 ( 351 líneas)  # Módulo Python
+│   │   │   ├── column_parser.py               ( 217 líneas)  # Módulo Python
+│   │   │   ├── config_parser.py               (  37 líneas)  # Módulo Python
+│   │   │   ├── excel_parser.py                ( 499 líneas)  # Parser de archivos Excel de ETABS
+│   │   │   ├── material_mapper.py             ( 140 líneas)  # Módulo Python
+│   │   │   ├── reinforcement_config.py        ( 242 líneas)  # Configuración de armadura
+│   │   │   ├── session_manager.py             ( 396 líneas)  # Gestión de sesiones de análisis
+│   │   │   ├── slab_parser.py                 ( 204 líneas)  # Módulo Python
+│   │   │   └── table_extractor.py             ( 148 líneas)  # Módulo Python
+│   │   ├── presentation/
+│   │   │   ├── __init__.py                    (   8 líneas)  # Inicialización del módulo
+│   │   │   ├── pier_details_formatter.py      ( 813 líneas)  # Módulo Python
+│   │   │   ├── plot_generator.py              ( 607 líneas)  # Módulo Python
+│   │   │   └── result_formatter.py            ( 431 líneas)  # Módulo Python
+│   │   ├── report/
+│   │   │   ├── __init__.py                    (  12 líneas)  # Inicialización del módulo
+│   │   │   ├── pdf_generator.py               ( 723 líneas)  # Módulo Python
+│   │   │   └── report_config.py               ( 109 líneas)  # Módulo Python
+│   ├── static/
+│   │   ├── css/
+│   │   │   ├── base.css                       ( 668 líneas)  # Hoja de estilos
+│   │   │   ├── modals.css                     ( 822 líneas)  # Estilos de ventanas modales
+│   │   │   ├── structural.css                 (   7 líneas)  # Estilos principales de la aplicación
+│   │   │   ├── tables.css                     ( 683 líneas)  # Estilos de tablas de piers y resultados
+│   │   │   └── variables.css                  (  26 líneas)  # Hoja de estilos
+│   │   ├── img/
+│   │   │   └── Tablas_Etabs.png               (1545 líneas)
+│   │   ├── js/
+│   │   │   ├── BeamsTable.js                  ( 174 líneas)  # Módulo JavaScript
+│   │   │   ├── Constants.js                   ( 134 líneas)  # Módulo JavaScript
+│   │   │   ├── ModalUtils.js                  (  52 líneas)  # Módulo JavaScript
+│   │   │   ├── PlotModal.js                   ( 219 líneas)  # Modal para diagrama P-M interactivo
+│   │   │   ├── ReportModal.js                 ( 185 líneas)  # Módulo JavaScript
+│   │   │   ├── ResultsTable.js                ( 727 líneas)  # Renderizado de tabla de resultados
+│   │   │   ├── RowFactory.js                  ( 449 líneas)  # Módulo JavaScript
+│   │   │   ├── SlabsTable.js                  ( 270 líneas)  # Módulo JavaScript
+│   │   │   ├── StructuralAPI.js               ( 405 líneas)  # API client para comunicación con backend
+│   │   │   ├── StructuralPage.js              (1067 líneas)  # Controlador principal de la página
+│   │   │   └── Utils.js                       ( 102 líneas)  # Módulo JavaScript
+│   ├── templates/
+│   │   └── structural_standalone.html     ( 779 líneas)  # Template HTML principal
+
+======================================================================
+  RESUMEN
+======================================================================
+  Total de archivos: 162
+  Total de líneas:   38,844
+
+  Líneas por tipo de archivo:
+    .py        29,790 líneas ( 76.7%)
+    .js         3,784 líneas (  9.7%)
+    .css        2,206 líneas (  5.7%)
+    .png        1,545 líneas (  4.0%)
+    .html         779 líneas (  2.0%)
+    .md           468 líneas (  1.2%)
+    .txt          240 líneas (  0.6%)
+    other          32 líneas (  0.1%)
+======================================================================

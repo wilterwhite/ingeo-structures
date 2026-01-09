@@ -10,9 +10,9 @@ Referencias:
 - ACI 318-25 §18.7.2.1
 """
 from .results import DimensionalLimitsResult
+from ...constants.units import MIN_COLUMN_DIMENSION_MM
 
 # Constantes
-MIN_DIMENSION_SPECIAL_MM = 300  # 12 pulgadas en mm
 MIN_ASPECT_RATIO_SPECIAL = 0.4
 
 
@@ -41,12 +41,12 @@ def check_dimensional_limits(
     min_dim = b
     aspect_ratio = b / h if h > 0 else 0
 
-    min_dim_ok = min_dim >= MIN_DIMENSION_SPECIAL_MM
+    min_dim_ok = min_dim >= MIN_COLUMN_DIMENSION_MM
     aspect_ok = aspect_ratio >= MIN_ASPECT_RATIO_SPECIAL
 
     return DimensionalLimitsResult(
         min_dimension=min_dim,
-        min_dimension_required=MIN_DIMENSION_SPECIAL_MM,
+        min_dimension_required=MIN_COLUMN_DIMENSION_MM,
         min_dimension_ok=min_dim_ok,
         aspect_ratio=round(aspect_ratio, 3),
         aspect_ratio_required=MIN_ASPECT_RATIO_SPECIAL,

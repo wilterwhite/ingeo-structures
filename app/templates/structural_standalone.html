@@ -234,9 +234,10 @@
                     <table class="results-table" id="results-table">
                         <thead>
                             <tr>
-                                <th title="Piso / Pier / Dimensiones">Elemento</th>
-                                <th title="Altura desde sección crítica (continuidad del muro)">hwcs</th>
-                                <th title="Malla distribuida vertical/horizontal">Malla</th>
+                                <th title="Tipo y nombre del elemento">Elemento</th>
+                                <th title="Piso">Story</th>
+                                <th title="Geometría: lw × espesor, hwcs">Geometría</th>
+                                <th title="Enfierradura distribuida vertical/horizontal">Enfierradura</th>
                                 <th title="Elemento de borde">Borde</th>
                                 <th title="Viga de acople izquierda">V.Izq</th>
                                 <th title="Viga de acople derecha">V.Der</th>
@@ -289,6 +290,9 @@
                         <span class="stat-item stat-fail"><strong id="beam-stat-fail">0</strong> Fail</span>
                         <span class="stat-item"><strong id="beam-stat-rate">0%</strong></span>
                     </div>
+                    <button class="btn btn-sm btn-secondary" id="create-custom-beam-btn" title="Crear viga custom">
+                        + Crear viga
+                    </button>
                 </div>
 
                 <!-- Beams Table -->
@@ -298,13 +302,12 @@
                             <tr>
                                 <th title="Piso / Viga / Tipo">Viga</th>
                                 <th title="Dimensiones de la sección">Sección</th>
-                                <th title="Armadura transversal">Estribos</th>
+                                <th title="Armadura longitudinal superior e inferior">Longitudinal</th>
+                                <th title="Armadura transversal (estribos)">Estribos</th>
                                 <th title="Resistencia de diseño">φVn (t)</th>
                                 <th title="Demanda máxima">Vu (t)</th>
-                                <th title="Factor de seguridad">FS</th>
-                                <th title="Demand/Capacity Ratio">DCR</th>
+                                <th title="Demand/Capacity Ratio">D/C</th>
                                 <th title="Combinación crítica">Combo</th>
-                                <th>Estado</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -371,12 +374,11 @@
                                 <th title="Verificación de espesor mínimo">h min</th>
                                 <th title="Resistencia de diseño a flexión">φMn (t-m)</th>
                                 <th title="Demanda de momento">Mu (t-m)</th>
-                                <th title="Factor de seguridad flexión">FS Flex.</th>
+                                <th title="D/C Flexión">D/C Flex.</th>
                                 <th title="Resistencia de diseño a cortante">φVn (t)</th>
                                 <th title="Demanda de cortante">Vu (t)</th>
-                                <th title="Factor de seguridad cortante">FS Corte</th>
+                                <th title="D/C Cortante">D/C Corte</th>
                                 <th title="Punzonamiento (solo 2-Way)">Punz.</th>
-                                <th>Estado</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -451,6 +453,7 @@
                         <option value="-1">Cargando...</option>
                     </select>
                     <span id="combo-critical-badge" class="critical-badge hidden">CRÍTICA</span>
+                    <button id="open-pm-diagram-btn" class="action-btn" title="Ver diagrama P-M">📊</button>
                     <div id="combo-forces-display" class="combo-forces-display">
                         <span>P=<strong id="combo-P">-</strong>t</span>
                         <span>M2=<strong id="combo-M2">-</strong>t-m</span>
@@ -586,7 +589,7 @@
 
                 <!-- Sección 6: Shear Design -->
                 <div class="etabs-section">
-                    <h4>Shear Design</h4>
+                    <h4>Shear Design <span id="det-phi-v" class="phi-factor">(φv = 0.60)</span></h4>
                     <table class="etabs-table">
                         <thead>
                             <tr>
@@ -685,6 +688,139 @@
                 <div class="progress-bar" id="progress-bar"></div>
             </div>
             <p class="progress-pier" id="progress-pier">Iniciando...</p>
+        </div>
+    </div>
+
+    <!-- Modal for Custom Beam Creation -->
+    <div class="modal" id="custom-beam-modal">
+        <button class="modal-close">×</button>
+        <div class="modal-content custom-beam-content">
+            <h3>Crear Viga Custom</h3>
+            <form id="custom-beam-form">
+                <!-- Basic Info -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="custom-beam-label">Nombre:</label>
+                        <input type="text" id="custom-beam-label" placeholder="VC1" required maxlength="20">
+                    </div>
+                    <div class="form-group">
+                        <label for="custom-beam-story">Piso:</label>
+                        <select id="custom-beam-story" required></select>
+                    </div>
+                </div>
+
+                <!-- Geometry -->
+                <h4>Geometría</h4>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="custom-beam-width">Ancho (mm):</label>
+                        <input type="number" id="custom-beam-width" value="200" min="100" max="1000" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="custom-beam-depth">Alto (mm):</label>
+                        <input type="number" id="custom-beam-depth" value="500" min="200" max="2000" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="custom-beam-length">Largo (mm):</label>
+                        <input type="number" id="custom-beam-length" value="3000" min="500" max="15000" required>
+                    </div>
+                </div>
+
+                <!-- Material -->
+                <h4>Material</h4>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="custom-beam-fc">f'c (MPa):</label>
+                        <input type="number" id="custom-beam-fc" value="28" min="20" max="60" required>
+                    </div>
+                </div>
+
+                <!-- Longitudinal Reinforcement -->
+                <h4>Armadura Longitudinal</h4>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="custom-beam-nbars-top">Barras sup:</label>
+                        <select id="custom-beam-nbars-top">
+                            <option value="2">2</option>
+                            <option value="3" selected>3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                            <option value="8">8</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="custom-beam-diam-top">φ sup (mm):</label>
+                        <select id="custom-beam-diam-top">
+                            <option value="12">12</option>
+                            <option value="16" selected>16</option>
+                            <option value="18">18</option>
+                            <option value="20">20</option>
+                            <option value="22">22</option>
+                            <option value="25">25</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="custom-beam-nbars-bot">Barras inf:</label>
+                        <select id="custom-beam-nbars-bot">
+                            <option value="2">2</option>
+                            <option value="3" selected>3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                            <option value="8">8</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="custom-beam-diam-bot">φ inf (mm):</label>
+                        <select id="custom-beam-diam-bot">
+                            <option value="12">12</option>
+                            <option value="16" selected>16</option>
+                            <option value="18">18</option>
+                            <option value="20">20</option>
+                            <option value="22">22</option>
+                            <option value="25">25</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Transverse Reinforcement -->
+                <h4>Estribos</h4>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="custom-beam-stirrup-legs">Ramas:</label>
+                        <select id="custom-beam-stirrup-legs">
+                            <option value="2" selected>2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="custom-beam-stirrup-diam">φ (mm):</label>
+                        <select id="custom-beam-stirrup-diam">
+                            <option value="8">8</option>
+                            <option value="10" selected>10</option>
+                            <option value="12">12</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="custom-beam-stirrup-spacing">@ (mm):</label>
+                        <select id="custom-beam-stirrup-spacing">
+                            <option value="100">100</option>
+                            <option value="125">125</option>
+                            <option value="150" selected>150</option>
+                            <option value="175">175</option>
+                            <option value="200">200</option>
+                            <option value="250">250</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-custom-beam">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Viga</button>
+                </div>
+            </form>
         </div>
     </div>
 

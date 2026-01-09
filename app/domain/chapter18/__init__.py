@@ -66,7 +66,7 @@ Uso desde ElementVerificationService:
 
 Re-exports desde chapter11:
 - WallLimitsService: Límites de espesor (§11.3, §11.7)
-- WallDesignMethodsService: Métodos simplificado/esbelto (§11.5.3, §11.8)
+- SlenderWallService: Método alternativo para muros esbeltos (§11.8)
 """
 # Infraestructura común
 from .common import SeismicCategory
@@ -158,10 +158,8 @@ from ..chapter11 import (
     ThicknessCheckResult,
     SpacingCheckResult,
     DoubleCurtainCheckResult,
-    WallDesignMethodsService,
-    SimplifiedMethodResult,
+    SlenderWallService,
     SlenderWallResult,
-    BoundaryCondition,
 )
 
 __all__ = [
@@ -243,9 +241,7 @@ __all__ = [
     'ThicknessCheckResult',
     'SpacingCheckResult',
     'DoubleCurtainCheckResult',
-    # design_methods
-    'WallDesignMethodsService',
-    'SimplifiedMethodResult',
+    # design_methods (§11.8 muros esbeltos)
+    'SlenderWallService',
     'SlenderWallResult',
-    'BoundaryCondition',
 ]

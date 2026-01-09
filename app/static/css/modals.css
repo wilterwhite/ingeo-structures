@@ -701,6 +701,13 @@
     border-bottom: 1px solid var(--border-color);
 }
 
+.etabs-section h4 .phi-factor {
+    font-weight: 400;
+    font-size: 0.75rem;
+    color: var(--text-muted, #666);
+    margin-left: 8px;
+}
+
 /* ETABS Table */
 .etabs-table {
     width: 100%;

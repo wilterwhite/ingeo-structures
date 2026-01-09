@@ -20,6 +20,12 @@ class BeamSource(Enum):
     SPANDREL = "spandrel"   # Viga de acople tipo shell (Spandrel Forces)
 
 
+class BeamShape(Enum):
+    """Forma de la seccion transversal."""
+    RECTANGULAR = "rectangular"
+    CIRCULAR = "circular"
+
+
 @dataclass
 class Beam:
     """
@@ -39,12 +45,15 @@ class Beam:
 
     # Geometria (mm)
     length: float           # Luz de la viga (longitud)
-    depth: float            # Altura de la viga (peralte)
-    width: float            # Ancho de la viga (espesor)
+    depth: float            # Altura de la viga (peralte) - para circular = diametro
+    width: float            # Ancho de la viga (espesor) - para circular = diametro
 
     # Propiedades del material (MPa)
     fc: float               # f'c del hormigon
     fy: float = FY_DEFAULT_MPA  # fy del acero (default A630-420H)
+
+    # Forma de la seccion
+    shape: BeamShape = BeamShape.RECTANGULAR
 
     # Origen y seccion
     source: BeamSource = BeamSource.FRAME   # frame o spandrel
@@ -66,6 +75,9 @@ class Beam:
 
     # Clasificacion sismica (para verificacion §18.6)
     is_seismic: bool = True         # True = portico especial/intermedio
+
+    # Flag para vigas creadas manualmente (no de ETABS)
+    is_custom: bool = False         # True = viga creada por el usuario
 
     # Geometria para verificacion sismica §18.6
     ln: Optional[float] = None      # Luz libre explicita (mm), si None se calcula
@@ -110,6 +122,9 @@ class Beam:
     @property
     def Ag(self) -> float:
         """Area bruta de la viga (mm2)."""
+        if self.shape == BeamShape.CIRCULAR:
+            import math
+            return math.pi * (self.depth / 2) ** 2
         return self.depth * self.width
 
     @property
@@ -136,6 +151,16 @@ class Beam:
     def is_spandrel(self) -> bool:
         """True si es un spandrel (viga de acople tipo shell)."""
         return self.source == BeamSource.SPANDREL
+
+    @property
+    def is_circular(self) -> bool:
+        """True si es una seccion circular."""
+        return self.shape == BeamShape.CIRCULAR
+
+    @property
+    def diameter(self) -> float:
+        """Diametro para secciones circulares (mm). Retorna depth."""
+        return self.depth
 
     @property
     def height(self) -> float:

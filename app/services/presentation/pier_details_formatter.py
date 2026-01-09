@@ -5,44 +5,26 @@ Formateador de detalles de piers para UI.
 Prepara datos estructurados para el modal de detalles de pier,
 incluyendo capacidades, verificaciones y tablas estilo ETABS.
 """
-from dataclasses import dataclass
 from typing import Dict, Any, Optional, List, Tuple
 
 from ..parsing.session_manager import SessionManager
 from ...domain.constants.units import TONF_TO_N, TONFM_TO_NMM
 from ...domain.constants.shear import PHI_SHEAR
+from ...domain.chapter18.boundary_elements import (
+    calculate_boundary_stress as _calculate_boundary_stress,
+    BoundaryStressAnalysis,
+)
+
+from .plot_generator import PlotGenerator
+from ..analysis.flexocompression_service import FlexocompressionService
+from ..analysis.shear_service import ShearService
+from ...domain.flexure import SlendernessService
+from ...domain.chapter18.reinforcement import SeismicReinforcementService
 
 
-@dataclass
-class BoundaryStressResult:
-    """Resultado de cálculo de estrés en bordes."""
-    sigma_left: float   # Estrés borde izquierdo (MPa)
-    sigma_right: float  # Estrés borde derecho (MPa)
-    sigma_limit: float  # Límite 0.2*f'c (MPa)
-    Ag: float           # Área bruta (mm²)
-    Ig: float           # Momento de inercia (mm⁴)
-    y: float            # Distancia al borde (mm)
-
-    @property
-    def required_left(self) -> bool:
-        """True si se requiere elemento de borde en el lado izquierdo."""
-        return self.sigma_left >= self.sigma_limit
-
-    @property
-    def required_right(self) -> bool:
-        """True si se requiere elemento de borde en el lado derecho."""
-        return self.sigma_right >= self.sigma_limit
-
-
-def calculate_boundary_stress(
-    pier,
-    P_tonf: float,
-    M_tonfm: float
-) -> BoundaryStressResult:
+def calculate_boundary_stress(pier, P_tonf: float, M_tonfm: float) -> BoundaryStressAnalysis:
     """
-    Calcula el estrés en los bordes del muro para verificación de boundary elements.
-
-    Usa la fórmula: σ = P/A ± M*y/I
+    Wrapper que convierte unidades y delega a domain/.
 
     Args:
         pier: Pier con width, thickness y fc
@@ -50,41 +32,17 @@ def calculate_boundary_stress(
         M_tonfm: Momento flector en tonf-m (valor absoluto)
 
     Returns:
-        BoundaryStressResult con esfuerzos calculados
+        BoundaryStressAnalysis con esfuerzos calculados
     """
-    # Propiedades geométricas
-    Ag = pier.width * pier.thickness  # mm²
-    Ig = pier.thickness * (pier.width ** 3) / 12  # mm⁴
-    y = pier.width / 2  # mm (distancia al borde)
-
-    # Límite de esfuerzo según ACI 318-25 §18.10.6.3
-    sigma_limit = 0.2 * pier.fc  # MPa
-
-    # Convertir fuerzas a N y N-mm
     P_N = P_tonf * TONF_TO_N
     M_Nmm = abs(M_tonfm) * TONFM_TO_NMM
-
-    # Calcular esfuerzos en bordes (MPa)
-    # Borde izquierdo: compresión cuando M positivo
-    sigma_left = P_N / Ag + M_Nmm * y / Ig
-    # Borde derecho
-    sigma_right = P_N / Ag - M_Nmm * y / Ig
-
-    return BoundaryStressResult(
-        sigma_left=sigma_left,
-        sigma_right=sigma_right,
-        sigma_limit=sigma_limit,
-        Ag=Ag,
-        Ig=Ig,
-        y=y
+    return _calculate_boundary_stress(
+        width=pier.width,
+        thickness=pier.thickness,
+        fc=pier.fc,
+        P_N=P_N,
+        M_Nmm=M_Nmm
     )
-
-
-from .plot_generator import PlotGenerator
-from ..analysis.flexocompression_service import FlexocompressionService
-from ..analysis.shear import ShearService
-from ...domain.flexure import SlendernessService
-from ...domain.chapter18.reinforcement import SeismicReinforcementService
 
 
 class PierDetailsFormatter:
@@ -240,18 +198,14 @@ class PierDetailsFormatter:
         # Obtener datos detallados de esbeltez
         slenderness = self._slenderness_service.analyze(pier, k=0.8, braced=True)
 
-        # Calcular capacidad reducida por esbeltez
+        # Capacidad axial (sin reduccion por esbeltez - el efecto se aplica magnificando Mu)
         phi_Pn_max = flexure_capacities['phi_Pn_max']
-        phi_Pn_reduced = (
-            phi_Pn_max * slenderness.buckling_factor
-            if slenderness.is_slender else phi_Pn_max
-        )
 
         # Área gruesa
         Ag_m2 = (pier.width / 1000) * (pier.thickness / 1000)
 
-        # Cuantía vertical y horizontal
-        rho_vertical = pier.As_flexure_total / (pier.width * pier.thickness)
+        # Cuantía vertical y horizontal (usar propiedades de la entidad)
+        rho_vertical = pier.rho_vertical
         rho_horizontal = pier.rho_horizontal
 
         # Obtener lambda del material (lightweight factor)
@@ -324,7 +278,7 @@ class PierDetailsFormatter:
                 'warnings': reinf_check.warnings,
                 'description': pier.reinforcement_description
             },
-            # Sección 3: Slenderness
+            # Sección 3: Slenderness (ACI 318-25 §6.6.4)
             'slenderness': {
                 'lambda': round(slenderness.lambda_ratio, 1),
                 'k': slenderness.k,
@@ -333,16 +287,14 @@ class PierDetailsFormatter:
                 'is_slender': slenderness.is_slender,
                 'limit': slenderness.lambda_limit,
                 'Pc_kN': round(slenderness.Pc_kN, 1),
-                'buckling_factor': round(slenderness.buckling_factor, 3),
-                'reduction_pct': (
-                    round((1 - slenderness.buckling_factor) * 100, 0)
-                    if slenderness.is_slender else 0
-                )
+                'delta_ns': round(slenderness.delta_ns, 3),
+                'magnification_pct': round(slenderness.magnification_pct, 1)
             },
             # Sección 4: Pure Capacities
+            # NOTA: phi_Pn_max no se reduce por esbeltez. El efecto de esbeltez
+            # se aplica magnificando Mu segun ACI 318-25 §6.6.4: Mc = δns × Mu
             'capacities': {
                 'phi_Pn_max_tonf': round(phi_Pn_max, 1),
-                'phi_Pn_reduced_tonf': round(phi_Pn_reduced, 1),
                 'phi_Mn3_tonf_m': flexure_capacities['phi_Mn3'],
                 'phi_Mn2_tonf_m': flexure_capacities['phi_Mn2'],
                 'phi_Vn2_tonf': shear_capacities['phi_Vn_2'],
@@ -400,8 +352,8 @@ class PierDetailsFormatter:
         # Calcular c (profundidad del eje neutro) para el punto crítico
         c_mm = self._calculate_neutral_axis_depth(pier, Pu, Mu)
 
-        # Cuantía actual
-        rho_actual = pier.As_flexure_total / (pier.width * pier.thickness)
+        # Cuantía actual (usar propiedad de la entidad)
+        rho_actual = pier.rho_vertical
 
         # Calcular D/C (Demand/Capacity) = 1/SF = Mu/φMn
         dcr = 1 / sf if sf > 0 else 0
@@ -498,9 +450,12 @@ class PierDetailsFormatter:
                 critical_combo = f"{combo.name} ({combo.location})"
                 break
 
-        # Calcular φVc (φ = 0.75 segun ACI 318-25 §21.2.1)
-        phi_Vc_2 = Vc_2 * PHI_SHEAR if Vc_2 else phi_Vn_2 - (Vs_2 * PHI_SHEAR if Vs_2 else 0)
-        phi_Vc_3 = Vc_3 * PHI_SHEAR if Vc_3 else phi_Vn_3 - (Vs_3 * PHI_SHEAR if Vs_3 else 0)
+        # Obtener phi_v usado (§21.2.4.1: 0.60 para SPECIAL, 0.75 para otros)
+        phi_v = shear_result.get('phi_v', PHI_SHEAR)
+
+        # Calcular φVc usando el phi_v correcto
+        phi_Vc_2 = Vc_2 * phi_v if Vc_2 else phi_Vn_2 - (Vs_2 * phi_v if Vs_2 else 0)
+        phi_Vc_3 = Vc_3 * phi_v if Vc_3 else phi_Vn_3 - (Vs_3 * phi_v if Vs_3 else 0)
 
         rows = []
 
@@ -533,7 +488,8 @@ class PierDetailsFormatter:
         return {
             'has_data': len(rows) > 0,
             'rows': rows,
-            'critical_combo': critical_combo
+            'critical_combo': critical_combo,
+            'phi_v': phi_v  # Factor φv usado (0.60 SPECIAL, 0.75 otros)
         }
 
     def _get_boundary_check_data(
@@ -795,12 +751,14 @@ class PierDetailsFormatter:
         phi_Vn_3 = shear_cap.get('phi_Vn_3', 0)
         Vc_2 = shear_cap.get('Vc_2', 0)
         Vc_3 = shear_cap.get('Vc_3', 0)
+        phi_v = shear_cap.get('phi_v', PHI_SHEAR)
 
         # Calcular D/C para cada dirección (phi ya incluido en phi_Vn_*)
         dcr_2 = V2 / phi_Vn_2 if phi_Vn_2 > 0 else 0
         dcr_3 = V3 / phi_Vn_3 if phi_Vn_3 > 0 else 0
 
         return {
+            'phi_v': phi_v,  # Factor φv usado
             'rows': [
                 {
                     'direction': 'V2',
@@ -808,7 +766,7 @@ class PierDetailsFormatter:
                     'Pu_tonf': round(Pu, 2),
                     'Mu_tonf_m': round(Mu, 2),
                     'Vu_tonf': round(V2, 2),
-                    'phi_Vc_tonf': round(Vc_2 * phi, 2),
+                    'phi_Vc_tonf': round(Vc_2 * phi_v, 2),
                     'phi_Vn_tonf': round(phi_Vn_2, 2)
                 },
                 {
@@ -817,7 +775,7 @@ class PierDetailsFormatter:
                     'Pu_tonf': round(Pu, 2),
                     'Mu_tonf_m': round(Mu, 2),
                     'Vu_tonf': round(V3, 2),
-                    'phi_Vc_tonf': round(Vc_3 * phi, 2),
+                    'phi_Vc_tonf': round(Vc_3 * phi_v, 2),
                     'phi_Vn_tonf': round(phi_Vn_3, 2)
                 }
             ]

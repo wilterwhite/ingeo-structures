@@ -2,8 +2,15 @@
 /**
  * Módulo para manejo de la tabla de vigas.
  * Muestra resultados de verificación de cortante para vigas.
+ * Permite editar la enfierradura de cada viga.
  * Usa Utils.js para funciones compartidas.
  */
+
+// Opciones de diámetros de barras disponibles
+const BEAM_DIAMETERS = [8, 10, 12, 16, 18, 20, 22, 25, 28, 32];
+const BEAM_N_BARS = [2, 3, 4, 5, 6, 8];
+const STIRRUP_SPACINGS = [100, 125, 150, 175, 200, 250, 300];
+const STIRRUP_LEGS = [2, 3, 4];
 
 class BeamsTable {
     constructor(page) {
@@ -54,13 +61,12 @@ class BeamsTable {
 
         row.appendChild(this.createInfoCell(result));
         row.appendChild(this.createSectionCell(result));
+        row.appendChild(this.createLongitudinalCell(result));
         row.appendChild(this.createStirrupsCell(result));
         row.appendChild(this.createCapacityCell(result));
         row.appendChild(this.createDemandCell(result));
-        row.appendChild(this.createSfCell(result));
         row.appendChild(this.createDcrCell(result));
         row.appendChild(this.createComboCell(result));
-        row.appendChild(this.createStatusCell(result));
 
         return row;
     }
@@ -73,8 +79,17 @@ class BeamsTable {
         const td = document.createElement('td');
         td.className = 'beam-info-cell';
 
-        const sourceLabel = result.source === 'spandrel' ? 'SPANDREL' : 'FRAME';
-        const sourceClass = result.source === 'spandrel' ? 'type-spandrel' : 'type-frame';
+        let sourceLabel, sourceClass;
+        if (result.is_custom) {
+            sourceLabel = 'CUSTOM';
+            sourceClass = 'type-custom';
+        } else if (result.source === 'spandrel') {
+            sourceLabel = 'SPANDREL';
+            sourceClass = 'type-spandrel';
+        } else {
+            sourceLabel = 'FRAME';
+            sourceClass = 'type-frame';
+        }
 
         td.innerHTML = `
             <span class="element-type-badge ${sourceClass}">${sourceLabel}</span>
@@ -96,16 +111,125 @@ class BeamsTable {
         return td;
     }
 
+    createLongitudinalCell(result) {
+        const td = document.createElement('td');
+        td.className = 'longitudinal-cell editable-cell';
+        const reinf = result.reinforcement || {};
+        const beamKey = result.key;
+
+        // Fila superior
+        const topRow = document.createElement('div');
+        topRow.className = 'reinf-row';
+        topRow.innerHTML = `
+            <span class="reinf-label">Sup:</span>
+            ${this.createSelect(beamKey, 'n_bars_top', BEAM_N_BARS, reinf.n_bars_top || 3)}
+            <span class="reinf-sep">φ</span>
+            ${this.createSelect(beamKey, 'diameter_top', BEAM_DIAMETERS, reinf.diameter_top || 16)}
+        `;
+
+        // Fila inferior
+        const botRow = document.createElement('div');
+        botRow.className = 'reinf-row';
+        botRow.innerHTML = `
+            <span class="reinf-label">Inf:</span>
+            ${this.createSelect(beamKey, 'n_bars_bottom', BEAM_N_BARS, reinf.n_bars_bottom || 3)}
+            <span class="reinf-sep">φ</span>
+            ${this.createSelect(beamKey, 'diameter_bottom', BEAM_DIAMETERS, reinf.diameter_bottom || 16)}
+        `;
+
+        td.appendChild(topRow);
+        td.appendChild(botRow);
+
+        // Agregar eventos después de insertar en DOM
+        setTimeout(() => this.attachSelectListeners(td, beamKey), 0);
+
+        return td;
+    }
+
     createStirrupsCell(result) {
         const td = document.createElement('td');
-        td.className = 'stirrups-cell';
+        td.className = 'stirrups-cell editable-cell';
         const reinf = result.reinforcement || {};
+        const beamKey = result.key;
 
-        td.innerHTML = `
-            <span class="stirrup-config">${reinf.n_stirrup_legs || 2}E${reinf.stirrup_diameter || 10}@${reinf.stirrup_spacing || 200}</span>
-            <span class="av-info">Av=${reinf.Av || 0}mm²</span>
+        // Fila de configuración: ramas E diámetro @ espaciamiento
+        const configRow = document.createElement('div');
+        configRow.className = 'reinf-row';
+        configRow.innerHTML = `
+            ${this.createSelect(beamKey, 'n_stirrup_legs', STIRRUP_LEGS, reinf.n_stirrup_legs || 2)}
+            <span class="reinf-sep">E</span>
+            ${this.createSelect(beamKey, 'stirrup_diameter', BEAM_DIAMETERS.slice(0, 5), reinf.stirrup_diameter || 10)}
+            <span class="reinf-sep">@</span>
+            ${this.createSelect(beamKey, 'stirrup_spacing', STIRRUP_SPACINGS, reinf.stirrup_spacing || 150)}
         `;
+
+        // Info de Av
+        const avInfo = document.createElement('div');
+        avInfo.className = 'av-info';
+        avInfo.textContent = `Av=${reinf.Av || 0}mm²`;
+
+        td.appendChild(configRow);
+        td.appendChild(avInfo);
+
+        // Agregar eventos
+        setTimeout(() => this.attachSelectListeners(td, beamKey), 0);
+
         return td;
+    }
+
+    // =========================================================================
+    // Helpers para selectores editables
+    // =========================================================================
+
+    createSelect(beamKey, field, options, currentValue) {
+        const optionsHtml = options.map(opt =>
+            `<option value="${opt}" ${opt == currentValue ? 'selected' : ''}>${opt}</option>`
+        ).join('');
+        return `<select class="reinf-select" data-beam="${beamKey}" data-field="${field}">${optionsHtml}</select>`;
+    }
+
+    attachSelectListeners(cell, beamKey) {
+        const selects = cell.querySelectorAll('.reinf-select');
+        selects.forEach(select => {
+            select.addEventListener('change', (e) => this.handleReinforcementChange(beamKey, e.target));
+        });
+    }
+
+    async handleReinforcementChange(beamKey, selectEl) {
+        const field = selectEl.dataset.field;
+        const value = parseInt(selectEl.value, 10);
+
+        // Recopilar todos los valores actuales de la fila
+        const row = selectEl.closest('tr');
+        const reinforcement = this.collectReinforcementFromRow(row);
+        reinforcement[field] = value;
+
+        try {
+            selectEl.classList.add('updating');
+            await structuralAPI.updateBeamReinforcement(
+                this.page.sessionId,
+                beamKey,
+                reinforcement
+            );
+
+            // Re-analizar para actualizar DCR y capacidad
+            await this.page.reanalyzeBeam(beamKey);
+
+        } catch (error) {
+            console.error('Error updating reinforcement:', error);
+            this.page.showNotification('Error al actualizar enfierradura', 'error');
+        } finally {
+            selectEl.classList.remove('updating');
+        }
+    }
+
+    collectReinforcementFromRow(row) {
+        const data = {};
+        const selects = row.querySelectorAll('.reinf-select');
+        selects.forEach(select => {
+            data[select.dataset.field] = parseInt(select.value, 10);
+        });
+        return data;
     }
 
     createCapacityCell(result) {
@@ -123,16 +247,6 @@ class BeamsTable {
         const shear = result.shear || {};
 
         td.innerHTML = `<span class="vu">${shear.Vu || 0}</span>`;
-        return td;
-    }
-
-    createSfCell(result) {
-        const shear = result.shear || {};
-        const sf = shear.sf;
-
-        const td = document.createElement('td');
-        td.className = `fs-value ${getFsClass(sf)}`;
-        td.innerHTML = `<span class="fs-number">${sf}</span>`;
         return td;
     }
 
@@ -154,15 +268,6 @@ class BeamsTable {
 
         const combo = shear.critical_combo || 'N/A';
         td.innerHTML = `<span class="combo-name" title="${combo}">${truncateCombo(combo, 15)}</span>`;
-        return td;
-    }
-
-    createStatusCell(result) {
-        const td = document.createElement('td');
-        const status = result.overall_status || 'N/A';
-        const statusClass = status === 'OK' ? 'status-ok' : 'status-fail';
-
-        td.innerHTML = `<span class="status-badge ${statusClass}">${status}</span>`;
         return td;
     }
 

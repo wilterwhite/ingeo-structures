@@ -17,7 +17,6 @@ from ..constants.phi_chapter21 import (
     calculate_phi_flexure,
 )
 from ..constants.materials import calculate_beta1 as _calculate_beta1
-from .checker import FlexureChecker
 
 
 @dataclass
@@ -324,57 +323,3 @@ class InteractionDiagramService:
         curve = [(p.phi_Mn, p.phi_Pn) for p in points]
         return curve
 
-    def calculate_safety_factor(
-        self,
-        points: List[InteractionPoint],
-        Pu: float,
-        Mu: float
-    ) -> Tuple[float, bool]:
-        """
-        Calcula el factor de seguridad para un punto de demanda.
-
-        Delega a FlexureChecker para evitar duplicación de código.
-
-        Args:
-            points: Puntos del diagrama de interacción
-            Pu: Carga axial de demanda (tonf), positivo = compresión
-            Mu: Momento de demanda (tonf-m), siempre positivo
-
-        Returns:
-            Tuple (factor_seguridad, is_inside)
-        """
-        return FlexureChecker.calculate_safety_factor(points, Pu, Mu)
-
-    def check_flexure(
-        self,
-        points: List[InteractionPoint],
-        demand_points: List[Tuple[float, float, str]]
-    ) -> Tuple[float, str, str, float, float, float, float, bool, float, bool, int]:
-        """
-        DEPRECATED: Usar FlexureChecker.check_flexure() directamente.
-
-        Este metodo se mantiene solo por compatibilidad. Prefiere llamar a:
-            from app.domain.flexure import FlexureChecker
-            result = FlexureChecker.check_flexure(points, demand_points)
-
-        Args:
-            points: Puntos del diagrama de interaccion
-            demand_points: Lista de (Pu, Mu, combo_name)
-
-        Returns:
-            Tuple de 11 elementos (usar FlexureCheckResult directamente es mas claro)
-        """
-        result = FlexureChecker.check_flexure(points, demand_points)
-        return (
-            result.safety_factor,
-            result.status,
-            result.critical_combo,
-            result.phi_Mn_0,
-            result.phi_Mn_at_Pu,
-            result.critical_Pu,
-            result.critical_Mu,
-            result.exceeds_axial_capacity,
-            result.phi_Pn_max,
-            result.has_tension,
-            result.tension_combos
-        )

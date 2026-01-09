@@ -70,6 +70,10 @@ TWELVE_INCH_MM = 304.8     # 12" en mm
 FOURTEEN_INCH_MM = 355.6   # 14" en mm
 EIGHTEEN_INCH_MM = 457.2   # 18" en mm
 
+# Dimensión mínima para columnas sísmicas especiales (§18.7.2.1)
+# ACI usa 300mm como valor SI redondeado (12" = 304.8mm)
+MIN_COLUMN_DIMENSION_MM = 300.0
+
 # =============================================================================
 # CONVERSION DE AREA
 # =============================================================================

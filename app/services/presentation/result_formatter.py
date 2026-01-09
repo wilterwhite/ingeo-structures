@@ -10,6 +10,7 @@ from typing import Dict, Any, Union, TYPE_CHECKING
 if TYPE_CHECKING:
     from ..analysis.verification_result import ElementVerificationResult
     from ...domain.entities import Beam, Column, Pier
+    from ...domain.calculations.wall_continuity import WallContinuityInfo
 
 
 class ResultFormatter:
@@ -24,7 +25,8 @@ class ResultFormatter:
     def format_element_result(
         element: Union['Beam', 'Column', 'Pier'],
         result: 'ElementVerificationResult',
-        key: str
+        key: str,
+        continuity_info: 'WallContinuityInfo' = None
     ) -> Dict[str, Any]:
         """
         Formatea resultado de cualquier elemento al formato UI.
@@ -33,6 +35,7 @@ class ResultFormatter:
             element: Beam, Column o Pier
             result: ElementVerificationResult del servicio
             key: Clave unica del elemento
+            continuity_info: Información de continuidad del muro (solo piers)
 
         Returns:
             Dict con formato unificado para UI
@@ -46,7 +49,7 @@ class ResultFormatter:
         elif element_type.is_column:
             return ResultFormatter._format_column(element, result, key)
         else:
-            return ResultFormatter._format_pier(element, result, key)
+            return ResultFormatter._format_pier(element, result, key, continuity_info)
 
     @staticmethod
     def _format_column(
@@ -113,8 +116,8 @@ class ResultFormatter:
             'slenderness': {
                 'lambda': slenderness.lambda_ratio if slenderness else 0,
                 'is_slender': slenderness.is_slender if slenderness else False,
-                'reduction': slenderness.reduction_factor if slenderness else 1.0,
-                'reduction_pct': round((1 - (slenderness.reduction_factor if slenderness else 1.0)) * 100, 1)
+                'delta_ns': slenderness.delta_ns if slenderness else 1.0,
+                'magnification_pct': round(slenderness.magnification_pct, 1) if slenderness else 0.0
             },
             'overall_status': result.overall_status,
             'wall_continuity': None,
@@ -141,6 +144,7 @@ class ResultFormatter:
             'label': beam.label,
             'story': beam.story,
             'source': beam.source.value,
+            'is_custom': getattr(beam, 'is_custom', False),
             'geometry': {
                 'length_m': beam.length / 1000,
                 'depth_m': beam.depth / 1000,
@@ -149,6 +153,12 @@ class ResultFormatter:
                 'fy_MPa': beam.fy
             },
             'reinforcement': {
+                # Longitudinal
+                'n_bars_top': beam.n_bars_top,
+                'n_bars_bottom': beam.n_bars_bottom,
+                'diameter_top': beam.diameter_top,
+                'diameter_bottom': beam.diameter_bottom,
+                # Transversal
                 'stirrup_diameter': beam.stirrup_diameter,
                 'stirrup_spacing': beam.stirrup_spacing,
                 'n_stirrup_legs': beam.n_stirrup_legs,
@@ -185,7 +195,8 @@ class ResultFormatter:
     def _format_pier(
         pier: 'Pier',
         result: 'ElementVerificationResult',
-        key: str
+        key: str,
+        continuity_info: 'WallContinuityInfo' = None
     ) -> Dict[str, Any]:
         """Formatea resultado de muro/pier."""
         from dataclasses import asdict
@@ -273,16 +284,51 @@ class ResultFormatter:
             'slenderness': {
                 'lambda': slenderness.lambda_ratio if slenderness else 0,
                 'is_slender': slenderness.is_slender if slenderness else False,
-                'reduction': slenderness.reduction_factor if slenderness else 1.0,
-                'reduction_pct': round((1 - (slenderness.reduction_factor if slenderness else 1.0)) * 100, 1)
+                'delta_ns': slenderness.delta_ns if slenderness else 1.0,
+                'magnification_pct': round(slenderness.magnification_pct, 1) if slenderness else 0.0
             },
             'classification': classification,
             'amplification': amplification,
             'boundary_element': boundary,
             'overall_status': result.overall_status,
-            'wall_continuity': None,
+            'wall_continuity': ResultFormatter._format_wall_continuity(
+                pier, continuity_info
+            ),
             'design_proposal': {'has_proposal': result.proposal is not None},
             'pm_plot': result.pm_plot
+        }
+
+    @staticmethod
+    def _format_wall_continuity(
+        pier: 'Pier',
+        continuity_info: 'WallContinuityInfo' = None
+    ) -> Dict[str, Any]:
+        """Formatea información de continuidad del muro."""
+        # Si tenemos continuity_info, usarla
+        if continuity_info:
+            hwcs_m = continuity_info.hwcs / 1000  # mm -> m
+            lw_m = pier.width / 1000  # mm -> m
+            hwcs_lw = hwcs_m / lw_m if lw_m > 0 else 0
+            return {
+                'hwcs_m': round(hwcs_m, 2),
+                'hwcs_lw': round(hwcs_lw, 2),
+                'n_stories': continuity_info.n_stories,
+                'is_continuous': continuity_info.is_continuous,
+                'is_base': continuity_info.is_base,
+                'stories_list': continuity_info.stories_list
+            }
+
+        # Fallback: calcular de la geometría del pier
+        hwcs_m = pier.height / 1000  # mm -> m
+        lw_m = pier.width / 1000  # mm -> m
+        hwcs_lw = hwcs_m / lw_m if lw_m > 0 else 0
+        return {
+            'hwcs_m': round(hwcs_m, 2),
+            'hwcs_lw': round(hwcs_lw, 2),
+            'n_stories': 1,
+            'is_continuous': False,
+            'is_base': True,
+            'stories_list': [pier.story]
         }
 
     # =========================================================================
@@ -387,6 +433,7 @@ class ResultFormatter:
             'label': beam.label,
             'story': beam.story,
             'source': beam.source.value,
+            'is_custom': getattr(beam, 'is_custom', False),
             'geometry': {
                 'length_m': beam.length / 1000,
                 'depth_m': beam.depth / 1000,
@@ -395,6 +442,12 @@ class ResultFormatter:
                 'fy_MPa': beam.fy
             },
             'reinforcement': {
+                # Longitudinal
+                'n_bars_top': beam.n_bars_top,
+                'n_bars_bottom': beam.n_bars_bottom,
+                'diameter_top': beam.diameter_top,
+                'diameter_bottom': beam.diameter_bottom,
+                # Transversal
                 'stirrup_diameter': beam.stirrup_diameter,
                 'stirrup_spacing': beam.stirrup_spacing,
                 'n_stirrup_legs': beam.n_stirrup_legs,

@@ -83,7 +83,16 @@
       "Bash(python -m pytest tests/domain/chapter18/ -v --tb=short)",
       "Bash(dir /s /b \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\analysis\\*.py\")",
       "Bash(cd:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(git push)",
+      "Bash(python scripts/generate_project_tree.py:*)",
+      "Bash(xargs basename:*)",
+      "Bash(for f in \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\domain\\entities\"/*.py)",
+      "Bash(do wc -l \"$f\")",
+      "Bash(done)",
+      "Bash(sort:*)",
+      "Bash(for class in \"status-ok\" \"status-fail\" \"critical-combo\" \"dcr-info\" \"slenderness-info\" \"capacity-line\" \"capacity-ref\" \"capacity-value\")",
+      "Bash(do echo -n \"$class: \" grep -r \"$class\" app/static/js/*.js app/templates/*.html)"
     ]
   }
 }

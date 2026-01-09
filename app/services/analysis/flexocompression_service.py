@@ -78,7 +78,8 @@ class FlexocompressionService:
         slenderness_data = {
             'lambda': round(slenderness.lambda_ratio, 1),
             'is_slender': slenderness.is_slender,
-            'reduction': round(slenderness.buckling_factor, 3) if slenderness.is_slender else 1.0
+            'delta_ns': round(slenderness.delta_ns, 3) if slenderness.is_slender else 1.0,
+            'magnification_pct': round(slenderness.magnification_pct, 1) if slenderness.is_slender else 0.0
         }
 
         # Obtener dimensiones y capas de acero
@@ -86,6 +87,8 @@ class FlexocompressionService:
         steel_layers = element.get_steel_layers(direction)
 
         # Generar curva de interaccion
+        # NOTA: No se reduce la curva P-M. El efecto de esbeltez se aplica
+        # magnificando Mu segun ACI 318-25 §6.6.4: Mc = δns × Mu
         interaction_points = self._interaction_service.generate_interaction_curve(
             width=width,
             thickness=thickness,
@@ -95,13 +98,6 @@ class FlexocompressionService:
             cover=element.cover,
             steel_layers=steel_layers
         )
-
-        # Aplicar reduccion por esbeltez si corresponde
-        if apply_slenderness and slenderness.is_slender:
-            reduction = slenderness.buckling_factor
-            for point in interaction_points:
-                point.phi_Pn *= reduction
-                point.Pn *= reduction
 
         return interaction_points, slenderness_data
 
@@ -239,7 +235,8 @@ class FlexocompressionService:
             'slenderness': {
                 'lambda': round(slenderness.lambda_ratio, 1),
                 'is_slender': slenderness.is_slender,
-                'reduction': round(slenderness.buckling_factor, 3) if slenderness.is_slender else 1.0
+                'delta_ns': round(slenderness.delta_ns, 3) if slenderness.is_slender else 1.0,
+                'magnification_pct': round(slenderness.magnification_pct, 1) if slenderness.is_slender else 0.0
             }
         }
 
@@ -255,6 +252,8 @@ class FlexocompressionService:
         """
         Interpola phi_Mn en la curva de interaccion para un Pu dado.
 
+        Delega a FlexureChecker.get_phi_Mn_at_P() para evitar duplicación.
+
         Args:
             interaction_points: Lista de puntos de interaccion
             Pu: Carga axial (tonf)
@@ -262,22 +261,7 @@ class FlexocompressionService:
         Returns:
             Capacidad phi_Mn interpolada (tonf-m)
         """
-        if not interaction_points:
-            return 0.0
-
-        points_sorted = sorted(interaction_points, key=lambda p: p.phi_Pn, reverse=True)
-
-        for i in range(len(points_sorted) - 1):
-            p1, p2 = points_sorted[i], points_sorted[i + 1]
-            if p1.phi_Pn >= Pu >= p2.phi_Pn:
-                if abs(p1.phi_Pn - p2.phi_Pn) < 0.001:
-                    return p1.phi_Mn
-                ratio = (p1.phi_Pn - Pu) / (p1.phi_Pn - p2.phi_Pn)
-                return p1.phi_Mn + ratio * (p2.phi_Mn - p1.phi_Mn)
-
-        if Pu > points_sorted[0].phi_Pn:
-            return points_sorted[0].phi_Mn
-        return points_sorted[-1].phi_Mn
+        return FlexureChecker.get_phi_Mn_at_P(interaction_points, Pu)
 
     def get_c_at_point(
         self,

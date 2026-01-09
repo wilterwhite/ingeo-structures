@@ -4,9 +4,9 @@ Constantes y verificaciones de refuerzo segun ACI 318-25.
 
 Constantes:
     - RHO_MIN: Cuantia minima para muros (0.0025)
+    - MAX_SPACING_SEISMIC_MM: Espaciamiento max muros especiales (457mm)
     - FY_DEFAULT_MPA: Fluencia por defecto del acero (420 MPa, A630-420H)
-    - COVER_DEFAULT_PIER_MM: Recubrimiento por defecto muros (25 mm)
-    - COVER_DEFAULT_COLUMN_MM: Recubrimiento por defecto columnas (40 mm)
+    - COVER_DEFAULT_*_MM: Recubrimientos por defecto
 
 Funciones:
     - check_rho_vertical_ge_horizontal: Verifica S18.10.4.3

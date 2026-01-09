@@ -39,6 +39,9 @@ class ShearResult:
     # Referencia ACI para trazabilidad
     aci_reference: str = ""     # Ej: "ACI 318-25 18.10.4.1"
 
+    # Factor de reduccion phi usado (§21.2.4.1)
+    phi_v: float = 0.75         # 0.60 para SPECIAL, 0.75 para otros
+
 
 @dataclass
 class CombinedShearResult:
@@ -61,6 +64,9 @@ class CombinedShearResult:
 
     # Info de la combinacion
     combo_name: str = ""
+
+    # Factor de reduccion phi usado (§21.2.4.1)
+    phi_v: float = 0.75         # 0.60 para SPECIAL, 0.75 para otros
 
 
 @dataclass
@@ -111,3 +117,4 @@ class SimpleShearCapacity:
     Vs_max: float   # Limite de Vs (tonf)
     phi_Vn: float   # Capacidad de diseno (tonf)
     aci_reference: str = "ACI 318-25 §22.5"
+    phi_v: float = 0.75  # Factor phi usado (§21.2.4.1)

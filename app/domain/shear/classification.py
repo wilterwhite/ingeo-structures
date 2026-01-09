@@ -17,9 +17,7 @@ from ..constants.shear import (
     WALL_PIER_COLUMN_LIMIT,
     WALL_PIER_ALTERNATE_LIMIT,
 )
-
-# Espesor mínimo para columnas sísmicas (§18.7.2.1)
-COLUMN_MIN_THICKNESS_MM = 300.0
+from ..constants.units import MIN_COLUMN_DIMENSION_MM
 
 
 class ElementType(Enum):
@@ -187,4 +185,4 @@ class WallClassificationService:
         Returns:
             Tupla (cumple, espesor_mínimo_requerido)
         """
-        return (bw >= COLUMN_MIN_THICKNESS_MM, COLUMN_MIN_THICKNESS_MM)
+        return (bw >= MIN_COLUMN_DIMENSION_MM, MIN_COLUMN_DIMENSION_MM)

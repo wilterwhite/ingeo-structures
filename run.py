@@ -14,7 +14,7 @@ import sys
 
 from flask import Flask, render_template, send_from_directory
 
-from app.routes.analysis import bp as structural_bp
+from app.routes import piers_bp, columns_bp, beams_bp, slabs_bp
 
 
 def create_app() -> Flask:
@@ -48,8 +48,11 @@ def create_app() -> Flask:
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
         return response
 
-    # Registrar blueprint
-    app.register_blueprint(structural_bp)
+    # Registrar blueprints
+    app.register_blueprint(piers_bp)
+    app.register_blueprint(columns_bp)
+    app.register_blueprint(beams_bp)
+    app.register_blueprint(slabs_bp)
 
     # Ruta principal
     @app.route('/')

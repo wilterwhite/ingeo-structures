@@ -21,7 +21,7 @@ from ..results import (
     EdgePierCheck,
     WallPierDesignResult,
 )
-from .classification import classify_wall_pier, COLUMN_MIN_THICKNESS_MM
+from .classification import classify_wall_pier
 from .shear_design import calculate_design_shear, verify_shear_strength
 from .transverse import calculate_transverse_requirements
 from .boundary_zones import check_boundary_zone_reinforcement

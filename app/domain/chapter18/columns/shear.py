@@ -26,7 +26,8 @@ from ...constants.shear import (
     VC_COEF_COLUMN,
     VS_MAX_COEF,
 )
-from ...constants.units import N_TO_TONF, TONF_TO_N
+from ...constants.units import N_TO_TONF
+from ..common import check_Vc_zero_condition as _check_Vc_zero
 from .results import SeismicColumnShearResult, ColumnShearCapacity
 
 
@@ -95,16 +96,7 @@ class SeismicColumnShearService:
         Returns:
             True si Vc debe ser cero
         """
-        # Condición (a): Ve >= 0.5 * Vu
-        condition_a = Ve >= 0.5 * Vu
-
-        # Condición (b): Pu < Ag * f'c / 20
-        # Pu en N para comparar con Ag * fc / 20
-        Pu_N = Pu * TONF_TO_N
-        threshold = Ag * fc / 20
-        condition_b = Pu_N < threshold
-
-        return condition_a and condition_b
+        return _check_Vc_zero(Ve, Vu, Pu, Ag, fc)
 
     def calculate_shear_capacity(
         self,

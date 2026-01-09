@@ -362,6 +362,73 @@ class Pier:
         """Profundidad efectiva (mm)."""
         return self.width - self.cover
 
+    @property
+    def Ig(self) -> float:
+        """
+        Momento de inercia de la sección bruta respecto al eje horizontal (mm⁴).
+
+        Fórmula: Ig = b × h³ / 12
+        Donde:
+        - b = thickness (espesor, perpendicular al plano de flexión)
+        - h = width (longitud del muro, en el plano de flexión)
+
+        Usado para cálculo de esfuerzos de borde (§18.10.6.2):
+        σ = P/A ± M×y/Ig
+        """
+        return self.thickness * (self.width ** 3) / 12
+
+    @property
+    def y_extreme(self) -> float:
+        """
+        Distancia de la fibra extrema al eje neutro (mm).
+
+        Para sección rectangular simétrica: y = h/2 = width/2
+        Usado en cálculo de esfuerzos: σ = P/A ± M×y/Ig
+        """
+        return self.width / 2
+
+    @property
+    def S(self) -> float:
+        """
+        Módulo de sección elástico (mm³).
+
+        Fórmula: S = Ig / y = b × h² / 6
+        Usado para cálculo rápido de momento elástico: M = σ × S
+        """
+        return self.Ig / self.y_extreme if self.y_extreme > 0 else 0
+
+    # =========================================================================
+    # Validación de Armadura
+    # =========================================================================
+
+    def is_reinforcement_valid(
+        self,
+        rho_min: float = 0.0025,
+        rho_max: float = 0.06
+    ) -> tuple:
+        """
+        Valida armadura según ACI 318-25 §11.6 y §18.10.2.1.
+
+        Args:
+            rho_min: Cuantía mínima (default 0.0025 = 0.25%)
+            rho_max: Cuantía máxima (default 0.06 = 6%)
+
+        Returns:
+            Tuple (is_valid: bool, issues: List[str])
+            - is_valid: True si cumple todos los requisitos
+            - issues: Lista de problemas encontrados
+        """
+        issues = []
+
+        if self.rho_vertical < rho_min:
+            issues.append(f"ρv = {self.rho_vertical:.5f} < ρmin = {rho_min}")
+        if self.rho_vertical > rho_max:
+            issues.append(f"ρv = {self.rho_vertical:.5f} > ρmax = {rho_max}")
+        if self.rho_horizontal < rho_min:
+            issues.append(f"ρh = {self.rho_horizontal:.5f} < ρmin = {rho_min}")
+
+        return len(issues) == 0, issues
+
     # =========================================================================
     # Métodos de Actualización
     # =========================================================================
@@ -379,10 +446,11 @@ class Pier:
         stirrup_spacing: Optional[int] = None,
         n_stirrup_legs: Optional[int] = None,
         fy: Optional[float] = None,
-        cover: Optional[float] = None
+        cover: Optional[float] = None,
+        thickness: Optional[float] = None
     ):
         """
-        Actualiza la configuración de armadura.
+        Actualiza la configuración de armadura y/o geometría.
 
         Args:
             n_meshes: Número de mallas (1 o 2)
@@ -397,6 +465,7 @@ class Pier:
             n_stirrup_legs: Número de ramas del estribo (2, 3 o 4)
             fy: Límite de fluencia (MPa)
             cover: Recubrimiento (mm)
+            thickness: Espesor del muro (mm) - para propuestas de diseño
         """
         if n_meshes is not None:
             self.n_meshes = n_meshes
@@ -425,6 +494,8 @@ class Pier:
             self.fy = fy
         if cover is not None:
             self.cover = cover
+        if thickness is not None:
+            self.thickness = thickness
 
     def set_minimum_reinforcement(self, diameter: int = 8):
         """

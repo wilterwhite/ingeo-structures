@@ -9,7 +9,7 @@ Exporta:
 """
 from .service import BoundaryElementService
 from .displacement import check_displacement_method, check_drift_capacity
-from .stress import check_stress_method
+from .stress import check_stress_method, calculate_boundary_stress
 from .dimensions import calculate_dimensions
 from .confinement import (
     calculate_transverse_reinforcement,
@@ -21,6 +21,7 @@ from ..results import (
     BoundaryElementMethod,
     DisplacementCheckResult,
     StressCheckResult,
+    BoundaryStressAnalysis,
     BoundaryElementDimensions,
     BoundaryTransverseReinforcement,
     BoundaryElementResult,
@@ -33,6 +34,7 @@ __all__ = [
     "check_displacement_method",
     "check_drift_capacity",
     "check_stress_method",
+    "calculate_boundary_stress",
     "calculate_dimensions",
     "calculate_transverse_reinforcement",
     "max_tie_spacing",
@@ -41,6 +43,7 @@ __all__ = [
     "BoundaryElementMethod",
     "DisplacementCheckResult",
     "StressCheckResult",
+    "BoundaryStressAnalysis",
     "BoundaryElementDimensions",
     "BoundaryTransverseReinforcement",
     "BoundaryElementResult",

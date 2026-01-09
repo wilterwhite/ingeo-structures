@@ -16,10 +16,10 @@ Referencias:
 import math
 from typing import List
 
-from ..common import SeismicCategory
+from ..common import SeismicCategory, check_Vc_zero_condition
 from ...constants.materials import get_effective_fc_shear, get_effective_fyt_shear
 from ...constants.shear import PHI_SHEAR
-from ...constants.units import N_TO_TONF, TONF_TO_N
+from ...constants.units import N_TO_TONF
 from .results import (
     SeismicBeamResult,
     BeamDimensionalLimitsResult,
@@ -476,14 +476,8 @@ class SeismicBeamService:
         # Cortante de diseño
         Vu_design = max(Ve, Vu)
 
-        # Verificar condición Vc = 0
-        # (a) Cortante sísmico >= 0.5 * Vu_max
-        seismic_shear_dominates = Ve >= 0.5 * Vu if Vu > 0 else True
-        # (b) Pu < Ag * f'c / 20 (vigas típicamente cumplen)
-        Pu_N = Pu * TONF_TO_N
-        low_axial = Pu_N < Ag * fc / 20
-
-        Vc_is_zero = seismic_shear_dominates and low_axial
+        # Verificar condición Vc = 0 según §18.6.5.2
+        Vc_is_zero = check_Vc_zero_condition(Ve, Vu, Pu, Ag, fc)
 
         # Calcular Vc y Vs (N)
         if Vc_is_zero:

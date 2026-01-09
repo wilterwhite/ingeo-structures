@@ -16,8 +16,8 @@ from app.domain.shear import (
 from app.domain.constants.shear import (
     SHEAR_FRICTION_MU,
     PHI_SHEAR_FRICTION,
-    N_TO_TONF,
 )
+from app.domain.constants.units import N_TO_TONF
 
 
 @pytest.fixture
