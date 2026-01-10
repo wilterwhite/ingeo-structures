@@ -115,12 +115,18 @@ def analyze(session_id: str, data: dict):
         {
             "session_id": "uuid-xxx",
             "pier_updates": [...],
+            "column_updates": [...],
+            "beam_updates": [...],
+            "drop_beam_updates": [...],
             "generate_plots": true,
             "moment_axis": "M3",
             "angle_deg": 0
         }
     """
     pier_updates = data.get('pier_updates')
+    column_updates = data.get('column_updates')
+    beam_updates = data.get('beam_updates')
+    drop_beam_updates = data.get('drop_beam_updates')
     generate_plots = data.get('generate_plots', True)
     moment_axis = data.get('moment_axis', 'M3')
     angle_deg = data.get('angle_deg', 0)
@@ -129,6 +135,9 @@ def analyze(session_id: str, data: dict):
     result = service.analyze(
         session_id=session_id,
         pier_updates=pier_updates,
+        column_updates=column_updates,
+        beam_updates=beam_updates,
+        drop_beam_updates=drop_beam_updates,
         generate_plots=generate_plots,
         moment_axis=moment_axis,
         angle_deg=angle_deg
@@ -145,6 +154,9 @@ def analyze_stream(session_id: str, data: dict):
     Ejecuta el análisis estructural con progreso en tiempo real (SSE).
     """
     pier_updates = data.get('pier_updates')
+    column_updates = data.get('column_updates')
+    beam_updates = data.get('beam_updates')
+    drop_beam_updates = data.get('drop_beam_updates')
     generate_plots = data.get('generate_plots', True)
     moment_axis = data.get('moment_axis', 'M3')
     angle_deg = data.get('angle_deg', 0)
@@ -157,6 +169,9 @@ def analyze_stream(session_id: str, data: dict):
             for event in service.analyze_with_progress(
                 session_id=session_id,
                 pier_updates=pier_updates,
+                column_updates=column_updates,
+                beam_updates=beam_updates,
+                drop_beam_updates=drop_beam_updates,
                 generate_plots=generate_plots,
                 moment_axis=moment_axis,
                 angle_deg=angle_deg,

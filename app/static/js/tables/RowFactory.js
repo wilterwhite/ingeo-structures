@@ -20,11 +20,23 @@ class RowFactory {
 
         const row = document.createElement('tr');
         row.className = `pier-row ${elementType}-type ${isExpanded ? 'expanded' : ''}`;
-        row.dataset.pierKey = elementKey;
         row.dataset.elementType = elementType;
+
+        // Usar data-attribute específico por tipo de elemento
+        if (elementType === 'beam') {
+            row.dataset.beamKey = elementKey;
+        } else if (elementType === 'drop_beam') {
+            row.dataset.dropBeamKey = elementKey;
+        } else {
+            row.dataset.pierKey = elementKey;  // pier y column comparten este
+        }
 
         if (elementType === 'column') {
             this._createColumnRow(row, result, elementKey, isExpanded);
+        } else if (elementType === 'drop_beam') {
+            this._createDropBeamRow(row, result, elementKey, isExpanded);
+        } else if (elementType === 'beam') {
+            this._createBeamRow(row, result, elementKey, isExpanded);
         } else {
             this._createPierRow(row, result, elementKey, isExpanded);
         }
@@ -70,6 +82,253 @@ class RowFactory {
         this.attachRowEventHandlers(row, colKey, result, 'column');
     }
 
+    _createDropBeamRow(row, result, dropBeamKey, isExpanded) {
+        // Viga capitel: usa estructura similar a pier pero sin vigas de acople
+        row.appendChild(this.createDropBeamInfoCell(result));
+        row.appendChild(this.createDropBeamSectionCell(result));
+        row.appendChild(this.createDropBeamLengthCell(result));
+        row.appendChild(this.createDropBeamMallaVCell(result, dropBeamKey));
+        row.appendChild(this.createDropBeamMallaHCell(result, dropBeamKey));
+        row.appendChild(this.createDropBeamBordeCell(result, dropBeamKey));
+        row.appendChild(this.createFlexureSfCell(result));
+        row.appendChild(this.createFlexureCapCell(result));
+        row.appendChild(this.createShearSfCell(result));
+        row.appendChild(this.createShearCapCell(result));
+        row.appendChild(this.createActionsCell(result, dropBeamKey, isExpanded));
+
+        this.attachRowEventHandlers(row, dropBeamKey, result, 'drop_beam');
+    }
+
+    // =========================================================================
+    // Celdas para Vigas Capitel (Drop Beams)
+    // =========================================================================
+
+    createDropBeamInfoCell(result) {
+        const td = document.createElement('td');
+        td.className = 'pier-info-cell';
+        td.innerHTML = `
+            <span class="element-type-badge type-drop_beam">VCAP</span>
+            <span class="pier-name">${result.label || result.pier_label || ''}</span>
+            <span class="story-badge">${result.story || ''}</span>
+        `;
+        return td;
+    }
+
+    createDropBeamSectionCell(result) {
+        const td = document.createElement('td');
+        td.className = 'geometry-cell';
+        const width_mm = Math.round((result.geometry?.width_m || 0) * 1000);
+        const thickness_mm = Math.round((result.geometry?.thickness_m || 0) * 1000);
+        td.innerHTML = `${width_mm} × ${thickness_mm}`;
+        td.title = `Espesor: ${width_mm}mm, Ancho: ${thickness_mm}mm`;
+        return td;
+    }
+
+    createDropBeamLengthCell(result) {
+        const td = document.createElement('td');
+        td.className = 'length-cell';
+        const length_m = (result.geometry?.length_m || 0).toFixed(2);
+        td.textContent = `${length_m}`;
+        return td;
+    }
+
+    createDropBeamMallaVCell(result, dropBeamKey) {
+        const td = document.createElement('td');
+        td.className = 'malla-cell malla-v-cell';
+        td.dataset.dropBeamKey = dropBeamKey;
+        const reinf = result.reinforcement || {};
+
+        td.innerHTML = `
+            <div class="malla-row">
+                <select class="edit-meshes" title="Mallas">
+                    ${generateOptions(MESH_OPTIONS, reinf.n_meshes || 2, 'M')}
+                </select>
+                <span class="malla-label">V</span>
+                <select class="edit-diameter-v" title="φ Vertical">
+                    ${generateDiameterOptions(DIAMETERS.malla, reinf.diameter_v || 12)}
+                </select>
+                <select class="edit-spacing-v" title="@ Vertical">
+                    ${generateSpacingOptions(SPACINGS.malla, reinf.spacing_v || 200)}
+                </select>
+            </div>
+        `;
+        td.title = `ρv=${(reinf.rho_vertical || 0).toFixed(4)}`;
+        return td;
+    }
+
+    createDropBeamMallaHCell(result, dropBeamKey) {
+        const td = document.createElement('td');
+        td.className = 'malla-cell malla-h-cell';
+        td.dataset.dropBeamKey = dropBeamKey;
+        const reinf = result.reinforcement || {};
+
+        td.innerHTML = `
+            <div class="malla-row">
+                <span class="malla-spacer"></span>
+                <span class="malla-label">H</span>
+                <select class="edit-diameter-h" title="φ Horizontal">
+                    ${generateDiameterOptions(DIAMETERS.malla, reinf.diameter_h || 10)}
+                </select>
+                <select class="edit-spacing-h" title="@ Horizontal">
+                    ${generateSpacingOptions(SPACINGS.malla, reinf.spacing_h || 200)}
+                </select>
+            </div>
+        `;
+        td.title = `ρh=${(reinf.rho_horizontal || 0).toFixed(4)}`;
+        return td;
+    }
+
+    createDropBeamBordeCell(result, dropBeamKey) {
+        const td = document.createElement('td');
+        td.className = 'borde-cell';
+        td.dataset.dropBeamKey = dropBeamKey;
+        const reinf = result.reinforcement || {};
+
+        td.innerHTML = `
+            <div class="borde-row">
+                <select class="edit-n-edge" title="Nº barras borde">
+                    ${generateOptions(EDGE_BAR_COUNTS, reinf.n_edge_bars || 4, 'φ')}
+                </select>
+                <select class="edit-edge" title="φ Borde">
+                    ${generateDiameterOptions(DIAMETERS.borde, reinf.diameter_edge || 16)}
+                </select>
+            </div>
+            <div class="borde-row borde-estribos">
+                <span class="borde-label">E</span>
+                <select class="edit-stirrup-d" title="φ Estribo">
+                    ${generateDiameterOptions(DIAMETERS.estribos, reinf.stirrup_diameter || 10, 'E')}
+                </select>
+                <select class="edit-stirrup-s" title="@ Estribo">
+                    ${generateSpacingOptions(SPACINGS.estribos, reinf.stirrup_spacing || 150)}
+                </select>
+            </div>
+        `;
+        td.title = `As borde=${reinf.As_edge_mm2 || 0}mm²`;
+        return td;
+    }
+
+    // =========================================================================
+    // Celdas para Vigas (Beams)
+    // =========================================================================
+
+    _createBeamRow(row, result, beamKey, isExpanded) {
+        // Viga: usa estructura similar a drop_beam con armadura longitudinal en lugar de malla
+        row.appendChild(this.createBeamInfoCell(result));
+        row.appendChild(this.createBeamSectionCell(result));
+        row.appendChild(this.createBeamLengthCell(result));
+        row.appendChild(this.createBeamTopReinfCell(result, beamKey));
+        row.appendChild(this.createBeamBottomReinfCell(result, beamKey));
+        row.appendChild(this.createBeamStirrupsCell(result, beamKey));
+        row.appendChild(this.createFlexureSfCell(result));
+        row.appendChild(this.createFlexureCapCell(result));
+        row.appendChild(this.createShearSfCell(result));
+        row.appendChild(this.createShearCapCell(result));
+        row.appendChild(this.createActionsCell(result, beamKey, isExpanded));
+
+        this.attachRowEventHandlers(row, beamKey, result, 'beam');
+    }
+
+    createBeamInfoCell(result) {
+        const td = document.createElement('td');
+        td.className = 'pier-info-cell';
+        const source = result.source || 'frame';
+        const sourceLabel = source === 'spandrel' ? 'SPAN' : 'VIGA';
+        td.innerHTML = `
+            <span class="element-type-badge type-beam">${sourceLabel}</span>
+            <span class="pier-name">${result.label || ''}</span>
+            <span class="story-badge">${result.story || ''}</span>
+        `;
+        return td;
+    }
+
+    createBeamSectionCell(result) {
+        const td = document.createElement('td');
+        td.className = 'geometry-cell';
+        const width_mm = Math.round((result.geometry?.width_m || 0) * 1000);
+        const depth_mm = Math.round((result.geometry?.depth_m || 0) * 1000);
+        td.innerHTML = `${width_mm} × ${depth_mm}`;
+        td.title = `Ancho: ${width_mm}mm, Peralte: ${depth_mm}mm\nf'c=${result.geometry?.fc_MPa || 0}MPa`;
+        return td;
+    }
+
+    createBeamLengthCell(result) {
+        const td = document.createElement('td');
+        td.className = 'length-cell';
+        const length_m = (result.geometry?.length_m || 0).toFixed(2);
+        td.textContent = `${length_m}`;
+        return td;
+    }
+
+    createBeamTopReinfCell(result, beamKey) {
+        const td = document.createElement('td');
+        td.className = 'reinf-cell beam-reinf-cell';
+        td.dataset.beamKey = beamKey;
+        const reinf = result.reinforcement || {};
+        const nBars = reinf.n_bars_top || 3;
+        const diam = reinf.diameter_top || 16;
+
+        td.innerHTML = `
+            <div class="beam-reinf-row">
+                <select class="edit-beam-n-top" title="Nº barras superiores">
+                    ${generateOptions(BEAM_BAR_COUNTS, nBars, '')}
+                </select>
+                <select class="edit-beam-diam-top" title="φ Superior">
+                    ${generateDiameterOptions(DIAMETERS.vigas, diam)}
+                </select>
+            </div>
+        `;
+        td.title = `Armadura superior: ${nBars} barras φ${diam}mm`;
+        return td;
+    }
+
+    createBeamBottomReinfCell(result, beamKey) {
+        const td = document.createElement('td');
+        td.className = 'reinf-cell beam-reinf-cell';
+        td.dataset.beamKey = beamKey;
+        const reinf = result.reinforcement || {};
+        const nBars = reinf.n_bars_bottom || 3;
+        const diam = reinf.diameter_bottom || 16;
+
+        td.innerHTML = `
+            <div class="beam-reinf-row">
+                <select class="edit-beam-n-bot" title="Nº barras inferiores">
+                    ${generateOptions(BEAM_BAR_COUNTS, nBars, '')}
+                </select>
+                <select class="edit-beam-diam-bot" title="φ Inferior">
+                    ${generateDiameterOptions(DIAMETERS.vigas, diam)}
+                </select>
+            </div>
+        `;
+        td.title = `Armadura inferior: ${nBars} barras φ${diam}mm`;
+        return td;
+    }
+
+    createBeamStirrupsCell(result, beamKey) {
+        const td = document.createElement('td');
+        td.className = 'stirrups-cell beam-stirrups-cell';
+        td.dataset.beamKey = beamKey;
+        const reinf = result.reinforcement || {};
+        const legs = reinf.n_stirrup_legs || 2;
+        const diam = reinf.stirrup_diameter || 10;
+        const spac = reinf.stirrup_spacing || 150;
+
+        td.innerHTML = `
+            <div class="beam-stirrup-row">
+                <select class="edit-beam-stirrup-legs" title="Ramas">
+                    ${generateOptions(STIRRUP_LEGS, legs, 'R')}
+                </select>
+                <select class="edit-beam-stirrup-d" title="φ Estribo">
+                    ${generateDiameterOptions(DIAMETERS.estribos, diam, 'E')}
+                </select>
+                <select class="edit-beam-stirrup-s" title="@ Estribo">
+                    ${generateSpacingOptions(SPACINGS.estribos, spac)}
+                </select>
+            </div>
+        `;
+        td.title = `${legs} ramas, Av=${reinf.Av || 0}mm²`;
+        return td;
+    }
+
     // =========================================================================
     // Celdas Comunes
     // =========================================================================
@@ -77,11 +336,20 @@ class RowFactory {
     createInfoCell(result, elementType) {
         const td = document.createElement('td');
         td.className = 'pier-info-cell';
-        const typeLabel = elementType === 'column' ? 'COL' : 'PIER';
-        const typeClass = elementType === 'column' ? 'type-column' : 'type-pier';
+        let typeLabel, typeClass;
+        if (elementType === 'column') {
+            typeLabel = 'COL';
+            typeClass = 'type-column';
+        } else if (elementType === 'drop_beam') {
+            typeLabel = 'VCAP';
+            typeClass = 'type-drop_beam';
+        } else {
+            typeLabel = 'PIER';
+            typeClass = 'type-pier';
+        }
         td.innerHTML = `
             <span class="element-type-badge ${typeClass}">${typeLabel}</span>
-            <span class="pier-name">${result.pier_label}</span>
+            <span class="pier-name">${result.pier_label || result.label || ''}</span>
         `;
         return td;
     }
@@ -406,6 +674,71 @@ class RowFactory {
     // Event Handlers
     // =========================================================================
 
+    /**
+     * Configuración de selectores por tipo de elemento.
+     * Mapea nombre de campo → [selector, valorDefault]
+     */
+    static SELECTOR_CONFIGS = {
+        pier: {
+            n_meshes: ['.malla-cell .edit-meshes', 2],
+            diameter_v: ['.malla-cell .edit-diameter-v', 8],
+            spacing_v: ['.malla-cell .edit-spacing-v', 200],
+            diameter_h: ['.malla-cell .edit-diameter-h', 8],
+            spacing_h: ['.malla-cell .edit-spacing-h', 200],
+            n_edge_bars: ['.borde-cell .edit-n-edge', 2],
+            diameter_edge: ['.borde-cell .edit-edge', 12],
+            stirrup_diameter: ['.borde-cell .edit-stirrup-d', 10],
+            stirrup_spacing: ['.borde-cell .edit-stirrup-s', 150]
+        },
+        column: {
+            n_bars_depth: ['.longitudinal-cell .edit-n-bars', 3],
+            n_bars_width: ['.longitudinal-cell .edit-n-bars-w', 3],
+            diameter_long: ['.longitudinal-cell .edit-diam-long', 20],
+            stirrup_diameter: ['.stirrups-cell .edit-stirrup-d', 10],
+            stirrup_spacing: ['.stirrups-cell .edit-stirrup-s', 150]
+        },
+        beam: {
+            n_bars_top: ['.edit-beam-n-top', 3],
+            diameter_top: ['.edit-beam-diam-top', 16],
+            n_bars_bottom: ['.edit-beam-n-bot', 3],
+            diameter_bottom: ['.edit-beam-diam-bot', 16],
+            n_stirrup_legs: ['.edit-beam-stirrup-legs', 2],
+            stirrup_diameter: ['.edit-beam-stirrup-d', 10],
+            stirrup_spacing: ['.edit-beam-stirrup-s', 150]
+        },
+        drop_beam: {
+            n_meshes: ['.malla-v-cell .edit-meshes', 2],
+            diameter_v: ['.malla-v-cell .edit-diameter-v', 12],
+            spacing_v: ['.malla-v-cell .edit-spacing-v', 200],
+            diameter_h: ['.malla-h-cell .edit-diameter-h', 10],
+            spacing_h: ['.malla-h-cell .edit-spacing-h', 200],
+            n_edge_bars: ['.borde-cell .edit-n-edge', 4],
+            diameter_edge: ['.borde-cell .edit-edge', 16],
+            stirrup_diameter: ['.borde-cell .edit-stirrup-d', 10],
+            stirrup_spacing: ['.borde-cell .edit-stirrup-s', 150]
+        }
+    };
+
+    /**
+     * Recolecta valores de armadura de una fila usando configuración por tipo.
+     * @param {HTMLElement} row - Fila de la tabla
+     * @param {string} elementType - Tipo de elemento (pier, column, beam, drop_beam)
+     * @returns {Object} Valores de armadura
+     */
+    _collectReinforcementChanges(row, elementType = 'pier') {
+        const config = RowFactory.SELECTOR_CONFIGS[elementType];
+        if (!config) {
+            console.warn(`[RowFactory] No hay configuración para tipo: ${elementType}`);
+            return {};
+        }
+
+        const result = {};
+        for (const [field, [selector, defaultVal]] of Object.entries(config)) {
+            result[field] = parseInt(row.querySelector(selector)?.value) || defaultVal;
+        }
+        return result;
+    }
+
     attachRowEventHandlers(row, elementKey, result, elementType) {
         const elementLabel = `${result.story} - ${result.pier_label}`;
 
@@ -413,34 +746,52 @@ class RowFactory {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const action = btn.dataset.action;
-                if (action === 'section') this.table.page.showSectionDiagram(elementKey, elementLabel);
-                else if (action === 'info') this.table.page.showPierDetails(elementKey, elementLabel);
+                if (action === 'section') this.table.page.wallsModule.showSectionDiagram(elementKey, elementLabel);
+                else if (action === 'info') this.table.page.wallsModule.showPierDetails(elementKey, elementLabel);
                 else if (action === 'diagram') this.table.page.plotModal.open(elementKey, elementLabel, this.table.plotsCache[elementKey]);
             });
         });
 
-        if (elementType === 'pier') {
-            row.querySelectorAll('.malla-cell select').forEach(select => {
-                select.addEventListener('change', () => this.table.saveInlineEdit(row, elementKey));
-            });
+        // Configuración de selectores por tipo de elemento para event listeners
+        const selectorsByType = {
+            pier: ['.malla-cell select', '.borde-cell select'],
+            column: ['.longitudinal-cell select', '.stirrups-cell select'],
+            beam: ['.beam-reinf-cell select', '.beam-stirrups-cell select'],
+            drop_beam: ['.malla-cell select', '.borde-cell select']
+        };
 
-            row.querySelectorAll('.borde-cell select').forEach(select => {
+        // Agregar event listeners genéricos para cambios de armadura
+        const selectors = selectorsByType[elementType] || [];
+        selectors.forEach(selector => {
+            row.querySelectorAll(selector).forEach(select => {
                 select.addEventListener('change', () => {
-                    if (select.classList.contains('edit-n-edge')) this.table.updateStirrupsState(row);
-                    this.table.saveInlineEdit(row, elementKey);
+                    // Caso especial: actualizar estado de estribos cuando cambia n_edge_bars
+                    if (elementType === 'pier' && select.classList.contains('edit-n-edge')) {
+                        this.table.updateStirrupsState(row);
+                    }
+                    const changes = this._collectReinforcementChanges(row, elementType);
+                    this.table.editManager.onReinforcementChange(elementKey, elementType, changes);
+                });
+            });
+        });
+
+        // Eventos específicos de pier
+        if (elementType === 'pier') {
+            // Vigas de acople
+            row.querySelectorAll('.viga-cell .beam-selector').forEach(select => {
+                select.addEventListener('change', () => {
+                    const side = select.dataset.side;
+                    this.table.editManager.onBeamAssignmentChange(elementKey, side, select.value);
                 });
             });
 
-            row.querySelectorAll('.viga-cell select').forEach(select => {
-                select.addEventListener('change', () => this.table.saveInlineEdit(row, elementKey));
-            });
-
+            // Propuestas
             const viewProposalBtn = row.querySelector('.view-proposal-btn');
             if (viewProposalBtn) {
                 viewProposalBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const proposedConfig = this.table.getProposedConfig(result.design_proposal);
-                    this.table.page.showProposedSectionDiagram(elementKey, elementLabel, proposedConfig);
+                    this.table.page.wallsModule.showProposedSectionDiagram(elementKey, elementLabel, proposedConfig);
                 });
             }
 

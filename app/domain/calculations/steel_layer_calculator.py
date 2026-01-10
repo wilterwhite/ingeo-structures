@@ -8,6 +8,7 @@ from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..entities.pier import Pier
+    from ..entities.drop_beam import DropBeam
 
 
 @dataclass
@@ -46,6 +47,27 @@ class SteelLayerCalculator:
             bar_area_edge=pier._bar_area_edge,
             bar_area_v=pier._bar_area_v,
             spacing_v=pier.spacing_v
+        )
+
+    @staticmethod
+    def calculate_from_drop_beam(drop_beam: 'DropBeam') -> List[SteelLayer]:
+        """
+        Genera las capas de acero a partir de un objeto DropBeam.
+
+        Args:
+            drop_beam: Entidad DropBeam con la configuración de armadura
+
+        Returns:
+            Lista de SteelLayer ordenadas por posición
+        """
+        return SteelLayerCalculator.calculate(
+            width=drop_beam.thickness,  # thickness es la dimensión mayor (ancho tributario)
+            cover=drop_beam.cover,
+            n_meshes=drop_beam.n_meshes,
+            n_edge_bars=drop_beam.n_edge_bars,
+            bar_area_edge=drop_beam._bar_area_edge,
+            bar_area_v=drop_beam._bar_area_v,
+            spacing_v=drop_beam.spacing_v
         )
 
     @staticmethod

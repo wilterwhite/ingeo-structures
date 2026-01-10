@@ -15,7 +15,7 @@ from ...domain.shear import WallClassificationService
 from ...domain.shear.classification import ElementType as DomainElementType
 
 if TYPE_CHECKING:
-    from ...domain.entities import Beam, Column, Pier
+    from ...domain.entities import Beam, Column, Pier, DropBeam
 
 
 class ElementType(Enum):
@@ -40,6 +40,9 @@ class ElementType(Enum):
     WALL_SQUAT = "wall_squat"                  # lw/tw > 6.0, hw/lw < 2.0
     WALL = "wall"                              # lw/tw > 6.0, hw/lw >= 2.0
 
+    # Vigas capitel - diseño flexocompresión tipo muro
+    DROP_BEAM = "drop_beam"
+
     @property
     def is_beam(self) -> bool:
         """True si es una viga."""
@@ -51,13 +54,19 @@ class ElementType(Enum):
         return self in (ElementType.COLUMN_SEISMIC, ElementType.COLUMN_NONSEISMIC)
 
     @property
+    def is_drop_beam(self) -> bool:
+        """True si es una viga capitel."""
+        return self == ElementType.DROP_BEAM
+
+    @property
     def is_wall(self) -> bool:
         """True si es un muro o pilar de muro."""
         return self in (
             ElementType.WALL,
             ElementType.WALL_SQUAT,
             ElementType.WALL_PIER_COLUMN,
-            ElementType.WALL_PIER_ALTERNATE
+            ElementType.WALL_PIER_ALTERNATE,
+            ElementType.DROP_BEAM,  # Vigas capitel se diseñan como muros
         )
 
     @property
@@ -81,6 +90,7 @@ class ElementType(Enum):
             ElementType.WALL_PIER_ALTERNATE: "§18.10.8.1",
             ElementType.WALL_SQUAT: "§18.10 (squat)",
             ElementType.WALL: "§18.10",
+            ElementType.DROP_BEAM: "§18.10",  # Vigas capitel como muros
         }
         return sections.get(self, "")
 
@@ -114,24 +124,27 @@ class ElementClassifier:
 
     def classify(
         self,
-        element: Union['Beam', 'Column', 'Pier']
+        element: Union['Beam', 'Column', 'Pier', 'DropBeam']
     ) -> ElementType:
         """
         Clasifica un elemento estructural.
 
         Args:
-            element: Beam, Column o Pier a clasificar
+            element: Beam, Column, Pier o DropBeam a clasificar
 
         Returns:
             ElementType correspondiente
         """
-        from ...domain.entities import Beam, Column, Pier
+        from ...domain.entities import Beam, Column, Pier, DropBeam
 
         if isinstance(element, Beam):
             return ElementType.BEAM
 
         if isinstance(element, Column):
             return self._classify_column(element)
+
+        if isinstance(element, DropBeam):
+            return ElementType.DROP_BEAM
 
         if isinstance(element, Pier):
             return self._classify_pier(element)
@@ -164,7 +177,7 @@ class ElementClassifier:
 
     def get_classification_info(
         self,
-        element: Union['Beam', 'Column', 'Pier']
+        element: Union['Beam', 'Column', 'Pier', 'DropBeam']
     ) -> dict:
         """
         Obtiene informacion detallada de la clasificacion.
@@ -175,7 +188,7 @@ class ElementClassifier:
         Returns:
             Dict con tipo, ratios geometricos y seccion ACI
         """
-        from ...domain.entities import Beam, Column, Pier
+        from ...domain.entities import Beam, Column, Pier, DropBeam
 
         element_type = self.classify(element)
 
@@ -195,5 +208,13 @@ class ElementClassifier:
             info['lw_tw'] = round(classification.lw_tw, 2)
             info['hw_lw'] = round(classification.hw_lw, 2)
             info['is_wall_pier'] = element_type.is_wall_pier
+
+        if isinstance(element, DropBeam):
+            # Para vigas capitel, agregar info similar a pier
+            lw_tw = element.thickness / element.width if element.width > 0 else 0
+            hw_lw = element.length / element.thickness if element.thickness > 0 else 0
+            info['lw_tw'] = round(lw_tw, 2)
+            info['hw_lw'] = round(hw_lw, 2)
+            info['is_wall_pier'] = False
 
         return info

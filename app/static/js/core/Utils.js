@@ -100,3 +100,20 @@ function calculateAsPerMeter(nMeshes, diameter, spacing) {
     return nMeshes * (barArea / spacing) * 1000;
 }
 
+// =============================================================================
+// Estadísticas de Elementos
+// =============================================================================
+
+/**
+ * Calcula estadísticas de elementos (total, ok, fail, rate).
+ * @param {Array} results - Array de resultados con overall_status
+ * @returns {Object} { total, ok, fail, rate }
+ */
+function calculateElementStats(results) {
+    const total = results?.length || 0;
+    const ok = results?.filter(r => r.overall_status === 'OK').length || 0;
+    const fail = total - ok;
+    const rate = total > 0 ? ((ok / total) * 100).toFixed(0) : 0;
+    return { total, ok, fail, rate };
+}
+

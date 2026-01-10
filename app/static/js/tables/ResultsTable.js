@@ -17,61 +17,9 @@ class ResultsTable {
         this.customBeamPiers = new Set();
         this.pierBeamConfigs = {};
         this.pierBeamAssignments = {};  // { pierKey: { izq: 'beamKey', der: 'beamKey' } }
-        this.pendingRecalcPiers = new Set();  // Piers con cambios pendientes de recalcular
 
-        // Crear botón flotante de recalcular
-        this.createRecalcButton();
-    }
-
-    createRecalcButton() {
-        const btn = document.createElement('button');
-        btn.id = 'recalc-floating-btn';
-        btn.className = 'btn btn-primary floating-recalc-btn hidden';
-        btn.innerHTML = '🔄 Recalcular (<span class="pending-count">0</span>)';
-        btn.title = 'Recalcular piers con cambios pendientes';
-        btn.addEventListener('click', () => this.recalculatePendingPiers());
-        document.body.appendChild(btn);
-        this.recalcButton = btn;
-    }
-
-    updateRecalcButton() {
-        const count = this.pendingRecalcPiers.size;
-        if (this.recalcButton) {
-            this.recalcButton.querySelector('.pending-count').textContent = count;
-            this.recalcButton.classList.toggle('hidden', count === 0);
-        }
-    }
-
-    async recalculatePendingPiers() {
-        if (this.pendingRecalcPiers.size === 0) return;
-
-        const piersToRecalc = [...this.pendingRecalcPiers];
-        this.pendingRecalcPiers.clear();
-        this.updateRecalcButton();
-
-        // Remover clase pending-recalc de todas las filas
-        piersToRecalc.forEach(pierKey => {
-            const row = document.querySelector(`tr[data-pier-key="${pierKey}"]`);
-            if (row) row.classList.remove('pending-recalc');
-        });
-
-        // Mostrar loading
-        if (this.recalcButton) {
-            this.recalcButton.disabled = true;
-            this.recalcButton.innerHTML = `⏳ Calculando (${piersToRecalc.length})...`;
-        }
-
-        try {
-            // Recalcular cada pier secuencialmente
-            for (const pierKey of piersToRecalc) {
-                await this.savePierBeamConfig(pierKey);
-            }
-        } finally {
-            if (this.recalcButton) {
-                this.recalcButton.disabled = false;
-                this.recalcButton.innerHTML = '🔄 Recalcular (<span class="pending-count">0</span>)';
-            }
-        }
+        // Manager de edición de piers (incluye botón de recálculo)
+        this.editManager = new PierEditManager(this);
     }
 
     // =========================================================================
@@ -296,9 +244,24 @@ class ResultsTable {
             <span class="assigned-beam-info">${this.getBeamInfoText(assignedBeamKey)}</span>
         `;
 
-        // Evento de cambio
+        // Evento de cambio - delegado al editManager
         const select = td.querySelector('.beam-selector');
-        select.addEventListener('change', () => this.onBeamAssignmentChange(pierKey, side, select.value));
+        select.addEventListener('change', () => {
+            // Guardar asignación localmente
+            if (!this.pierBeamAssignments[pierKey]) {
+                this.pierBeamAssignments[pierKey] = { izq: 'generic', der: 'generic' };
+            }
+            this.pierBeamAssignments[pierKey][side] = select.value;
+
+            // Actualizar info text
+            const infoSpan = td.querySelector('.assigned-beam-info');
+            if (infoSpan) {
+                infoSpan.textContent = this.getBeamInfoText(select.value);
+            }
+
+            // Notificar al editManager para recálculo pendiente
+            this.editManager.onBeamAssignmentChange(pierKey, side, select.value);
+        });
 
         return td;
     }
@@ -354,36 +317,6 @@ class ResultsTable {
             return `${beam.width}×${beam.depth}`;
         }
         return '';
-    }
-
-    /**
-     * Maneja el cambio de asignación de viga.
-     */
-    async onBeamAssignmentChange(pierKey, side, beamKey) {
-        // Guardar asignación localmente
-        if (!this.pierBeamAssignments) {
-            this.pierBeamAssignments = {};
-        }
-        if (!this.pierBeamAssignments[pierKey]) {
-            this.pierBeamAssignments[pierKey] = { izq: 'generic', der: 'generic' };
-        }
-        this.pierBeamAssignments[pierKey][side] = beamKey;
-
-        // Actualizar info text
-        const row = document.querySelector(`tr[data-pier-key="${pierKey}"]`);
-        if (row) {
-            const cell = row.querySelector(`.viga-cell[data-side="${side}"]`);
-            const infoSpan = cell?.querySelector('.assigned-beam-info');
-            if (infoSpan) {
-                infoSpan.textContent = this.getBeamInfoText(beamKey);
-            }
-
-            // Marcar como pendiente de recálculo
-            row.classList.add('pending-recalc');
-        }
-
-        this.pendingRecalcPiers.add(pierKey);
-        this.updateRecalcButton();
     }
 
     getBeamConfig(pierKey, side) {
@@ -693,13 +626,21 @@ class ResultsTable {
         if (!pier) return;
 
         const config = this.parseProposalConfig(proposal);
-        if (config.n_edge_bars) pier.n_edge_bars = config.n_edge_bars;
-        if (config.diameter_edge) pier.diameter_edge = config.diameter_edge;
-        if (config.n_meshes) pier.n_meshes = config.n_meshes;
-        if (config.diameter_v) { pier.diameter_v = config.diameter_v; pier.diameter_h = config.diameter_v; }
-        if (config.spacing_v) { pier.spacing_v = config.spacing_v; pier.spacing_h = config.spacing_v; }
+        // Aplicar cambios usando el editManager
+        const changes = {};
+        if (config.n_edge_bars) changes.n_edge_bars = config.n_edge_bars;
+        if (config.diameter_edge) changes.diameter_edge = config.diameter_edge;
+        if (config.n_meshes) changes.n_meshes = config.n_meshes;
+        if (config.diameter_v) {
+            changes.diameter_v = config.diameter_v;
+            changes.diameter_h = config.diameter_v;
+        }
+        if (config.spacing_v) {
+            changes.spacing_v = config.spacing_v;
+            changes.spacing_h = config.spacing_v;
+        }
 
-        await this.reanalyzeSinglePier(pierKey);
+        this.editManager.onReinforcementChange(pierKey, changes);
     }
 
     parseProposalConfig(proposal) {
@@ -712,63 +653,6 @@ class ResultsTable {
         return config;
     }
 
-    async saveInlineEdit(row, pierKey) {
-        const malla = row.querySelector('.malla-cell');
-        const borde = row.querySelector('.borde-cell');
-
-        const pier = this.piersData.find(p => p.key === pierKey);
-        if (pier) {
-            pier.n_meshes = parseInt(malla?.querySelector('.edit-meshes')?.value) || 2;
-            pier.diameter_v = parseInt(malla?.querySelector('.edit-diameter-v')?.value) || 8;
-            pier.spacing_v = parseInt(malla?.querySelector('.edit-spacing-v')?.value) || 200;
-            pier.diameter_h = parseInt(malla?.querySelector('.edit-diameter-h')?.value) || 8;
-            pier.spacing_h = parseInt(malla?.querySelector('.edit-spacing-h')?.value) || 200;
-            pier.n_edge_bars = parseInt(borde?.querySelector('.edit-n-edge')?.value) || 2;
-            pier.diameter_edge = parseInt(borde?.querySelector('.edit-edge')?.value) || 12;
-            pier.stirrup_diameter = parseInt(borde?.querySelector('.edit-stirrup-d')?.value) || 10;
-            pier.stirrup_spacing = parseInt(borde?.querySelector('.edit-stirrup-s')?.value) || 150;
-        }
-
-        await this.reanalyzeSinglePier(pierKey);
-    }
-
-    async reanalyzeSinglePier(pierKey) {
-        const pier = this.piersData.find(p => p.key === pierKey);
-        if (!pier || !this.sessionId) return;
-
-        const row = this.elements.resultsTable?.querySelector(`.pier-row[data-pier-key="${pierKey}"]`);
-        if (row) row.style.opacity = '0.5';
-
-        try {
-            const data = await structuralAPI.analyze({
-                session_id: this.sessionId,
-                pier_updates: [{
-                    key: pierKey,
-                    n_meshes: pier.n_meshes, diameter_v: pier.diameter_v, diameter_h: pier.diameter_h,
-                    spacing_v: pier.spacing_v, spacing_h: pier.spacing_h,
-                    n_edge_bars: pier.n_edge_bars || 2, diameter_edge: pier.diameter_edge,
-                    stirrup_diameter: pier.stirrup_diameter || 10, stirrup_spacing: pier.stirrup_spacing || 150,
-                    cover: pier.cover || 25
-                }],
-                generate_plots: true, moment_axis: 'M3', angle_deg: 0
-            });
-
-            if (data.success) {
-                this.page.results = data.results;
-                delete this.combinationsCache[pierKey];
-                const filtered = this.getFilteredResults();
-                this.renderTable(filtered);
-                this.updateStatistics(this.calculateStatistics(filtered));
-                this.updateSummaryPlot();
-            }
-        } catch (error) {
-            console.error('Error re-analyzing pier:', error);
-            alert('Error al re-analizar: ' + error.message);
-        } finally {
-            if (row) row.style.opacity = '1';
-        }
-    }
-
     reset() {
         this.expandedPiers.clear();
         this.combinationsCache = {};
@@ -776,8 +660,7 @@ class ResultsTable {
         this.customBeamPiers.clear();
         this.pierBeamConfigs = {};
         this.pierBeamAssignments = {};
-        this.pendingRecalcPiers.clear();
-        this.updateRecalcButton();
+        this.editManager.reset();
     }
 
     /**

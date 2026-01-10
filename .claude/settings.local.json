@@ -92,7 +92,8 @@
       "Bash(done)",
       "Bash(sort:*)",
       "Bash(for class in \"status-ok\" \"status-fail\" \"critical-combo\" \"dcr-info\" \"slenderness-info\" \"capacity-line\" \"capacity-ref\" \"capacity-value\")",
-      "Bash(do echo -n \"$class: \" grep -r \"$class\" app/static/js/*.js app/templates/*.html)"
+      "Bash(do echo -n \"$class: \" grep -r \"$class\" app/static/js/*.js app/templates/*.html)",
+      "Bash(findstr:*)"
     ]
   }
 }

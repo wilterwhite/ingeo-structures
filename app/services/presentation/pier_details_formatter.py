@@ -93,38 +93,47 @@ class PierDetailsFormatter:
     def get_section_diagram(
         self,
         session_id: str,
-        pier_key: str,
+        element_key: str,
         proposed_config: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Genera un diagrama de la sección transversal del pier.
+        Genera un diagrama de la sección transversal del pier o columna.
 
         Args:
             session_id: ID de sesión
-            pier_key: Clave del pier (Story_Label)
+            element_key: Clave del elemento (Story_Label)
             proposed_config: Configuración propuesta opcional (para preview)
 
         Returns:
             Dict con section_diagram en base64
         """
-        error = self._validate_pier(session_id, pier_key)
-        if error:
-            return error
+        # Intentar obtener como pier primero
+        pier = self._session_manager.get_pier(session_id, element_key)
+        if pier is not None:
+            # Es un pier
+            if proposed_config:
+                pier = self._apply_proposed_config(pier, proposed_config)
+            section_diagram = self._plot_generator.generate_section_diagram(pier)
+            return {
+                'success': True,
+                'pier_key': element_key,
+                'section_diagram': section_diagram,
+                'is_proposed': proposed_config is not None
+            }
 
-        pier = self._session_manager.get_pier(session_id, pier_key)
+        # Intentar obtener como columna
+        column = self._session_manager.get_column(session_id, element_key)
+        if column is not None:
+            section_diagram = self._plot_generator.generate_column_section_diagram(column)
+            return {
+                'success': True,
+                'pier_key': element_key,
+                'section_diagram': section_diagram,
+                'is_proposed': False
+            }
 
-        # Si hay configuración propuesta, crear copia y aplicar cambios
-        if proposed_config:
-            pier = self._apply_proposed_config(pier, proposed_config)
-
-        section_diagram = self._plot_generator.generate_section_diagram(pier)
-
-        return {
-            'success': True,
-            'pier_key': pier_key,
-            'section_diagram': section_diagram,
-            'is_proposed': proposed_config is not None
-        }
+        # Ni pier ni columna encontrado
+        return {'success': False, 'error': f'Element not found: {element_key}'}
 
     def _apply_proposed_config(self, pier, config: Dict[str, Any]):
         """

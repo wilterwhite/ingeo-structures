@@ -151,6 +151,21 @@ WALL_CONFIG = VerificationConfig(
 """Muro esbelto §18.10 (lw/tw > 6.0, hw/lw >= 2.0) - Todas las verificaciones."""
 
 
+DROP_BEAM_CONFIG = VerificationConfig(
+    check_axial_threshold=False,
+    k_factor=0.8,
+    braced=True,
+    shear_method='simple',
+    use_capacity_design=False,
+    check_classification=False,
+    check_amplification=False,
+    check_boundary=True,
+    check_end_zones=False,
+    check_min_reinforcement=True,
+)
+"""Viga capitel (losa diseñada como viga) - Flexocompresion P-M, cortante simple."""
+
+
 # =============================================================================
 # Mapa de configuraciones
 # =============================================================================
@@ -163,6 +178,7 @@ CONFIGS: Dict[ElementType, VerificationConfig] = {
     ElementType.WALL_PIER_ALTERNATE: WALL_PIER_ALTERNATE_CONFIG,
     ElementType.WALL_SQUAT: WALL_SQUAT_CONFIG,
     ElementType.WALL: WALL_CONFIG,
+    ElementType.DROP_BEAM: DROP_BEAM_CONFIG,
 }
 
 

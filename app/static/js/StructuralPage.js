@@ -12,10 +12,12 @@ class StructuralPage {
         this.columnsData = [];
         this.beamsData = [];
         this.slabsData = [];
+        this.dropBeamsData = [];
         this.results = [];
         this.columnResults = [];
         this.beamResults = [];
         this.slabResults = [];
+        this.dropBeamResults = [];
         this.filters = { grilla: '', story: '', axis: '', status: '', elementType: '' };
         this.uniqueGrillas = [];
         this.uniqueStories = [];
@@ -30,7 +32,7 @@ class StructuralPage {
 
         // Componentes (se inicializan en init())
         this.resultsTable = null;
-        this.beamsTable = null;
+        // beamsTable eliminado - vigas se renderizan con RowFactory
         this.slabsTable = null;
         this.plotModal = null;
         this.reportModal = null;
@@ -69,11 +71,20 @@ class StructuralPage {
             slabsPlaceholder: document.getElementById('slabs-placeholder'),
             slabsResultsSection: document.getElementById('slabs-results-section'),
 
+            // Vigas (Beams)
+            beamsTableBody: document.getElementById('beams-table')?.querySelector('tbody'),
+
+            // Vigas Capitel (Drop Beams)
+            dropBeamsPlaceholder: document.getElementById('drop-beams-placeholder'),
+            dropBeamsResultsSection: document.getElementById('drop-beams-results-section'),
+            dropBeamsTable: document.getElementById('drop-beams-table')?.querySelector('tbody'),
+
             // Paginas principales
             configPage: document.getElementById('config-page'),
             wallsPage: document.getElementById('walls-page'),
             beamsPage: document.getElementById('beams-page'),
             slabsPage: document.getElementById('slabs-page'),
+            dropBeamsPage: document.getElementById('drop-beams-page'),
 
             // Resultados
             resultsTable: document.getElementById('results-table')?.querySelector('tbody'),
@@ -119,22 +130,28 @@ class StructuralPage {
 
     initComponents() {
         this.resultsTable = new ResultsTable(this);
-        this.beamsTable = new BeamsTable(this);
+        // beamsTable ya no se usa - vigas se renderizan con RowFactory
         this.slabsTable = new SlabsTable(this);
         this.slabsTable.bindFilterEvents();
         this.plotModal = new PlotModal(this);
         this.plotModal.init();
         this.reportModal = new ReportModal(this);
         this.reportModal.init();
+
+        // Módulos extraídos
+        this.wallsModule = new WallsModule(this);
+        this.beamsModule = new BeamsModule(this);
+        this.dropBeamsModule = new DropBeamsModule(this);
+
         this.initPierDetailsModal();
-        this.initSectionModal();
-        this.initCustomBeamModal();
+        this.wallsModule.initSectionModal();
+        this.beamsModule.initCustomBeamModal();
     }
 
     initPierDetailsModal() {
         const modal = this.elements.pierDetailsModal;
         if (!modal) return;
-        setupModalClose(modal, () => this.closePierDetailsModal());
+        setupModalClose(modal, () => this.wallsModule.closePierDetailsModal());
     }
 
     bindEvents() {
@@ -180,11 +197,11 @@ class StructuralPage {
         this.elements.generateReportBtn?.addEventListener('click', () => this.openReportModal());
 
         // Viga estándar (para muros acoplados)
-        this.elements.stdBeamWidth?.addEventListener('change', () => this.onStandardBeamChange());
-        this.elements.stdBeamHeight?.addEventListener('change', () => this.onStandardBeamChange());
-        this.elements.stdBeamLn?.addEventListener('change', () => this.onStandardBeamChange());
-        this.elements.stdBeamNbars?.addEventListener('change', () => this.onStandardBeamChange());
-        this.elements.stdBeamDiam?.addEventListener('change', () => this.onStandardBeamChange());
+        this.elements.stdBeamWidth?.addEventListener('change', () => this.beamsModule.onStandardBeamChange());
+        this.elements.stdBeamHeight?.addEventListener('change', () => this.beamsModule.onStandardBeamChange());
+        this.elements.stdBeamLn?.addEventListener('change', () => this.beamsModule.onStandardBeamChange());
+        this.elements.stdBeamNbars?.addEventListener('change', () => this.beamsModule.onStandardBeamChange());
+        this.elements.stdBeamDiam?.addEventListener('change', () => this.beamsModule.onStandardBeamChange());
 
         // Botones de navegación
         document.getElementById('new-file-btn')?.addEventListener('click', () => {
@@ -200,7 +217,7 @@ class StructuralPage {
         });
 
         // Botón de diagrama P-M en modal de detalles
-        document.getElementById('open-pm-diagram-btn')?.addEventListener('click', () => this.openPmDiagram());
+        document.getElementById('open-pm-diagram-btn')?.addEventListener('click', () => this.wallsModule.openPmDiagram());
     }
 
     // =========================================================================
@@ -218,6 +235,7 @@ class StructuralPage {
         this.elements.wallsPage?.classList.toggle('hidden', pageId !== 'walls-page');
         this.elements.beamsPage?.classList.toggle('hidden', pageId !== 'beams-page');
         this.elements.slabsPage?.classList.toggle('hidden', pageId !== 'slabs-page');
+        this.elements.dropBeamsPage?.classList.toggle('hidden', pageId !== 'drop-beams-page');
 
         this.currentPage = pageId;
     }
@@ -243,6 +261,10 @@ class StructuralPage {
         this.elements.slabsPlaceholder?.classList.toggle('hidden', section !== 'upload');
         this.elements.slabsResultsSection?.classList.toggle('hidden', section !== 'results');
 
+        // Drop Beams page
+        this.elements.dropBeamsPlaceholder?.classList.toggle('hidden', section !== 'upload');
+        this.elements.dropBeamsResultsSection?.classList.toggle('hidden', section !== 'results');
+
         if (section === 'upload') {
             this.resetUploadArea();
         }
@@ -267,18 +289,21 @@ class StructuralPage {
         this.columnsData = [];
         this.beamsData = [];
         this.slabsData = [];
+        this.dropBeamsData = [];
         this.results = [];
         this.columnResults = [];
         this.beamResults = [];
         this.slabResults = [];
+        this.dropBeamResults = [];
         this.filters = { grilla: '', story: '', axis: '', status: '', elementType: '' };
         this.uniqueGrillas = [];
         this.uniqueStories = [];
         this.uniqueAxes = [];
         this.materials = {};
         this.resultsTable.reset();
-        this.beamsTable.clear();
+        this.beamsModule.clearBeamsTable();
         this.slabsTable.clear();
+        this.dropBeamsModule.clearDropBeamsTable();
         this.updateMaterialsTable();
     }
 
@@ -459,6 +484,7 @@ class StructuralPage {
             this.columnsData = uploadData.summary.columns_list || [];
             this.beamsData = uploadData.summary.beams_list || [];
             this.slabsData = uploadData.summary.slabs_list || [];
+            this.dropBeamsData = uploadData.summary.drop_beams_list || [];
             this.uniqueGrillas = uploadData.summary.grillas || [];
             this.uniqueStories = uploadData.summary.stories || [];
             this.uniqueAxes = uploadData.summary.axes || [];
@@ -468,7 +494,8 @@ class StructuralPage {
                 piers: this.piersData.length,
                 columns: this.columnsData.length,
                 beams: this.beamsData.length,
-                slabs: this.slabsData.length
+                slabs: this.slabsData.length,
+                dropBeams: this.dropBeamsData.length
             });
 
             // Actualizar conteos en la UI
@@ -543,6 +570,7 @@ class StructuralPage {
                         this.columnResults = data.column_results || [];
                         this.beamResults = data.beam_results || [];
                         this.slabResults = data.slab_results || [];
+                        this.dropBeamResults = data.drop_beam_results || [];
 
                         // Log results para debug
                         if (this.columnResults.length > 0) {
@@ -554,11 +582,15 @@ class StructuralPage {
                         if (this.slabResults.length > 0) {
                             console.log('[Analysis] Slab results:', this.slabResults.length);
                         }
+                        if (this.dropBeamResults.length > 0) {
+                            console.log('[Analysis] Drop beam results:', this.dropBeamResults.length);
+                        }
 
                         this.resultsTable.populateFilters();
                         this.resultsTable.render(data);
-                        this.beamsTable.renderTable(this.beamResults);
+                        this.beamsModule.renderBeamsTable();
                         this.slabsTable.renderTable(this.slabResults);
+                        this.dropBeamsModule.renderDropBeamsTable();
                         this.showSection('results');
                         resolve(data);
                     } else {
@@ -591,453 +623,6 @@ class StructuralPage {
     }
 
     // =========================================================================
-    // Pier Details Modal
-    // =========================================================================
-
-    async showPierDetails(pierKey, pierLabel) {
-        const { pierDetailsModal, pierDetailsTitle, pierDetailsLoading } = this.elements;
-
-        if (!pierDetailsModal) return;
-
-        // Guardar referencia del pier actual para el selector de combos
-        this._currentPierKey = pierKey;
-        this._currentPierLabel = pierLabel;
-
-        // Abrir modal y mostrar loading
-        pierDetailsModal.classList.add('active');
-        pierDetailsTitle.textContent = pierLabel;
-        pierDetailsLoading.classList.add('active');
-
-        try {
-            const data = await structuralAPI.getPierCapacities(this.sessionId, pierKey);
-
-            if (data.success) {
-                this._currentPierData = data;
-                this.updatePierDetailsContent(data);
-                this.populateComboSelector(data.combinations_list || []);
-
-                // Cargar datos de la primera combinación (la más crítica)
-                // para asegurar que las tablas muestren la misma combinación
-                const combinations = data.combinations_list || [];
-                if (combinations.length > 0) {
-                    const firstComboIndex = combinations[0].index;
-                    const comboDetails = await structuralAPI.getCombinationDetails(
-                        this.sessionId,
-                        pierKey,
-                        firstComboIndex
-                    );
-                    if (comboDetails.success) {
-                        this.updateDesignTablesForCombo(comboDetails);
-                    }
-                }
-            } else {
-                alert('Error: ' + data.error);
-                this.closePierDetailsModal();
-            }
-        } catch (error) {
-            console.error('Error getting pier capacities:', error);
-            alert('Error: ' + error.message);
-            this.closePierDetailsModal();
-        } finally {
-            pierDetailsLoading.classList.remove('active');
-        }
-    }
-
-    /**
-     * Llena el selector de combinaciones.
-     */
-    populateComboSelector(combinations) {
-        const selector = document.getElementById('pier-combo-selector');
-        const badge = document.getElementById('combo-critical-badge');
-
-        if (!selector) return;
-
-        // Limpiar opciones anteriores
-        selector.innerHTML = '';
-
-        if (!combinations || combinations.length === 0) {
-            selector.innerHTML = '<option value="-1">Sin combinaciones</option>';
-            badge?.classList.add('hidden');
-            return;
-        }
-
-        // Agregar opción por defecto (crítica)
-        const criticalCombo = combinations.find(c => c.is_critical) || combinations[0];
-        selector.innerHTML = combinations.map((combo, idx) => {
-            const isCritical = combo.is_critical_flexure || combo.is_critical_shear;
-            const criticalMark = isCritical ? ' ★' : '';
-            const criticalType = combo.is_critical_flexure && combo.is_critical_shear
-                ? ' (crit. flexión y corte)'
-                : combo.is_critical_flexure
-                    ? ' (crit. flexión)'
-                    : combo.is_critical_shear
-                        ? ' (crit. corte)'
-                        : '';
-            return `<option value="${combo.index}" ${idx === 0 ? 'selected' : ''}>
-                ${combo.full_name}${criticalMark}${criticalType}
-            </option>`;
-        }).join('');
-
-        // Mostrar badge si la primera es crítica
-        if (criticalCombo && (criticalCombo.is_critical_flexure || criticalCombo.is_critical_shear)) {
-            badge?.classList.remove('hidden');
-        } else {
-            badge?.classList.add('hidden');
-        }
-
-        // Actualizar fuerzas mostradas
-        this.updateComboForcesDisplay(criticalCombo);
-
-        // Agregar evento change
-        selector.onchange = () => this.onComboSelectorChange();
-    }
-
-    /**
-     * Actualiza el display de fuerzas de la combinación seleccionada.
-     */
-    updateComboForcesDisplay(combo) {
-        if (!combo) return;
-
-        document.getElementById('combo-P').textContent = combo.P ?? '-';
-        document.getElementById('combo-M2').textContent = combo.M2 ?? '-';
-        document.getElementById('combo-M3').textContent = combo.M3 ?? '-';
-        document.getElementById('combo-V2').textContent = combo.V2 ?? '-';
-        document.getElementById('combo-V3').textContent = combo.V3 ?? '-';
-    }
-
-    /**
-     * Maneja el cambio en el selector de combinaciones.
-     */
-    async onComboSelectorChange() {
-        const selector = document.getElementById('pier-combo-selector');
-        const badge = document.getElementById('combo-critical-badge');
-        const comboIndex = parseInt(selector.value);
-
-        if (comboIndex < 0 || !this._currentPierKey) return;
-
-        // Buscar la combinación en la lista
-        const combinations = this._currentPierData?.combinations_list || [];
-        const selectedCombo = combinations.find(c => c.index === comboIndex);
-
-        // Actualizar fuerzas
-        this.updateComboForcesDisplay(selectedCombo);
-
-        // Actualizar badge
-        if (selectedCombo && (selectedCombo.is_critical_flexure || selectedCombo.is_critical_shear)) {
-            badge?.classList.remove('hidden');
-        } else {
-            badge?.classList.add('hidden');
-        }
-
-        // Obtener detalles de la combinación seleccionada
-        try {
-            const loadingEl = document.getElementById('pier-details-loading');
-            loadingEl?.classList.add('active');
-
-            const data = await structuralAPI.getCombinationDetails(
-                this.sessionId,
-                this._currentPierKey,
-                comboIndex
-            );
-
-            if (data.success) {
-                this.updateDesignTablesForCombo(data);
-            } else {
-                console.error('Error:', data.error);
-            }
-        } catch (error) {
-            console.error('Error getting combo details:', error);
-        } finally {
-            document.getElementById('pier-details-loading')?.classList.remove('active');
-        }
-    }
-
-    /**
-     * Abre el modal de diagrama P-M para la combinación actualmente seleccionada.
-     */
-    async openPmDiagram() {
-        const selector = document.getElementById('pier-combo-selector');
-        const comboIndex = parseInt(selector?.value ?? 0);
-
-        if (!this._currentPierKey) return;
-
-        try {
-            const data = await structuralAPI.analyzeCombination({
-                session_id: this.sessionId,
-                pier_key: this._currentPierKey,
-                combination_index: comboIndex,
-                generate_plot: true
-            });
-
-            if (data.success && data.pm_plot) {
-                this.plotModal.open(
-                    this._currentPierKey,
-                    this._currentPierLabel,
-                    data.pm_plot
-                );
-                // Sincronizar con la combinación seleccionada después de cargar
-                setTimeout(() => this.plotModal.selectCombination(comboIndex), 100);
-            }
-        } catch (error) {
-            console.error('Error opening PM diagram:', error);
-        }
-    }
-
-    /**
-     * Actualiza solo las tablas de diseño (flexión, corte, boundary) para una combinación.
-     */
-    updateDesignTablesForCombo(data) {
-        const { flexure, shear, boundary, combo_name, combo_location } = data;
-
-        // Actualizar Flexural Design
-        const flexureBody = document.getElementById('det-flexure-body');
-        if (flexure) {
-            flexureBody.innerHTML = `
-                <tr>
-                    <td>${flexure.location}</td>
-                    <td class="${this._getDcrClass(flexure.dcr)}">${flexure.dcr}</td>
-                    <td class="combo-cell">${combo_name}</td>
-                    <td>${flexure.Pu_tonf}</td>
-                    <td>${flexure.Mu2_tonf_m}</td>
-                    <td>${flexure.Mu3_tonf_m}</td>
-                    <td>${flexure.phi_Mn_tonf_m}</td>
-                    <td>${flexure.c_mm}</td>
-                </tr>
-            `;
-        }
-
-        // Actualizar Shear Design
-        const shearBody = document.getElementById('det-shear-body');
-        if (shear && shear.rows) {
-            shearBody.innerHTML = shear.rows.map(row => `
-                <tr>
-                    <td>${row.direction}</td>
-                    <td class="${this._getDcrClass(row.dcr)}">${row.dcr}</td>
-                    <td class="combo-cell">${combo_name}</td>
-                    <td>${row.Pu_tonf}</td>
-                    <td>${row.Mu_tonf_m}</td>
-                    <td>${row.Vu_tonf}</td>
-                    <td>${row.phi_Vc_tonf}</td>
-                    <td>${row.phi_Vn_tonf}</td>
-                </tr>
-            `).join('');
-        }
-
-        // Actualizar Boundary Element Check
-        const boundaryBody = document.getElementById('det-boundary-body');
-        if (boundary && boundary.rows) {
-            boundaryBody.innerHTML = boundary.rows.map(row => `
-                <tr>
-                    <td>${row.location}</td>
-                    <td class="combo-cell">${combo_name}</td>
-                    <td>${row.Pu_tonf}</td>
-                    <td>${row.Mu_tonf_m}</td>
-                    <td>${row.sigma_comp_MPa}</td>
-                    <td>${row.sigma_limit_MPa}</td>
-                    <td>${row.c_mm}</td>
-                    <td class="${row.required === 'Yes' ? 'status-fail' : 'status-ok'}">${row.required}</td>
-                </tr>
-            `).join('');
-        }
-    }
-
-    updatePierDetailsContent(data) {
-        const { pier_info, reinforcement, slenderness, capacities,
-                flexure_design, shear_design, boundary_check } = data;
-
-        // Sección 1: Pier Details
-        document.getElementById('det-story').textContent = pier_info.story;
-        document.getElementById('det-pier').textContent = pier_info.label;
-        document.getElementById('det-length').textContent = pier_info.width_m;
-        document.getElementById('det-thickness').textContent = pier_info.thickness_m;
-        document.getElementById('det-height').textContent = pier_info.height_m;
-        document.getElementById('det-ag').textContent = pier_info.Ag_m2 ||
-            (pier_info.width_m * pier_info.thickness_m).toFixed(4);
-
-        // Sección 2: Material Properties
-        document.getElementById('det-fc').textContent = pier_info.fc_MPa;
-        document.getElementById('det-fy').textContent = pier_info.fy_MPa;
-        document.getElementById('det-lambda').textContent = pier_info.lambda || '1.0';
-
-        // Sección 4: Reinforcement
-        document.getElementById('det-reinf-desc').textContent = reinforcement.description;
-        document.getElementById('det-as-vertical').textContent = reinforcement.As_vertical_mm2;
-        document.getElementById('det-as-edge').textContent = reinforcement.As_edge_mm2;
-        document.getElementById('det-as-total').textContent = reinforcement.As_flexure_total_mm2;
-
-        // Mostrar cuantías con estado (OK o warning)
-        const rhoVEl = document.getElementById('det-rho-actual');
-        const rhoVValue = reinforcement.rho_vertical?.toFixed(5) || '—';
-        if (reinforcement.rho_v_ok === false) {
-            rhoVEl.innerHTML = `<span class="warning-text">${rhoVValue}</span>`;
-        } else {
-            rhoVEl.textContent = rhoVValue;
-        }
-
-        // Mostrar advertencias de cuantía mínima si existen
-        const warningsContainer = document.getElementById('det-reinf-warnings');
-        if (warningsContainer) {
-            if (reinforcement.warnings && reinforcement.warnings.length > 0) {
-                warningsContainer.innerHTML = reinforcement.warnings.map(w =>
-                    `<div class="warning-message">${w}</div>`
-                ).join('');
-                warningsContainer.style.display = 'block';
-            } else {
-                warningsContainer.innerHTML = '';
-                warningsContainer.style.display = 'none';
-            }
-        }
-
-        // Sección 5: Flexural Design
-        const flexureBody = document.getElementById('det-flexure-body');
-        if (flexure_design && flexure_design.has_data && flexure_design.rows.length > 0) {
-            flexureBody.innerHTML = flexure_design.rows.map(row => `
-                <tr>
-                    <td>${row.location}</td>
-                    <td class="${this._getDcrClass(row.dcr)}">${row.dcr}</td>
-                    <td class="combo-cell">${row.combo}</td>
-                    <td>${row.Pu_tonf}</td>
-                    <td>${row.Mu2_tonf_m}</td>
-                    <td>${row.Mu3_tonf_m}</td>
-                    <td>${row.phi_Mn_tonf_m}</td>
-                    <td>${row.c_mm}</td>
-                </tr>
-            `).join('');
-        } else {
-            flexureBody.innerHTML = '<tr><td colspan="8" class="no-data">Sin datos de carga</td></tr>';
-        }
-
-        // Sección 6: Shear Design
-        // Actualizar φv mostrado (§21.2.4.1: 0.60 para SPECIAL, 0.75 para otros)
-        const phiVElement = document.getElementById('det-phi-v');
-        if (phiVElement && shear_design) {
-            const phi_v = shear_design.phi_v || 0.60;
-            phiVElement.textContent = `(φv = ${phi_v.toFixed(2)})`;
-        }
-
-        const shearBody = document.getElementById('det-shear-body');
-        if (shear_design && shear_design.has_data && shear_design.rows.length > 0) {
-            shearBody.innerHTML = shear_design.rows.map(row => `
-                <tr>
-                    <td>${row.direction}</td>
-                    <td class="${this._getDcrClass(row.dcr)}">${row.dcr}</td>
-                    <td class="combo-cell">${row.combo}</td>
-                    <td>${row.Pu_tonf}</td>
-                    <td>${row.Mu_tonf_m}</td>
-                    <td>${row.Vu_tonf}</td>
-                    <td>${row.phi_Vc_tonf}</td>
-                    <td>${row.phi_Vn_tonf}</td>
-                </tr>
-            `).join('');
-        } else {
-            shearBody.innerHTML = '<tr><td colspan="8" class="no-data">Sin datos de carga</td></tr>';
-        }
-
-        // Sección 7: Boundary Element Check
-        const boundaryBody = document.getElementById('det-boundary-body');
-        if (boundary_check && boundary_check.has_data && boundary_check.rows.length > 0) {
-            boundaryBody.innerHTML = boundary_check.rows.map(row => `
-                <tr>
-                    <td>${row.location}</td>
-                    <td class="combo-cell">${row.combo}</td>
-                    <td>${row.Pu_tonf}</td>
-                    <td>${row.Mu_tonf_m}</td>
-                    <td>${row.sigma_comp_MPa}</td>
-                    <td>${row.sigma_limit_MPa}</td>
-                    <td>${row.c_mm}</td>
-                    <td class="${row.required === 'Yes' ? 'status-fail' : 'status-ok'}">${row.required}</td>
-                </tr>
-            `).join('');
-        } else {
-            boundaryBody.innerHTML = '<tr><td colspan="8" class="no-data">Sin datos de carga</td></tr>';
-        }
-
-        // Sección 8: Pure Capacities
-        if (slenderness && slenderness.is_slender) {
-            document.getElementById('det-phi-pn').innerHTML =
-                `<span class="strikethrough">${capacities.phi_Pn_max_tonf}</span>` +
-                ` → ${capacities.phi_Pn_reduced_tonf}`;
-        } else {
-            document.getElementById('det-phi-pn').textContent = capacities.phi_Pn_max_tonf;
-        }
-        document.getElementById('det-phi-mn3').textContent = capacities.phi_Mn3_tonf_m;
-        document.getElementById('det-phi-mn2').textContent = capacities.phi_Mn2_tonf_m;
-        document.getElementById('det-phi-vn2').textContent = capacities.phi_Vn2_tonf;
-        document.getElementById('det-phi-vn3').textContent = capacities.phi_Vn3_tonf;
-    }
-
-    /**
-     * Retorna la clase CSS para colorear el D/C (Demand/Capacity) según su valor.
-     * D/C <= 1.0 es OK, D/C > 1.0 significa que falla.
-     */
-    _getDcrClass(dcr) {
-        if (dcr === '<0.01' || (typeof dcr === 'number' && dcr <= 1.0)) {
-            return 'status-ok';
-        }
-        return 'status-fail';
-    }
-
-    /**
-     * Retorna la clase CSS para colorear el SF según su valor.
-     */
-    _getSfClass(sf) {
-        if (sf === '>100' || (typeof sf === 'number' && sf >= 1)) {
-            return 'status-ok';
-        }
-        return 'status-fail';
-    }
-
-    closePierDetailsModal() {
-        const { pierDetailsModal } = this.elements;
-        pierDetailsModal?.classList.remove('active');
-    }
-
-    // =========================================================================
-    // Section Diagram Modal
-    // =========================================================================
-
-    initSectionModal() {
-        const modal = this.elements.sectionModal;
-        if (!modal) return;
-        setupModalClose(modal, () => this.closeSectionModal());
-    }
-
-    async showSectionDiagram(pierKey, pierLabel) {
-        const { sectionModal, sectionModalTitle, sectionModalLoading, sectionModalImg } = this.elements;
-
-        if (!sectionModal) return;
-
-        // Abrir modal y mostrar loading
-        sectionModal.classList.add('active');
-        sectionModalTitle.textContent = `Sección - ${pierLabel}`;
-        sectionModalLoading.classList.add('active');
-        sectionModalImg.style.display = 'none';
-
-        try {
-            const data = await structuralAPI.getSectionDiagram(this.sessionId, pierKey);
-
-            if (data.success && data.section_diagram) {
-                sectionModalImg.src = `data:image/png;base64,${data.section_diagram}`;
-                sectionModalImg.style.display = 'block';
-            } else {
-                alert('Error: ' + (data.error || 'No se pudo generar el diagrama'));
-                this.closeSectionModal();
-            }
-        } catch (error) {
-            console.error('Error getting section diagram:', error);
-            alert('Error: ' + error.message);
-            this.closeSectionModal();
-        } finally {
-            sectionModalLoading.classList.remove('active');
-        }
-    }
-
-    closeSectionModal() {
-        const { sectionModal } = this.elements;
-        sectionModal?.classList.remove('active');
-    }
-
-    // =========================================================================
     // Report Modal
     // =========================================================================
 
@@ -1051,167 +636,13 @@ class StructuralPage {
     }
 
     // =========================================================================
-    // Viga Estándar
+    // Métodos Compartidos (usados por módulos)
     // =========================================================================
-
-    /**
-     * Maneja cambios en la viga estándar.
-     */
-    onStandardBeamChange() {
-        const beam = {
-            width: parseInt(this.elements.stdBeamWidth?.value) || 200,
-            height: parseInt(this.elements.stdBeamHeight?.value) || 500,
-            ln: parseInt(this.elements.stdBeamLn?.value) || 1500,
-            nbars: parseInt(this.elements.stdBeamNbars?.value) || 2,
-            diam: parseInt(this.elements.stdBeamDiam?.value) || 12
-        };
-
-        // Actualizar en ResultsTable (propaga a celdas bloqueadas y guarda en backend)
-        this.resultsTable.updateStandardBeam(beam);
-    }
-
-    // =========================================================================
-    // Vigas - Creación y Edición
-    // =========================================================================
-
-    /**
-     * Inicializa el modal de creación de vigas custom.
-     */
-    initCustomBeamModal() {
-        const modal = document.getElementById('custom-beam-modal');
-        const form = document.getElementById('custom-beam-form');
-        const createBtn = document.getElementById('create-custom-beam-btn');
-        const cancelBtn = document.getElementById('cancel-custom-beam');
-
-        if (!modal || !form) return;
-
-        // Abrir modal
-        createBtn?.addEventListener('click', () => this.openCustomBeamModal());
-
-        // Cerrar modal
-        cancelBtn?.addEventListener('click', () => this.closeCustomBeamModal());
-        setupModalClose(modal, () => this.closeCustomBeamModal());
-
-        // Manejar submit
-        form.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleCreateCustomBeam();
-        });
-    }
-
-    /**
-     * Abre el modal de creación de viga custom.
-     */
-    openCustomBeamModal() {
-        const modal = document.getElementById('custom-beam-modal');
-        const storySelect = document.getElementById('custom-beam-story');
-
-        if (!modal) return;
-
-        // Poblar selector de pisos
-        if (storySelect && this.uniqueStories.length > 0) {
-            storySelect.innerHTML = this.uniqueStories.map(story =>
-                `<option value="${story}">${story}</option>`
-            ).join('');
-        }
-
-        // Resetear form
-        document.getElementById('custom-beam-form')?.reset();
-
-        modal.classList.add('active');
-    }
-
-    /**
-     * Cierra el modal de creación de viga custom.
-     */
-    closeCustomBeamModal() {
-        const modal = document.getElementById('custom-beam-modal');
-        modal?.classList.remove('active');
-    }
-
-    /**
-     * Maneja la creación de una viga custom.
-     */
-    async handleCreateCustomBeam() {
-        const beamData = {
-            label: document.getElementById('custom-beam-label')?.value || 'VC1',
-            story: document.getElementById('custom-beam-story')?.value || 'Story1',
-            width: parseInt(document.getElementById('custom-beam-width')?.value) || 200,
-            depth: parseInt(document.getElementById('custom-beam-depth')?.value) || 500,
-            length: parseInt(document.getElementById('custom-beam-length')?.value) || 3000,
-            fc: parseInt(document.getElementById('custom-beam-fc')?.value) || 28,
-            n_bars_top: parseInt(document.getElementById('custom-beam-nbars-top')?.value) || 3,
-            diameter_top: parseInt(document.getElementById('custom-beam-diam-top')?.value) || 16,
-            n_bars_bottom: parseInt(document.getElementById('custom-beam-nbars-bot')?.value) || 3,
-            diameter_bottom: parseInt(document.getElementById('custom-beam-diam-bot')?.value) || 16,
-            stirrup_diameter: parseInt(document.getElementById('custom-beam-stirrup-diam')?.value) || 10,
-            stirrup_spacing: parseInt(document.getElementById('custom-beam-stirrup-spacing')?.value) || 150,
-            n_stirrup_legs: parseInt(document.getElementById('custom-beam-stirrup-legs')?.value) || 2
-        };
-
-        try {
-            const result = await structuralAPI.createCustomBeam(this.sessionId, beamData);
-
-            if (result.success) {
-                this.closeCustomBeamModal();
-                this.showNotification(`Viga ${beamData.label} creada`, 'success');
-
-                // Agregar a beamsData localmente para que aparezca en los dropdowns
-                this.beamsData.push({
-                    label: beamData.label,
-                    story: beamData.story,
-                    width: beamData.width,
-                    depth: beamData.depth,
-                    is_custom: true
-                });
-
-                // Actualizar dropdowns de vigas en la tabla de muros
-                this.resultsTable.refreshBeamSelectors();
-
-                // Re-analizar para incluir la nueva viga
-                await this.reanalyzeBeam(result.beam_key);
-            } else {
-                this.showNotification(result.error || 'Error al crear viga', 'error');
-            }
-        } catch (error) {
-            console.error('Error creating custom beam:', error);
-            this.showNotification('Error al crear viga: ' + error.message, 'error');
-        }
-    }
-
-    /**
-     * Re-analiza una viga específica después de cambiar su enfierradura.
-     * Por ahora, recalcula todas las vigas (puede optimizarse después).
-     */
-    async reanalyzeBeam(beamKey) {
-        try {
-            // Por ahora simplemente refrescamos todos los resultados de vigas
-            // Una optimización futura sería recalcular solo la viga afectada
-            const data = await structuralAPI.analyze({
-                session_id: this.sessionId,
-                pier_updates: [],
-                generate_plots: false,
-                moment_axis: 'M3',
-                angle_deg: 0,
-                materials_config: this.materials
-            });
-
-            if (data.success) {
-                this.beamResults = data.beam_results || [];
-                this.beamsTable.renderTable(this.beamResults);
-                this.showNotification('Viga actualizada', 'success');
-            }
-        } catch (error) {
-            console.error('Error reanalyzing beam:', error);
-            this.showNotification('Error al recalcular viga', 'error');
-        }
-    }
 
     /**
      * Muestra una notificación temporal al usuario.
      */
     showNotification(message, type = 'info') {
-        // Crear elemento de notificación si no existe
         let container = document.getElementById('notification-container');
         if (!container) {
             container = document.createElement('div');
@@ -1225,45 +656,54 @@ class StructuralPage {
 
         container.appendChild(notification);
 
-        // Auto-remover después de 3 segundos
         setTimeout(() => {
             notification.classList.add('fade-out');
             setTimeout(() => notification.remove(), 300);
         }, 3000);
     }
 
-    async showProposedSectionDiagram(pierKey, pierLabel, proposedConfig) {
-        const { sectionModal, sectionModalTitle, sectionModalLoading, sectionModalImg } = this.elements;
+    /**
+     * Actualiza estadísticas de un tipo de elemento (genérico).
+     */
+    updateElementStats(results, prefix) {
+        const statTotal = document.getElementById(`${prefix}-stat-total`);
+        if (!statTotal) return;
 
-        if (!sectionModal) return;
+        const stats = calculateElementStats(results);
+        statTotal.textContent = stats.total;
+        document.getElementById(`${prefix}-stat-ok`).textContent = stats.ok;
+        document.getElementById(`${prefix}-stat-fail`).textContent = stats.fail;
+        document.getElementById(`${prefix}-stat-rate`).textContent = `${stats.rate}%`;
+    }
 
-        // Abrir modal y mostrar loading
-        sectionModal.classList.add('active');
-        sectionModalTitle.textContent = `Sección Propuesta - ${pierLabel}`;
-        sectionModalLoading.classList.add('active');
-        sectionModalImg.style.display = 'none';
-
-        try {
-            const data = await structuralAPI.getSectionDiagram(
-                this.sessionId,
-                pierKey,
-                proposedConfig
-            );
-
-            if (data.success && data.section_diagram) {
-                sectionModalImg.src = `data:image/png;base64,${data.section_diagram}`;
-                sectionModalImg.style.display = 'block';
-            } else {
-                alert('Error: ' + (data.error || 'No se pudo generar el diagrama'));
-                this.closeSectionModal();
-            }
-        } catch (error) {
-            console.error('Error getting proposed section diagram:', error);
-            alert('Error: ' + error.message);
-            this.closeSectionModal();
-        } finally {
-            sectionModalLoading.classList.remove('active');
+    /**
+     * Renderiza una tabla de elementos genérica.
+     */
+    renderElementTable(results, tbody, statsPrefix, colspan, emptyMsg, logPrefix) {
+        if (!tbody) {
+            console.warn(`[${logPrefix}] No se encontró tbody`);
+            return;
         }
+
+        tbody.innerHTML = '';
+
+        if (!results || results.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${colspan}" class="no-data-msg">${emptyMsg}</td></tr>`;
+            this.updateElementStats([], statsPrefix);
+            return;
+        }
+
+        const rowFactory = new RowFactory(this.resultsTable);
+        results.forEach(result => {
+            const elementKey = result.key || `${result.story}_${result.label}`;
+            const row = rowFactory.createRow(result, elementKey);
+            if (row) {
+                tbody.appendChild(row);
+            }
+        });
+
+        this.updateElementStats(results, statsPrefix);
+        console.log(`[${logPrefix}] Renderizados ${results.length} elementos`);
     }
 }
 

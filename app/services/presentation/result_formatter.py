@@ -9,7 +9,7 @@ from typing import Dict, Any, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..analysis.verification_result import ElementVerificationResult
-    from ...domain.entities import Beam, Column, Pier
+    from ...domain.entities import Beam, Column, Pier, DropBeam
     from ...domain.calculations.wall_continuity import WallContinuityInfo
 
 
@@ -170,8 +170,12 @@ class ResultFormatter:
                 'status': flexure.status,
                 'design_type': flexure.design_type,
                 'phi_Mn': flexure.phi_Mn,
+                'phi_Mn_at_Pu': flexure.phi_Mn_at_Pu if hasattr(flexure, 'phi_Mn_at_Pu') else flexure.phi_Mn,
+                'phi_Mn_0': flexure.phi_Mn,  # Para vigas, phi_Mn_0 = phi_Mn (P=0)
                 'Mu': flexure.Mu,
                 'Pu': flexure.Pu,
+                'phi_Pn_max': flexure.phi_Pn_max if hasattr(flexure, 'phi_Pn_max') else 0,
+                'exceeds_axial': flexure.exceeds_axial if hasattr(flexure, 'exceeds_axial') else False,
                 'critical_combo': flexure.critical_combo,
                 'has_significant_axial': flexure.has_significant_axial,
                 'warning': flexure.warning
@@ -481,4 +485,97 @@ class ResultFormatter:
             'reinforcement': slab_result.get('reinforcement', {}),
             'punching': punching_result,
             'overall_status': slab_result.get('overall_status', 'N/A')
+        }
+
+    @staticmethod
+    def format_drop_beam_result(
+        drop_beam: 'DropBeam',
+        result: 'ElementVerificationResult',
+        key: str
+    ) -> Dict[str, Any]:
+        """
+        Formatea resultado de viga capitel al formato UI.
+
+        Las vigas capitel son losas diseñadas como vigas a flexocompresión,
+        usando análisis P-M similar a muros.
+
+        Args:
+            drop_beam: Entidad DropBeam
+            result: ElementVerificationResult del servicio
+            key: Clave única del elemento
+
+        Returns:
+            Dict con formato unificado para UI
+        """
+        flexure = result.flexure
+        shear = result.shear
+        slenderness = flexure.slenderness
+
+        return {
+            'element_type': 'drop_beam',
+            'key': key,
+            'label': drop_beam.label,
+            'story': drop_beam.story,
+            'axis_slab': drop_beam.axis_slab,
+            'location': drop_beam.location,
+            'geometry': {
+                'width_m': drop_beam.width / 1000,        # Espesor de losa
+                'thickness_m': drop_beam.thickness / 1000,  # Ancho tributario
+                'length_m': drop_beam.length / 1000,
+                'fc_MPa': drop_beam.fc,
+                'fy_MPa': drop_beam.fy
+            },
+            'reinforcement': {
+                # Armadura de malla
+                'n_meshes': drop_beam.n_meshes,
+                'diameter_v': drop_beam.diameter_v,
+                'spacing_v': drop_beam.spacing_v,
+                'diameter_h': drop_beam.diameter_h,
+                'spacing_h': drop_beam.spacing_h,
+                'As_vertical_mm2': round(drop_beam.As_vertical, 0),
+                'As_horizontal_mm2': round(drop_beam.As_horizontal, 0),
+                'rho_vertical': round(drop_beam.rho_vertical, 5),
+                'rho_horizontal': round(drop_beam.rho_horizontal, 5),
+                # Armadura de borde
+                'n_edge_bars': drop_beam.n_edge_bars,
+                'diameter_edge': drop_beam.diameter_edge,
+                'As_edge_mm2': round(drop_beam.As_edge_total, 0),
+                # Estribos
+                'stirrup_diameter': drop_beam.stirrup_diameter,
+                'stirrup_spacing': drop_beam.stirrup_spacing,
+                'n_stirrup_legs': drop_beam.n_stirrup_legs,
+                'description': drop_beam.reinforcement_description
+            },
+            'flexure': {
+                'sf': flexure.sf,
+                'status': flexure.status,
+                'critical_combo': flexure.critical_combo,
+                'phi_Mn_at_Pu': flexure.phi_Mn_at_Pu,
+                'Mu': flexure.Mu,
+                'phi_Mn_0': flexure.phi_Mn,
+                'Pu': flexure.Pu,
+                'phi_Pn_max': flexure.phi_Pn_max,
+                'exceeds_axial': flexure.exceeds_axial,
+                'has_tension': flexure.has_tension
+            },
+            'shear': {
+                'sf': shear.sf,
+                'status': shear.status,
+                'critical_combo': shear.critical_combo,
+                'dcr_2': shear.dcr_2,
+                'phi_Vn_2': shear.phi_Vn_2,
+                'Vu_2': shear.Vu_2,
+                'Vc': shear.Vc,
+                'Vs': shear.Vs,
+                'formula_type': 'drop_beam'
+            },
+            'slenderness': {
+                'lambda': slenderness.lambda_ratio if slenderness else 0,
+                'is_slender': slenderness.is_slender if slenderness else False,
+                'delta_ns': slenderness.delta_ns if slenderness else 1.0,
+                'magnification_pct': round(slenderness.magnification_pct, 1) if slenderness else 0.0
+            },
+            'overall_status': result.overall_status,
+            'design_proposal': {'has_proposal': result.proposal is not None},
+            'pm_plot': result.pm_plot
         }

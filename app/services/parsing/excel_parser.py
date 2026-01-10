@@ -29,6 +29,7 @@ from .table_extractor import (
 from .column_parser import ColumnParser
 from .beam_parser import BeamParser
 from .slab_parser import SlabParser
+from .drop_beam_parser import DropBeamParser
 
 
 # Nombres de tablas soportadas (para mostrar al usuario)
@@ -50,6 +51,9 @@ SUPPORTED_TABLES = {
         'Spandrel Forces'
     ],
     'slabs': [
+        'Section Cut Forces - Analysis'
+    ],
+    'drop_beams': [
         'Section Cut Forces - Analysis'
     ]
 }
@@ -73,6 +77,7 @@ class EtabsExcelParser:
         self.column_parser = ColumnParser()
         self.beam_parser = BeamParser()
         self.slab_parser = SlabParser()
+        self.drop_beam_parser = DropBeamParser()
 
     def parse_excel(self, file_content: bytes) -> ParsedData:
         """
@@ -213,9 +218,18 @@ class EtabsExcelParser:
                 section_cut_df, materials
             )
 
+        # Procesar vigas capitel (del mismo Section Cut Forces, pero como DropBeam)
+        drop_beams = {}
+        drop_beam_forces = {}
+        drop_beam_stories = []
+        if section_cut_df is not None:
+            drop_beams, drop_beam_forces, drop_beam_stories = self.drop_beam_parser.parse_drop_beams(
+                section_cut_df, materials
+            )
+
         # Combinar stories
         all_stories = pier_stories.copy()
-        for s in column_stories + beam_stories + slab_stories:
+        for s in column_stories + beam_stories + slab_stories + drop_beam_stories:
             if s not in all_stories:
                 all_stories.append(s)
 
@@ -228,6 +242,8 @@ class EtabsExcelParser:
             beam_forces=beam_forces,
             slabs=slabs,
             slab_forces=slab_forces,
+            drop_beams=drop_beams,
+            drop_beam_forces=drop_beam_forces,
             materials=materials,
             stories=all_stories,
             raw_data=raw_data
@@ -393,6 +409,7 @@ class EtabsExcelParser:
             'total_columns': len(data.columns) if data.columns else 0,
             'total_beams': len(data.beams) if data.beams else 0,
             'total_slabs': len(data.slabs) if data.slabs else 0,
+            'total_drop_beams': len(data.drop_beams) if data.drop_beams else 0,
             'total_stories': len(data.stories),
             'stories': data.stories,
             'axes': sorted(list(axes)),
@@ -512,6 +529,42 @@ class EtabsExcelParser:
                     'reinforcement_desc': slab.reinforcement_description
                 }
                 for key, slab in data.slabs.items()
+            ]
+
+        # Agregar vigas capitel si existen
+        if data.drop_beams:
+            summary['drop_beams_list'] = [
+                {
+                    'key': key,
+                    'label': db.label,
+                    'story': db.story,
+                    'axis_slab': db.axis_slab,
+                    'location': db.location,
+                    'width_m': db.width / 1000,       # Espesor de losa
+                    'thickness_m': db.thickness / 1000,  # Ancho tributario
+                    'length_m': db.length / 1000,
+                    'fc_MPa': db.fc,
+                    'fy_MPa': db.fy,
+                    # Configuración de armadura (igual que pier)
+                    'n_meshes': db.n_meshes,
+                    'diameter_v': db.diameter_v,
+                    'spacing_v': db.spacing_v,
+                    'diameter_h': db.diameter_h,
+                    'spacing_h': db.spacing_h,
+                    'diameter_edge': db.diameter_edge,
+                    'n_edge_bars': db.n_edge_bars,
+                    'stirrup_diameter': db.stirrup_diameter,
+                    'stirrup_spacing': db.stirrup_spacing,
+                    'cover': db.cover,
+                    # Valores calculados
+                    'As_vertical_mm2': db.As_vertical,
+                    'As_horizontal_mm2': db.As_horizontal,
+                    'As_edge_mm2': db.As_edge_total,
+                    'rho_vertical': db.rho_vertical,
+                    'rho_horizontal': db.rho_horizontal,
+                    'reinforcement_desc': db.reinforcement_description
+                }
+                for key, db in data.drop_beams.items()
             ]
 
         return summary

@@ -26,9 +26,9 @@
                     <span class="nav-icon">📏</span>
                     <span class="nav-label">Vigas</span>
                 </button>
-                <button class="nav-tab" data-page="slabs-page" title="Diseño de losas">
+                <button class="nav-tab" data-page="drop-beams-page" title="Vigas capitel (losas diseñadas como vigas)">
                     <span class="nav-icon">▭</span>
-                    <span class="nav-label">Losas</span>
+                    <span class="nav-label">V. Capitel</span>
                 </button>
             </nav>
             <div class="header-spacer"></div>
@@ -278,11 +278,11 @@
             </div>
         </div>
 
-        <!-- Beams Results -->
+        <!-- Beams Results (estilo pier - flexocompresión) -->
         <div class="card hidden" id="beams-results-section">
             <div class="card-header">Vigas</div>
             <div class="card-body">
-                <!-- Stats -->
+                <!-- Stats + Filters -->
                 <div class="toolbar-bar">
                     <div class="stats-inline">
                         <span class="stat-item"><strong id="beam-stat-total">0</strong> vigas</span>
@@ -290,24 +290,42 @@
                         <span class="stat-item stat-fail"><strong id="beam-stat-fail">0</strong> Fail</span>
                         <span class="stat-item"><strong id="beam-stat-rate">0%</strong></span>
                     </div>
+                    <div class="toolbar-divider"></div>
+                    <div class="filter-group">
+                        <label>Piso:</label>
+                        <select id="beam-story-filter">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Estado:</label>
+                        <select id="beam-status-filter">
+                            <option value="">Todos</option>
+                            <option value="OK">OK</option>
+                            <option value="FAIL">Fail</option>
+                        </select>
+                    </div>
                     <button class="btn btn-sm btn-secondary" id="create-custom-beam-btn" title="Crear viga custom">
                         + Crear viga
                     </button>
                 </div>
 
-                <!-- Beams Table -->
+                <!-- Beams Table (usa estructura tipo pier) -->
                 <div class="table-wrapper">
-                    <table class="results-table beams-table" id="beams-table">
+                    <table class="results-table pier-results-table" id="beams-table">
                         <thead>
                             <tr>
-                                <th title="Piso / Viga / Tipo">Viga</th>
-                                <th title="Dimensiones de la sección">Sección</th>
-                                <th title="Armadura longitudinal superior e inferior">Longitudinal</th>
-                                <th title="Armadura transversal (estribos)">Estribos</th>
-                                <th title="Resistencia de diseño">φVn (t)</th>
-                                <th title="Demanda máxima">Vu (t)</th>
-                                <th title="Demand/Capacity Ratio">D/C</th>
-                                <th title="Combinación crítica">Combo</th>
+                                <th title="Viga / Piso">Viga</th>
+                                <th title="Ancho × Peralte (mm)">Sección</th>
+                                <th title="Luz de la viga">L (m)</th>
+                                <th title="Armadura longitudinal superior">Arm. Sup.</th>
+                                <th title="Armadura longitudinal inferior">Arm. Inf.</th>
+                                <th title="Estribos de confinamiento">Estribos</th>
+                                <th title="Demanda/Capacidad Flexión">D/C Flex.</th>
+                                <th title="Capacidad y demanda de flexión">Flexión</th>
+                                <th title="Demanda/Capacidad Corte">D/C Corte</th>
+                                <th title="Capacidad y demanda de corte">Corte</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -319,43 +337,42 @@
         </div>
 
         <!-- ================================================================
-             PAGE: LOSAS
+             PAGE: VIGAS CAPITEL (Drop Beams)
              ================================================================ -->
-        <div class="page-container hidden" id="slabs-page">
+        <div class="page-container hidden" id="drop-beams-page">
 
         <!-- Placeholder when no data -->
-        <div class="card" id="slabs-placeholder">
+        <div class="card" id="drop-beams-placeholder">
             <div class="card-body">
                 <div class="no-data-placeholder">
                     <p class="no-data-msg">Carga un archivo de ETABS en la pestaña <strong>Config</strong> para comenzar.</p>
+                    <p class="hint">Las vigas capitel se extraen de la tabla "Section Cut Forces - Analysis"</p>
                 </div>
             </div>
         </div>
 
-        <!-- Slabs Results -->
-        <div class="card hidden" id="slabs-results-section">
-            <div class="card-header">Losas</div>
+        <!-- Drop Beams Results (estilo pier) -->
+        <div class="card hidden" id="drop-beams-results-section">
+            <div class="card-header">Vigas Capitel</div>
             <div class="card-body">
                 <!-- Stats + Filters -->
                 <div class="toolbar-bar">
                     <div class="stats-inline">
-                        <span class="stat-item"><strong id="slab-stat-total">0</strong> losas</span>
-                        <span class="stat-item stat-ok"><strong id="slab-stat-ok">0</strong> OK</span>
-                        <span class="stat-item stat-fail"><strong id="slab-stat-fail">0</strong> Fail</span>
-                        <span class="stat-item"><strong id="slab-stat-rate">0%</strong></span>
+                        <span class="stat-item"><strong id="drop-beam-stat-total">0</strong> elementos</span>
+                        <span class="stat-item stat-ok"><strong id="drop-beam-stat-ok">0</strong> OK</span>
+                        <span class="stat-item stat-fail"><strong id="drop-beam-stat-fail">0</strong> Fail</span>
+                        <span class="stat-item"><strong id="drop-beam-stat-rate">0%</strong></span>
                     </div>
                     <div class="toolbar-divider"></div>
                     <div class="filter-group">
-                        <label>Tipo:</label>
-                        <select id="slab-type-filter">
+                        <label>Piso:</label>
+                        <select id="drop-beam-story-filter">
                             <option value="">Todos</option>
-                            <option value="ONE_WAY">1-Way</option>
-                            <option value="TWO_WAY">2-Way</option>
                         </select>
                     </div>
                     <div class="filter-group">
                         <label>Estado:</label>
-                        <select id="slab-status-filter">
+                        <select id="drop-beam-status-filter">
                             <option value="">Todos</option>
                             <option value="OK">OK</option>
                             <option value="FAIL">Fail</option>
@@ -363,22 +380,22 @@
                     </div>
                 </div>
 
-                <!-- Slabs Table -->
+                <!-- Drop Beams Table (usa ResultsTable estilo pier) -->
                 <div class="table-wrapper">
-                    <table class="results-table slabs-table" id="slabs-table">
+                    <table class="results-table pier-results-table" id="drop-beams-table">
                         <thead>
                             <tr>
-                                <th title="Piso / Losa / Tipo">Losa</th>
-                                <th title="Espesor de la losa">h (cm)</th>
-                                <th title="Ancho del corte">b (cm)</th>
-                                <th title="Verificación de espesor mínimo">h min</th>
-                                <th title="Resistencia de diseño a flexión">φMn (t-m)</th>
-                                <th title="Demanda de momento">Mu (t-m)</th>
-                                <th title="D/C Flexión">D/C Flex.</th>
-                                <th title="Resistencia de diseño a cortante">φVn (t)</th>
-                                <th title="Demanda de cortante">Vu (t)</th>
-                                <th title="D/C Cortante">D/C Corte</th>
-                                <th title="Punzonamiento (solo 2-Way)">Punz.</th>
+                                <th title="Viga capitel / Piso">V. Capitel</th>
+                                <th title="Espesor × Ancho (mm)">Sección</th>
+                                <th title="Luz libre">L (m)</th>
+                                <th title="Armadura vertical malla">Malla V</th>
+                                <th title="Armadura horizontal malla">Malla H</th>
+                                <th title="Barras de borde">Borde</th>
+                                <th title="Demanda/Capacidad Flexión">D/C Flex.</th>
+                                <th title="Capacidad y demanda de flexión">Flexión</th>
+                                <th title="Demanda/Capacidad Corte">D/C Corte</th>
+                                <th title="Capacidad y demanda de corte">Corte</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -894,17 +911,27 @@
     </div>
 
     <!-- JavaScript Modules -->
-    <script src="{{ url_for('structural_static', filename='js/Constants.js') }}?v=1"></script>
-    <script src="{{ url_for('structural_static', filename='js/Utils.js') }}?v=2"></script>
-    <script src="{{ url_for('structural_static', filename='js/ModalUtils.js') }}?v=1"></script>
-    <script src="{{ url_for('structural_static', filename='js/StructuralAPI.js') }}?v=12"></script>
-    <script src="{{ url_for('structural_static', filename='js/PlotModal.js') }}?v=13"></script>
-    <script src="{{ url_for('structural_static', filename='js/RowFactory.js') }}?v=1"></script>
-    <script src="{{ url_for('structural_static', filename='js/ResultsTable.js') }}?v=19"></script>
-    <script src="{{ url_for('structural_static', filename='js/BeamsTable.js') }}?v=1"></script>
-    <script src="{{ url_for('structural_static', filename='js/SlabsTable.js') }}?v=1"></script>
-    <script src="{{ url_for('structural_static', filename='js/ReportModal.js') }}?v=13"></script>
-    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}?v=25"></script>
+    <!-- Core -->
+    <script src="{{ url_for('structural_static', filename='js/core/Constants.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/core/Utils.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/core/StructuralAPI.js') }}?v=1"></script>
+    <!-- Modals -->
+    <script src="{{ url_for('structural_static', filename='js/modals/ModalUtils.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/modals/PlotModal.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/modals/ReportModal.js') }}?v=1"></script>
+    <!-- Editing -->
+    <script src="{{ url_for('structural_static', filename='js/editing/RecalcButton.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/editing/ElementEditManager.js') }}?v=1"></script>
+    <!-- Tables -->
+    <script src="{{ url_for('structural_static', filename='js/tables/RowFactory.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/tables/ResultsTable.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/tables/SlabsTable.js') }}?v=1"></script>
+    <!-- Modules -->
+    <script src="{{ url_for('structural_static', filename='js/modules/WallsModule.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/modules/BeamsModule.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/modules/DropBeamsModule.js') }}?v=1"></script>
+    <!-- Main -->
+    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}?v=1"></script>
     <script>
         // Inicializar la página cuando el DOM esté listo
         document.addEventListener('DOMContentLoaded', () => {

@@ -90,6 +90,8 @@ const BEAM_OPTIONS = {
 const MESH_OPTIONS = [1, 2];
 const EDGE_BAR_COUNTS = [2, 4, 6, 8, 10, 12];
 const COLUMN_BARS_PER_FACE = [2, 3, 4, 5, 6];
+const BEAM_BAR_COUNTS = [2, 3, 4, 5, 6, 8];  // Barras longitudinales de vigas
+const STIRRUP_LEGS = [2, 3, 4];  // Ramas de estribos
 
 // =============================================================================
 // Helpers para generar options HTML

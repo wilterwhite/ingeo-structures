@@ -17,6 +17,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from ...domain.entities import Pier
+    from ...domain.entities.column import Column
 
 
 class PlotGenerator:
@@ -593,6 +594,195 @@ class PlotGenerator:
         ax.set_aspect('equal')
         ax.set_xlim(x0 - dim_offset * 2, x0 + lw + dim_offset * 3 + 180)
         ax.set_ylim(y0 - dim_offset * 2, y0 + tw + dim_offset * 2)
+        ax.axis('off')
+
+        plt.tight_layout()
+
+        # Convertir a base64
+        buffer = BytesIO()
+        fig.savefig(buffer, format='png', dpi=self.dpi, bbox_inches='tight',
+                   facecolor='white', edgecolor='none')
+        buffer.seek(0)
+        plt.close(fig)
+
+        return base64.b64encode(buffer.read()).decode('utf-8')
+
+    def generate_column_section_diagram(
+        self,
+        column: 'Column',
+        figsize: Tuple[int, int] = (8, 8)
+    ) -> str:
+        """
+        Genera un diagrama de la sección transversal de una columna.
+
+        Muestra:
+        - Sección de hormigón rectangular
+        - Armadura longitudinal distribuida en el perímetro
+        - Estribos con esquinas redondeadas
+        - Dimensiones y recubrimientos
+
+        Args:
+            column: Entidad Column con la configuración
+            figsize: Tamaño de la figura
+
+        Returns:
+            Imagen en formato base64
+        """
+        fig, ax = plt.subplots(figsize=figsize)
+
+        # Dimensiones en mm
+        depth = column.depth    # Profundidad (eje 2)
+        width = column.width    # Ancho (eje 3)
+        cover = column.cover
+
+        # Origen centrado
+        x0 = -width / 2
+        y0 = -depth / 2
+
+        # 1. Dibujar sección de hormigón
+        concrete = Rectangle(
+            (x0, y0), width, depth,
+            facecolor=self.COLOR_CONCRETE,
+            edgecolor=self.COLOR_CONCRETE_EDGE,
+            linewidth=2,
+            zorder=1
+        )
+        ax.add_patch(concrete)
+
+        # 2. Dibujar estribos con esquinas redondeadas
+        stirrup_d = column.stirrup_diameter
+        stirrup_clearance = stirrup_d / 2
+
+        # Dimensiones del estribo (desde el interior del recubrimiento)
+        stirrup_width = width - 2 * cover + 2 * stirrup_clearance
+        stirrup_height = depth - 2 * cover + 2 * stirrup_clearance
+
+        # Posición del estribo
+        stirrup_x = x0 + cover - stirrup_clearance
+        stirrup_y = y0 + cover - stirrup_clearance
+
+        # Radio de esquina
+        corner_radius = min(stirrup_d * 3, stirrup_width * 0.15, stirrup_height * 0.15)
+
+        stirrup = FancyBboxPatch(
+            (stirrup_x, stirrup_y),
+            stirrup_width, stirrup_height,
+            boxstyle=f"round,pad=0,rounding_size={corner_radius}",
+            facecolor='none',
+            edgecolor=self.COLOR_STIRRUP,
+            linewidth=1.5,
+            zorder=3
+        )
+        ax.add_patch(stirrup)
+
+        # 3. Dibujar barras longitudinales
+        bar_d = column.diameter_long
+        bar_radius = bar_d / 2
+        n_bars_depth = column.n_bars_depth
+        n_bars_width = column.n_bars_width
+
+        # Posiciones de las barras en cada dirección
+        # Depth: desde cover hasta depth - cover
+        if n_bars_depth >= 2:
+            y_first = y0 + cover
+            y_last = y0 + depth - cover
+            if n_bars_depth == 2:
+                y_positions = [y_first, y_last]
+            else:
+                y_spacing = (y_last - y_first) / (n_bars_depth - 1)
+                y_positions = [y_first + i * y_spacing for i in range(n_bars_depth)]
+        else:
+            y_positions = [0]  # Centro
+
+        # Width: desde cover hasta width - cover
+        if n_bars_width >= 2:
+            x_first = x0 + cover
+            x_last = x0 + width - cover
+            if n_bars_width == 2:
+                x_positions = [x_first, x_last]
+            else:
+                x_spacing = (x_last - x_first) / (n_bars_width - 1)
+                x_positions = [x_first + i * x_spacing for i in range(n_bars_width)]
+        else:
+            x_positions = [0]  # Centro
+
+        # Dibujar barras: esquinas y lados
+        drawn_positions = set()
+
+        # Dibujar todas las posiciones del perímetro
+        for i, y_bar in enumerate(y_positions):
+            for j, x_bar in enumerate(x_positions):
+                # Solo dibujar si está en el borde (primera/última fila o columna)
+                is_edge = (i == 0 or i == len(y_positions) - 1 or
+                          j == 0 or j == len(x_positions) - 1)
+                if is_edge:
+                    pos_key = (round(x_bar, 1), round(y_bar, 1))
+                    if pos_key not in drawn_positions:
+                        bar = Circle(
+                            (x_bar, y_bar), bar_radius,
+                            facecolor=self.COLOR_REBAR,
+                            edgecolor='white',
+                            linewidth=0.5,
+                            zorder=5
+                        )
+                        ax.add_patch(bar)
+                        drawn_positions.add(pos_key)
+
+        # 4. Agregar dimensiones
+        dim_offset = max(depth, width) * 0.15
+        arrow_props = dict(arrowstyle='<->', color=self.COLOR_DIMENSION, lw=1.5)
+
+        # Dimensión del ancho (width - horizontal)
+        ax.annotate('', xy=(x0, y0 - dim_offset), xytext=(x0 + width, y0 - dim_offset),
+                   arrowprops=arrow_props)
+        ax.text(x0 + width/2, y0 - dim_offset - 15, f'b = {width:.0f} mm',
+               ha='center', va='top', fontsize=10, color=self.COLOR_DIMENSION)
+
+        # Dimensión de la profundidad (depth - vertical)
+        ax.annotate('', xy=(x0 - dim_offset, y0), xytext=(x0 - dim_offset, y0 + depth),
+                   arrowprops=arrow_props)
+        ax.text(x0 - dim_offset - 15, y0 + depth/2, f'h = {depth:.0f} mm',
+               ha='right', va='center', fontsize=10, color=self.COLOR_DIMENSION,
+               rotation=90)
+
+        # Dimensión del recubrimiento
+        ax.annotate('', xy=(x0, y0 + depth + 10), xytext=(x0 + cover, y0 + depth + 10),
+                   arrowprops=dict(arrowstyle='<->', color='#9ca3af', lw=1))
+        ax.text(x0 + cover/2, y0 + depth + 25, f'r={cover:.0f}',
+               ha='center', va='bottom', fontsize=8, color='#9ca3af')
+
+        # 5. Agregar leyenda de armadura
+        info_x = x0 + width + dim_offset + 20
+        info_y = y0 + depth
+
+        info_lines = [
+            f"ARMADURA:",
+            f"",
+            f"Longitudinal: {column.n_total_bars}phi{column.diameter_long}",
+            f"  ({n_bars_depth} x {n_bars_width})",
+            f"",
+            f"Estribos: E{column.stirrup_diameter}@{column.stirrup_spacing}",
+            f"",
+            f"Recubrimiento: {cover:.0f} mm",
+            f"",
+            f"As total: {column.As_longitudinal:.0f} mm2",
+            f"rho: {column.rho_longitudinal*100:.2f}%",
+        ]
+
+        for i, line in enumerate(info_lines):
+            ax.text(info_x, info_y - i * 18, line,
+                   ha='left', va='top', fontsize=9,
+                   fontfamily='monospace', color='#374151')
+
+        # 6. Título
+        ax.set_title(f'Seccion Transversal - {column.story} / {column.label}\n'
+                    f'({width/1000:.2f}m x {depth/1000:.2f}m)',
+                    fontsize=14, fontweight='bold')
+
+        # 7. Configurar ejes
+        ax.set_aspect('equal')
+        ax.set_xlim(x0 - dim_offset * 2, x0 + width + dim_offset * 2 + 150)
+        ax.set_ylim(y0 - dim_offset * 2, y0 + depth + dim_offset * 2)
         ax.axis('off')
 
         plt.tight_layout()

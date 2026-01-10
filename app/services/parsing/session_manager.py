@@ -174,12 +174,78 @@ class SessionManager:
 
         return True
 
+    def apply_column_updates(
+        self,
+        session_id: str,
+        updates: list
+    ) -> bool:
+        """
+        Aplica actualizaciones de armadura a las columnas de una sesión.
+
+        Args:
+            session_id: ID de sesión
+            updates: Lista de actualizaciones con configuración de armadura
+                     [{'key': 'Story_Column', 'n_bars_depth': 3, 'n_bars_width': 3,
+                       'diameter_long': 20, 'stirrup_diameter': 10,
+                       'stirrup_spacing': 150}]
+
+        Returns:
+            True si se aplicaron las actualizaciones
+        """
+        parsed_data = self.get_session(session_id)
+        if not parsed_data or not updates:
+            return False
+
+        columns = parsed_data.columns or {}
+
+        for update in updates:
+            key = update.get('key')
+            if key not in columns:
+                continue
+
+            column = columns[key]
+
+            # Aplicar configuración de armadura
+            column.update_reinforcement(
+                n_bars_depth=update.get('n_bars_depth'),
+                n_bars_width=update.get('n_bars_width'),
+                diameter_long=update.get('diameter_long'),
+                stirrup_diameter=update.get('stirrup_diameter'),
+                stirrup_spacing=update.get('stirrup_spacing'),
+                cover=update.get('cover')
+            )
+
+        return True
+
     def get_pier(self, session_id: str, pier_key: str):
         """Obtiene un pier específico de una sesión."""
         parsed_data = self.get_session(session_id)
         if not parsed_data:
             return None
         return parsed_data.piers.get(pier_key)
+
+    def get_column(self, session_id: str, column_key: str):
+        """Obtiene una columna específica de una sesión."""
+        parsed_data = self.get_session(session_id)
+        if not parsed_data or not parsed_data.columns:
+            return None
+        return parsed_data.columns.get(column_key)
+
+    def validate_column(self, session_id: str, column_key: str) -> Optional[Dict[str, Any]]:
+        """
+        Valida que la columna existe en la sesión.
+
+        Returns:
+            None si la columna es válida, o dict con error si no existe.
+        """
+        session_error = self.validate_session(session_id)
+        if session_error:
+            return session_error
+
+        column = self.get_column(session_id, column_key)
+        if column is None:
+            return {'success': False, 'error': f'Column not found: {column_key}'}
+        return None
 
     def get_pier_forces(self, session_id: str, pier_key: str):
         """Obtiene las fuerzas de un pier específico."""

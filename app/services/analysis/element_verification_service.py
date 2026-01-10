@@ -9,8 +9,8 @@ las verificaciones correspondientes segun ACI 318-25.
 import math
 from typing import Dict, Any, Optional, Union, TYPE_CHECKING
 
-from ...domain.entities import Beam, Column, Pier
-from ...domain.entities import BeamForces, ColumnForces, PierForces
+from ...domain.entities import Beam, Column, Pier, DropBeam
+from ...domain.entities import BeamForces, ColumnForces, PierForces, DropBeamForces
 
 from .flexocompression_service import FlexocompressionService
 from .shear_service import ShearService
@@ -123,8 +123,8 @@ class ElementService:
 
     def verify(
         self,
-        element: Union[Beam, Column, Pier],
-        forces: Optional[Union[BeamForces, ColumnForces, PierForces]],
+        element: Union[Beam, Column, Pier, DropBeam],
+        forces: Optional[Union[BeamForces, ColumnForces, PierForces, DropBeamForces]],
         *,
         generate_plot: bool = False,
         moment_axis: str = 'M3',
@@ -706,6 +706,15 @@ class ElementService:
     ) -> ElementVerificationResult:
         """Alias para verificar un muro/pier."""
         return self.verify(pier, forces, **kwargs)
+
+    def verify_drop_beam(
+        self,
+        drop_beam: DropBeam,
+        forces: Optional[DropBeamForces],
+        **kwargs
+    ) -> ElementVerificationResult:
+        """Alias para verificar una viga capitel."""
+        return self.verify(drop_beam, forces, **kwargs)
 
     def verify_all(
         self,

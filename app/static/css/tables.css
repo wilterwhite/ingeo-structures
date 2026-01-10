@@ -115,7 +115,9 @@
 .borde-row,
 .viga-row,
 .longitudinal-cell .long-row,
-.stirrups-cell .stirrup-row {
+.stirrups-cell .stirrup-row,
+.beam-reinf-row,
+.beam-stirrup-row {
     display: flex;
     gap: 2px;
     align-items: center;
@@ -135,7 +137,9 @@
 .borde-cell select,
 .viga-cell select,
 .longitudinal-cell select,
-.stirrups-cell select {
+.stirrups-cell select,
+.beam-reinf-cell select,
+.beam-stirrups-cell select {
     padding: 1px 2px;
     font-size: 0.65rem;
     font-family: monospace;
@@ -149,7 +153,9 @@
 .borde-cell select:hover,
 .viga-cell select:hover,
 .longitudinal-cell select:hover,
-.stirrups-cell select:hover {
+.stirrups-cell select:hover,
+.beam-reinf-cell select:hover,
+.beam-stirrups-cell select:hover {
     border-color: var(--primary-color);
 }
 
@@ -157,7 +163,9 @@
 .borde-cell select:focus,
 .viga-cell select:focus,
 .longitudinal-cell select:focus,
-.stirrups-cell select:focus {
+.stirrups-cell select:focus,
+.beam-reinf-cell select:focus,
+.beam-stirrups-cell select:focus {
     outline: none;
     border-color: var(--primary-color);
 }
@@ -240,13 +248,6 @@
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-}
-
-.viga-cell .assigned-beam-info {
-    display: block;
-    font-size: 0.65rem;
-    color: var(--text-muted);
-    margin-top: 2px;
 }
 
 /* Longitudinal (columnas) */
@@ -339,8 +340,8 @@
 }
 .element-type-badge.type-pier { background: #dbeafe; color: #1e40af; }
 .element-type-badge.type-column { background: #d1fae5; color: #065f46; }
-.element-type-badge.type-frame { background: #fef3c7; color: #92400e; }
-.element-type-badge.type-spandrel { background: #ede9fe; color: #5b21b6; }
+.element-type-badge.type-drop_beam { background: #e9d5ff; color: #7c3aed; }  /* Vigas capitel - morado */
+.element-type-badge.type-beam { background: #fef3c7; color: #92400e; }  /* Vigas frame - naranja */
 .element-type-badge.type-1way { background: #fce7f3; color: #9d174d; }
 .element-type-badge.type-2way { background: #ccfbf1; color: #0f766e; }
 
@@ -717,13 +718,25 @@
     font-weight: 700;
 }
 
-/* Fila con cambios pendientes */
-.pier-row.pending-recalc {
-    background: rgba(251, 191, 36, 0.1);  /* Amarillo suave */
+/* Fila con cambios pendientes - aplica a todas las tablas */
+.pier-row.pending-recalc,
+#beams-table tr.pending-recalc,
+#drop-beams-table tr.pending-recalc {
+    background: rgba(251, 191, 36, 0.15) !important;
+    border-left: 3px solid var(--warning-color);
 }
 
 .pier-row.pending-recalc .viga-cell {
     border-left: 3px solid var(--warning-color);
+}
+
+/* Indicador visual de carga durante recálculo */
+.pier-row.pending-recalc td:first-child::before,
+#beams-table tr.pending-recalc td:first-child::before,
+#drop-beams-table tr.pending-recalc td:first-child::before {
+    content: "⏳";
+    margin-right: 4px;
+    font-size: 10px;
 }
 
 /* ==========================================================================
@@ -840,8 +853,3 @@
     border-top: 1px solid var(--border-color);
 }
 
-/* Badge CUSTOM para vigas */
-.element-type-badge.type-custom {
-    background: #8b5cf6;
-    color: white;
-}

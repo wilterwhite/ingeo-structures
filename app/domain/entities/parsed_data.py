@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from .beam_forces import BeamForces
     from .slab import Slab
     from .slab_forces import SlabForces
+    from .drop_beam import DropBeam
+    from .drop_beam_forces import DropBeamForces
     from .coupling_beam import CouplingBeamConfig, PierCouplingConfig
     from ..calculations.wall_continuity import WallContinuityInfo, BuildingInfo
 
@@ -58,6 +60,10 @@ class ParsedData:
     slabs: Dict[str, 'Slab'] = field(default_factory=dict)
     slab_forces: Dict[str, 'SlabForces'] = field(default_factory=dict)
 
+    # Vigas Capitel (losas diseñadas como vigas a flexocompresión)
+    drop_beams: Dict[str, 'DropBeam'] = field(default_factory=dict)
+    drop_beam_forces: Dict[str, 'DropBeamForces'] = field(default_factory=dict)
+
     # Datos calculados
     continuity_info: Optional[Dict[str, 'WallContinuityInfo']] = field(default=None)
     building_info: Optional['BuildingInfo'] = field(default=None)
@@ -85,6 +91,11 @@ class ParsedData:
         return len(self.slabs) > 0
 
     @property
+    def has_drop_beams(self) -> bool:
+        """True si hay vigas capitel cargadas."""
+        return len(self.drop_beams) > 0
+
+    @property
     def element_types_loaded(self) -> List[str]:
         """Lista de tipos de elementos cargados."""
         types = []
@@ -96,4 +107,6 @@ class ParsedData:
             types.append('beams')
         if self.has_slabs:
             types.append('slabs')
+        if self.has_drop_beams:
+            types.append('drop_beams')
         return types

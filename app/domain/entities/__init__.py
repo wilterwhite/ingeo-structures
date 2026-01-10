@@ -17,6 +17,8 @@ from .beam import Beam, BeamSource, BeamShape
 from .beam_forces import BeamForces
 from .slab import Slab, SlabType, SupportCondition
 from .slab_forces import SlabForces, SlabSectionCut
+from .drop_beam import DropBeam
+from .drop_beam_forces import DropBeamForces
 from .parsed_data import ParsedData
 from .design_proposal import (
     DesignProposal,
@@ -45,6 +47,9 @@ __all__ = [
     'SupportCondition',
     'SlabForces',
     'SlabSectionCut',
+    # Vigas Capitel
+    'DropBeam',
+    'DropBeamForces',
     # Comunes
     'LoadCombination',
     'ParsedData',

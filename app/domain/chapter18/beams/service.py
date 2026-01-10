@@ -476,6 +476,11 @@ class SeismicBeamService:
         # Cortante de diseño
         Vu_design = max(Ve, Vu)
 
+        # Calcular condiciones individuales para reporte
+        seismic_shear_dominates = Ve >= 0.5 * Vu if Vu > 0 else True
+        Pu_N = Pu * 9806.65  # TONF_TO_N
+        low_axial = Pu_N < (Ag * fc / 20)
+
         # Verificar condición Vc = 0 según §18.6.5.2
         Vc_is_zero = check_Vc_zero_condition(Ve, Vu, Pu, Ag, fc)
 

@@ -224,6 +224,9 @@ class StructuralAnalysisService:
         self,
         session_id: str,
         pier_updates: Optional[List[Dict]] = None,
+        column_updates: Optional[List[Dict]] = None,
+        beam_updates: Optional[List[Dict]] = None,
+        drop_beam_updates: Optional[List[Dict]] = None,
         generate_plots: bool = True,
         moment_axis: str = 'M3',
         angle_deg: float = 0
@@ -233,7 +236,10 @@ class StructuralAnalysisService:
 
         Args:
             session_id: ID de sesión
-            pier_updates: Actualizaciones de armadura opcionales
+            pier_updates: Actualizaciones de armadura de piers opcionales
+            column_updates: Actualizaciones de armadura de columnas opcionales
+            beam_updates: Actualizaciones de armadura de vigas opcionales
+            drop_beam_updates: Actualizaciones de armadura de vigas capitel opcionales
             generate_plots: Generar gráficos P-M
             moment_axis: Plano de momento ('M2', 'M3', 'combined', 'SRSS')
             angle_deg: Ángulo para vista combinada
@@ -246,12 +252,53 @@ class StructuralAnalysisService:
         if error:
             return error
 
-        # Aplicar actualizaciones de armadura
+        # Aplicar actualizaciones de armadura de piers
         if pier_updates:
             self._session_manager.apply_reinforcement_updates(session_id, pier_updates)
 
+        # Aplicar actualizaciones de armadura de columnas
+        if column_updates:
+            self._session_manager.apply_column_updates(session_id, column_updates)
+
         # Obtener datos de la sesión
         parsed_data = self._session_manager.get_session(session_id)
+
+        # Aplicar actualizaciones de armadura de vigas
+        if beam_updates:
+            beams = parsed_data.beams or {}
+            for update in beam_updates:
+                key = update.get('key')
+                if key and key in beams:
+                    beam = beams[key]
+                    beam.update_reinforcement(
+                        n_bars_top=update.get('n_bars_top'),
+                        n_bars_bottom=update.get('n_bars_bottom'),
+                        diameter_top=update.get('diameter_top'),
+                        diameter_bottom=update.get('diameter_bottom'),
+                        stirrup_diameter=update.get('stirrup_diameter'),
+                        stirrup_spacing=update.get('stirrup_spacing'),
+                        n_stirrup_legs=update.get('n_stirrup_legs')
+                    )
+
+        # Aplicar actualizaciones de armadura de vigas capitel
+        if drop_beam_updates:
+            drop_beams = parsed_data.drop_beams or {}
+            for update in drop_beam_updates:
+                key = update.get('key')
+                if key and key in drop_beams:
+                    drop_beam = drop_beams[key]
+                    if hasattr(drop_beam, 'update_reinforcement'):
+                        drop_beam.update_reinforcement(
+                            n_meshes=update.get('n_meshes'),
+                            diameter_v=update.get('diameter_v'),
+                            spacing_v=update.get('spacing_v'),
+                            diameter_h=update.get('diameter_h'),
+                            spacing_h=update.get('spacing_h'),
+                            n_edge_bars=update.get('n_edge_bars'),
+                            diameter_edge=update.get('diameter_edge'),
+                            stirrup_diameter=update.get('stirrup_diameter'),
+                            stirrup_spacing=update.get('stirrup_spacing')
+                        )
 
         # Analizar todos los piers
         results = self._analyze_piers_batch(
@@ -285,10 +332,25 @@ class StructuralAnalysisService:
             )
             pier_results.append(formatted)
 
+        # Incluir columnas existentes (no re-analizarlas)
+        column_results = []
+        columns = parsed_data.columns or {}
+        column_forces_dict = parsed_data.column_forces or {}
+        for key, column in columns.items():
+            col_forces = column_forces_dict.get(key)
+            col_result = self._element_service.verify(column, col_forces)
+            unified_result = ResultFormatter.format_element_result(
+                column, col_result, key
+            )
+            column_results.append(unified_result)
+
+        # Combinar piers + columnas
+        all_results = pier_results + column_results
+
         return {
             'success': True,
             'statistics': statistics,
-            'results': pier_results,
+            'results': all_results,
             'summary_plot': summary_plot
         }
 
@@ -329,6 +391,9 @@ class StructuralAnalysisService:
         self,
         session_id: str,
         pier_updates: Optional[List[Dict]] = None,
+        column_updates: Optional[List[Dict]] = None,
+        beam_updates: Optional[List[Dict]] = None,
+        drop_beam_updates: Optional[List[Dict]] = None,
         generate_plots: bool = True,
         moment_axis: str = 'M3',
         angle_deg: float = 0,
@@ -338,6 +403,10 @@ class StructuralAnalysisService:
         Ejecuta el análisis estructural con progreso (generador para SSE).
 
         Args:
+            pier_updates: Actualizaciones de armadura de piers/muros
+            column_updates: Actualizaciones de armadura de columnas
+            beam_updates: Actualizaciones de armadura de vigas
+            drop_beam_updates: Actualizaciones de armadura de vigas capitel
             materials_config: Configuración de materiales con lambda por tipo de concreto.
                 Format: {material_name: {fc, type, lambda}, ...}
 
@@ -355,12 +424,65 @@ class StructuralAnalysisService:
             yield {"type": "error", "message": error.get('error', 'Error de sesión')}
             return
 
-        # Aplicar actualizaciones de armadura
+        # Aplicar actualizaciones de armadura de piers
         if pier_updates:
             self._session_manager.apply_reinforcement_updates(session_id, pier_updates)
 
         # Obtener datos de la sesión
         parsed_data = self._session_manager.get_session(session_id)
+
+        # Aplicar actualizaciones de armadura de columnas
+        if column_updates:
+            columns_dict = parsed_data.columns or {}
+            for update in column_updates:
+                key = update.get('key')
+                if key and key in columns_dict:
+                    column = columns_dict[key]
+                    if hasattr(column, 'update_reinforcement'):
+                        column.update_reinforcement(
+                            n_bars_depth=update.get('n_bars_depth'),
+                            n_bars_width=update.get('n_bars_width'),
+                            diameter_long=update.get('diameter_long'),
+                            stirrup_diameter=update.get('stirrup_diameter'),
+                            stirrup_spacing=update.get('stirrup_spacing')
+                        )
+
+        # Aplicar actualizaciones de armadura de vigas
+        if beam_updates:
+            beams = parsed_data.beams or {}
+            for update in beam_updates:
+                key = update.get('key')
+                if key and key in beams:
+                    beam = beams[key]
+                    beam.update_reinforcement(
+                        n_bars_top=update.get('n_bars_top'),
+                        n_bars_bottom=update.get('n_bars_bottom'),
+                        diameter_top=update.get('diameter_top'),
+                        diameter_bottom=update.get('diameter_bottom'),
+                        stirrup_diameter=update.get('stirrup_diameter'),
+                        stirrup_spacing=update.get('stirrup_spacing'),
+                        n_stirrup_legs=update.get('n_stirrup_legs')
+                    )
+
+        # Aplicar actualizaciones de armadura de vigas capitel
+        if drop_beam_updates:
+            drop_beams = parsed_data.drop_beams or {}
+            for update in drop_beam_updates:
+                key = update.get('key')
+                if key and key in drop_beams:
+                    drop_beam = drop_beams[key]
+                    if hasattr(drop_beam, 'update_reinforcement'):
+                        drop_beam.update_reinforcement(
+                            n_meshes=update.get('n_meshes'),
+                            diameter_v=update.get('diameter_v'),
+                            spacing_v=update.get('spacing_v'),
+                            diameter_h=update.get('diameter_h'),
+                            spacing_h=update.get('spacing_h'),
+                            n_edge_bars=update.get('n_edge_bars'),
+                            diameter_edge=update.get('diameter_edge'),
+                            stirrup_diameter=update.get('stirrup_diameter'),
+                            stirrup_spacing=update.get('stirrup_spacing')
+                        )
 
         # Contar elementos totales (piers + columnas)
         piers = parsed_data.piers
@@ -504,6 +626,41 @@ class StructuralAnalysisService:
                 )
                 slab_results.append(unified_result)
 
+        # =====================================================================
+        # FASE 5: Analizar VIGAS CAPITEL (Drop Beams)
+        # =====================================================================
+        drop_beam_results = []
+        drop_beams = parsed_data.drop_beams or {}
+        drop_beam_forces_dict = parsed_data.drop_beam_forces or {}
+        total_drop_beams = len(drop_beams)
+
+        if total_drop_beams > 0:
+            for i, (key, drop_beam) in enumerate(drop_beams.items(), 1):
+                # Enviar progreso
+                yield {
+                    "type": "progress",
+                    "current": total_piers + total_columns + total_beams + total_slabs + i,
+                    "total": total_elements + total_beams + total_slabs + total_drop_beams,
+                    "pier": f"V. Capitel: {drop_beam.story} - {drop_beam.label}"
+                }
+
+                # Obtener fuerzas de la viga capitel
+                drop_beam_forces = drop_beam_forces_dict.get(key)
+
+                # Verificar usando ElementService (flexocompresión)
+                result = self._element_service.verify(
+                    drop_beam,
+                    drop_beam_forces,
+                    generate_plot=generate_plots,
+                    moment_axis=moment_axis
+                )
+
+                # Formatear resultado
+                formatted = ResultFormatter.format_drop_beam_result(
+                    drop_beam, result, key
+                )
+                drop_beam_results.append(formatted)
+
         # Calcular estadisticas de piers
         statistics = self._statistics_service.calculate_statistics(results)
 
@@ -516,6 +673,9 @@ class StructuralAnalysisService:
 
         if slab_results:
             statistics['slabs'] = self._statistics_service.calculate_dict_statistics(slab_results)
+
+        if drop_beam_results:
+            statistics['drop_beams'] = self._statistics_service.calculate_dict_statistics(drop_beam_results)
 
         # Generar grafico resumen (solo para piers por ahora)
         summary_plot = None
@@ -554,6 +714,7 @@ class StructuralAnalysisService:
                 'results': all_results,
                 'beam_results': beam_results,  # Vigas separadas (tabla diferente)
                 'slab_results': slab_results,  # Losas separadas (tabla diferente)
+                'drop_beam_results': drop_beam_results,  # Vigas capitel (flexocompresión)
                 'summary_plot': summary_plot
             }
         }
@@ -1053,5 +1214,87 @@ class StructuralAnalysisService:
             'success': len(errors) == 0,
             'updated_count': updated_count,
             'errors': errors if errors else None
+        }
+
+    # =========================================================================
+    # API Pública - Vigas Capitel (Drop Beams)
+    # =========================================================================
+
+    def analyze_drop_beams(
+        self,
+        session_id: str,
+        drop_beam_updates: Optional[List[Dict]] = None,
+        generate_plots: bool = True,
+        moment_axis: str = 'M3'
+    ) -> Dict[str, Any]:
+        """
+        Ejecuta el análisis de vigas capitel (losas diseñadas como vigas).
+
+        Las vigas capitel se analizan como elementos a flexocompresión,
+        similar a los muros pero sin amplificación de cortante.
+
+        Args:
+            session_id: ID de sesión
+            drop_beam_updates: Actualizaciones de armadura opcionales
+            generate_plots: Generar gráficos P-M
+            moment_axis: Plano de momento ('M2', 'M3', 'combined', 'SRSS')
+
+        Returns:
+            Diccionario con estadísticas y resultados
+        """
+        # Validar sesión
+        error = self._validate_session(session_id)
+        if error:
+            return error
+
+        # Obtener datos de la sesión
+        parsed_data = self._session_manager.get_session(session_id)
+
+        # Aplicar actualizaciones de armadura si hay
+        if drop_beam_updates:
+            for update in drop_beam_updates:
+                key = update.get('key')
+                if key and key in parsed_data.drop_beams:
+                    drop_beam = parsed_data.drop_beams[key]
+                    drop_beam.update_reinforcement(
+                        n_meshes=update.get('n_meshes'),
+                        diameter_v=update.get('diameter_v'),
+                        spacing_v=update.get('spacing_v'),
+                        diameter_h=update.get('diameter_h'),
+                        spacing_h=update.get('spacing_h'),
+                        diameter_edge=update.get('diameter_edge'),
+                        n_edge_bars=update.get('n_edge_bars'),
+                        stirrup_diameter=update.get('stirrup_diameter'),
+                        stirrup_spacing=update.get('stirrup_spacing'),
+                        fy=update.get('fy'),
+                        cover=update.get('cover')
+                    )
+
+        # Analizar todas las vigas capitel
+        drop_beam_results = []
+        for key, drop_beam in parsed_data.drop_beams.items():
+            drop_beam_forces = parsed_data.drop_beam_forces.get(key)
+
+            # Verificar usando ElementService
+            result = self._element_service.verify(
+                drop_beam,
+                drop_beam_forces,
+                generate_plot=generate_plots,
+                moment_axis=moment_axis
+            )
+
+            # Formatear resultado
+            formatted = ResultFormatter.format_drop_beam_result(
+                drop_beam, result, key
+            )
+            drop_beam_results.append(formatted)
+
+        # Calcular estadísticas
+        statistics = self._statistics_service.calculate_dict_statistics(drop_beam_results)
+
+        return {
+            'success': True,
+            'statistics': statistics,
+            'results': drop_beam_results
         }
 
