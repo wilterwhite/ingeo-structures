@@ -125,37 +125,3 @@ def get_alpha_s(position: ColumnPosition) -> float:
     return alpha_values.get(position, 40)
 
 
-# TODO: Funcion huerfana - requerida por ACI 318-25 §8.4.2.3 pero no usada aun.
-# Exportar en __init__.py cuando se implemente verificacion de transferencia de momento.
-def get_gamma_v(
-    c1_mm: float,
-    c2_mm: float,
-    position: ColumnPosition = ColumnPosition.INTERIOR
-) -> Tuple[float, float]:
-    """
-    Calcula los factores gamma para transferencia de momento.
-
-    gamma_f: Fraccion de momento transferida por flexion
-    gamma_v: Fraccion de momento transferida por cortante
-
-    gamma_f = 1 / (1 + (2/3)*sqrt(b1/b2))
-    gamma_v = 1 - gamma_f
-
-    Args:
-        c1_mm: Dimension columna paralela al momento (mm)
-        c2_mm: Dimension columna perpendicular al momento (mm)
-        position: Posicion de la columna
-
-    Returns:
-        Tupla (gamma_f, gamma_v)
-    """
-    # Para interior, b1 y b2 son las dimensiones de la seccion critica
-    # Simplificado: usar relacion de columnas
-    if c2_mm <= 0:
-        return 0.6, 0.4
-
-    ratio = math.sqrt(c1_mm / c2_mm)
-    gamma_f = 1 / (1 + (2/3) * ratio)
-    gamma_v = 1 - gamma_f
-
-    return gamma_f, gamma_v

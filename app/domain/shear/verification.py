@@ -43,6 +43,8 @@ from .results import (
     WallGroupShearResult,
     SimpleShearCapacity,
 )
+from .concrete_shear import calculate_Vc_beam
+from .steel_shear import calculate_Vs_beam_column
 
 
 def calculate_simple_shear_capacity(
@@ -56,9 +58,7 @@ def calculate_simple_shear_capacity(
     """
     Calcula capacidad de corte simple para vigas segun ACI 318-25 §22.5.
 
-    Vc = 0.17 * lambda * sqrt(f'c) * bw * d
-    Vs = Av * fyt * d / s
-    Vs_max = 0.66 * sqrt(f'c) * bw * d
+    Delega a funciones centralizadas en concrete_shear.py y steel_shear.py.
 
     Args:
         bw: Ancho del alma (mm)
@@ -71,21 +71,13 @@ def calculate_simple_shear_capacity(
     Returns:
         SimpleShearCapacity con valores en tonf
     """
-    # Aplicar limites de materiales
-    fc_eff = get_effective_fc_shear(fc)
-    fyt_eff = get_effective_fyt_shear(fy)
+    # Usar funciones centralizadas
+    vc_result = calculate_Vc_beam(bw, d, fc, LAMBDA_NORMAL)
+    vs_result = calculate_Vs_beam_column(Av, d, s, fy, bw, fc)
 
-    # Vc (ACI 318-25 §22.5.5.1)
-    Vc_N = VC_COEF_COLUMN * LAMBDA_NORMAL * math.sqrt(fc_eff) * bw * d
-
-    # Vs (si tiene estribos)
-    Vs_N = 0.0
-    if Av > 0 and s > 0:
-        Vs_N = Av * fyt_eff * d / s
-
-    # Limite Vs
-    Vs_max_N = VS_MAX_COEF * math.sqrt(fc_eff) * bw * d
-    Vs_N = min(Vs_N, Vs_max_N)
+    Vc_N = vc_result.Vc_N
+    Vs_N = vs_result.Vs_N
+    Vs_max_N = vs_result.Vs_max_N
 
     # Capacidad de diseno
     phi_Vn = PHI_SHEAR * (Vc_N + Vs_N) / N_TO_TONF

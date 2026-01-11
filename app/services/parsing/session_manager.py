@@ -126,96 +126,9 @@ class SessionManager:
             return True
         return False
 
-    def apply_reinforcement_updates(
-        self,
-        session_id: str,
-        updates: list
-    ) -> bool:
-        """
-        Aplica actualizaciones de armadura a los piers de una sesión.
-
-        Args:
-            session_id: ID de sesión
-            updates: Lista de actualizaciones con configuración de malla
-                     [{'key': 'Story_Pier', 'n_meshes': 2, 'diameter_v': 10,
-                       'spacing_v': 150, 'diameter_h': 8, 'spacing_h': 200,
-                       'diameter_edge': 10, 'n_edge_bars': 4,
-                       'stirrup_diameter': 10, 'stirrup_spacing': 150,
-                       'fy': FY_DEFAULT_MPA}]
-
-        Returns:
-            True si se aplicaron las actualizaciones
-        """
-        parsed_data = self.get_session(session_id)
-        if not parsed_data or not updates:
-            return False
-
-        for update in updates:
-            key = update.get('key')
-            if key not in parsed_data.piers:
-                continue
-
-            pier = parsed_data.piers[key]
-
-            # Aplicar configuración de armadura (incluye elemento de borde)
-            pier.update_reinforcement(
-                n_meshes=update.get('n_meshes'),
-                diameter_v=update.get('diameter_v'),
-                spacing_v=update.get('spacing_v'),
-                diameter_h=update.get('diameter_h'),
-                spacing_h=update.get('spacing_h'),
-                diameter_edge=update.get('diameter_edge'),
-                n_edge_bars=update.get('n_edge_bars'),
-                stirrup_diameter=update.get('stirrup_diameter'),
-                stirrup_spacing=update.get('stirrup_spacing'),
-                fy=update.get('fy'),
-                cover=update.get('cover')
-            )
-
-        return True
-
-    def apply_column_updates(
-        self,
-        session_id: str,
-        updates: list
-    ) -> bool:
-        """
-        Aplica actualizaciones de armadura a las columnas de una sesión.
-
-        Args:
-            session_id: ID de sesión
-            updates: Lista de actualizaciones con configuración de armadura
-                     [{'key': 'Story_Column', 'n_bars_depth': 3, 'n_bars_width': 3,
-                       'diameter_long': 20, 'stirrup_diameter': 10,
-                       'stirrup_spacing': 150}]
-
-        Returns:
-            True si se aplicaron las actualizaciones
-        """
-        parsed_data = self.get_session(session_id)
-        if not parsed_data or not updates:
-            return False
-
-        columns = parsed_data.columns or {}
-
-        for update in updates:
-            key = update.get('key')
-            if key not in columns:
-                continue
-
-            column = columns[key]
-
-            # Aplicar configuración de armadura
-            column.update_reinforcement(
-                n_bars_depth=update.get('n_bars_depth'),
-                n_bars_width=update.get('n_bars_width'),
-                diameter_long=update.get('diameter_long'),
-                stirrup_diameter=update.get('stirrup_diameter'),
-                stirrup_spacing=update.get('stirrup_spacing'),
-                cover=update.get('cover')
-            )
-
-        return True
+    # =========================================================================
+    # Métodos de acceso a elementos
+    # =========================================================================
 
     def get_pier(self, session_id: str, pier_key: str):
         """Obtiene un pier específico de una sesión."""
@@ -253,6 +166,41 @@ class SessionManager:
         if not parsed_data:
             return None
         return parsed_data.pier_forces.get(pier_key)
+
+    def get_column_forces(self, session_id: str, column_key: str):
+        """Obtiene las fuerzas de una columna específica."""
+        parsed_data = self.get_session(session_id)
+        if not parsed_data or not parsed_data.column_forces:
+            return None
+        return parsed_data.column_forces.get(column_key)
+
+    def get_beam(self, session_id: str, beam_key: str):
+        """Obtiene una viga específica de una sesión."""
+        parsed_data = self.get_session(session_id)
+        if not parsed_data or not parsed_data.beams:
+            return None
+        return parsed_data.beams.get(beam_key)
+
+    def get_beam_forces(self, session_id: str, beam_key: str):
+        """Obtiene las fuerzas de una viga específica."""
+        parsed_data = self.get_session(session_id)
+        if not parsed_data or not parsed_data.beam_forces:
+            return None
+        return parsed_data.beam_forces.get(beam_key)
+
+    def get_drop_beam(self, session_id: str, key: str):
+        """Obtiene una viga capitel específica de una sesión."""
+        parsed_data = self.get_session(session_id)
+        if not parsed_data or not parsed_data.drop_beams:
+            return None
+        return parsed_data.drop_beams.get(key)
+
+    def get_drop_beam_forces(self, session_id: str, key: str):
+        """Obtiene las fuerzas de una viga capitel específica."""
+        parsed_data = self.get_session(session_id)
+        if not parsed_data or not parsed_data.drop_beam_forces:
+            return None
+        return parsed_data.drop_beam_forces.get(key)
 
     def get_hwcs(self, session_id: str, pier_key: str) -> float:
         """
@@ -460,3 +408,120 @@ class SessionManager:
         else:
             # Por defecto: viga genérica en ambos lados
             return 2 * default_beam.Mpr_max
+
+    # =========================================================================
+    # VIGAS CUSTOM Y RESOLUCIÓN
+    # =========================================================================
+
+    def resolve_beam_config(
+        self,
+        session_id: str,
+        beam_key: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Resuelve la configuración de una viga desde el catálogo de la sesión.
+
+        Args:
+            session_id: ID de sesión
+            beam_key: Clave de la viga ('none', 'generic', o key del catálogo)
+
+        Returns:
+            Dict con configuración de la viga, o None si es 'none' o 'generic'
+        """
+        if beam_key == 'none':
+            return None
+        if beam_key == 'generic':
+            return None  # El servicio usará la viga genérica
+
+        parsed_data = self.get_session(session_id)
+        if not parsed_data:
+            return None
+
+        beam = parsed_data.beams.get(beam_key)
+        if beam:
+            return {
+                'width': beam.width,
+                'height': beam.depth,
+                'ln': beam.length,
+                'n_bars_top': beam.n_bars_top,
+                'diameter_top': beam.diameter_top,
+                'n_bars_bottom': beam.n_bars_bottom,
+                'diameter_bottom': beam.diameter_bottom
+            }
+        return None
+
+    def create_custom_beam(
+        self,
+        session_id: str,
+        label: str,
+        story: str,
+        length: float = 3000,
+        depth: float = 500,
+        width: float = 200,
+        fc: float = 28,
+        n_bars_top: int = 3,
+        n_bars_bottom: int = 3,
+        diameter_top: int = 16,
+        diameter_bottom: int = 16,
+        stirrup_diameter: int = 10,
+        stirrup_spacing: int = 150,
+        n_stirrup_legs: int = 2
+    ) -> Dict[str, Any]:
+        """
+        Crea una viga custom y la agrega al catálogo de la sesión.
+
+        Args:
+            session_id: ID de sesión
+            label: Etiqueta de la viga
+            story: Piso donde se ubica
+            length: Longitud en mm
+            depth: Altura en mm
+            width: Ancho en mm
+            fc: Resistencia del concreto en MPa
+            n_bars_top: Número de barras superiores
+            n_bars_bottom: Número de barras inferiores
+            diameter_top: Diámetro barras superiores en mm
+            diameter_bottom: Diámetro barras inferiores en mm
+            stirrup_diameter: Diámetro de estribos en mm
+            stirrup_spacing: Espaciamiento de estribos en mm
+            n_stirrup_legs: Número de ramas del estribo
+
+        Returns:
+            Dict con 'success', 'beam_key' o 'error'
+        """
+        from ...domain.entities import Beam
+        from ...domain.entities.beam import BeamSource
+
+        parsed_data = self.get_session(session_id)
+        if not parsed_data:
+            return {'success': False, 'error': 'Sesión no encontrada'}
+
+        beam_key = f"{story}_{label}"
+
+        if beam_key in parsed_data.beams:
+            return {
+                'success': False,
+                'error': f'Ya existe una viga con el nombre {label} en {story}'
+            }
+
+        beam = Beam(
+            label=label,
+            story=story,
+            length=float(length),
+            depth=float(depth),
+            width=float(width),
+            fc=float(fc),
+            source=BeamSource.FRAME,
+            is_custom=True,
+            n_bars_top=int(n_bars_top),
+            n_bars_bottom=int(n_bars_bottom),
+            diameter_top=int(diameter_top),
+            diameter_bottom=int(diameter_bottom),
+            stirrup_diameter=int(stirrup_diameter),
+            stirrup_spacing=int(stirrup_spacing),
+            n_stirrup_legs=int(n_stirrup_legs)
+        )
+
+        parsed_data.beams[beam_key] = beam
+
+        return {'success': True, 'beam_key': beam_key}

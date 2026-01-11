@@ -15,6 +15,7 @@ Referencias:
 """
 from typing import Optional, List
 
+from ...constants.units import TONF_TO_N
 from ..common import SeismicCategory
 from ..seismic_detailing_service import SeismicDetailingService
 from .results import (
@@ -148,7 +149,7 @@ class SeismicColumnService:
         shear = None
 
         # Pu en N para cálculos internos
-        Pu_N = Pu * 9806.65  # tonf a N
+        Pu_N = Pu * TONF_TO_N
 
         # ==== VERIFICACIONES SEGÚN CATEGORÍA ====
 

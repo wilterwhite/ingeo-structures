@@ -16,11 +16,12 @@ Referencias:
 import math
 from typing import List
 
-from ..common import SeismicCategory, check_Vc_zero_condition
+from ..common import SeismicCategory
 from ..seismic_detailing_service import SeismicDetailingService
-from ...constants.materials import get_effective_fc_shear, get_effective_fyt_shear
 from ...constants.shear import PHI_SHEAR
-from ...constants.units import N_TO_TONF
+from ...constants.units import N_TO_TONF, TONF_TO_N
+from ...shear.concrete_shear import calculate_Vc_beam, check_Vc_zero_condition
+from ...shear.steel_shear import calculate_Vs_beam_column
 from ...constants.chapter18 import (
     MIN_WIDTH_BEAM_MM as MIN_WIDTH_SPECIAL_MM,
     FIRST_HOOP_MAX_MM,
@@ -477,10 +478,11 @@ class SeismicBeamService:
         lambda_factor: float,
         category: SeismicCategory,
     ) -> BeamShearResult:
-        """Verifica cortante §18.6.5 / §18.4.2.3."""
-        fc_eff = get_effective_fc_shear(fc)
-        fyt_eff = get_effective_fyt_shear(fyt)
+        """
+        Verifica cortante §18.6.5 / §18.4.2.3.
 
+        Delega cálculos de Vc y Vs a funciones centralizadas en domain/shear/.
+        """
         # Calcular Ve por capacidad (Mpr1 + Mpr2)/ln
         if Mpr_left > 0 or Mpr_right > 0:
             # Mpr en tonf-m, ln en mm -> Ve en tonf
@@ -493,22 +495,18 @@ class SeismicBeamService:
 
         # Calcular condiciones individuales para reporte
         seismic_shear_dominates = Ve >= 0.5 * Vu if Vu > 0 else True
-        Pu_N = Pu * 9806.65  # TONF_TO_N
+        Pu_N = Pu * TONF_TO_N
         low_axial = Pu_N < (Ag * fc / 20)
 
         # Verificar condición Vc = 0 según §18.6.5.2
         Vc_is_zero = check_Vc_zero_condition(Ve, Vu, Pu, Ag, fc)
 
-        # Calcular Vc y Vs (N)
-        if Vc_is_zero:
-            Vc = 0
-        else:
-            Vc = 0.17 * lambda_factor * math.sqrt(fc_eff) * bw * d
+        # Usar funciones centralizadas de domain/shear/
+        vc_result = calculate_Vc_beam(bw, d, fc, lambda_factor, force_Vc_zero=Vc_is_zero)
+        vs_result = calculate_Vs_beam_column(Av, d, s, fyt, bw, fc)
 
-        if s > 0:
-            Vs = Av * fyt_eff * d / s
-        else:
-            Vs = 0
+        Vc = vc_result.Vc_N
+        Vs = vs_result.Vs_N
 
         # Vn y phi_Vn
         Vn = Vc + Vs

@@ -1,6 +1,25 @@
-# app/domain/chapter18/piers/__init__.py
+# app/domain/chapter18/wall_piers/__init__.py
 """
-Módulo de pilares de muro ACI 318-25 §18.10.8.
+Módulo especializado para pilares de muro ACI 318-25 §18.10.8.
+
+DEFINICIÓN (Tabla R18.10.1):
+Un "wall pier" (pilar de muro) es un segmento vertical de muro que cumple:
+- lw/tw ≤ 6.0 (relación longitud/espesor)
+- hw/lw < 2.0 (relación altura/longitud)
+
+DIFERENCIA CON walls/:
+- walls/: Orquestador general para TODOS los muros sísmicos (§18.10.2-6).
+- wall_piers/: Servicio especializado que walls/ invoca cuando detecta lw/tw ≤ 6.0.
+
+REQUISITOS ADICIONALES (§18.10.8):
+- §18.10.8.1(a): Cortante por capacidad o Ω₀×Vu
+- §18.10.8.1(b): Vn según §18.10.4
+- §18.10.8.1(c)-(e): Refuerzo transversal con ganchos de 180°
+- §18.10.8.1(f): Elementos de borde según §18.10.6.3
+
+CLASIFICACIÓN POR lw/bw:
+- lw/bw ≤ 2.5: Diseñar como columna especial (§18.7)
+- 2.5 < lw/bw ≤ 6.0: Método alternativo permitido (§18.10.8.1)
 
 Exporta:
 - WallPierService: Servicio principal de verificación

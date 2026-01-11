@@ -75,19 +75,6 @@ class ForcesCollectionMixin:
 
         return points
 
-    def get_biaxial_pm_points(self) -> List[Tuple[float, float, float, str]]:
-        """
-        Obtiene puntos (P, M2, M3) para análisis biaxial completo.
-
-        Returns:
-            Lista de (P, M2, M3, combo_name) en tonf y tonf-m.
-        """
-        points = []
-        for combo in self.combinations:
-            P = -combo.P  # Positivo = compresión
-            points.append((P, combo.M2, combo.M3, f"{combo.name} ({combo.location})"))
-        return points
-
     def get_combinations_with_angles(self) -> List[dict]:
         """
         Obtiene todas las combinaciones con información de ángulo.

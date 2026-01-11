@@ -402,21 +402,23 @@ class GeometryNormalizer:
 
     @staticmethod
     def _drop_beam_to_wall_geom(db: 'DropBeam') -> WallGeometry:
-        """Extrae geometria de DropBeam para verificacion tipo muro.
+        """Extrae geometría de DropBeam para verificación tipo muro.
 
-        DropBeam convention:
-        - length: luz libre (se usa como lw)
-        - thickness: ancho tributario (se usa como tw)
-        - width: espesor de la losa
-        - height: property que retorna length
+        Mapeo según comportamiento estructural (consistente con SeismicWallService):
+        - hw (altura muro) ← length (luz libre de viga capitel)
+        - lw (longitud muro) ← thickness (ancho tributario/peralte)
+        - tw (espesor muro) ← width (espesor de losa)
+
+        El DropBeam se diseña como muro con flexión fuera del plano,
+        donde la luz libre actúa como altura del muro equivalente.
         """
         return WallGeometry(
-            lw=db.length,        # luz libre
-            tw=db.thickness,     # ancho tributario
-            hw=db.width,         # espesor de losa (hw para wall)
+            hw=db.length,        # Altura muro = luz libre
+            lw=db.thickness,     # Longitud muro = ancho tributario
+            tw=db.width,         # Espesor muro = espesor losa
             cover=getattr(db, 'cover', 25),
-            Ag=getattr(db, 'Ag', db.length * db.thickness),
-            Acv=getattr(db, 'Acv', db.length * db.thickness),
+            Ag=getattr(db, 'Ag', db.thickness * db.width),   # lw × tw
+            Acv=getattr(db, 'Acv', db.thickness * db.width), # lw × tw (área de corte)
             fc=db.fc,
             fy=db.fy,
             rho_v=getattr(db, 'rho_vertical', 0),

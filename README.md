@@ -53,7 +53,7 @@ app/
 │   ├── chapter18/                           # Requisitos sísmicos (Cap. 18)
 │   │   ├── __init__.py
 │   │   ├── common/                          # Infraestructura común
-│   │   │   └── seismic_category.py          # SeismicCategory enum
+│   │   │   └── categories.py                # SeismicCategory enum
 │   │   ├── results.py                       # Dataclasses de resultados
 │   │   ├── beams/                           # Vigas sísmicas §18.6
 │   │   │   ├── __init__.py
@@ -149,8 +149,11 @@ app/
 │   └── shear/
 │       ├── __init__.py
 │       ├── classification.py                # Clasificación muro/columna
+│       ├── combined.py                      # DCR biaxial combinado
+│       ├── concrete_shear.py                # Vc centralizado + check_Vc_zero_condition
 │       ├── results.py                       # Resultados de corte
-│       ├── shear_friction.py                # Fricción cortante
+│       ├── shear_friction.py                # Fricción cortante §22.9
+│       ├── steel_shear.py                   # Vs centralizado
 │       └── verification.py                  # Vc + Vs verificación
 ├── routes/
 │   ├── __init__.py
@@ -161,22 +164,26 @@ app/
 │   ├── structural_analysis.py               # Orquestador principal
 │   ├── analysis/
 │   │   ├── __init__.py
-│   │   ├── element_classifier.py            # Clasificador elementos
+│   │   ├── design_behavior.py               # DesignBehavior enum (SEISMIC_COLUMN, etc.)
+│   │   ├── design_behavior_resolver.py      # Resuelve transiciones de comportamiento
+│   │   ├── element_classifier.py            # Clasificador elementos (WALL_PIER_COLUMN, etc.)
 │   │   ├── element_orchestrator.py          # Orquestador unificado de verificación
+│   │   ├── force_extractor.py               # Extrae fuerzas normalizadas
+│   │   ├── geometry_normalizer.py           # Normaliza geometría entre tipos
 │   │   ├── flexocompression_service.py      # Servicio flexocompresión
-│   │   ├── shear/                           # Servicio de corte
-│   │   │   ├── __init__.py
-│   │   │   ├── facade.py                    # ShearService (fachada principal)
-│   │   │   ├── column_shear.py              # Cortante columnas §22.5, §18.7.6
-│   │   │   ├── wall_shear.py                # Cortante muros §11.5, §18.10.4
-│   │   │   └── wall_special_elements.py     # Clasificación, amplificación, borde
+│   │   ├── shear_service.py                 # Cortante Vc + Vs + DCR
 │   │   ├── proposal_service.py              # Orquestador (delega a domain/proposals/)
 │   │   ├── punching_service.py              # Verificación punzonamiento
 │   │   ├── slab_service.py                  # Verificación losas
 │   │   ├── statistics_service.py            # Estadísticas y resumen
 │   │   ├── formatting.py                    # Formateo SF y valores para JSON
 │   │   ├── verification_config.py           # Configuración verificación
-│   │   └── verification_result.py           # Dataclasses resultados
+│   │   ├── verification_result.py           # Re-exports desde results/
+│   │   └── results/                         # Dataclasses de resultados
+│   │       ├── common.py                    # SlendernessResult, FlexureResult
+│   │       ├── beam.py                      # SeismicBeamChecks §18.6
+│   │       ├── column.py                    # SeismicColumnChecks §18.7
+│   │       └── wall.py                      # WallChecks §18.10
 │   ├── parsing/
 │   │   ├── __init__.py
 │   │   ├── beam_parser.py                   # Parser vigas ETABS
@@ -236,17 +243,52 @@ Los servicios de dominio son **la única fuente de verdad** para fórmulas y req
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+## Flujo Unificado de Diseño (ElementOrchestrator)
+
+El sistema implementa un flujo unificado donde todos los elementos se diseñan según su comportamiento real, no solo su tipo geométrico:
+
+```
+ElementOrchestrator.verify(element, forces)
+│
+├─ ElementClassifier.classify(element)
+│   │  Detecta tipo geométrico:
+│   ├─ WALL_PIER_COLUMN: lw/tw ≤ 2.5 Y hw/lw < 2.0 → Pier tipo columna
+│   ├─ WALL_PIER_ALTERNATE: 2.5 < lw/tw ≤ 6.0 → Pier alternativo
+│   ├─ WALL / WALL_SQUAT: Muros normales
+│   └─ BEAM, COLUMN_SEISMIC, DROP_BEAM
+│
+├─ DesignBehaviorResolver.resolve(element_type, forces)
+│   │  Determina comportamiento de diseño:
+│   ├─ WALL_PIER_COLUMN → SEISMIC_COLUMN (usa §18.7)
+│   ├─ Beam con Pu > Ag×f'c/10 → SEISMIC_BEAM_COLUMN (usa §18.7.5)
+│   └─ DROP_BEAM → SEISMIC_WALL (usa §18.10)
+│
+└─ Rutea a servicio apropiado:
+    ├─ SEISMIC_COLUMN → SeismicColumnService (§18.7)
+    ├─ SEISMIC_BEAM → SeismicBeamService (§18.6)
+    ├─ SEISMIC_WALL → SeismicWallService (§18.10)
+    └─ FLEXURE_COMPRESSION → FlexocompressionService (§22.4)
+```
+
+**Transiciones clave según ACI 318-25:**
+
+| Condición | Transición | Referencia ACI |
+|-----------|------------|----------------|
+| Pier con lw/tw ≤ 2.5 Y hw/lw < 2.0 | Se diseña como columna | §18.10.8.1 → §18.7 |
+| Viga con Pu > Ag×f'c/10 | Requiere confinamiento tipo columna | §18.6.4.6 → §18.7.5 |
+| Drop Beam (viga capitel) | Se diseña como muro | §18.10 |
+
 ## Servicios de Aplicación (`services/`)
 
 | Servicio | Responsabilidad |
 |----------|-----------------|
 | `StructuralAnalysisService` | Orquestador principal, gestiona sesiones y flujo |
-| `ElementService` | Verificación unificada de Beam/Column/Pier (SF, DCR, sísmico) |
+| `ElementOrchestrator` | Clasifica, resuelve comportamiento y rutea a servicio apropiado |
 | `FlexocompressionService` | Genera curvas P-M de interacción, calcula Mpr |
 | `ShearService` | Calcula Vc + Vs y DCR de corte |
 | `ProposalService` | Orquesta generación de propuestas (delega a domain/proposals/) |
 | `StatisticsService` | Estadísticas y gráfico resumen |
-| `PierDetailsFormatter` | Formatea detalles de piers para UI |
+| `PierDetailsService` | Formatea detalles de piers para UI |
 
 ## Servicios de Dominio (`domain/`)
 
@@ -285,6 +327,11 @@ Los servicios de dominio son **la única fuente de verdad** para fórmulas y req
 |----------|-----------------|
 | `ShearVerificationService` | Calcula Vc + Vs |
 | `WallClassificationService` | Clasifica muro vs columna (Tabla R18.10.1) |
+| `calculate_Vc_beam/column/wall` | Vc centralizado para cada tipo (§22.5, §18.10.4) |
+| `calculate_Vs` | Vs para estribos y muros |
+| `check_Vc_zero_condition` | Condición Vc=0 para SMF (§18.6.5.2, §18.7.6.2.1) |
+| `calculate_combined_dcr` | DCR biaxial combinado |
+| `ShearFrictionService` | Fricción cortante §22.9 |
 
 ### `domain/proposals/` - Generación de Propuestas
 

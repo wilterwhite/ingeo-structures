@@ -1,39 +1,35 @@
-# app/services/analysis/verification_result.py
+# app/services/analysis/results/__init__.py
 """
-Dataclasses de resultado para verificacion de elementos estructurales.
+Dataclasses de resultado para verificaciones estructurales.
 
-NOTA: Este archivo ahora re-exporta desde el paquete results/ para
-mantener compatibilidad hacia atras. Los nuevos imports deben usar:
-
-    from app.services.analysis.results import SlendernessResult, FlexureResult
-
-Organizacion del paquete results/:
-- common.py: SlendernessResult, FlexureResult, BidirectionalShearResult
-- beam.py: SeismicBeam*Result (verificaciones §18.6)
-- column.py: SeismicColumn*Result (verificaciones §18.7)
-- wall.py: WallClassification, BoundaryResult, etc. (verificaciones §18.10)
+Organizados por tipo de elemento:
+- common: Resultados comunes (SlendernessResult, FlexureResult, ShearResult)
+- beam: Verificaciones de vigas sismicas §18.6
+- column: Verificaciones de columnas sismicas §18.7
+- wall: Verificaciones de muros sismicos §18.10
 """
-# Re-exportar todo desde el paquete results para compatibilidad
-from .results import (
-    # Common
+from .common import (
     SlendernessResult,
     FlexureResult,
     BidirectionalShearResult,
     ShearResult,
-    # Beam
+)
+from .beam import (
     SeismicBeamDimensionalResult,
     SeismicBeamLongitudinalResult,
     SeismicBeamTransverseResult,
     SeismicBeamShearResult,
     SeismicBeamChecks,
-    # Column
+)
+from .column import (
     SeismicColumnDimensionalResult,
     SeismicColumnStrongResult,
     SeismicColumnLongitudinalResult,
     SeismicColumnTransverseResult,
     SeismicColumnShearDetailedResult,
     SeismicColumnChecks,
-    # Wall
+)
+from .wall import (
     WallClassification,
     BoundaryResult,
     EndZonesResult,

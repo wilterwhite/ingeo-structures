@@ -34,6 +34,12 @@ from .concrete_shear import (
     calculate_Vc_wall,
     check_Vc_zero_condition,
 )
+from .steel_shear import (
+    VsResult,
+    calculate_Vs,
+    calculate_Vs_beam_column,
+    calculate_Vs_wall,
+)
 
 __all__ = [
     # verification
@@ -63,4 +69,9 @@ __all__ = [
     'calculate_Vc_column',
     'calculate_Vc_wall',
     'check_Vc_zero_condition',
+    # steel shear (Vs) - centralized calculations
+    'VsResult',
+    'calculate_Vs',
+    'calculate_Vs_beam_column',
+    'calculate_Vs_wall',
 ]

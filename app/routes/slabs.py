@@ -13,11 +13,13 @@ from flask import Blueprint, jsonify
 
 from ..services.analysis.slab_service import SlabService
 from ..services.analysis.punching_service import PunchingService
+from ..services.analysis.reinforcement_update_service import ReinforcementUpdateService
 from .common import (
-    get_analysis_service,
     handle_errors,
     require_session,
+    require_session_data,
     require_session_and_slab,
+    require_element_type,
     get_session_or_404,
 )
 
@@ -32,8 +34,9 @@ logger = logging.getLogger(__name__)
 
 @bp.route('/analyze-slabs', methods=['POST'])
 @handle_errors
-@require_session
-def analyze_slabs(session_id: str, data: dict):
+@require_session_data
+@require_element_type('slabs')
+def analyze_slabs(session_id: str, data: dict, parsed_data):
     """
     Analiza losas de la sesión actual.
 
@@ -44,21 +47,12 @@ def analyze_slabs(session_id: str, data: dict):
             "lambda_factor": 1.0
         }
     """
-    parsed_data, error = get_session_or_404(session_id)
-    if error:
-        return error
-
-    if not parsed_data.has_slabs:
-        return jsonify({
-            'success': False,
-            'error': 'No hay losas en esta sesión. Asegúrese de cargar un archivo con tabla "Section Cut Forces - Analysis".'
-        }), 400
-
-    # Aplicar actualizaciones a las losas si se proporcionan
+    # Aplicar actualizaciones a las losas usando servicio centralizado
     slab_updates = data.get('slab_updates', [])
     if slab_updates:
-        service = get_analysis_service()
-        service.update_slabs_batch(session_id, slab_updates)
+        ReinforcementUpdateService.apply_slab_property_updates(
+            parsed_data.slabs, slab_updates
+        )
 
     # Crear servicio de losas
     lambda_factor = float(data.get('lambda_factor', 1.0))

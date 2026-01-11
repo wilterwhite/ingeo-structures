@@ -11,6 +11,9 @@ Métodos principales:
 """
 from typing import Dict, Any, Union, TYPE_CHECKING
 
+from ...domain.constants.phi_chapter21 import get_dcr_status
+from ...domain.constants.reinforcement import RHO_MIN, MAX_SPACING_SEISMIC_MM
+
 if TYPE_CHECKING:
     from ..analysis.element_orchestrator import OrchestrationResult
     from ...domain.entities import Beam, Column, Pier, DropBeam
@@ -38,13 +41,41 @@ def get_dcr_css_class(dcr: float) -> str:
         dcr: Demand/Capacity ratio
 
     Returns:
-        Clase CSS para aplicar al valor
+        Clase CSS para aplicar al valor (fs-ok, fs-warn, fs-fail)
+
+    Usa umbrales centralizados del domain (DCR_OK=0.67, DCR_WARN=1.0).
     """
-    if dcr <= 0.67:  # Equivale a SF >= 1.5
-        return 'fs-ok'
-    elif dcr <= 1.0:  # Equivale a SF >= 1.0
-        return 'fs-warn'
-    return 'fs-fail'
+    status = get_dcr_status(dcr)  # 'ok', 'warn', 'fail'
+    return f'fs-{status}'
+
+
+def format_dimensions(width_mm: float, thickness_mm: float) -> str:
+    """
+    Formatea dimensiones en formato "espesor × ancho mm".
+
+    Args:
+        width_mm: Ancho en mm (lw para muros)
+        thickness_mm: Espesor en mm (tw para muros)
+
+    Returns:
+        String formateado, ej: "200 × 3000 mm"
+    """
+    return f"{int(thickness_mm)} × {int(width_mm)} mm"
+
+
+def format_dcr_display(dcr: float) -> str:
+    """
+    Formatea DCR para mostrar en UI.
+
+    Args:
+        dcr: Demand/Capacity ratio
+
+    Returns:
+        String formateado, ej: "0.85" o ">100"
+    """
+    if dcr > 100:
+        return '>100'
+    return f"{dcr:.2f}"
 
 
 class ResultFormatter:
@@ -55,7 +86,7 @@ class ResultFormatter:
 
     Uso principal:
         result = orchestrator.verify(element, forces)
-        formatted = ResultFormatter.format_any_element(element, result, key)
+        formatted = ResultFormatter.format_any_element(element, key, result)
     """
 
     # =========================================================================
@@ -68,14 +99,11 @@ class ResultFormatter:
         continuity_info: 'WallContinuityInfo' = None
     ) -> Dict[str, Any]:
         """Formatea información de continuidad del muro."""
-        # Si tenemos continuity_info, usarla
+        # Si tenemos continuity_info, usar propiedades del domain
         if continuity_info:
-            hwcs_m = continuity_info.hwcs / 1000  # mm -> m
-            lw_m = pier.width / 1000  # mm -> m
-            hwcs_lw = hwcs_m / lw_m if lw_m > 0 else 0
             return {
-                'hwcs_m': round(hwcs_m, 2),
-                'hwcs_lw': round(hwcs_lw, 2),
+                'hwcs_m': round(continuity_info.hwcs_m, 2),
+                'hwcs_lw': round(continuity_info.get_hwcs_lw(pier.width), 2),
                 'n_stories': continuity_info.n_stories,
                 'is_continuous': continuity_info.is_continuous,
                 'is_base': continuity_info.is_base,
@@ -125,6 +153,184 @@ class ResultFormatter:
         }
 
     # =========================================================================
+    # Estructura base común para todos los elementos
+    # =========================================================================
+
+    @staticmethod
+    def _build_base_result(
+        element_type: str,
+        key: str,
+        label: str,
+        story: str,
+        result: 'OrchestrationResult',
+        geometry: Dict[str, Any],
+        reinforcement: Dict[str, Any],
+        pm_plot: str = None
+    ) -> Dict[str, Any]:
+        """
+        Construye la estructura base común para todos los tipos de elementos.
+
+        Esta función centraliza la lógica común de formateo, reduciendo
+        duplicación en los métodos especializados.
+        """
+        overall_status = 'OK' if result.is_ok else 'NO OK'
+        dcr = result.dcr_max
+
+        # Datos de flexure base
+        flexure_data = {
+            'sf': 1.0 / dcr if dcr > 0 else 100.0,
+            'dcr': dcr,
+            'status': overall_status,
+            'critical_combo': 'envelope',
+            'phi_Mn_at_Pu': 0,
+            'Mu': 0,
+            'phi_Mn_0': 0,
+            'Pu': 0,
+            'phi_Pn_max': 0,
+            'exceeds_axial': False,
+            'has_tension': False
+        }
+
+        # Datos de shear base
+        shear_data = {
+            'sf': 1.0 / dcr if dcr > 0 else 100.0,
+            'dcr': dcr,
+            'dcr_class': get_dcr_css_class(dcr),
+            'status': overall_status,
+            'critical_combo': 'envelope',
+            'dcr_2': dcr,
+            'dcr_3': 0,
+            'dcr_combined': dcr,
+            'phi_Vn_2': 0,
+            'phi_Vn_3': 0,
+            'Vu_2': 0,
+            'Vu_3': 0,
+            'Vc': 0,
+            'Vs': 0,
+            'formula_type': element_type
+        }
+
+        # Datos de slenderness base
+        slenderness_data = {
+            'lambda': 0,
+            'is_slender': False,
+            'delta_ns': 1.0,
+            'magnification_pct': 0.0
+        }
+
+        return {
+            'element_type': element_type,
+            'key': key,
+            'pier_label': label,
+            'story': story,
+            # Campos pre-formateados para UI
+            'dimensions_display': format_dimensions(
+                geometry.get('width_mm', 0),
+                geometry.get('thickness_mm', 0)
+            ),
+            'dcr_display': format_dcr_display(dcr),
+            'dcr_class': get_dcr_css_class(dcr),
+            'geometry': {
+                'width_m': geometry.get('width_mm', 0) / 1000,
+                'thickness_m': geometry.get('thickness_mm', 0) / 1000,
+                'height_m': geometry.get('height_mm', 0) / 1000,
+                'fc_MPa': geometry.get('fc', 0),
+                'fy_MPa': geometry.get('fy', 0)
+            },
+            'reinforcement': reinforcement,
+            'flexure': flexure_data,
+            'shear': shear_data,
+            'slenderness': slenderness_data,
+            'classification': None,
+            'amplification': None,
+            'boundary_element': None,
+            'overall_status': overall_status,
+            'status_class': get_status_css_class(overall_status),
+            'wall_continuity': None,
+            'design_proposal': {'has_proposal': False},
+            'pm_plot': pm_plot,
+            # Metadata de orquestación
+            'design_behavior': result.design_behavior.name,
+            'service_used': result.service_used,
+            'aci_section': result.design_behavior.aci_section,
+            'dcr_max': result.dcr_max,
+            'critical_check': result.critical_check,
+            'warnings': result.warnings
+        }
+
+    @staticmethod
+    def _extract_pier_geometry_reinforcement(pier: 'Pier') -> tuple:
+        """
+        Extrae geometría y refuerzo base de un Pier.
+
+        Centraliza la lógica común para _format_wall/column/flexure_orchestration.
+
+        Returns:
+            (geometry, reinforcement) dicts
+        """
+        geometry = {
+            'width_mm': pier.width,
+            'thickness_mm': pier.thickness,
+            'height_mm': pier.height,
+            'fc': pier.fc,
+            'fy': pier.fy
+        }
+        reinforcement = {
+            'As_vertical_mm2': pier.As_vertical,
+            'As_horizontal_mm2': pier.As_horizontal,
+            'As_vertical_per_m': round(pier.As_vertical_per_m, 1),
+            'As_horizontal_per_m': round(pier.As_horizontal, 1),
+            'rho_vertical': round(pier.rho_vertical, 5),
+            'rho_horizontal': round(pier.rho_horizontal, 5)
+        }
+        return geometry, reinforcement
+
+    @staticmethod
+    def _extract_shear_from_domain(
+        domain_result,
+        base_dcr: float,
+        formula_type: str = 'wall'
+    ) -> Dict[str, Any]:
+        """Extrae datos de cortante del resultado de dominio."""
+        shear_data = {
+            'sf': 1.0 / base_dcr if base_dcr > 0 else 100.0,
+            'dcr': base_dcr,
+            'dcr_class': get_dcr_css_class(base_dcr),
+            'status': 'OK' if base_dcr <= 1.0 else 'NO OK',
+            'critical_combo': 'envelope',
+            'dcr_2': base_dcr,
+            'dcr_3': 0,
+            'dcr_combined': base_dcr,
+            'phi_Vn_2': 0,
+            'phi_Vn_3': 0,
+            'Vu_2': 0,
+            'Vu_3': 0,
+            'Vc': 0,
+            'Vs': 0,
+            'Ve': 0,
+            'omega_v': None,
+            'formula_type': formula_type
+        }
+
+        if hasattr(domain_result, 'shear') and domain_result.shear:
+            sh = domain_result.shear
+            dcr = getattr(sh, 'dcr', base_dcr)
+            shear_data.update({
+                'dcr': dcr,
+                'dcr_class': get_dcr_css_class(dcr),
+                'dcr_2': dcr,
+                'dcr_combined': dcr,
+                'phi_Vn_2': getattr(sh, 'phi_Vn', getattr(sh, 'phi_Vn_V2', 0)),
+                'Vu_2': getattr(sh, 'Ve', 0),
+                'Vc': getattr(sh, 'Vc', 0) if not hasattr(sh, 'capacity_V2') else (sh.capacity_V2.Vc if sh.capacity_V2 else 0),
+                'Vs': getattr(sh, 'Vs', 0) if not hasattr(sh, 'capacity_V2') else (sh.capacity_V2.Vs if sh.capacity_V2 else 0),
+            })
+            if dcr > 0:
+                shear_data['sf'] = round(1.0 / dcr, 2)
+
+        return shear_data
+
+    # =========================================================================
     # Formateo de resultados de ElementOrchestrator (arquitectura unificada)
     # =========================================================================
 
@@ -141,55 +347,70 @@ class ResultFormatter:
 
         Este método soporta la nueva arquitectura donde ElementOrchestrator
         clasifica automáticamente los elementos y delega al servicio apropiado.
-
-        Args:
-            pier: Entidad Pier
-            result: OrchestrationResult del ElementOrchestrator
-            key: Clave única del elemento
-            continuity_info: Información de continuidad del muro
-            pm_plot: Gráfico P-M en base64 (opcional)
-
-        Returns:
-            Dict con formato unificado para UI
         """
-        domain_result = result.domain_result
         service_used = result.service_used
 
-        # Determinar tipo de elemento para UI
-        element_type = 'pier'
-        if result.design_behavior.requires_column_checks:
-            element_type = 'pier_column'  # Pier verificado como columna
-
-        # Extraer datos según el servicio usado
+        # Delegar según servicio usado
         if service_used == 'wall':
             return ResultFormatter._format_wall_orchestration(
-                pier, result, domain_result, key, continuity_info, pm_plot
+                pier, result, key, continuity_info, pm_plot
             )
         elif service_used == 'column':
             return ResultFormatter._format_column_orchestration(
-                pier, result, domain_result, key, continuity_info, pm_plot
+                pier, result, key, continuity_info, pm_plot
             )
         else:
-            # Fallback para flexure
             return ResultFormatter._format_flexure_orchestration(
-                pier, result, domain_result, key, continuity_info, pm_plot
+                pier, result, key, continuity_info, pm_plot
             )
 
     @staticmethod
     def _format_wall_orchestration(
         pier: 'Pier',
         result: 'OrchestrationResult',
-        domain_result,
         key: str,
         continuity_info: 'WallContinuityInfo' = None,
         pm_plot: str = None
     ) -> Dict[str, Any]:
         """Formatea resultado de pier verificado como muro (§18.10)."""
+        domain_result = result.domain_result
+
+        # Extraer geometría y refuerzo usando helper
+        geometry, reinforcement = ResultFormatter._extract_pier_geometry_reinforcement(pier)
+
+        # Agregar flags de validación desde domain_result.reinforcement (§18.10.2.1)
+        if hasattr(domain_result, 'reinforcement') and domain_result.reinforcement:
+            rf = domain_result.reinforcement
+            reinforcement.update({
+                'rho_v_ok': rf.rho_l_ok,
+                'rho_h_ok': rf.rho_t_ok,
+                'rho_mesh_v_ok': rf.rho_l_ok,  # Para compatibilidad con frontend
+                'spacing_v_ok': rf.spacing_ok,
+                'spacing_h_ok': rf.spacing_ok,
+                'rho_min': rf.rho_l_min,
+                'max_spacing': rf.spacing_max
+            })
+
+        # Construir resultado base
+        formatted = ResultFormatter._build_base_result(
+            element_type='pier',
+            key=key,
+            label=pier.label,
+            story=pier.story,
+            result=result,
+            geometry=geometry,
+            reinforcement=reinforcement,
+            pm_plot=pm_plot
+        )
+
+        # Agregar campos específicos de pier
+        formatted['grilla'] = pier.grilla
+        formatted['axis'] = pier.eje
+
         # Clasificación
-        classification = None
         if hasattr(domain_result, 'classification') and domain_result.classification:
             cls = domain_result.classification
-            classification = {
+            formatted['classification'] = {
                 'type': 'wall',
                 'lw_tw': cls.lw_tw,
                 'hw_lw': cls.hw_lw,
@@ -198,44 +419,15 @@ class ResultFormatter:
                 'aci_section': result.design_behavior.aci_section
             }
 
-        # Cortante
-        shear_data = {
-            'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
-            'status': 'OK' if result.is_ok else 'NO OK',
-            'critical_combo': 'envelope',
-            'dcr_2': result.dcr_max,
-            'dcr_3': 0,
-            'dcr_combined': result.dcr_max,
-            'phi_Vn_2': 0,
-            'phi_Vn_3': 0,
-            'Vu_2': 0,
-            'Vu_3': 0,
-            'Vc': 0,
-            'Vs': 0,
-            'Ve': 0,
-            'omega_v': None,
-            'formula_type': 'wall'
-        }
-
-        if hasattr(domain_result, 'shear') and domain_result.shear:
-            sh = domain_result.shear
-            shear_data.update({
-                'dcr_2': sh.dcr,
-                'dcr_combined': sh.dcr,
-                'phi_Vn_2': sh.phi_Vn,
-                'Vu_2': sh.Ve,
-                'Vc': sh.Vc,
-                'Vs': sh.Vs,
-                'Ve': sh.Ve,
-            })
-            if sh.dcr > 0:
-                shear_data['sf'] = round(1.0 / sh.dcr, 2)
+        # Cortante específico de muros
+        formatted['shear'] = ResultFormatter._extract_shear_from_domain(
+            domain_result, result.dcr_max, 'wall'
+        )
 
         # Elementos de borde
-        boundary = None
         if hasattr(domain_result, 'boundary') and domain_result.boundary:
             be = domain_result.boundary
-            boundary = {
+            formatted['boundary_element'] = {
                 'required': be.requires_special,
                 'method': 'stress' if be.requires_special else 'N/A',
                 'sigma_max': 0,
@@ -245,89 +437,79 @@ class ResultFormatter:
             }
 
         # Cuantías mínimas
-        reinforcement_check = None
         if hasattr(domain_result, 'reinforcement') and domain_result.reinforcement:
             rf = domain_result.reinforcement
-            reinforcement_check = {
+            formatted['reinforcement_check'] = {
                 'rho_l_ok': rf.rho_l_ok,
                 'rho_t_ok': rf.rho_t_ok,
                 'is_ok': rf.is_ok
             }
 
-        overall_status = 'OK' if result.is_ok else 'NO OK'
-        flexure_dcr = result.dcr_max  # DCR de flexión directo
+        # Continuidad del muro
+        formatted['wall_continuity'] = ResultFormatter._format_wall_continuity(
+            pier, continuity_info
+        )
 
-        return {
-            'element_type': 'pier',
-            'key': key,
-            'pier_label': pier.label,
-            'story': pier.story,
-            'geometry': {
-                'width_m': pier.width / 1000,
-                'thickness_m': pier.thickness / 1000,
-                'height_m': pier.height / 1000,
-                'fc_MPa': pier.fc,
-                'fy_MPa': pier.fy
-            },
-            'reinforcement': {
-                'As_vertical_mm2': pier.As_vertical,
-                'As_horizontal_mm2': pier.As_horizontal,
-                'As_vertical_per_m': round(pier.As_vertical_per_m, 1),
-                'As_horizontal_per_m': round(pier.As_horizontal, 1),
-                'rho_vertical': round(pier.rho_vertical, 5),
-                'rho_horizontal': round(pier.rho_horizontal, 5)
-            },
-            'flexure': {
-                'sf': 1.0 / flexure_dcr if flexure_dcr > 0 else 100.0,
-                'dcr': flexure_dcr,  # DCR directo para evitar cálculo en frontend
-                'status': 'OK' if result.is_ok else 'NO OK',
-                'critical_combo': 'envelope',
-                'phi_Mn_at_Pu': 0,
-                'Mu': 0,
-                'phi_Mn_0': 0,
-                'Pu': 0,
-                'phi_Pn_max': 0,
-                'exceeds_axial': False,
-                'has_tension': False
-            },
-            'shear': shear_data,
-            'slenderness': {
-                'lambda': 0,
-                'is_slender': False,
-                'delta_ns': 1.0,
-                'magnification_pct': 0.0
-            },
-            'classification': classification,
-            'amplification': None,
-            'boundary_element': boundary,
-            'reinforcement_check': reinforcement_check,
-            'overall_status': overall_status,
-            'status_class': get_status_css_class(overall_status),
-            'wall_continuity': ResultFormatter._format_wall_continuity(
-                pier, continuity_info
-            ),
-            'design_proposal': {'has_proposal': False},
-            'pm_plot': pm_plot,
-            # Metadata de orquestación
-            'design_behavior': result.design_behavior.name,
-            'service_used': result.service_used,
-            'aci_section': result.design_behavior.aci_section,
-            'dcr_max': result.dcr_max,
-            'critical_check': result.critical_check,
-            'warnings': result.warnings
-        }
+        return formatted
 
     @staticmethod
     def _format_column_orchestration(
         pier: 'Pier',
         result: 'OrchestrationResult',
-        domain_result,
         key: str,
         continuity_info: 'WallContinuityInfo' = None,
         pm_plot: str = None
     ) -> Dict[str, Any]:
         """Formatea resultado de pier verificado como columna (§18.7)."""
-        # Extraer verificaciones dimensionales
+        domain_result = result.domain_result
+
+        # Extraer geometría y refuerzo usando helper
+        geometry, reinforcement = ResultFormatter._extract_pier_geometry_reinforcement(pier)
+
+        # Para columnas §18.7, agregar constantes de refuerzo para el frontend
+        # (las columnas tienen requisitos diferentes a muros)
+        reinforcement.update({
+            'rho_v_ok': True,  # Columnas no usan mismo check de muro
+            'rho_h_ok': True,
+            'rho_mesh_v_ok': True,
+            'spacing_v_ok': True,
+            'spacing_h_ok': True,
+            'rho_min': RHO_MIN,  # domain/constants/reinforcement.py
+            'max_spacing': MAX_SPACING_SEISMIC_MM
+        })
+
+        # Construir resultado base
+        formatted = ResultFormatter._build_base_result(
+            element_type='pier',
+            key=key,
+            label=pier.label,
+            story=pier.story,
+            result=result,
+            geometry=geometry,
+            reinforcement=reinforcement,
+            pm_plot=pm_plot
+        )
+
+        # Agregar campos específicos de pier
+        formatted['grilla'] = pier.grilla
+        formatted['axis'] = pier.eje
+
+        # Clasificación como pier-columna
+        formatted['classification'] = {
+            'type': 'wall_pier_column',
+            'lw_tw': pier.width / pier.thickness if pier.thickness > 0 else 0,
+            'hw_lw': pier.height / pier.width if pier.width > 0 else 0,
+            'is_slender': False,
+            'is_wall_pier': True,
+            'aci_section': '§18.7'
+        }
+
+        # Cortante específico de columnas
+        formatted['shear'] = ResultFormatter._extract_shear_from_domain(
+            domain_result, result.dcr_max, 'column'
+        )
+
+        # Verificaciones dimensionales
         dimensional = None
         if hasattr(domain_result, 'dimensional_limits') and domain_result.dimensional_limits:
             dim = domain_result.dimensional_limits
@@ -363,199 +545,77 @@ class ResultFormatter:
                 'is_ok': trans.is_ok
             }
 
-        # Cortante
-        shear_data = {
-            'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
-            'status': 'OK' if result.is_ok else 'NO OK',
-            'critical_combo': 'envelope',
-            'dcr_2': 0,
-            'dcr_3': 0,
-            'dcr_combined': result.dcr_max,
-            'phi_Vn_2': 0,
-            'phi_Vn_3': 0,
-            'Vu_2': 0,
-            'Vu_3': 0,
-            'Vc': 0,
-            'Vs': 0,
-            'formula_type': 'column'
+        formatted['seismic_column_checks'] = {
+            'dimensional': dimensional,
+            'longitudinal': longitudinal,
+            'transverse': transverse,
         }
 
-        if hasattr(domain_result, 'shear') and domain_result.shear:
-            sh = domain_result.shear
-            shear_data.update({
-                'dcr_2': sh.dcr,
-                'dcr_combined': sh.dcr,
-                'phi_Vn_2': sh.phi_Vn_V2,
-                'Vu_2': sh.Ve,
-                'Vc': sh.capacity_V2.Vc if sh.capacity_V2 else 0,
-                'Vs': sh.capacity_V2.Vs if sh.capacity_V2 else 0,
-            })
-            if sh.dcr > 0:
-                shear_data['sf'] = round(1.0 / sh.dcr, 2)
+        # Continuidad del muro
+        formatted['wall_continuity'] = ResultFormatter._format_wall_continuity(
+            pier, continuity_info
+        )
 
-        overall_status = 'OK' if result.is_ok else 'NO OK'
-
-        # Clasificación como pier-columna
-        classification = {
-            'type': 'wall_pier_column',
-            'lw_tw': pier.width / pier.thickness if pier.thickness > 0 else 0,
-            'hw_lw': pier.height / pier.width if pier.width > 0 else 0,
-            'is_slender': False,
-            'is_wall_pier': True,
-            'aci_section': '§18.7'
-        }
-
-        return {
-            'element_type': 'pier',  # Sigue siendo pier para la UI
-            'key': key,
-            'pier_label': pier.label,
-            'story': pier.story,
-            'geometry': {
-                'width_m': pier.width / 1000,
-                'thickness_m': pier.thickness / 1000,
-                'height_m': pier.height / 1000,
-                'fc_MPa': pier.fc,
-                'fy_MPa': pier.fy
-            },
-            'reinforcement': {
-                'As_vertical_mm2': pier.As_vertical,
-                'As_horizontal_mm2': pier.As_horizontal,
-                'As_vertical_per_m': round(pier.As_vertical_per_m, 1),
-                'As_horizontal_per_m': round(pier.As_horizontal, 1),
-                'rho_vertical': round(pier.rho_vertical, 5),
-                'rho_horizontal': round(pier.rho_horizontal, 5)
-            },
-            'flexure': {
-                'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
-                'dcr': result.dcr_max,  # DCR directo
-                'status': 'OK' if result.is_ok else 'NO OK',
-                'critical_combo': 'envelope',
-                'phi_Mn_at_Pu': 0,
-                'Mu': 0,
-                'phi_Mn_0': 0,
-                'Pu': 0,
-                'phi_Pn_max': 0,
-                'exceeds_axial': False,
-                'has_tension': False
-            },
-            'shear': shear_data,
-            'slenderness': {
-                'lambda': 0,
-                'is_slender': False,
-                'delta_ns': 1.0,
-                'magnification_pct': 0.0
-            },
-            'classification': classification,
-            'amplification': None,
-            'boundary_element': None,
-            'seismic_column_checks': {
-                'dimensional': dimensional,
-                'longitudinal': longitudinal,
-                'transverse': transverse,
-            },
-            'overall_status': overall_status,
-            'status_class': get_status_css_class(overall_status),
-            'wall_continuity': ResultFormatter._format_wall_continuity(
-                pier, continuity_info
-            ),
-            'design_proposal': {'has_proposal': False},
-            'pm_plot': pm_plot,
-            # Metadata de orquestación
-            'design_behavior': result.design_behavior.name,
-            'service_used': result.service_used,
-            'aci_section': result.design_behavior.aci_section,
-            'dcr_max': result.dcr_max,
-            'critical_check': result.critical_check,
-            'warnings': result.warnings
-        }
+        return formatted
 
     @staticmethod
     def _format_flexure_orchestration(
         pier: 'Pier',
         result: 'OrchestrationResult',
-        domain_result,
         key: str,
         continuity_info: 'WallContinuityInfo' = None,
         pm_plot: str = None
     ) -> Dict[str, Any]:
         """Formatea resultado de pier verificado por flexocompresión."""
-        overall_status = 'OK' if result.is_ok else 'NO OK'
+        domain_result = result.domain_result
 
-        return {
-            'element_type': 'pier',
-            'key': key,
-            'pier_label': pier.label,
-            'story': pier.story,
-            'geometry': {
-                'width_m': pier.width / 1000,
-                'thickness_m': pier.thickness / 1000,
-                'height_m': pier.height / 1000,
-                'fc_MPa': pier.fc,
-                'fy_MPa': pier.fy
-            },
-            'reinforcement': {
-                'As_vertical_mm2': pier.As_vertical,
-                'As_horizontal_mm2': pier.As_horizontal,
-                'As_vertical_per_m': round(pier.As_vertical_per_m, 1),
-                'As_horizontal_per_m': round(pier.As_horizontal, 1),
-                'rho_vertical': round(pier.rho_vertical, 5),
-                'rho_horizontal': round(pier.rho_horizontal, 5)
-            },
-            'flexure': {
-                'sf': domain_result.get('SF', 0) if isinstance(domain_result, dict) else 0,
-                'dcr': result.dcr_max,  # DCR directo
-                'status': 'OK' if result.is_ok else 'NO OK',
-                'critical_combo': 'envelope',
-                'phi_Mn_at_Pu': 0,
-                'Mu': 0,
-                'phi_Mn_0': 0,
-                'Pu': 0,
-                'phi_Pn_max': 0,
-                'exceeds_axial': False,
-                'has_tension': False
-            },
-            'shear': {
-                'sf': 100.0,
-                'dcr': 0,  # DCR directo
-                'status': 'N/A',
-                'critical_combo': 'N/A',
-                'dcr_2': 0,
-                'dcr_3': 0,
-                'dcr_combined': 0,
-                'phi_Vn_2': 0,
-                'phi_Vn_3': 0,
-                'Vu_2': 0,
-                'Vu_3': 0,
-                'Vc': 0,
-                'Vs': 0,
-                'Ve': 0,
-                'omega_v': None,
-                'formula_type': 'flexure'
-            },
-            'slenderness': {
-                'lambda': 0,
-                'is_slender': False,
-                'delta_ns': 1.0,
-                'magnification_pct': 0.0
-            },
-            'classification': None,
-            'amplification': None,
-            'boundary_element': None,
-            'overall_status': overall_status,
-            'status_class': get_status_css_class(overall_status),
-            'wall_continuity': ResultFormatter._format_wall_continuity(
-                pier, continuity_info
-            ),
-            'design_proposal': {'has_proposal': False},
-            'pm_plot': pm_plot,
-            # Metadata de orquestación
-            'design_behavior': result.design_behavior.name,
-            'service_used': result.service_used,
-            'aci_section': result.design_behavior.aci_section,
-            'dcr_max': result.dcr_max,
-            'critical_check': result.critical_check,
-            'warnings': result.warnings
-        }
+        # Extraer geometría y refuerzo usando helper
+        geometry, reinforcement = ResultFormatter._extract_pier_geometry_reinforcement(pier)
+
+        # Para verificación por flexocompresión, agregar valores por defecto
+        reinforcement.update({
+            'rho_v_ok': True,
+            'rho_h_ok': True,
+            'rho_mesh_v_ok': True,
+            'spacing_v_ok': True,
+            'spacing_h_ok': True,
+            'rho_min': RHO_MIN,  # domain/constants/reinforcement.py
+            'max_spacing': MAX_SPACING_SEISMIC_MM
+        })
+
+        # Construir resultado base
+        formatted = ResultFormatter._build_base_result(
+            element_type='pier',
+            key=key,
+            label=pier.label,
+            story=pier.story,
+            result=result,
+            geometry=geometry,
+            reinforcement=reinforcement,
+            pm_plot=pm_plot
+        )
+
+        # Agregar campos específicos de pier
+        formatted['grilla'] = pier.grilla
+        formatted['axis'] = pier.eje
+
+        # Actualizar flexure con SF del domain_result si existe
+        if isinstance(domain_result, dict) and 'SF' in domain_result:
+            formatted['flexure']['sf'] = domain_result['SF']
+
+        # Shear básico para flexure (sin datos detallados)
+        formatted['shear']['formula_type'] = 'flexure'
+        formatted['shear']['status'] = 'N/A'
+        formatted['shear']['dcr'] = 0
+        formatted['shear']['dcr_2'] = 0
+        formatted['shear']['dcr_combined'] = 0
+
+        # Continuidad del muro
+        formatted['wall_continuity'] = ResultFormatter._format_wall_continuity(
+            pier, continuity_info
+        )
+
+        return formatted
 
     # =========================================================================
     # Método unificado para cualquier elemento (nueva arquitectura)
@@ -574,16 +634,6 @@ class ResultFormatter:
 
         Este es el método principal para la nueva arquitectura unificada.
         Detecta el tipo de elemento y delega al formateador apropiado.
-
-        Args:
-            element: Beam, Column, Pier o DropBeam
-            result: OrchestrationResult del ElementOrchestrator
-            key: Clave única del elemento
-            continuity_info: Información de continuidad (solo muros)
-            pm_plot: Gráfico P-M en base64 (opcional)
-
-        Returns:
-            Dict con formato unificado para UI
         """
         from ...domain.entities import Pier, Column, Beam, DropBeam
 
@@ -593,15 +643,15 @@ class ResultFormatter:
                 element, result, key, continuity_info, pm_plot
             )
         elif isinstance(element, Column):
-            return ResultFormatter._format_column_from_orchestration(
+            return ResultFormatter._format_column_element(
                 element, result, key, pm_plot
             )
         elif isinstance(element, Beam):
-            return ResultFormatter._format_beam_from_orchestration(
+            return ResultFormatter._format_beam_element(
                 element, result, key
             )
         elif isinstance(element, DropBeam):
-            return ResultFormatter._format_drop_beam_from_orchestration(
+            return ResultFormatter._format_drop_beam_element(
                 element, result, key, pm_plot
             )
 
@@ -614,7 +664,7 @@ class ResultFormatter:
         }
 
     @staticmethod
-    def _format_column_from_orchestration(
+    def _format_column_element(
         column: 'Column',
         result: 'OrchestrationResult',
         key: str,
@@ -622,153 +672,86 @@ class ResultFormatter:
     ) -> Dict[str, Any]:
         """Formatea resultado de Column desde OrchestrationResult."""
         domain_result = result.domain_result
-        overall_status = 'OK' if result.is_ok else 'NO OK'
 
-        # Cortante desde dominio
-        shear_data = {
-            'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
-            'status': 'OK' if result.is_ok else 'NO OK',
-            'critical_combo': 'envelope',
-            'dcr_2': result.dcr_max,
-            'dcr_3': 0,
-            'dcr_combined': result.dcr_max,
-            'phi_Vn_2': 0, 'phi_Vn_3': 0,
-            'Vu_2': 0, 'Vu_3': 0,
-            'Vc': 0, 'Vs': 0,
-            'formula_type': 'column'
+        geometry = {
+            'width_mm': column.depth,
+            'thickness_mm': column.width,
+            'height_mm': column.height,
+            'fc': column.fc,
+            'fy': column.fy
+        }
+        reinforcement = {
+            'n_total_bars': column.n_total_bars,
+            'n_bars_depth': column.n_bars_depth,
+            'n_bars_width': column.n_bars_width,
+            'diameter_long': column.diameter_long,
+            'stirrup_diameter': column.stirrup_diameter,
+            'stirrup_spacing': column.stirrup_spacing,
+            'As_longitudinal_mm2': round(column.As_longitudinal, 0),
+            'rho_longitudinal': round(column.rho_longitudinal, 4),
+            'description': column.reinforcement_description
         }
 
-        if hasattr(domain_result, 'shear') and domain_result.shear:
-            sh = domain_result.shear
-            shear_data.update({
-                'dcr_2': sh.dcr,
-                'dcr_combined': sh.dcr,
-                'phi_Vn_2': getattr(sh, 'phi_Vn_V2', 0),
-                'Vu_2': getattr(sh, 'Ve', 0),
-            })
-            if sh.dcr > 0:
-                shear_data['sf'] = round(1.0 / sh.dcr, 2)
+        formatted = ResultFormatter._build_base_result(
+            element_type='column',
+            key=key,
+            label=column.label,
+            story=column.story,
+            result=result,
+            geometry=geometry,
+            reinforcement=reinforcement,
+            pm_plot=pm_plot
+        )
 
-        return {
-            'element_type': 'column',
-            'key': key,
-            'pier_label': column.label,
-            'story': column.story,
-            'geometry': {
-                'width_m': column.depth / 1000,
-                'thickness_m': column.width / 1000,
-                'height_m': column.height / 1000,
-                'fc_MPa': column.fc,
-                'fy_MPa': column.fy
-            },
-            'reinforcement': {
-                'n_total_bars': column.n_total_bars,
-                'n_bars_depth': column.n_bars_depth,
-                'n_bars_width': column.n_bars_width,
-                'diameter_long': column.diameter_long,
-                'stirrup_diameter': column.stirrup_diameter,
-                'stirrup_spacing': column.stirrup_spacing,
-                'As_longitudinal_mm2': round(column.As_longitudinal, 0),
-                'rho_longitudinal': round(column.rho_longitudinal, 4),
-                'description': column.reinforcement_description
-            },
-            'flexure': {
-                'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
-                'dcr': result.dcr_max,  # DCR directo
-                'status': overall_status,
-                'critical_combo': 'envelope',
-                'phi_Mn_at_Pu': 0, 'Mu': 0, 'phi_Mn_0': 0,
-                'Pu': 0, 'phi_Pn_max': 0,
-                'exceeds_axial': False, 'has_tension': False
-            },
-            'shear': shear_data,
-            'slenderness': {
-                'lambda': 0, 'is_slender': False,
-                'delta_ns': 1.0, 'magnification_pct': 0.0
-            },
-            'overall_status': overall_status,
-            'status_class': get_status_css_class(overall_status),
-            'wall_continuity': None,
-            'design_proposal': {'has_proposal': False},
-            'pm_plot': pm_plot,
-            'design_behavior': result.design_behavior.name,
-            'service_used': result.service_used,
-            'aci_section': result.design_behavior.aci_section,
-            'dcr_max': result.dcr_max,
-            'critical_check': result.critical_check,
-            'warnings': result.warnings
-        }
+        # Cortante específico de columnas
+        formatted['shear'] = ResultFormatter._extract_shear_from_domain(
+            domain_result, result.dcr_max, 'column'
+        )
+
+        return formatted
 
     @staticmethod
-    def _format_beam_from_orchestration(
+    def _format_beam_element(
         beam: 'Beam',
         result: 'OrchestrationResult',
         key: str
     ) -> Dict[str, Any]:
         """Formatea resultado de Beam desde OrchestrationResult."""
-        overall_status = 'OK' if result.is_ok else 'NO OK'
-
-        shear_data = {
-            'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
-            'status': overall_status,
-            'critical_combo': 'envelope',
-            'dcr_2': result.dcr_max, 'dcr_3': 0, 'dcr_combined': result.dcr_max,
-            'phi_Vn_2': 0, 'phi_Vn_3': 0,
-            'Vu_2': 0, 'Vu_3': 0,
-            'Vc': 0, 'Vs': 0,
-            'formula_type': 'beam'
+        # Para beams: width_m=width, thickness_m=depth, height_m=length
+        geometry = {
+            'width_mm': beam.width,
+            'thickness_mm': beam.depth,
+            'height_mm': beam.length,
+            'fc': beam.fc,
+            'fy': beam.fy
+        }
+        reinforcement = {
+            'n_bars_top': beam.n_bars_top,
+            'n_bars_bottom': beam.n_bars_bottom,
+            'diameter_top': beam.diameter_top,
+            'diameter_bottom': beam.diameter_bottom,
+            'stirrup_diameter': beam.stirrup_diameter,
+            'stirrup_spacing': beam.stirrup_spacing,
+            'description': f"{beam.n_bars_top}phi{beam.diameter_top} + {beam.n_bars_bottom}phi{beam.diameter_bottom}"
         }
 
-        return {
-            'element_type': 'beam',
-            'key': key,
-            'pier_label': beam.label,
-            'story': beam.story,
-            'geometry': {
-                'width_m': beam.width / 1000,
-                'thickness_m': beam.depth / 1000,
-                'height_m': beam.length / 1000,
-                'fc_MPa': beam.fc,
-                'fy_MPa': beam.fy
-            },
-            'reinforcement': {
-                'n_bars_top': beam.n_bars_top,
-                'n_bars_bottom': beam.n_bars_bottom,
-                'diameter_top': beam.diameter_top,
-                'diameter_bottom': beam.diameter_bottom,
-                'stirrup_diameter': beam.stirrup_diameter,
-                'stirrup_spacing': beam.stirrup_spacing,
-                'description': f"{beam.n_bars_top}phi{beam.diameter_top} + {beam.n_bars_bottom}phi{beam.diameter_bottom}"
-            },
-            'flexure': {
-                'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
-                'dcr': result.dcr_max,  # DCR directo
-                'status': overall_status,
-                'critical_combo': 'envelope',
-                'phi_Mn_at_Pu': 0, 'Mu': 0, 'phi_Mn_0': 0,
-                'Pu': 0, 'phi_Pn_max': 0,
-                'exceeds_axial': False, 'has_tension': False
-            },
-            'shear': shear_data,
-            'slenderness': {
-                'lambda': 0, 'is_slender': False,
-                'delta_ns': 1.0, 'magnification_pct': 0.0
-            },
-            'overall_status': overall_status,
-            'status_class': get_status_css_class(overall_status),
-            'wall_continuity': None,
-            'design_proposal': {'has_proposal': False},
-            'pm_plot': None,
-            'design_behavior': result.design_behavior.name,
-            'service_used': result.service_used,
-            'aci_section': result.design_behavior.aci_section,
-            'dcr_max': result.dcr_max,
-            'critical_check': result.critical_check,
-            'warnings': result.warnings
-        }
+        formatted = ResultFormatter._build_base_result(
+            element_type='beam',
+            key=key,
+            label=beam.label,
+            story=beam.story,
+            result=result,
+            geometry=geometry,
+            reinforcement=reinforcement,
+            pm_plot=None
+        )
+
+        formatted['shear']['formula_type'] = 'beam'
+
+        return formatted
 
     @staticmethod
-    def _format_drop_beam_from_orchestration(
+    def _format_drop_beam_element(
         drop_beam: 'DropBeam',
         result: 'OrchestrationResult',
         key: str,
@@ -776,78 +759,41 @@ class ResultFormatter:
     ) -> Dict[str, Any]:
         """Formatea resultado de DropBeam desde OrchestrationResult."""
         domain_result = result.domain_result
-        overall_status = 'OK' if result.is_ok else 'NO OK'
 
-        shear_data = {
-            'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
-            'status': overall_status,
-            'critical_combo': 'envelope',
-            'dcr_2': result.dcr_max, 'dcr_3': 0, 'dcr_combined': result.dcr_max,
-            'phi_Vn_2': 0, 'phi_Vn_3': 0,
-            'Vu_2': 0, 'Vu_3': 0,
-            'Vc': 0, 'Vs': 0,
-            'formula_type': 'wall'
+        # Para drop beams: width_m=length (luz libre), thickness_m=thickness (ancho tributario), height_m=width (espesor losa)
+        geometry = {
+            'width_mm': drop_beam.length,
+            'thickness_mm': drop_beam.thickness,
+            'height_mm': drop_beam.width,
+            'fc': drop_beam.fc,
+            'fy': drop_beam.fy
+        }
+        reinforcement = {
+            'As_vertical_mm2': drop_beam.As_vertical,
+            'As_edge_total': drop_beam.As_edge_total,
+            'n_edge_bars': drop_beam.n_edge_bars,
+            'diameter_edge': drop_beam.diameter_edge,
+            'rho_vertical': round(drop_beam.rho_vertical, 5),
+            'description': drop_beam.reinforcement_description
         }
 
-        if hasattr(domain_result, 'shear') and domain_result.shear:
-            sh = domain_result.shear
-            shear_data.update({
-                'dcr_2': sh.dcr,
-                'dcr_combined': sh.dcr,
-                'phi_Vn_2': getattr(sh, 'phi_Vn', 0),
-                'Vu_2': getattr(sh, 'Ve', 0),
-                'Vc': getattr(sh, 'Vc', 0),
-                'Vs': getattr(sh, 'Vs', 0),
-            })
-            if sh.dcr > 0:
-                shear_data['sf'] = round(1.0 / sh.dcr, 2)
+        formatted = ResultFormatter._build_base_result(
+            element_type='drop_beam',
+            key=key,
+            label=drop_beam.label,
+            story=drop_beam.story,
+            result=result,
+            geometry=geometry,
+            reinforcement=reinforcement,
+            pm_plot=pm_plot
+        )
 
-        return {
-            'element_type': 'drop_beam',
-            'key': key,
-            'pier_label': drop_beam.label,
-            'story': drop_beam.story,
-            'geometry': {
-                'width_m': drop_beam.length / 1000,
-                'thickness_m': drop_beam.thickness / 1000,
-                'height_m': drop_beam.width / 1000,
-                'fc_MPa': drop_beam.fc,
-                'fy_MPa': drop_beam.fy
-            },
-            'reinforcement': {
-                'As_vertical_mm2': drop_beam.As_vertical,
-                'As_edge_total': drop_beam.As_edge_total,
-                'n_edge_bars': drop_beam.n_edge_bars,
-                'diameter_edge': drop_beam.diameter_edge,
-                'rho_vertical': round(drop_beam.rho_vertical, 5),
-                'description': drop_beam.reinforcement_description
-            },
-            'flexure': {
-                'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
-                'dcr': result.dcr_max,  # DCR directo
-                'status': overall_status,
-                'critical_combo': 'envelope',
-                'phi_Mn_at_Pu': 0, 'Mu': 0, 'phi_Mn_0': 0,
-                'Pu': 0, 'phi_Pn_max': 0,
-                'exceeds_axial': False, 'has_tension': False
-            },
-            'shear': shear_data,
-            'slenderness': {
-                'lambda': 0, 'is_slender': False,
-                'delta_ns': 1.0, 'magnification_pct': 0.0
-            },
-            'overall_status': overall_status,
-            'status_class': get_status_css_class(overall_status),
-            'wall_continuity': None,
-            'design_proposal': {'has_proposal': False},
-            'pm_plot': pm_plot,
-            'design_behavior': result.design_behavior.name,
-            'service_used': result.service_used,
-            'aci_section': result.design_behavior.aci_section,
-            'dcr_max': result.dcr_max,
-            'critical_check': result.critical_check,
-            'warnings': result.warnings
-        }
+        # Cortante específico de drop beams (usa formato wall)
+        formatted['shear'] = ResultFormatter._extract_shear_from_domain(
+            domain_result, result.dcr_max, 'wall'
+        )
+
+        return formatted
 
     # =========================================================================
     # Formateo de Capacidades (sin OrchestrationResult)
@@ -863,13 +809,6 @@ class ResultFormatter:
 
         Este método NO usa OrchestrationResult, solo formatea las propiedades
         del elemento Beam directamente.
-
-        Args:
-            beam: Entidad Beam
-            beam_forces: Fuerzas de la viga (opcional)
-
-        Returns:
-            Dict con propiedades formateadas
         """
         # Información de la viga
         beam_info = {
@@ -940,13 +879,6 @@ class ResultFormatter:
 
         Este método NO usa OrchestrationResult, solo formatea las propiedades
         del elemento Column directamente.
-
-        Args:
-            column: Entidad Column
-            column_forces: Fuerzas de la columna (opcional)
-
-        Returns:
-            Dict con propiedades formateadas
         """
         # Información de la columna
         column_info = {

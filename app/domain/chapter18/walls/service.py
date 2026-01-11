@@ -13,7 +13,7 @@ Orquesta las verificaciones:
 Diseñado para ser consistente con SeismicColumnService y SeismicBeamService.
 """
 import math
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, List, Tuple, TYPE_CHECKING
 
 from ..common import SeismicCategory
 from ..boundary_elements import BoundaryElementService
@@ -23,7 +23,8 @@ from ..design_forces import ShearAmplificationService
 from ...constants.reinforcement import RHO_MIN, MAX_SPACING_SEISMIC_MM
 from ...constants.materials import get_effective_fc_shear
 from ...constants.shear import PHI_SHEAR
-from ...constants.units import N_TO_TONF
+from ...constants.units import N_TO_TONF, TONF_TO_N, TONFM_TO_NMM
+from ..results import WallPierDesignResult
 
 from .results import (
     SeismicWallResult,
@@ -273,13 +274,23 @@ class SeismicWallService:
         # 6. PILAR DE MURO (§18.10.8) si lw/tw <= 6.0
         # =====================================================================
         wall_pier = None
+        wall_pier_design = None
         if classification.is_wall_pier:
             wall_pier = classify_wall_pier(hw, lw, tw)
-            if wall_pier.requires_column_details:
-                warnings.append(
-                    f"Pilar de muro (lw/tw={classification.lw_tw:.1f}): "
-                    "Verificar requisitos de columna especial §18.7"
-                )
+
+            # Delegar verificación completa a WallPierService
+            wall_pier_design, pier_warnings = self._check_wall_pier(
+                hw=hw, lw=lw, tw=tw,
+                fc=fc, fy=fy, fyt=fyt,
+                rho_h=rho_h, Vu=Vu, Mu=Mu, Pu=Pu,
+                n_meshes=n_meshes, lambda_factor=lambda_factor
+            )
+            warnings.extend(pier_warnings)
+
+            # Actualizar DCR si wall pier tiene mayor DCR
+            if wall_pier_design and wall_pier_design.shear_design.dcr > dcr_max:
+                dcr_max = wall_pier_design.shear_design.dcr
+                critical_check = "wall_pier_shear"
 
         # =====================================================================
         # RESULTADO GLOBAL
@@ -297,6 +308,7 @@ class SeismicWallService:
             boundary=boundary,
             end_zones=end_zones,
             wall_pier=wall_pier,
+            wall_pier_design=wall_pier_design,
             is_ok=is_ok,
             dcr_max=round(dcr_max, 3),
             critical_check=critical_check,
@@ -307,6 +319,102 @@ class SeismicWallService:
     # =========================================================================
     # MÉTODOS PRIVADOS
     # =========================================================================
+
+    def _calculate_sigma_max(
+        self,
+        lw: float,
+        tw: float,
+        Pu: float,
+        Mu: float
+    ) -> float:
+        """
+        Calcula el esfuerzo máximo de compresión para verificación de elementos de borde.
+
+        Usa la fórmula: σ = P/A + M×y/I
+
+        Args:
+            lw: Longitud del muro (mm)
+            tw: Espesor del muro (mm)
+            Pu: Carga axial última (tonf, positivo = compresión)
+            Mu: Momento último (tonf-m)
+
+        Returns:
+            Esfuerzo máximo de compresión (MPa)
+        """
+        Ag = lw * tw
+        Ig = tw * (lw ** 3) / 12
+        y = lw / 2
+
+        # Convertir a unidades consistentes (N, N-mm)
+        Pu_N = abs(Pu) * TONF_TO_N
+        Mu_Nmm = abs(Mu) * TONFM_TO_NMM
+
+        sigma_axial = Pu_N / Ag if Ag > 0 else 0
+        sigma_moment = (Mu_Nmm * y / Ig) if Ig > 0 else 0
+
+        return sigma_axial + sigma_moment  # MPa (N/mm² = MPa)
+
+    def _check_wall_pier(
+        self,
+        hw: float,
+        lw: float,
+        tw: float,
+        fc: float,
+        fy: float,
+        fyt: float,
+        rho_h: float,
+        Vu: float,
+        Mu: float,
+        Pu: float,
+        n_meshes: int,
+        lambda_factor: float,
+    ) -> Tuple[Optional[WallPierDesignResult], List[str]]:
+        """
+        Verifica pilar de muro delegando a WallPierService.
+
+        Según §18.10.8, los pilares de muro (lw/tw <= 6.0) requieren
+        verificaciones adicionales que son manejadas por WallPierService.
+
+        Args:
+            hw: Altura del muro (mm)
+            lw: Longitud del muro (mm)
+            tw: Espesor del muro (mm)
+            fc: f'c del concreto (MPa)
+            fy: Fluencia longitudinal (MPa)
+            fyt: Fluencia transversal (MPa)
+            rho_h: Cuantía horizontal
+            Vu: Cortante último (tonf)
+            Mu: Momento último (tonf-m)
+            Pu: Carga axial (tonf)
+            n_meshes: Número de cortinas (1 o 2)
+            lambda_factor: Factor para concreto liviano
+
+        Returns:
+            Tuple (WallPierDesignResult o None, lista de warnings)
+        """
+        warnings = []
+
+        # Calcular sigma_max para boundary check
+        sigma_max = self._calculate_sigma_max(lw, tw, Pu, Mu)
+
+        # Delegar verificación completa a WallPierService
+        design_result = self._wall_pier_service.design_wall_pier(
+            hw=hw,
+            lw=lw,
+            bw=tw,
+            Vu=Vu,
+            fc=fc,
+            fy=fy,
+            fyt=fyt,
+            rho_h=rho_h,
+            sigma_max=sigma_max,
+            has_single_curtain=(n_meshes == 1),
+            use_capacity_design=True,
+            Mu=Mu,
+        )
+
+        warnings.extend(design_result.warnings)
+        return design_result, warnings
 
     def _classify_wall(
         self,
@@ -530,8 +638,8 @@ class SeismicWallService:
         y = lw / 2
 
         # P en N, M en N-mm
-        Pu_N = abs(Pu) * 9806.65  # tonf a N
-        Mu_Nmm = abs(Mu) * 9806.65 * 1000  # tonf-m a N-mm
+        Pu_N = abs(Pu) * TONF_TO_N
+        Mu_Nmm = abs(Mu) * TONFM_TO_NMM
 
         # sigma = P/A + M×y/I
         sigma_axial = Pu_N / Ag if Ag > 0 else 0

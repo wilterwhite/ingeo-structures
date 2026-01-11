@@ -27,6 +27,17 @@ from .phi_chapter21 import (
     EPSILON_TY,
     EPSILON_T_LIMIT,
     calculate_phi_flexure,
+    # Umbrales DCR
+    DCR_OK,
+    DCR_WARN,
+    get_dcr_status,
+    # Factores de capacidad axial (§22.4.2.1)
+    PN_MAX_FACTOR_TIED,
+    PN_MAX_FACTOR_SPIRAL,
+    # Factores de sobreresistencia (§18.8.2.1)
+    ALPHA_OVERSTRENGTH,
+    # Bloque de Whitney (§22.2.2.4.1)
+    WHITNEY_STRESS_FACTOR,
 )
 from .shear import (
     # Coeficientes alpha_c para muros

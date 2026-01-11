@@ -11,6 +11,10 @@ class ResultsTable extends FilterableTable {
         this.rowFactory = new RowFactory(this);
         this.plotsCache = {};
 
+        // Propiedades para vigas personalizadas por pier
+        this.customBeamPiers = new Set();
+        this.pierBeamConfigs = {};
+
         // Managers especializados
         this.combinationsManager = new CombinationsManager(this);
         this.couplingBeamManager = new CouplingBeamManager(this);
@@ -485,7 +489,7 @@ class ResultsTable extends FilterableTable {
             changes.spacing_h = config.spacing_v;
         }
 
-        this.editManager.onReinforcementChange(pierKey, changes);
+        this.editManager.onReinforcementChange(pierKey, 'pier', changes);
     }
 
     parseProposalConfig(proposal) {
@@ -503,7 +507,7 @@ class ResultsTable extends FilterableTable {
         this.plotsCache = {};
         this.customBeamPiers.clear();
         this.pierBeamConfigs = {};
-        this.pierBeamAssignments = {};
+        this.couplingBeamManager.clearAssignments();
         this.editManager.reset();
     }
 

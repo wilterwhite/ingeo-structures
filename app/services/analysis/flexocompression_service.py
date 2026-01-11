@@ -22,8 +22,13 @@ from ...domain.flexure import (
     InteractionPoint,
     FlexureChecker,
 )
-from ...domain.constants.phi_chapter21 import PHI_COMPRESSION
-from ...domain.constants.units import N_TO_TONF
+from ...domain.constants.phi_chapter21 import (
+    PHI_COMPRESSION,
+    PN_MAX_FACTOR_TIED,
+    ALPHA_OVERSTRENGTH,
+    WHITNEY_STRESS_FACTOR,
+)
+from ...domain.constants.units import N_TO_TONF, NMM_TO_TONFM
 
 
 class FlexocompressionService:
@@ -188,7 +193,7 @@ class FlexocompressionService:
     def get_capacities(
         self,
         element: FlexuralElement,
-        pn_max_factor: float = 0.80,
+        pn_max_factor: float = PN_MAX_FACTOR_TIED,
         k: float = 0.8,
         braced: bool = True
     ) -> Dict[str, Any]:
@@ -210,7 +215,7 @@ class FlexocompressionService:
         # 1. Compresion pura (ACI 318-25 §22.4.2.1)
         Ag = element.Ag
         As_total = element.As_flexure_total
-        Pn_max = pn_max_factor * (0.85 * element.fc * (Ag - As_total) + element.fy * As_total)
+        Pn_max = pn_max_factor * (WHITNEY_STRESS_FACTOR * element.fc * (Ag - As_total) + element.fy * As_total)
         phi_Pn_max = PHI_COMPRESSION * Pn_max / N_TO_TONF
 
         # 2. Momento eje fuerte (primary)
@@ -307,7 +312,7 @@ class FlexocompressionService:
     def calculate_Mpr(
         self,
         beam: Beam,
-        alpha: float = 1.25
+        alpha: float = ALPHA_OVERSTRENGTH
     ) -> Tuple[float, float]:
         """
         Calcula Mpr en ambos extremos de una viga segun ACI 318-25 §18.6.5.1.
@@ -318,12 +323,12 @@ class FlexocompressionService:
         Mpr = As * (alpha * fy) * (d - a/2)
 
         donde:
-        - alpha = 1.25 (considera sobreresistencia del acero)
+        - alpha = ALPHA_OVERSTRENGTH (1.25, considera sobreresistencia del acero)
         - a = As * (alpha * fy) / (0.85 * f'c * b)
 
         Args:
             beam: Viga a analizar
-            alpha: Factor de amplificacion del acero (default 1.25)
+            alpha: Factor de amplificacion del acero (default ALPHA_OVERSTRENGTH)
 
         Returns:
             Tuple (Mpr_negative, Mpr_positive) en tonf-m
@@ -341,18 +346,16 @@ class FlexocompressionService:
 
         # Calcular Mpr para momento negativo (refuerzo superior en tension)
         fy_amp = alpha * fy
-        a_neg = (As_top * fy_amp) / (0.85 * fc * b)
+        a_neg = (As_top * fy_amp) / (WHITNEY_STRESS_FACTOR * fc * b)
         Mpr_neg = As_top * fy_amp * (d - a_neg / 2)  # N-mm
 
         # Calcular Mpr para momento positivo (refuerzo inferior en tension)
-        a_pos = (As_bottom * fy_amp) / (0.85 * fc * b)
+        a_pos = (As_bottom * fy_amp) / (WHITNEY_STRESS_FACTOR * fc * b)
         Mpr_pos = As_bottom * fy_amp * (d - a_pos / 2)  # N-mm
 
-        # Convertir a tonf-m
-        # N-mm -> kN-m = /1e6, kN-m -> tonf-m = /9.80665
-        conversion = 1e6 * 9.80665
-        Mpr_neg_tonf = Mpr_neg / conversion
-        Mpr_pos_tonf = Mpr_pos / conversion
+        # Convertir N-mm a tonf-m
+        Mpr_neg_tonf = Mpr_neg / NMM_TO_TONFM
+        Mpr_pos_tonf = Mpr_pos / NMM_TO_TONFM
 
         return (round(Mpr_neg_tonf, 2), round(Mpr_pos_tonf, 2))
 

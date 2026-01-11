@@ -346,13 +346,16 @@ class TestDropBeamToWallGeometry:
     """Tests para to_wall() con DropBeam."""
 
     def test_basic_dimensions(self, sample_drop_beam):
-        """Extrae dimensiones de viga capitel."""
+        """Extrae dimensiones de viga capitel como muro equivalente."""
         geom = GeometryNormalizer.to_wall(sample_drop_beam)
 
-        # DropBeam: lw=length, tw=thickness, hw=width (espesor losa)
-        assert geom.lw == 1500  # length (luz libre)
-        assert geom.tw == 2400  # thickness (ancho tributario)
-        assert geom.hw == 200   # width (espesor losa)
+        # Mapeo DropBeam → Wall (consistente con SeismicWallService):
+        # hw (altura muro) ← length (luz libre viga capitel)
+        # lw (longitud muro) ← thickness (ancho tributario)
+        # tw (espesor muro) ← width (espesor losa)
+        assert geom.hw == 1500  # length (luz libre)
+        assert geom.lw == 2400  # thickness (ancho tributario)
+        assert geom.tw == 200   # width (espesor losa)
         assert geom.fc == 25
 
     def test_edge_reinforcement(self, sample_drop_beam):

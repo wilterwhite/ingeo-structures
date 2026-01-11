@@ -10,13 +10,14 @@ from typing import Optional, List, TYPE_CHECKING
 
 from ..constants.materials import get_bar_area
 from ..constants.reinforcement import RHO_MIN, FY_DEFAULT_MPA
+from .reinforcement_mixin import MeshReinforcementMixin
 
 if TYPE_CHECKING:
     from ..calculations.steel_layer_calculator import SteelLayer, SteelLayerCalculator
 
 
 @dataclass
-class DropBeam:
+class DropBeam(MeshReinforcementMixin):
     """
     Representa una viga capitel (losa diseñada como viga).
 
@@ -84,74 +85,18 @@ class DropBeam:
         self._bar_area_edge = get_bar_area(self.diameter_edge, 201.1)
 
     # =========================================================================
-    # Propiedades de Armadura (idénticas a Pier)
+    # Implementación de métodos abstractos del MeshReinforcementMixin
     # =========================================================================
 
-    @property
-    def n_intermediate_bars(self) -> int:
-        """Número de barras intermedias de malla (sin contar las de borde)."""
-        available_length = self.thickness - 2 * self.cover
-        if available_length <= 0:
-            return 0
-        n_spaces = available_length / self.spacing_v
-        return max(0, int(n_spaces))
+    def _get_mesh_length(self) -> float:
+        """Longitud disponible para barras de malla (ancho tributario)."""
+        return self.thickness
 
-    @property
-    def As_vertical(self) -> float:
-        """Área de acero vertical de malla intermedia (mm²)."""
-        return self.n_intermediate_bars * self.n_meshes * self._bar_area_v
+    def _get_thickness_for_rho_h(self) -> float:
+        """Espesor para cálculo de cuantía horizontal."""
+        return self.width
 
-    @property
-    def As_horizontal(self) -> float:
-        """Área de acero horizontal por metro de altura (mm²/m)."""
-        return self.n_meshes * (self._bar_area_h / self.spacing_h) * 1000
-
-    @property
-    def As_vertical_per_m(self) -> float:
-        """Área de acero vertical por metro de longitud (mm²/m)."""
-        return self.n_meshes * (self._bar_area_v / self.spacing_v) * 1000
-
-    @property
-    def rho_vertical(self) -> float:
-        """Cuantía de acero vertical total (malla + borde)."""
-        return (self.As_vertical + self.As_edge_total) / self.Ag
-
-    @property
-    def rho_mesh_vertical(self) -> float:
-        """Cuantía de acero vertical distribuido (solo malla, sin barras de borde)."""
-        return self.As_vertical / self.Ag
-
-    @property
-    def rho_horizontal(self) -> float:
-        """Cuantía de acero horizontal (malla distribuida)."""
-        return self.As_horizontal / (self.width * 1000)
-
-    @property
-    def As_edge_total(self) -> float:
-        """Área de acero de borde TOTAL (mm²)."""
-        return self.n_edge_bars * 2 * self._bar_area_edge
-
-    @property
-    def As_edge_per_end(self) -> float:
-        """Área de acero de borde en cada extremo (mm²)."""
-        return self.n_edge_bars * self._bar_area_edge
-
-    @property
-    def n_edge_bars_per_end(self) -> int:
-        """Número de barras de borde en cada extremo."""
-        return self.n_edge_bars
-
-    @property
-    def As_flexure_total(self) -> float:
-        """Área de acero total para flexión (mm²)."""
-        return self.As_edge_total + self.As_vertical
-
-    @property
-    def n_total_vertical_bars(self) -> int:
-        """Número total de barras verticales (borde + intermedias)."""
-        n_edge = self.n_meshes * 2
-        n_intermediate = self.n_intermediate_bars * self.n_meshes
-        return n_edge + n_intermediate
+    # Propiedades de armadura vienen del MeshReinforcementMixin
 
     def get_steel_layers(self, direction: str = 'primary') -> List['SteelLayer']:
         """

@@ -43,33 +43,37 @@ const PierCells = {
         const spacingVok = reinf.spacing_v_ok !== false;
         const spacingHok = reinf.spacing_h_ok !== false;
 
+        // Obtener constantes de StructuralConstants (cargadas desde backend)
+        const rhoMin = reinf.rho_min || StructuralConstants.reinforcement?.rho_min || 0.0025;
+        const maxSpacing = reinf.max_spacing || StructuralConstants.reinforcement?.max_spacing_mm || 457;
+
         // Advertencias fila V
         const vHasWarning = !rhoMeshVok || !spacingVok;
         const vWarningClass = vHasWarning ? 'rho-warning' : '';
         let vWarnings = [];
-        if (!rhoMeshVok) vWarnings.push(`ρ_malla < ${(reinf.rho_min || 0.0025) * 100}%`);
-        if (!spacingVok) vWarnings.push(`s > ${reinf.max_spacing || 457}mm`);
+        if (!rhoMeshVok) vWarnings.push(`ρ_malla < ${rhoMin * 100}%`);
+        if (!spacingVok) vWarnings.push(`s > ${maxSpacing}mm`);
         const vWarningTitle = vWarnings.length ? `${vWarnings.join(', ')} (§18.10.2.1)` : '';
 
         // Advertencias fila H
         const hHasWarning = !rhoHok || !spacingHok;
         const hWarningClass = hHasWarning ? 'rho-warning' : '';
         let hWarnings = [];
-        if (!rhoHok) hWarnings.push(`ρ < ${(reinf.rho_min || 0.0025) * 100}%`);
-        if (!spacingHok) hWarnings.push(`s > ${reinf.max_spacing || 457}mm`);
+        if (!rhoHok) hWarnings.push(`ρ < ${rhoMin * 100}%`);
+        if (!spacingHok) hWarnings.push(`s > ${maxSpacing}mm`);
         const hWarningTitle = hWarnings.length ? `${hWarnings.join(', ')} (§18.10.2.1)` : '';
 
         td.innerHTML = `
             <div class="malla-row ${vWarningClass}" ${vHasWarning ? `title="${vWarningTitle}"` : ''}>
                 <select class="edit-meshes" title="Mallas">
-                    ${generateOptions(MESH_OPTIONS, pier?.n_meshes, 'M')}
+                    ${StructuralConstants.generateOptions('mesh_counts', pier?.n_meshes, 'M')}
                 </select>
                 <span class="malla-label">V</span>
                 <select class="edit-diameter-v" title="φ Vertical">
-                    ${generateDiameterOptions(DIAMETERS.malla, pier?.diameter_v)}
+                    ${StructuralConstants.generateDiameterOptions('malla', pier?.diameter_v)}
                 </select>
                 <select class="edit-spacing-v" title="@ Vertical">
-                    ${generateSpacingOptions(SPACINGS.malla, pier?.spacing_v)}
+                    ${StructuralConstants.generateSpacingOptions('malla', pier?.spacing_v)}
                 </select>
                 ${vHasWarning ? '<span class="rho-warn-icon" title="' + vWarningTitle + '">⚠</span>' : ''}
             </div>
@@ -77,10 +81,10 @@ const PierCells = {
                 <span class="malla-spacer"></span>
                 <span class="malla-label">H</span>
                 <select class="edit-diameter-h" title="φ Horizontal">
-                    ${generateDiameterOptions(DIAMETERS.malla, pier?.diameter_h)}
+                    ${StructuralConstants.generateDiameterOptions('malla', pier?.diameter_h)}
                 </select>
                 <select class="edit-spacing-h" title="@ Horizontal">
-                    ${generateSpacingOptions(SPACINGS.malla, pier?.spacing_h)}
+                    ${StructuralConstants.generateSpacingOptions('malla', pier?.spacing_h)}
                 </select>
                 ${hHasWarning ? '<span class="rho-warn-icon" title="' + hWarningTitle + '">⚠</span>' : ''}
             </div>
@@ -107,20 +111,20 @@ const PierCells = {
         td.innerHTML = `
             <div class="borde-row ${warningClass}" ${!rhoVok ? `title="${warningTitle}"` : ''}>
                 <select class="edit-n-edge" title="Nº barras borde">
-                    ${generateOptions(EDGE_BAR_COUNTS, pier?.n_edge_bars, 'φ')}
+                    ${StructuralConstants.generateOptions('edge_bar_counts', pier?.n_edge_bars, 'φ')}
                 </select>
                 <select class="edit-edge" title="φ Borde">
-                    ${generateDiameterOptions(DIAMETERS.borde, pier?.diameter_edge)}
+                    ${StructuralConstants.generateDiameterOptions('borde', pier?.diameter_edge)}
                 </select>
                 ${!rhoVok ? '<span class="rho-warn-icon" title="ρ_v < mínimo">⚠</span>' : ''}
             </div>
             <div class="borde-row borde-estribos">
                 <span class="borde-label">E</span>
                 <select class="edit-stirrup-d" title="φ Estribo" ${stirrupsDisabled ? 'disabled' : ''}>
-                    ${generateDiameterOptions(DIAMETERS.estribos, pier?.stirrup_diameter, 'E')}
+                    ${StructuralConstants.generateDiameterOptions('estribos', pier?.stirrup_diameter, 'E')}
                 </select>
                 <select class="edit-stirrup-s" title="@ Estribo" ${stirrupsDisabled ? 'disabled' : ''}>
-                    ${generateSpacingOptions(SPACINGS.estribos, pier?.stirrup_spacing)}
+                    ${StructuralConstants.generateSpacingOptions('estribos', pier?.stirrup_spacing)}
                 </select>
             </div>
         `;

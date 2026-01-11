@@ -19,9 +19,8 @@ from dataclasses import dataclass
 
 from ..constants.shear import VC_COEF_COLUMN
 
-# Constantes locales (podrían moverse a constants/ si se reutilizan)
-LAMBDA_NORMAL = 1.0  # Factor lambda para concreto de peso normal
-FC_EFF_SHEAR_MAX_MPA = 70  # f'c máximo efectivo para cortante (§22.5.3.1)
+# f'c máximo efectivo para cortante (§22.5.3.1)
+FC_EFF_SHEAR_MAX_MPA = 70
 
 
 @dataclass
@@ -197,37 +196,51 @@ def calculate_Vc_wall(
 
 
 def check_Vc_zero_condition(
-    Ve_seismic: float,
-    Vu_total: float,
+    Ve: float,
+    Vu: float,
     Pu: float,
     Ag: float,
-    fc: float,
+    fc: float
 ) -> bool:
     """
-    Verifica si aplica la condición Vc = 0 según §18.6.5.2 / §18.7.6.2.
+    Verifica si Vc debe ser cero según ACI 318-25.
 
-    La condición Vc = 0 aplica cuando AMBAS condiciones se cumplen:
-    1. Ve (cortante sísmico) ≥ 0.5 × Vu (cortante total)
-    2. Pu < Ag × f'c / 20
+    Para elementos sísmicos especiales (SMF), Vc = 0 cuando se cumplen
+    AMBAS condiciones:
+        (a) Ve >= 0.5 × Vu
+        (b) Pu < Ag × f'c / 20
 
     Args:
-        Ve_seismic: Cortante inducido por sismo (N)
-        Vu_total: Cortante último total (N)
-        Pu: Carga axial última (N), positivo = compresión
-        Ag: Área bruta de la sección (mm²)
-        fc: Resistencia del concreto (MPa)
+        Ve: Cortante por diseño por capacidad (tonf)
+        Vu: Cortante último máximo de la combinación (tonf)
+        Pu: Carga axial factorizada (tonf, positivo = compresión)
+        Ag: Área bruta del elemento (mm²)
+        fc: f'c del concreto (MPa)
 
     Returns:
-        True si debe usarse Vc = 0, False en caso contrario
+        True si Vc debe ser cero (ambas condiciones cumplidas)
+
+    Referencias:
+        - §18.6.5.2: Vigas sísmicas especiales
+        - §18.7.6.2.1: Columnas sísmicas especiales
+
+    Nota:
+        Para vigas, Pu típicamente es cero o muy bajo, por lo que
+        la condición (b) casi siempre se cumple.
     """
-    # Condición 1: Cortante sísmico domina
-    seismic_dominates = Ve_seismic >= 0.5 * Vu_total
+    from ..constants.units import TONF_TO_N
 
-    # Condición 2: Carga axial baja
-    Pu_limit = Ag * fc / 20  # N
-    low_axial = Pu < Pu_limit
+    # Condición (a): El cortante sísmico domina
+    # Si Vu es cero o negativo, asumimos que Ve domina
+    condition_a = Ve >= 0.5 * Vu if Vu > 0 else True
 
-    return seismic_dominates and low_axial
+    # Condición (b): Carga axial baja
+    # Convertir Pu a Newtons para comparar con Ag * fc / 20
+    Pu_N = Pu * TONF_TO_N
+    threshold = Ag * fc / 20
+    condition_b = Pu_N < threshold
+
+    return condition_a and condition_b
 
 
 __all__ = [

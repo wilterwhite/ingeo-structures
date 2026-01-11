@@ -23,12 +23,10 @@ const BeamCells = {
     createDropBeamSectionCell(result) {
         const td = document.createElement('td');
         td.className = 'geometry-cell';
-        const sectionText = formatSectionDimensions(
-            result.geometry?.width_m,
-            result.geometry?.thickness_m
-        );
+        // Usar dimensiones del backend
+        const sectionText = getDimensionsDisplay(result);
         td.innerHTML = sectionText;
-        td.title = `Sección: ${sectionText} mm`;
+        td.title = `Sección: ${sectionText}`;
         return td;
     },
 
@@ -49,14 +47,14 @@ const BeamCells = {
         td.innerHTML = `
             <div class="malla-row">
                 <select class="edit-meshes" title="Mallas">
-                    ${generateOptions(MESH_OPTIONS, reinf.n_meshes || 2, 'M')}
+                    ${StructuralConstants.generateOptions('mesh_counts', reinf.n_meshes || 2, 'M')}
                 </select>
                 <span class="malla-label">V</span>
                 <select class="edit-diameter-v" title="φ Vertical">
-                    ${generateDiameterOptions(DIAMETERS.malla, reinf.diameter_v || 12)}
+                    ${StructuralConstants.generateDiameterOptions('malla', reinf.diameter_v || 12)}
                 </select>
                 <select class="edit-spacing-v" title="@ Vertical">
-                    ${generateSpacingOptions(SPACINGS.malla, reinf.spacing_v || 200)}
+                    ${StructuralConstants.generateSpacingOptions('malla', reinf.spacing_v || 200)}
                 </select>
             </div>
         `;
@@ -75,10 +73,10 @@ const BeamCells = {
                 <span class="malla-spacer"></span>
                 <span class="malla-label">H</span>
                 <select class="edit-diameter-h" title="φ Horizontal">
-                    ${generateDiameterOptions(DIAMETERS.malla, reinf.diameter_h || 10)}
+                    ${StructuralConstants.generateDiameterOptions('malla', reinf.diameter_h || 10)}
                 </select>
                 <select class="edit-spacing-h" title="@ Horizontal">
-                    ${generateSpacingOptions(SPACINGS.malla, reinf.spacing_h || 200)}
+                    ${StructuralConstants.generateSpacingOptions('malla', reinf.spacing_h || 200)}
                 </select>
             </div>
         `;
@@ -95,19 +93,19 @@ const BeamCells = {
         td.innerHTML = `
             <div class="borde-row">
                 <select class="edit-n-edge" title="Nº barras borde">
-                    ${generateOptions(EDGE_BAR_COUNTS, reinf.n_edge_bars || 4, 'φ')}
+                    ${StructuralConstants.generateOptions('edge_bar_counts', reinf.n_edge_bars || 4, 'φ')}
                 </select>
                 <select class="edit-edge" title="φ Borde">
-                    ${generateDiameterOptions(DIAMETERS.borde, reinf.diameter_edge || 16)}
+                    ${StructuralConstants.generateDiameterOptions('borde', reinf.diameter_edge || 16)}
                 </select>
             </div>
             <div class="borde-row borde-estribos">
                 <span class="borde-label">E</span>
                 <select class="edit-stirrup-d" title="φ Estribo">
-                    ${generateDiameterOptions(DIAMETERS.estribos, reinf.stirrup_diameter || 10, 'E')}
+                    ${StructuralConstants.generateDiameterOptions('estribos', reinf.stirrup_diameter || 10, 'E')}
                 </select>
                 <select class="edit-stirrup-s" title="@ Estribo">
-                    ${generateSpacingOptions(SPACINGS.estribos, reinf.stirrup_spacing || 150)}
+                    ${StructuralConstants.generateSpacingOptions('estribos', reinf.stirrup_spacing || 150)}
                 </select>
             </div>
         `;
@@ -159,10 +157,10 @@ const BeamCells = {
             <div class="reinf-row">
                 <span class="reinf-label">Sup:</span>
                 <select class="edit-beam-n-top" title="Nº barras superiores">
-                    ${generateOptions(BEAM_BARS, reinf.n_bars_top || 3)}
+                    ${StructuralConstants.generateOptions('beam_bar_counts', reinf.n_bars_top || 3)}
                 </select>
                 <select class="edit-beam-diam-top" title="φ Superior">
-                    ${generateDiameterOptions(DIAMETERS.longitudinal, reinf.diameter_top || 16)}
+                    ${StructuralConstants.generateDiameterOptions('vigas', reinf.diameter_top || 16)}
                 </select>
             </div>
         `;
@@ -180,10 +178,10 @@ const BeamCells = {
             <div class="reinf-row">
                 <span class="reinf-label">Inf:</span>
                 <select class="edit-beam-n-bot" title="Nº barras inferiores">
-                    ${generateOptions(BEAM_BARS, reinf.n_bars_bottom || 3)}
+                    ${StructuralConstants.generateOptions('beam_bar_counts', reinf.n_bars_bottom || 3)}
                 </select>
                 <select class="edit-beam-diam-bot" title="φ Inferior">
-                    ${generateDiameterOptions(DIAMETERS.longitudinal, reinf.diameter_bottom || 16)}
+                    ${StructuralConstants.generateDiameterOptions('vigas', reinf.diameter_bottom || 16)}
                 </select>
             </div>
         `;
@@ -200,13 +198,13 @@ const BeamCells = {
         td.innerHTML = `
             <div class="stirrup-row">
                 <select class="edit-beam-stirrup-legs" title="Ramas">
-                    ${generateOptions([2, 3, 4], reinf.n_stirrup_legs || 2, 'R')}
+                    ${StructuralConstants.generateOptions('stirrup_legs', reinf.n_stirrup_legs || 2, 'R')}
                 </select>
                 <select class="edit-beam-stirrup-d" title="φ Estribo">
-                    ${generateDiameterOptions(DIAMETERS.estribos, reinf.stirrup_diameter || 10, 'E')}
+                    ${StructuralConstants.generateDiameterOptions('estribos', reinf.stirrup_diameter || 10, 'E')}
                 </select>
                 <select class="edit-beam-stirrup-s" title="@ Estribo">
-                    ${generateSpacingOptions(SPACINGS.vigas, reinf.stirrup_spacing || 150)}
+                    ${StructuralConstants.generateSpacingOptions('estribos', reinf.stirrup_spacing || 150)}
                 </select>
             </div>
         `;

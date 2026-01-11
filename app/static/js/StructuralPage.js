@@ -50,7 +50,12 @@ class StructuralPage {
     // Inicialización
     // =========================================================================
 
-    init() {
+    async init() {
+        // Cargar constantes del backend primero
+        if (typeof StructuralConstants !== 'undefined') {
+            await StructuralConstants.load();
+        }
+
         this.cacheElements();
         this.initComponents();
         this.bindEvents();

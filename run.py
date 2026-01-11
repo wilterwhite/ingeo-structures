@@ -14,7 +14,7 @@ import sys
 
 from flask import Flask, render_template, send_from_directory
 
-from app.routes import piers_bp, columns_bp, beams_bp, slabs_bp, drop_beams_bp
+from app.routes import piers_bp, columns_bp, beams_bp, slabs_bp, drop_beams_bp, common_bp
 
 
 def create_app() -> Flask:
@@ -54,6 +54,7 @@ def create_app() -> Flask:
     app.register_blueprint(beams_bp)
     app.register_blueprint(slabs_bp)
     app.register_blueprint(drop_beams_bp)
+    app.register_blueprint(common_bp)
 
     # Ruta principal
     @app.route('/')

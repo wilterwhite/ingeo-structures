@@ -13,12 +13,13 @@ import logging
 
 from flask import Blueprint, jsonify
 
-from ..services.analysis.element_orchestrator import ElementOrchestrator
 from ..services.presentation.result_formatter import ResultFormatter
 from .common import (
+    get_orchestrator,
     handle_errors,
     require_session_data,
     require_element,
+    require_element_type,
     parse_seismic_params,
     analyze_elements_generic,
 )
@@ -26,9 +27,6 @@ from .common import (
 # Blueprint para endpoints de columnas
 bp = Blueprint('columns', __name__, url_prefix='/structural')
 logger = logging.getLogger(__name__)
-
-# Orquestador unificado de elementos
-_orchestrator = ElementOrchestrator()
 
 
 # =============================================================================
@@ -38,6 +36,7 @@ _orchestrator = ElementOrchestrator()
 @bp.route('/analyze-columns', methods=['POST'])
 @handle_errors
 @require_session_data
+@require_element_type('columns')
 def analyze_columns(session_id: str, data: dict, parsed_data):
     """
     Analiza columnas de la sesión actual usando flujo unificado.
@@ -60,12 +59,6 @@ def analyze_columns(session_id: str, data: dict, parsed_data):
     Nota: Usa ElementOrchestrator que clasifica automáticamente cada columna
     y la verifica con el servicio apropiado según ACI 318-25.
     """
-    if not parsed_data.has_columns:
-        return jsonify({
-            'success': False,
-            'error': 'No hay columnas en esta sesión. Asegúrese de cargar un archivo con columnas.'
-        }), 400
-
     # Parsear parámetros sísmicos
     category, lambda_factor = parse_seismic_params(data)
 
@@ -73,7 +66,7 @@ def analyze_columns(session_id: str, data: dict, parsed_data):
     results, statistics = analyze_elements_generic(
         elements=parsed_data.columns or {},
         forces_dict=parsed_data.column_forces or {},
-        orchestrator=_orchestrator,
+        orchestrator=get_orchestrator(),
         result_formatter=ResultFormatter,
         category=category,
         lambda_factor=lambda_factor,

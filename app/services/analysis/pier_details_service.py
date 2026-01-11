@@ -1,12 +1,29 @@
-# app/services/presentation/pier_details_formatter.py
+# app/services/analysis/pier_details_service.py
 """
-Formateador de detalles de piers para UI.
+Servicio de detalles de elementos estructurales para UI.
 
-Prepara datos estructurados para el modal de detalles de pier,
+Prepara datos estructurados para el modal de detalles,
 incluyendo capacidades, verificaciones y tablas estilo ETABS.
+
+ELEMENTOS SOPORTADOS:
+- Piers (muros): Verificación completa con boundary elements
+- Columnas: Diagrama de sección (get_section_diagram)
+
+NOTA: Los métodos get_pier_capacities y get_combination_details están
+diseñados para Pier pero usan servicios genéricos (FlexocompressionService,
+ShearService) que funcionan con cualquier elemento que implemente
+FlexuralElement protocol.
+
+Para agregar soporte a otros elementos (Beam, DropBeam):
+1. Agregar getters en SessionManager (get_beam, get_beam_forces, etc.)
+2. Crear variantes de métodos _get_*_design_data si hay diferencias
+3. O crear subclases específicas (ColumnDetailsService, BeamDetailsService)
 
 Usa ElementOrchestrator para verificaciones, manteniendo servicios
 de dominio solo para generación de gráficos y curvas.
+
+Nota: Anteriormente llamado PierDetailsFormatter en presentation/.
+Movido a analysis/ porque es un servicio completo, no un simple formatter.
 """
 from typing import Dict, Any, Optional, List, Tuple, TYPE_CHECKING
 
@@ -18,14 +35,15 @@ from ...domain.chapter18.boundary_elements import (
     BoundaryStressAnalysis,
 )
 
-from .plot_generator import PlotGenerator
-from ..analysis.flexocompression_service import FlexocompressionService
-from ..analysis.shear_service import ShearService
+from ..presentation.plot_generator import PlotGenerator
+from .flexocompression_service import FlexocompressionService
+from .shear_service import ShearService
+from .element_details_service import ElementDetailsService
 from ...domain.flexure import SlendernessService
 from ...domain.chapter18.reinforcement import SeismicReinforcementService
 
 if TYPE_CHECKING:
-    from ..analysis.element_orchestrator import ElementOrchestrator
+    from .element_orchestrator import ElementOrchestrator
 
 
 def calculate_boundary_stress(pier, P_tonf: float, M_tonfm: float) -> BoundaryStressAnalysis:
@@ -51,9 +69,14 @@ def calculate_boundary_stress(pier, P_tonf: float, M_tonfm: float) -> BoundarySt
     )
 
 
-class PierDetailsFormatter:
+class PierDetailsService(ElementDetailsService):
     """
-    Servicio para formateo de detalles de piers para UI.
+    Servicio especializado para detalles de Piers (muros).
+
+    Extiende ElementDetailsService agregando:
+    - Verificación de boundary elements (§18.10.6)
+    - Verificación de cuantía mínima según §18.10.2.1
+    - Cálculo de c (profundidad del eje neutro)
 
     Usa ElementOrchestrator para verificaciones, manteniendo servicios
     de dominio solo para generación de gráficos y curvas de interacción.
@@ -69,7 +92,7 @@ class PierDetailsFormatter:
         plot_generator: Optional[PlotGenerator] = None
     ):
         """
-        Inicializa el servicio de formateo.
+        Inicializa el servicio de detalles de piers.
 
         Args:
             session_manager: Gestor de sesiones (requerido)
@@ -79,19 +102,14 @@ class PierDetailsFormatter:
             slenderness_service: Servicio de esbeltez (opcional)
             plot_generator: Generador de gráficos (opcional)
         """
-        self._session_manager = session_manager
-
-        # Import lazy para evitar circular
-        if orchestrator is None:
-            from ..analysis.element_orchestrator import ElementOrchestrator
-            orchestrator = ElementOrchestrator()
-        self._orchestrator = orchestrator
-
-        # Servicios de dominio para gráficos y capacidades
-        self._flexo_service = flexocompression_service or FlexocompressionService()
-        self._shear_service = shear_service or ShearService()
-        self._slenderness_service = slenderness_service or SlendernessService()
-        self._plot_generator = plot_generator or PlotGenerator()
+        super().__init__(
+            session_manager=session_manager,
+            orchestrator=orchestrator,
+            flexocompression_service=flexocompression_service,
+            shear_service=shear_service,
+            slenderness_service=slenderness_service,
+            plot_generator=plot_generator
+        )
         self._seismic_reinf_service = SeismicReinforcementService()
 
     # =========================================================================
@@ -115,6 +133,9 @@ class PierDetailsFormatter:
         """
         Genera un diagrama de la sección transversal del pier o columna.
 
+        Intenta primero como pier, luego como columna.
+        Override del método base para mantener compatibilidad con API existente.
+
         Args:
             session_id: ID de sesión
             element_key: Clave del elemento (Story_Label)
@@ -126,9 +147,8 @@ class PierDetailsFormatter:
         # Intentar obtener como pier primero
         pier = self._session_manager.get_pier(session_id, element_key)
         if pier is not None:
-            # Es un pier
             if proposed_config:
-                pier = self._apply_proposed_config(pier, proposed_config)
+                pier = self._apply_proposed_config_pier(pier, proposed_config)
             section_diagram = self._plot_generator.generate_section_diagram(pier)
             return {
                 'success': True,
@@ -150,45 +170,6 @@ class PierDetailsFormatter:
 
         # Ni pier ni columna encontrado
         return {'success': False, 'error': f'Element not found: {element_key}'}
-
-    def _apply_proposed_config(self, pier, config: Dict[str, Any]):
-        """
-        Crea una copia del pier con la configuración propuesta aplicada.
-
-        Args:
-            pier: Pier original
-            config: Configuración propuesta
-
-        Returns:
-            Copia del pier con los cambios aplicados
-        """
-        from copy import deepcopy
-        from ...domain.entities import Pier
-
-        # Crear copia del pier
-        pier_copy = Pier(
-            label=pier.label,
-            story=pier.story,
-            width=pier.width,  # Largo del muro no cambia
-            thickness=config.get('thickness', pier.thickness),
-            height=pier.height,
-            fc=pier.fc,
-            fy=pier.fy,
-            n_meshes=config.get('n_meshes', pier.n_meshes),
-            diameter_v=config.get('diameter_v', pier.diameter_v),
-            spacing_v=config.get('spacing_v', pier.spacing_v),
-            diameter_h=config.get('diameter_h', pier.diameter_h),
-            spacing_h=config.get('spacing_h', pier.spacing_h),
-            n_edge_bars=config.get('n_edge_bars', pier.n_edge_bars),
-            diameter_edge=config.get('diameter_edge', pier.diameter_edge),
-            stirrup_diameter=config.get('stirrup_diameter', pier.stirrup_diameter),
-            stirrup_spacing=config.get('stirrup_spacing', pier.stirrup_spacing),
-            n_stirrup_legs=config.get('n_stirrup_legs', getattr(pier, 'n_stirrup_legs', 2)),
-            cover=pier.cover,
-            axis_angle=pier.axis_angle
-        )
-
-        return pier_copy
 
     def get_pier_capacities(self, session_id: str, pier_key: str) -> Dict[str, Any]:
         """
@@ -836,3 +817,7 @@ class PierDetailsFormatter:
                 }
             ]
         }
+
+
+# Alias para compatibilidad hacia atrás
+PierDetailsFormatter = PierDetailsService

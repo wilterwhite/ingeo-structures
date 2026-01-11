@@ -10,7 +10,6 @@ Implementa verificaciones para:
 
 Las verificaciones de punzonamiento se manejan en punching_service.py.
 """
-import math
 from dataclasses import dataclass, asdict
 from typing import Dict, Any, Optional, List
 
@@ -30,9 +29,12 @@ from ...domain.chapter8.limits import (
     PanelType,
 )
 from ...domain.constants.materials import LAMBDA_NORMAL
-from ...domain.constants.shear import PHI_SHEAR, VC_COEF_COLUMN
+from ...domain.constants.shear import PHI_SHEAR
 from ...domain.constants.units import N_TO_TONF, NMM_TO_TONFM
+from ...domain.chapter22 import calculate_flexural_capacity, calculate_As_required
+from ...domain.shear.concrete_shear import calculate_Vc_beam
 from .formatting import format_safety_factor
+from ..presentation.result_formatter import get_dcr_css_class
 
 
 # Wrapper para compatibilidad - usa string ">100"
@@ -270,12 +272,14 @@ class SlabService:
         dcr = Mu / phi_Mn if phi_Mn > 0 else 0
         status = "OK" if sf >= 1.0 else "NO OK"
 
+        dcr_rounded = round(dcr, 3)
         return {
             'phi_Mn': round(phi_Mn, 3),
             'Mu': round(Mu, 3),
             'Mu_total': round(Mu_total, 3),
             'sf': _format_sf(sf),
-            'dcr': round(dcr, 3),
+            'dcr': dcr_rounded,
+            'dcr_class': get_dcr_css_class(dcr_rounded),
             'status': status,
             'As_required': round(As_req, 1),
             'As_provided': round(slab.As_main, 1),
@@ -289,62 +293,42 @@ class SlabService:
         """
         Calcula phi*Mn por metro de ancho.
 
-        Usando la aproximacion:
-        Mn = As * fy * (d - a/2)
-        a = As * fy / (0.85 * f'c * b)
+        Delega a domain/chapter22/flexural_capacity.py
 
         Returns:
             phi*Mn en tonf-m/m
         """
-        As = slab.As_main  # mm2/m
-        fy = slab.fy       # MPa
-        fc = slab.fc       # MPa
-        d = slab.d         # mm
-        b = 1000           # mm (1 metro de ancho)
+        result = calculate_flexural_capacity(
+            As=slab.As_main,  # mm2/m
+            fy=slab.fy,       # MPa
+            fc=slab.fc,       # MPa
+            b=1000,           # mm (1 metro de ancho)
+            d=slab.d          # mm
+        )
 
-        # Bloque de compresion
-        a = As * fy / (0.85 * fc * b)
-
-        # Brazo de palanca
-        if d <= a / 2:
-            # Caso degenerado
-            return 0
-
-        # Momento nominal (N-mm)
-        Mn = As * fy * (d - a / 2)
-
-        # Factor de reduccion (flexion controlada por tension)
-        phi = 0.90
-
-        # Convertir a tonf-m
-        phi_Mn = phi * Mn / NMM_TO_TONFM
-
-        return phi_Mn
+        # Convertir de N-mm a tonf-m
+        return result.phi_Mn / NMM_TO_TONFM
 
     def _calculate_As_required(self, Mu: float, slab: Slab) -> float:
         """
         Calcula el As requerido para un momento dado.
 
-        Simplificado: As = Mu / (phi * fy * jd)
-        donde jd ~ 0.9d
+        Delega a domain/chapter22/flexural_capacity.py
 
         Returns:
             As requerido en mm2/m
         """
         if Mu <= 0:
-            return 0
+            return 0.0
 
-        phi = 0.90
-        fy = slab.fy
-        d = slab.d
-        jd = 0.9 * d
-
-        # Mu en tonf-m, convertir a N-mm
+        # Convertir Mu de tonf-m a N-mm
         Mu_Nmm = Mu * NMM_TO_TONFM
 
-        As_req = Mu_Nmm / (phi * fy * jd)
-
-        return As_req
+        return calculate_As_required(
+            Mu=Mu_Nmm,
+            fy=slab.fy,
+            d=slab.d
+        )
 
     def _check_shear_one_way(
         self,
@@ -390,11 +374,13 @@ class SlabService:
         dcr = Vu / phi_Vn_total if phi_Vn_total > 0 else 0
         status = "OK" if sf >= 1.0 else "NO OK"
 
+        dcr_rounded = round(dcr, 3)
         return {
             'phi_Vn': round(phi_Vn_total, 2),
             'Vu': round(Vu, 2),
             'sf': _format_sf(sf),
-            'dcr': round(dcr, 3),
+            'dcr': dcr_rounded,
+            'dcr_class': get_dcr_css_class(dcr_rounded),
             'status': status,
             'Vc': round(phi_Vc * width_m / PHI_SHEAR, 2),
             'critical_combo': combo_name,
@@ -405,21 +391,21 @@ class SlabService:
         """
         Calcula phi*Vc por metro de ancho.
 
-        Vc = 0.17 * lambda * sqrt(f'c) * bw * d
+        Delega a domain/shear/concrete_shear.py
 
         Returns:
             phi*Vc en tonf/m
         """
-        fc = slab.fc       # MPa
-        d = slab.d         # mm
-        bw = 1000          # mm (1 metro de ancho)
+        result = calculate_Vc_beam(
+            bw=1000,              # mm (1 metro de ancho)
+            d=slab.d,             # mm
+            fc=slab.fc,           # MPa
+            lambda_factor=self.lambda_factor
+        )
 
-        # Vc = 0.17 * lambda * sqrt(f'c) * bw * d
-        Vc = VC_COEF_COLUMN * self.lambda_factor * math.sqrt(fc) * bw * d
+        # result.Vc_N esta en Newtons, aplicar phi y convertir a tonf
+        phi_Vc = PHI_SHEAR * result.Vc_N
 
-        phi_Vc = PHI_SHEAR * Vc
-
-        # Convertir a tonf
         return phi_Vc / N_TO_TONF
 
     def _check_reinforcement(self, slab: Slab) -> Dict[str, Any]:

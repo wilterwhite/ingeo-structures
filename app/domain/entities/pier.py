@@ -8,6 +8,7 @@ from typing import Optional, List, TYPE_CHECKING
 from ..constants.materials import get_bar_area
 from ..constants.reinforcement import FY_DEFAULT_MPA
 from ..calculations.minimum_reinforcement import MinimumReinforcementCalculator
+from .reinforcement_mixin import MeshReinforcementMixin
 
 if TYPE_CHECKING:
     from ..calculations.steel_layer_calculator import SteelLayer, SteelLayerCalculator
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class Pier:
+class Pier(MeshReinforcementMixin):
     """
     Representa un pier/muro de hormigón armado desde ETABS.
 
@@ -94,102 +95,16 @@ class Pier:
         self._bar_area_h = config.bar_area
 
     # =========================================================================
-    # Propiedades de Armadura
+    # Implementación de métodos abstractos del MeshReinforcementMixin
     # =========================================================================
 
-    @property
-    def n_intermediate_bars(self) -> int:
-        """
-        Número de barras intermedias de malla (sin contar las de borde).
+    def _get_mesh_length(self) -> float:
+        """Longitud disponible para barras de malla (ancho del muro)."""
+        return self.width
 
-        Cálculo:
-        - Distancia disponible = width - 2×cover (restamos recubrimiento de cada lado)
-        - Espacios que caben = distancia_disponible / espaciamiento
-        - Barras = floor(espacios) - estas son las barras entre las de borde
-
-        Ejemplo 50cm con cover=2.5cm, spacing=20cm:
-        - Disponible = 500 - 50 = 450mm
-        - Espacios = 450/200 = 2.25
-        - Barras = floor(2.25) = 2 barras intermedias por cara
-
-        Ejemplo 20cm con cover=2.5cm, spacing=20cm:
-        - Disponible = 200 - 50 = 150mm
-        - Espacios = 150/200 = 0.75
-        - Barras = floor(0.75) = 0 barras (solo quedan las de esquina)
-        """
-        # Distancia entre las barras de borde (restamos recubrimiento de cada lado)
-        available_length = self.width - 2 * self.cover
-        if available_length <= 0:
-            return 0
-        # Número de espacios que caben
-        n_spaces = available_length / self.spacing_v
-        # Número de barras intermedias (truncamos)
-        return max(0, int(n_spaces))
-
-    @property
-    def As_vertical(self) -> float:
-        """
-        Área de acero vertical de malla intermedia (mm²).
-
-        Solo cuenta las barras intermedias (entre las de borde).
-        Para cada cara de malla: n_intermediate_bars × área_barra
-        Total: n_intermediate_bars × n_meshes × área_barra
-        """
-        return self.n_intermediate_bars * self.n_meshes * self._bar_area_v
-
-    @property
-    def As_horizontal(self) -> float:
-        """
-        Área de acero horizontal por metro de altura (mm²/m).
-
-        Cálculo: n_meshes × (área_barra / espaciamiento) × 1000
-        """
-        return self.n_meshes * (self._bar_area_h / self.spacing_h) * 1000
-
-    @property
-    def As_vertical_per_m(self) -> float:
-        """Área de acero vertical por metro de longitud (mm²/m)."""
-        return self.n_meshes * (self._bar_area_v / self.spacing_v) * 1000
-
-    @property
-    def rho_vertical(self) -> float:
-        """Cuantía de acero vertical total (malla + borde)."""
-        return (self.As_vertical + self.As_edge_total) / self.Ag
-
-    @property
-    def rho_mesh_vertical(self) -> float:
-        """
-        Cuantía de acero vertical distribuido (solo malla, sin barras de borde).
-
-        Según ACI 318-25 §18.10.2.1, el refuerzo distribuido mínimo
-        debe ser ρℓ ≥ 0.0025, calculado solo con las mallas.
-        """
-        return self.As_vertical / self.Ag
-
-    @property
-    def rho_horizontal(self) -> float:
-        """Cuantía de acero horizontal (malla distribuida)."""
-        return self.As_horizontal / (self.thickness * 1000)
-
-    @property
-    def As_edge_total(self) -> float:
-        """
-        Área de acero de borde TOTAL (mm²).
-
-        Cálculo: n_edge_bars barras × 2 extremos × área_barra
-        Ejemplo: 4 barras por extremo × 2 extremos = 8 barras total
-        """
-        return self.n_edge_bars * 2 * self._bar_area_edge
-
-    @property
-    def As_edge_per_end(self) -> float:
-        """Área de acero de borde en cada extremo del muro (mm²)."""
-        return self.n_edge_bars * self._bar_area_edge
-
-    @property
-    def n_edge_bars_per_end(self) -> int:
-        """Número de barras de borde en cada extremo del muro."""
-        return self.n_edge_bars
+    def _get_thickness_for_rho_h(self) -> float:
+        """Espesor para cálculo de cuantía horizontal."""
+        return self.thickness
 
     @property
     def As_boundary_left(self) -> float:
@@ -232,23 +147,7 @@ class Pier:
         from ..calculations.wall_boundary_zone import WallBoundaryZoneService
         return WallBoundaryZoneService.calculate_steel_in_zone(self, is_left)
 
-    @property
-    def As_flexure_total(self) -> float:
-        """
-        Área de acero total para flexión (mm²).
-
-        Total = As_edge_total + As_vertical
-        - As_edge_total: barras en los extremos (esquinas)
-        - As_vertical: barras intermedias de malla (puede ser 0 si no caben)
-        """
-        return self.As_edge_total + self.As_vertical
-
-    @property
-    def n_total_vertical_bars(self) -> int:
-        """Número total de barras verticales (borde + intermedias)."""
-        n_edge = self.n_meshes * 2  # 2 extremos
-        n_intermediate = self.n_intermediate_bars * self.n_meshes
-        return n_edge + n_intermediate
+    # Las propiedades As_flexure_total y n_total_vertical_bars vienen del mixin
 
     def get_steel_layers(self, direction: str = 'primary') -> List['SteelLayer']:
         """
@@ -448,20 +347,6 @@ class Pier:
             self.cover = cover
         if thickness is not None:
             self.thickness = thickness
-
-    def set_minimum_reinforcement(self, diameter: int = 8):
-        """
-        Configura armadura mínima con el diámetro especificado.
-
-        Args:
-            diameter: Diámetro de barra (mm), default 8
-        """
-        self.diameter_v = diameter
-        self.diameter_h = diameter
-        self._bar_area_v = get_bar_area(diameter, 50.3)
-        self._bar_area_h = self._bar_area_v
-        self.spacing_v = self._calculate_min_spacing()
-        self.spacing_h = self.spacing_v
 
     # =========================================================================
     # Métodos para Protocol FlexuralElement

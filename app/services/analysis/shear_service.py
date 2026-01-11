@@ -206,14 +206,35 @@ class ShearService:
         fc: float, fy: float, rho_h: float,
         Vu2_max: float, Vu3_max: float,
         Nu: float = 0, rho_v: Optional[float] = None,
+        lambda_factor: float = 1.0,
         seismic_category: SeismicCategory = None
     ):
-        """Expone el método de verificación bidireccional."""
+        """
+        Verifica cortante bidireccional (V2 y V3).
+
+        Args:
+            lw: Longitud del muro (mm)
+            tw: Espesor del muro (mm)
+            hw: Altura del muro (mm)
+            fc: Resistencia del concreto (MPa)
+            fy: Fluencia del acero (MPa)
+            rho_h: Cuantía horizontal
+            Vu2_max: Cortante en plano V2 (N)
+            Vu3_max: Cortante fuera de plano V3 (N)
+            Nu: Carga axial (N)
+            rho_v: Cuantía vertical (opcional)
+            lambda_factor: Factor para concreto liviano (1.0=normal)
+            seismic_category: Categoría sísmica
+
+        Returns:
+            CombinedShearResult con DCR combinado SRSS
+        """
         if seismic_category is None:
             seismic_category = SeismicCategory.SPECIAL
         return self._shear_verification.verify_combined_shear(
             lw=lw, tw=tw, hw=hw, fc=fc, fy=fy, rho_h=rho_h,
             Vu2=Vu2_max, Vu3=Vu3_max, Nu=Nu, rho_v=rho_v,
+            lambda_factor=lambda_factor,
             seismic_category=seismic_category
         )
 

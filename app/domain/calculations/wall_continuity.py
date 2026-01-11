@@ -44,6 +44,23 @@ class WallContinuityInfo:
     is_top: bool               # True si es el pier más alto del muro
     story_index: int           # Índice del piso (0 = base)
 
+    @property
+    def hwcs_m(self) -> float:
+        """Altura desde sección crítica en metros."""
+        return self.hwcs * MM_TO_M
+
+    def get_hwcs_lw(self, lw_mm: float) -> float:
+        """
+        Calcula relación hwcs/lw para clasificación de muros.
+
+        Args:
+            lw_mm: Longitud del muro en mm (pier.width)
+
+        Returns:
+            Relación hwcs/lw (adimensional)
+        """
+        return self.hwcs / lw_mm if lw_mm > 0 else 0
+
 
 @dataclass
 class BuildingInfo:

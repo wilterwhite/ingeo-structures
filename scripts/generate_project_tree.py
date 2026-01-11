@@ -18,8 +18,13 @@ IGNORE_DIRS = {
 # Extensiones a ignorar
 IGNORE_EXTENSIONS = {'.pyc', '.pyo', '.exe', '.dll', '.so', '.dylib'}
 
+# Extensiones binarias (no cuentan líneas de código)
+BINARY_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.bmp', '.svg',
+                     '.pdf', '.zip', '.tar', '.gz', '.woff', '.woff2', '.ttf',
+                     '.eot', '.mp3', '.mp4', '.wav', '.avi', '.mov'}
+
 # Archivos a ignorar
-IGNORE_FILES = {'nul', '.DS_Store', 'Thumbs.db'}
+IGNORE_FILES = {'nul', '.DS_Store', 'Thumbs.db', '__init__.py'}
 
 # Comentarios por patrón de nombre de archivo
 FILE_COMMENTS = {
@@ -49,7 +54,6 @@ FILE_COMMENTS = {
     # Routes
     'routes.py': 'Rutas Flask de la API',
     'run.py': 'Punto de entrada de la aplicación',
-    '__init__.py': 'Inicialización del módulo',
 
     # Frontend
     'StructuralAPI.js': 'API client para comunicación con backend',
@@ -83,8 +87,20 @@ def should_ignore(name: str, is_dir: bool = False) -> bool:
     return ext in IGNORE_EXTENSIONS
 
 
+def is_binary_file(filepath: Path) -> bool:
+    """Determina si un archivo es binario (imagen, etc.)."""
+    ext = filepath.suffix.lower()
+    return ext in BINARY_EXTENSIONS
+
+
 def count_lines(filepath: Path) -> int:
-    """Cuenta las líneas de un archivo de texto."""
+    """Cuenta las líneas de un archivo de texto.
+
+    Retorna 0 para archivos binarios (imágenes, etc.).
+    """
+    if is_binary_file(filepath):
+        return 0
+
     try:
         with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
             return sum(1 for _ in f)
@@ -93,110 +109,128 @@ def count_lines(filepath: Path) -> int:
 
 
 def get_comment(filename: str) -> str:
-    """Obtiene un comentario corto para el archivo."""
+    """Obtiene un comentario corto para el archivo.
+
+    Solo retorna comentarios específicos definidos en FILE_COMMENTS.
+    NO genera comentarios genéricos como "Módulo Python" que son obvios.
+    """
     if filename in FILE_COMMENTS:
         return FILE_COMMENTS[filename]
 
-    # Comentarios genéricos por extensión
+    # Solo comentarios específicos para tests
     ext = os.path.splitext(filename)[1]
-    if ext == '.py':
-        if filename.startswith('test_'):
-            base = filename[5:-3]  # Remove test_ and .py
-            return f'Tests para {base}'
-        return 'Módulo Python'
-    elif ext == '.js':
-        return 'Módulo JavaScript'
-    elif ext == '.css':
-        return 'Hoja de estilos'
-    elif ext == '.html':
-        return 'Template HTML'
-    elif ext == '.json':
-        return 'Configuración JSON'
-    elif ext == '.md':
-        return 'Documentación Markdown'
-    elif ext == '.xlsx':
-        return 'Archivo Excel'
-    elif ext in ('.yml', '.yaml'):
-        return 'Configuración YAML'
-    elif ext == '.txt':
-        return 'Archivo de texto'
-    elif ext == '.ini':
-        return 'Archivo de configuración'
+    if ext == '.py' and filename.startswith('test_'):
+        base = filename[5:-3]  # Remove test_ and .py
+        return f'Tests para {base}'
 
+    # No generar comentarios genéricos obvios
     return ''
+
+
+class TreeStats:
+    """Acumula estadísticas durante la generación del árbol."""
+    def __init__(self):
+        self.total_lines = 0
+        self.total_files = 0
+        self.lines_by_type = {}
+
+    def add_file(self, filepath: Path, lines: int):
+        self.total_lines += lines
+        self.total_files += 1
+        ext = filepath.suffix or 'other'
+        self.lines_by_type[ext] = self.lines_by_type.get(ext, 0) + lines
+
+
+def build_tree_recursive(
+    dir_path: Path,
+    prefix: str,
+    output: list,
+    stats: TreeStats
+):
+    """Construye el árbol recursivamente con prefijos correctos.
+
+    Args:
+        dir_path: Directorio a procesar
+        prefix: Prefijo de indentación actual (ej: "│   │   ")
+        output: Lista donde agregar líneas de salida
+        stats: Objeto para acumular estadísticas
+    """
+    # Obtener contenido del directorio
+    try:
+        entries = list(dir_path.iterdir())
+    except PermissionError:
+        return
+
+    # Separar y filtrar directorios y archivos
+    subdirs = sorted([e for e in entries if e.is_dir() and not should_ignore(e.name, is_dir=True)])
+    files = sorted([e for e in entries if e.is_file() and not should_ignore(e.name)])
+
+    # Combinar: primero archivos, luego directorios
+    all_entries = files + subdirs
+    total = len(all_entries)
+
+    for i, entry in enumerate(all_entries):
+        is_last = (i == total - 1)
+        connector = "└── " if is_last else "├── "
+        extension = "    " if is_last else "│   "
+
+        if entry.is_file():
+            # Archivo
+            lines = count_lines(entry)
+            comment = get_comment(entry.name)
+            stats.add_file(entry, lines)
+
+            # Formato: para binarios mostrar (binario) en vez de líneas
+            if is_binary_file(entry):
+                line_info = "(binario)"
+            else:
+                line_info = f"({lines:>4} líneas)"
+
+            if comment:
+                output.append(f"{prefix}{connector}{entry.name:<35} {line_info}  # {comment}")
+            else:
+                output.append(f"{prefix}{connector}{entry.name:<35} {line_info}")
+        else:
+            # Directorio
+            output.append(f"{prefix}{connector}{entry.name}/")
+            build_tree_recursive(entry, prefix + extension, output, stats)
 
 
 def generate_tree(root_path: Path, output_path: Path):
     """Genera el árbol de archivos con comentarios y líneas."""
-    total_lines = 0
-    total_files = 0
-    lines_by_type = {}
-
+    stats = TreeStats()
     output = []
+
     output.append("=" * 70)
     output.append("  INGEO STRUCTURES - Estructura del Proyecto")
     output.append(f"  Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     output.append("=" * 70)
     output.append("")
+    output.append(f"{root_path.name}/")
 
-    for dirpath, dirnames, filenames in os.walk(root_path):
-        # Filtrar directorios ignorados
-        dirnames[:] = [d for d in dirnames if not should_ignore(d, is_dir=True)]
-        dirnames.sort()
-
-        # Calcular nivel de indentación
-        rel_path = Path(dirpath).relative_to(root_path)
-        level = len(rel_path.parts)
-        indent = "│   " * level
-
-        # Nombre del directorio
-        if level > 0:
-            dir_name = Path(dirpath).name
-            output.append(f"{indent[:-4]}├── {dir_name}/")
-
-        # Archivos en este directorio
-        valid_files = [f for f in sorted(filenames) if not should_ignore(f)]
-
-        for i, filename in enumerate(valid_files):
-            filepath = Path(dirpath) / filename
-            lines = count_lines(filepath)
-            comment = get_comment(filename)
-
-            # Acumular estadísticas
-            total_lines += lines
-            total_files += 1
-            ext = os.path.splitext(filename)[1] or 'other'
-            lines_by_type[ext] = lines_by_type.get(ext, 0) + lines
-
-            # Formatear línea
-            is_last = (i == len(valid_files) - 1)
-            prefix = "└── " if is_last else "├── "
-            line_info = f"({lines:>4} líneas)"
-
-            if comment:
-                output.append(f"{indent}{prefix}{filename:<30} {line_info}  # {comment}")
-            else:
-                output.append(f"{indent}{prefix}{filename:<30} {line_info}")
+    # Construir árbol recursivamente
+    build_tree_recursive(root_path, "", output, stats)
 
     # Resumen final
     output.append("")
     output.append("=" * 70)
     output.append("  RESUMEN")
     output.append("=" * 70)
-    output.append(f"  Total de archivos: {total_files}")
-    output.append(f"  Total de líneas:   {total_lines:,}")
+    output.append(f"  Total de archivos: {stats.total_files}")
+    output.append(f"  Total de líneas de código: {stats.total_lines:,}")
     output.append("")
     output.append("  Líneas por tipo de archivo:")
-    for ext, lines in sorted(lines_by_type.items(), key=lambda x: -x[1]):
-        pct = lines / total_lines * 100 if total_lines > 0 else 0
-        output.append(f"    {ext:<10} {lines:>6,} líneas ({pct:>5.1f}%)")
+    for ext, lines in sorted(stats.lines_by_type.items(), key=lambda x: -x[1]):
+        if lines > 0:  # Solo mostrar tipos con líneas de código
+            pct = lines / stats.total_lines * 100 if stats.total_lines > 0 else 0
+            output.append(f"    {ext:<10} {lines:>6,} líneas ({pct:>5.1f}%)")
     output.append("=" * 70)
 
     # Escribir archivo
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(output))
 
-    return total_files, total_lines
+    return stats.total_files, stats.total_lines
 
 
 def main():

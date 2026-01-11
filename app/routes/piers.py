@@ -7,6 +7,8 @@ Incluye:
 - Análisis de piers (flexión, corte, boundary elements)
 - Generación de reportes PDF
 - Configuración de vigas de acople
+
+Usa ElementOrchestrator para clasificar y verificar piers de forma unificada.
 """
 import uuid
 import json
@@ -16,6 +18,7 @@ from flask import Blueprint, request, jsonify, Response
 
 from ..services.report import PDFReportGenerator, ReportConfig
 from ..services.parsing.config_parser import parse_beam_config
+from ..services.analysis.reinforcement_update_service import ReinforcementUpdateService
 from .common import (
     get_analysis_service,
     get_json_data,
@@ -25,6 +28,7 @@ from .common import (
     require_session_and_pier,
     require_element,
     get_session_or_404,
+    validate_positive_numeric,
 )
 
 # Blueprint para endpoints de piers
@@ -339,16 +343,34 @@ def get_section_diagram(session_id: str, pier_key: str, data: dict):
 @require_session
 def set_default_beam(session_id: str, data: dict):
     """Configura la viga estándar para la sesión."""
+    # Validar parámetros numéricos
+    numeric_fields = {
+        'width': ('float', False),
+        'height': ('float', False),
+        'ln': ('float', False),
+        'n_bars_top': ('int', False),
+        'diameter_top': ('int', False),
+        'n_bars_bottom': ('int', False),
+        'diameter_bottom': ('int', False),
+    }
+    validated, errors = validate_positive_numeric(data, numeric_fields)
+    if errors:
+        return jsonify({
+            'success': False,
+            'error': 'Errores de validación',
+            'validation_errors': errors
+        }), 400
+
     service = get_analysis_service()
     service.set_default_coupling_beam(
         session_id=session_id,
-        width=float(data.get('width', 200)),
-        height=float(data.get('height', 500)),
-        ln=float(data.get('ln', 1500)),
-        n_bars_top=int(data.get('n_bars_top', 2)),
-        diameter_top=int(data.get('diameter_top', 12)),
-        n_bars_bottom=int(data.get('n_bars_bottom', 2)),
-        diameter_bottom=int(data.get('diameter_bottom', 12))
+        width=validated.get('width', 200),
+        height=validated.get('height', 500),
+        ln=validated.get('ln', 1500),
+        n_bars_top=validated.get('n_bars_top', 2),
+        diameter_top=validated.get('diameter_top', 12),
+        n_bars_bottom=validated.get('n_bars_bottom', 2),
+        diameter_bottom=validated.get('diameter_bottom', 12)
     )
 
     return jsonify({'success': True})

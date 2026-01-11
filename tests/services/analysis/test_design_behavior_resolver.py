@@ -164,12 +164,13 @@ class TestBeamBehavior:
 
         assert behavior == DesignBehavior.SEISMIC_BEAM
 
-    def test_beam_with_significant_axial_gets_flexure_compression(self):
+    def test_beam_with_significant_axial_gets_seismic_beam_column(self):
         """
-        Viga con axial > Ag*fc'/10 → FLEXURE_COMPRESSION.
+        Viga sísmica con axial > Ag*fc'/10 → SEISMIC_BEAM_COLUMN.
 
-        Segun ACI 318-25 §18.6.4.6, cuando Pu > Ag*fc'/10,
-        se requieren verificaciones adicionales de confinamiento.
+        Según ACI 318-25 §18.6.4.6, cuando Pu > Ag*fc'/10,
+        se requieren hoops (estribos cerrados) como columna.
+        Esto es SEISMIC_BEAM_COLUMN, no FLEXURE_COMPRESSION.
         """
         resolver = DesignBehaviorResolver()
         beam = MockBeam(width=300, depth=600, fc=28)
@@ -188,7 +189,7 @@ class TestBeamBehavior:
             is_seismic=True
         )
 
-        assert behavior == DesignBehavior.FLEXURE_COMPRESSION
+        assert behavior == DesignBehavior.SEISMIC_BEAM_COLUMN
 
     def test_nonseismic_beam_without_axial_gets_flexure_only(self):
         """Viga no-sismica sin axial → FLEXURE_ONLY."""

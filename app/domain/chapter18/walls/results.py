@@ -8,6 +8,7 @@ from typing import Optional, List
 from ..results import (
     WallPierClassification,
     WallPierShearDesign,
+    WallPierDesignResult,
     BoundaryElementResult,
     BoundaryZoneCheck,
     ShearAmplificationResult,
@@ -129,6 +130,7 @@ class SeismicWallResult:
     boundary: Optional[WallBoundaryResult] = None
     end_zones: Optional[BoundaryZoneCheck] = None
     wall_pier: Optional[WallPierClassification] = None
+    wall_pier_design: Optional[WallPierDesignResult] = None  # Diseño completo §18.10.8
 
     is_ok: bool = True
     dcr_max: float = 0

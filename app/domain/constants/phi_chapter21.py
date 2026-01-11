@@ -67,6 +67,32 @@ PHI_SHEAR_DIAGONAL = 0.85   # Vigas de acople diagonales (§21.2.4.4)
 
 
 # =============================================================================
+# FACTORES DE CAPACIDAD AXIAL (§22.4.2.1)
+# =============================================================================
+# Pn,max = factor × [0.85×f'c×(Ag-Ast) + fy×Ast]
+
+PN_MAX_FACTOR_TIED = 0.80       # Factor para elementos con estribos (§22.4.2.1(a))
+PN_MAX_FACTOR_SPIRAL = 0.85    # Factor para elementos con espiral (§22.4.2.1(b))
+
+
+# =============================================================================
+# FACTORES DE SOBRERESISTENCIA (§18.8.2.1)
+# =============================================================================
+# Para cálculo de momentos probables Mpr
+
+ALPHA_OVERSTRENGTH = 1.25      # Factor de sobreresistencia del acero
+                               # Mpr usa fy_amp = alpha × fy
+
+
+# =============================================================================
+# BLOQUE DE WHITNEY (§22.2.2.4.1)
+# =============================================================================
+# Factor de esfuerzo equivalente
+
+WHITNEY_STRESS_FACTOR = 0.85   # 0.85×f'c para bloque rectangular equivalente
+
+
+# =============================================================================
 # FUNCIONES DE CÁLCULO DE PHI
 # =============================================================================
 
@@ -102,3 +128,32 @@ def calculate_phi_flexure(
         # Zona de transición - interpolación lineal
         return phi_c + (PHI_TENSION - phi_c) * \
                (epsilon_t - EPSILON_TY) / (EPSILON_T_LIMIT - EPSILON_TY)
+
+
+# =============================================================================
+# UMBRALES DCR (Demand/Capacity Ratio)
+# =============================================================================
+# Criterios de evaluación de resultados basados en factor de seguridad implícito
+
+DCR_OK = 0.67           # DCR <= 0.67 significa SF >= 1.5 (conservador)
+DCR_WARN = 1.0          # DCR <= 1.0 significa SF >= 1.0 (límite)
+# DCR > 1.0 significa que la capacidad es insuficiente
+
+
+def get_dcr_status(dcr: float) -> str:
+    """
+    Determina el estado de un elemento basado en su DCR.
+
+    Args:
+        dcr: Demand/Capacity ratio
+
+    Returns:
+        'ok': DCR <= 0.67 (SF >= 1.5)
+        'warn': 0.67 < DCR <= 1.0 (1.0 <= SF < 1.5)
+        'fail': DCR > 1.0 (SF < 1.0)
+    """
+    if dcr <= DCR_OK:
+        return 'ok'
+    elif dcr <= DCR_WARN:
+        return 'warn'
+    return 'fail'

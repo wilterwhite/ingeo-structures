@@ -48,10 +48,11 @@ const SharedCells = {
     createFlexureSfCell(result) {
         const hasTension = result.flexure?.has_tension || false;
         const tensionCombos = result.flexure?.tension_combos || 0;
-        // Usar DCR directo del backend si está disponible, si no, calcular de SF
-        const sf = result.flexure?.sf ?? 0;
-        const dcr = result.flexure?.dcr ?? (sf > 0 ? (1 / sf) : 0);
+        // DCR siempre viene del backend (domain/constants/phi_chapter21.py)
+        const dcr = result.flexure?.dcr ?? 0;
         const dcrDisplay = formatDcr(dcr);
+        // Usar dcr_class del backend (centralizado)
+        const dcrClass = result.dcr_class || result.flexure?.dcr_class || getDcrClass(dcr);
 
         const sl = result.slenderness || {};
         const slenderInfo = sl.is_slender
@@ -59,7 +60,7 @@ const SharedCells = {
             : `Esbeltez: λ=${sl.lambda || 0}`;
 
         const td = document.createElement('td');
-        td.className = `fs-value ${getDcrClass(dcr)}`;
+        td.className = `fs-value ${dcrClass}`;
         td.title = `Combo: ${result.flexure?.critical_combo || '-'}\n${slenderInfo}`;
 
         let tensionWarning = '';
@@ -100,13 +101,14 @@ const SharedCells = {
         const formulaType = result.shear?.formula_type || 'wall';
         const shearType = formulaType === 'column' ? 'COL' : 'MURO';
         const shearTitle = formulaType === 'column' ? 'Fórmula COLUMNA (ACI 22.5)' : 'Fórmula MURO (ACI 18.10.4)';
-        // Usar DCR directo del backend si está disponible, si no, calcular de SF
-        const sf = result.shear?.sf ?? 0;
-        const dcr = result.shear?.dcr ?? (sf > 0 ? (1 / sf) : 0);
+        // DCR siempre viene del backend (domain/constants/phi_chapter21.py)
+        const dcr = result.shear?.dcr ?? 0;
         const dcrDisplay = formatDcr(dcr);
+        // Usar dcr_class del backend (centralizado)
+        const dcrClass = result.shear?.dcr_class || getDcrClass(dcr);
 
         const td = document.createElement('td');
-        td.className = `fs-value ${getDcrClass(dcr)}`;
+        td.className = `fs-value ${dcrClass}`;
         td.title = `Combo: ${result.shear?.critical_combo || '-'}\n${shearTitle}`;
         td.innerHTML = `
             <span class="fs-number">${dcrDisplay}</span>
@@ -153,5 +155,58 @@ const SharedCells = {
         td.className = 'empty-cell';
         td.innerHTML = '<span class="na-value">-</span>';
         return td;
+    },
+
+    // =========================================================================
+    // Helpers para creación de selectores de refuerzo
+    // =========================================================================
+
+    /**
+     * Crea un select de diámetro estándar.
+     * @param {string} type - Tipo de diámetro ('malla', 'borde', 'estribos', etc.)
+     * @param {number} value - Valor seleccionado
+     * @param {string} className - Clase CSS del select
+     * @param {string} title - Título/tooltip
+     * @returns {string} HTML del select
+     */
+    createDiameterSelect(type, value, className, title) {
+        return `<select class="${className}" title="${title}">
+            ${StructuralConstants.generateDiameterOptions(type, value)}
+        </select>`;
+    },
+
+    /**
+     * Crea un select de espaciamiento estándar.
+     * @param {string} type - Tipo de espaciamiento ('malla', 'estribos', etc.)
+     * @param {number} value - Valor seleccionado
+     * @param {string} className - Clase CSS del select
+     * @param {string} title - Título/tooltip
+     * @returns {string} HTML del select
+     */
+    createSpacingSelect(type, value, className, title) {
+        return `<select class="${className}" title="${title}">
+            ${StructuralConstants.generateSpacingOptions(type, value)}
+        </select>`;
+    },
+
+    /**
+     * Genera clase CSS de warning basada en condiciones booleanas.
+     * @param {Object} conditions - Objeto con condiciones {nombre: boolean}
+     * @returns {string} 'rho-warning' si alguna condición es false, '' si todas son true
+     */
+    getWarningClass(conditions) {
+        return Object.values(conditions).some(v => v === false) ? 'rho-warning' : '';
+    },
+
+    /**
+     * Construye título de warning desde checks fallidos.
+     * @param {Object} checks - Objeto con {mensaje: boolean}
+     * @returns {string} Mensajes de checks fallidos separados por coma
+     */
+    buildWarningTitle(checks) {
+        return Object.entries(checks)
+            .filter(([_, ok]) => !ok)
+            .map(([msg]) => msg)
+            .join(', ');
     }
 };

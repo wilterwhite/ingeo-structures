@@ -108,7 +108,7 @@ def verify_shear_strength(
     """
     # Usar ShearVerificationService para calcular Vn (instancia local)
     shear_service = ShearVerificationService()
-    _Vc, _Vs, Vn, _Vn_max, _alpha_c = shear_service.calculate_Vn_wall(
+    _Vc, _Vs, Vn, _Vn_max, _alpha_c, _alpha_sh = shear_service.calculate_Vn_wall(
         lw=lw,
         tw=bw,
         hw=hw if hw > 0 else lw,  # Usar lw si no se proporciona hw

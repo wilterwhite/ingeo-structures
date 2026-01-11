@@ -201,11 +201,12 @@ class RowFactory {
         });
 
         // Configuración de selectores para event listeners
+        // Nota: los selectores deben coincidir con los definidos en BeamCells.js
         const selectorsByType = {
             pier: ['.malla-cell select', '.borde-cell select'],
             column: ['.longitudinal-cell select', '.stirrups-cell select'],
-            beam: ['.beam-reinf-cell select', '.beam-stirrups-cell select'],
-            drop_beam: ['.malla-cell select', '.borde-cell select']
+            beam: ['select[class^="edit-beam-"]'],  // Todos los selects de beam
+            drop_beam: ['.malla-v-cell select', '.malla-h-cell select', '.borde-cell select']
         };
 
         // Event listeners para cambios de armadura

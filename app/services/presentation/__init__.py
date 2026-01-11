@@ -1,8 +1,12 @@
-# app/structural/services/presentation/__init__.py
+# app/services/presentation/__init__.py
 """
 Servicios de presentación y visualización.
 """
 from .plot_generator import PlotGenerator
-from .pier_details_formatter import PierDetailsFormatter
+from .result_formatter import ResultFormatter
 
-__all__ = ['PlotGenerator', 'PierDetailsFormatter']
+# Re-export desde nueva ubicación para compatibilidad hacia atrás
+# PierDetailsService se movió a services/analysis/ (ya no es un formatter)
+from ..analysis.pier_details_service import PierDetailsService, PierDetailsFormatter
+
+__all__ = ['PlotGenerator', 'ResultFormatter', 'PierDetailsService', 'PierDetailsFormatter']

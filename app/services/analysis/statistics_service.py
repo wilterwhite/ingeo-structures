@@ -37,7 +37,7 @@ class StatisticsService:
             Dict con total, ok, fail, pass_rate
         """
         if not results:
-            return {'total': 0, 'ok': 0, 'fail': 0, 'pass_rate': 100.0}
+            return {'total': 0, 'ok_count': 0, 'fail_count': 0, 'pass_rate': 100.0}
 
         total = len(results)
         ok_count = sum(1 for r in results if r.get(status_key) == 'OK')
@@ -45,8 +45,8 @@ class StatisticsService:
 
         return {
             'total': total,
-            'ok': ok_count,
-            'fail': fail_count,
+            'ok_count': ok_count,
+            'fail_count': fail_count,
             'pass_rate': round(ok_count / total * 100, 1) if total > 0 else 100.0
         }
 

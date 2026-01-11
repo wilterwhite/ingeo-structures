@@ -2,6 +2,9 @@
 /**
  * Utilidades compartidas para el módulo estructural.
  * Funciones de formateo, validación y helpers comunes.
+ *
+ * NOTA: Las funciones getDcrClass() y getFsClass() usan umbrales
+ * de StructuralConstants (cargados desde /api/constants).
  */
 
 // =============================================================================
@@ -10,31 +13,29 @@
 
 /**
  * Retorna la clase CSS según el factor de seguridad.
- * @param {string|number} sf - Factor de seguridad
+ * Convierte SF a DCR y usa StructuralConstants para consistencia.
+ * @param {string|number} sf - Factor de seguridad (SF = 1/DCR)
  * @returns {string} Clase CSS ('fs-ok', 'fs-warn', 'fs-fail')
  */
 function getFsClass(sf) {
     if (sf === '>100') return 'fs-ok';
     const val = parseFloat(sf);
     if (isNaN(val)) return 'fs-fail';
-    if (val >= 1.5) return 'fs-ok';
-    if (val >= 1.0) return 'fs-warn';
-    return 'fs-fail';
+
+    // Convertir SF a DCR: SF = 1/DCR → DCR = 1/SF
+    const dcr = val > 0 ? 1.0 / val : 100;
+    return StructuralConstants.getDcrClass(dcr);
 }
 
 /**
  * Retorna la clase CSS según el D/C (Demand/Capacity ratio).
- * D/C <= 1.0 es OK, D/C > 1.0 es falla.
+ * Delega a StructuralConstants (cargados desde backend).
+ *
  * @param {string|number} dcr - Demand/Capacity ratio
  * @returns {string} Clase CSS ('fs-ok', 'fs-warn', 'fs-fail')
  */
 function getDcrClass(dcr) {
-    if (dcr === '<0.01') return 'fs-ok';
-    const val = parseFloat(dcr);
-    if (isNaN(val)) return 'fs-fail';
-    if (val <= 0.67) return 'fs-ok';  // Equivale a SF >= 1.5
-    if (val <= 1.0) return 'fs-warn'; // Equivale a SF >= 1.0
-    return 'fs-fail';
+    return StructuralConstants.getDcrClass(dcr);
 }
 
 // =============================================================================
@@ -165,5 +166,51 @@ function getStatusClass(result) {
     }
     // Fallback: calcular localmente
     return isStatusOk(result) ? 'status-ok' : 'status-fail';
+}
+
+/**
+ * Obtiene el texto de DCR formateado, preferiendo el valor del backend.
+ * @param {Object} result - Resultado con dcr_display y dcr_max
+ * @returns {string} DCR formateado
+ */
+function getDcrDisplay(result) {
+    // Preferir el valor pre-formateado del backend
+    if (result?.dcr_display) {
+        return result.dcr_display;
+    }
+    // Fallback: formatear localmente
+    return formatDcr(result?.dcr_max);
+}
+
+/**
+ * Obtiene la clase CSS de DCR, preferiendo el valor del backend.
+ * @param {Object} result - Resultado con dcr_class y dcr_max
+ * @returns {string} Clase CSS ('fs-ok', 'fs-warn', 'fs-fail')
+ */
+function getDcrClassFromResult(result) {
+    // Preferir la clase CSS del backend
+    if (result?.dcr_class) {
+        return result.dcr_class;
+    }
+    // Fallback: calcular localmente
+    return getDcrClass(result?.dcr_max);
+}
+
+/**
+ * Obtiene las dimensiones formateadas, preferiendo el valor del backend.
+ * @param {Object} result - Resultado con dimensions_display y geometry
+ * @returns {string} Dimensiones formateadas
+ */
+function getDimensionsDisplay(result) {
+    // Preferir el valor pre-formateado del backend
+    if (result?.dimensions_display) {
+        return result.dimensions_display;
+    }
+    // Fallback: formatear localmente desde geometry
+    const g = result?.geometry;
+    if (g) {
+        return formatSectionDimensions(g.thickness_m, g.width_m, 'mm');
+    }
+    return '-';
 }
 

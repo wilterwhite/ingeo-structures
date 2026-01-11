@@ -183,9 +183,10 @@ class SlabsTable extends FilterableTable {
     createFlexureDcrCell(result) {
         const flex = result.flexure || {};
         const dcr = flex.dcr || 0;
+        // Usar clase CSS del backend (consistente con otros elementos)
+        const dcrClass = flex.dcr_class || 'fs-ok';
 
         const td = document.createElement('td');
-        const dcrClass = dcr > 1 ? 'dcr-fail' : dcr > 0.8 ? 'dcr-warn' : 'dcr-ok';
         td.className = 'dcr-value';
         td.innerHTML = `<span class="${dcrClass}">${dcr.toFixed(3)}</span>`;
         return td;
@@ -214,9 +215,10 @@ class SlabsTable extends FilterableTable {
     createShearDcrCell(result) {
         const shear = result.shear || {};
         const dcr = shear.dcr || 0;
+        // Usar clase CSS del backend (consistente con otros elementos)
+        const dcrClass = shear.dcr_class || 'fs-ok';
 
         const td = document.createElement('td');
-        const dcrClass = dcr > 1 ? 'dcr-fail' : dcr > 0.8 ? 'dcr-warn' : 'dcr-ok';
         td.className = 'dcr-value';
         td.innerHTML = `<span class="${dcrClass}">${dcr.toFixed(3)}</span>`;
         return td;

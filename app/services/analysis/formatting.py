@@ -6,7 +6,7 @@ Centraliza la logica de formateo para evitar duplicacion y garantizar
 consistencia en las respuestas JSON.
 """
 import math
-from typing import Any, Callable, Dict, List, Union
+from typing import Union
 
 
 def format_safety_factor(
@@ -38,57 +38,3 @@ def format_safety_factor(
     return round(value, 2)
 
 
-def calculate_summary_stats(
-    results: Union[List, Dict],
-    ok_filter: Callable[[Any], bool]
-) -> Dict[str, Any]:
-    """
-    Calcula estadisticas resumidas de resultados de verificacion.
-
-    Args:
-        results: Lista o diccionario de resultados
-        ok_filter: Funcion que retorna True si el resultado es OK
-
-    Returns:
-        Dict con total, ok, fail, pass_rate
-
-    Examples:
-        >>> results = [{'status': 'OK'}, {'status': 'NO OK'}]
-        >>> calculate_summary_stats(results, lambda r: r['status'] == 'OK')
-        {'total': 2, 'ok': 1, 'fail': 1, 'pass_rate': 50.0}
-    """
-    items = list(results.values()) if isinstance(results, dict) else list(results)
-    total = len(items)
-
-    if total == 0:
-        return {
-            'total': 0,
-            'ok': 0,
-            'fail': 0,
-            'pass_rate': 100.0
-        }
-
-    ok_count = sum(1 for r in items if ok_filter(r))
-
-    return {
-        'total': total,
-        'ok': ok_count,
-        'fail': total - ok_count,
-        'pass_rate': round(ok_count / total * 100, 1)
-    }
-
-
-def format_dcr(value: float, precision: int = 3) -> float:
-    """
-    Formatea Demand-Capacity Ratio (DCR).
-
-    Args:
-        value: DCR a formatear
-        precision: Decimales (default 3)
-
-    Returns:
-        DCR redondeado
-    """
-    if math.isinf(value):
-        return 0.0  # DCR infinito indica capacidad cero
-    return round(value, precision)

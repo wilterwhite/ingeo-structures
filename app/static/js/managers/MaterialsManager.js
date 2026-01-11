@@ -90,29 +90,27 @@ class MaterialsManager {
 
     /**
      * Maneja el cambio de tipo de concreto.
+     * Usa factores lambda de StructuralConstants (cargados desde backend).
      */
     onTypeChange(event) {
         const select = event.target;
         const materialName = select.dataset.material;
         const newType = select.value;
 
-        const lambdaValues = {
-            'normal': 1.0,
-            'sand_lightweight': 0.85,
-            'all_lightweight': 0.75
-        };
+        // Obtener lambda del backend (siempre debería estar disponible)
+        const lambda = StructuralConstants.getLambda(newType);
 
         this.materials[materialName].type = newType;
-        this.materials[materialName].lambda = lambdaValues[newType];
+        this.materials[materialName].lambda = lambda;
 
         // Actualizar celda de lambda
         const row = select.closest('tr');
         const lambdaCell = row.querySelector('.lambda-value');
         if (lambdaCell) {
-            lambdaCell.textContent = this.materials[materialName].lambda.toFixed(2);
+            lambdaCell.textContent = lambda.toFixed(2);
         }
 
-        console.log(`[Materials] ${materialName} → ${newType}, λ=${lambdaValues[newType]}`);
+        console.log(`[Materials] ${materialName} → ${newType}, λ=${lambda}`);
     }
 
     /**

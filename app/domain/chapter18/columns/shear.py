@@ -16,18 +16,11 @@ Referencias:
 import math
 from typing import Optional
 
-from ...constants.materials import (
-    LAMBDA_NORMAL,
-    get_effective_fc_shear,
-    get_effective_fyt_shear,
-)
-from ...constants.shear import (
-    PHI_SHEAR,
-    VC_COEF_COLUMN,
-    VS_MAX_COEF,
-)
+from ...constants.materials import LAMBDA_NORMAL
+from ...constants.shear import PHI_SHEAR
 from ...constants.units import N_TO_TONF
-from ..common import check_Vc_zero_condition as _check_Vc_zero
+from ...shear.concrete_shear import calculate_Vc_beam, check_Vc_zero_condition
+from ...shear.steel_shear import calculate_Vs_beam_column
 from .results import SeismicColumnShearResult, ColumnShearCapacity
 
 
@@ -71,33 +64,6 @@ class SeismicColumnShearService:
         Ve = (Mpr_top + Mpr_bottom) * 1000 / lu
         return Ve
 
-    def check_Vc_zero_condition(
-        self,
-        Ve: float,
-        Vu: float,
-        Pu: float,
-        Ag: float,
-        fc: float
-    ) -> bool:
-        """
-        Verifica si aplica Vc = 0 según §18.7.6.2.1.
-
-        Condiciones (ambas deben cumplirse):
-        (a) El cortante inducido por sismo Ve >= 0.5 * Vu máximo
-        (b) La carga axial factorizada Pu < Ag * f'c / 20
-
-        Args:
-            Ve: Cortante por diseño por capacidad (tonf)
-            Vu: Cortante último máximo de la combinación (tonf)
-            Pu: Carga axial factorizada (tonf, positivo = compresión)
-            Ag: Área bruta de la columna (mm²)
-            fc: f'c del concreto (MPa)
-
-        Returns:
-            True si Vc debe ser cero
-        """
-        return _check_Vc_zero(Ve, Vu, Pu, Ag, fc)
-
     def calculate_shear_capacity(
         self,
         bw: float,
@@ -112,10 +78,9 @@ class SeismicColumnShearService:
         """
         Calcula la capacidad de cortante de la columna.
 
-        Según ACI 318-25:
-        - Vc = 0.17 * lambda * sqrt(f'c) * bw * d  [§22.5.5.1]
-        - Vs = Av * fyt * d / s                    [§22.5.10.5.3]
-        - Vs_max = 0.66 * sqrt(f'c) * bw * d       [§22.5.1.2]
+        Delega a funciones centralizadas en domain/shear/:
+        - calculate_Vc_beam() para Vc conservador (sin incremento por axial)
+        - calculate_Vs_beam_column() para Vs
 
         NOTA: Esta fórmula de Vc NO incluye el incremento por carga axial
         (1 + Nu/14Ag) de §22.5.6.1. Esto es conservador porque:
@@ -135,24 +100,12 @@ class SeismicColumnShearService:
         Returns:
             ColumnShearCapacity con Vc, Vs, Vn, phi_Vn en tonf
         """
-        fc_eff = get_effective_fc_shear(fc)
-        fyt_eff = get_effective_fyt_shear(fyt)
+        # Usar funciones centralizadas de domain/shear/
+        vc_result = calculate_Vc_beam(bw, d, fc, lambda_factor, force_Vc_zero=Vc_is_zero)
+        vs_result = calculate_Vs_beam_column(Av, d, s, fyt, bw, fc)
 
-        # Vc (N)
-        if Vc_is_zero:
-            Vc = 0
-        else:
-            Vc = VC_COEF_COLUMN * lambda_factor * math.sqrt(fc_eff) * bw * d
-
-        # Vs (N)
-        if s > 0:
-            Vs = Av * fyt_eff * d / s
-        else:
-            Vs = 0
-
-        # Límite de Vs: Vs <= 0.66 * sqrt(f'c) * bw * d
-        Vs_max = VS_MAX_COEF * math.sqrt(fc_eff) * bw * d
-        Vs = min(Vs, Vs_max)
+        Vc = vc_result.Vc_N
+        Vs = vs_result.Vs_N
 
         # Vn y phi_Vn
         Vn = Vc + Vs
@@ -225,7 +178,7 @@ class SeismicColumnShearService:
         # Verificar condición Vc = 0
         Vc_is_zero = False
         if uses_capacity_design:
-            Vc_is_zero = self.check_Vc_zero_condition(Ve, Vu_max, Pu, Ag, fc)
+            Vc_is_zero = check_Vc_zero_condition(Ve, Vu_max, Pu, Ag, fc)
 
         # Calcular capacidades
         cap_V2 = self.calculate_shear_capacity(
