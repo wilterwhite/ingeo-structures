@@ -1,12 +1,20 @@
 // app/structural/static/js/StructuralPage.js
 /**
  * Coordinador principal del módulo de análisis estructural.
- * Orquesta los componentes: PiersTable, ResultsTable, PlotModal.
+ * Orquesta los componentes: ResultsTable, PlotModal, módulos y managers.
+ *
+ * Managers:
+ * - MaterialsManager: Gestión de tipos de concreto y lambda
+ * - UploadManager: Carga de archivos y análisis
+ *
+ * Módulos:
+ * - WallsModule: Muros y columnas
+ * - BeamsModule: Vigas
  */
 
 class StructuralPage {
     constructor() {
-        // Estado
+        // Estado de datos
         this.sessionId = null;
         this.piersData = [];
         this.columnsData = [];
@@ -18,21 +26,21 @@ class StructuralPage {
         this.beamResults = [];
         this.slabResults = [];
         this.dropBeamResults = [];
+
+        // Filtros y metadatos
         this.filters = { grilla: '', story: '', axis: '', status: '', elementType: '' };
         this.uniqueGrillas = [];
         this.uniqueStories = [];
         this.uniqueAxes = [];
-
-        // Materiales y configuración
-        this.materials = {};  // { materialName: { fc, type: 'normal'|'sand_lightweight'|'all_lightweight', lambda } }
         this.currentPage = 'config-page';
 
-        // Elementos DOM
+        // Elementos DOM (se cachean en init)
         this.elements = {};
 
-        // Componentes (se inicializan en init())
+        // Managers y componentes (se inicializan en init)
+        this.materialsManager = null;
+        this.uploadManager = null;
         this.resultsTable = null;
-        // beamsTable eliminado - vigas se renderizan con RowFactory
         this.slabsTable = null;
         this.plotModal = null;
         this.reportModal = null;
@@ -129,8 +137,12 @@ class StructuralPage {
     }
 
     initComponents() {
+        // Managers
+        this.materialsManager = new MaterialsManager(this);
+        this.uploadManager = new UploadManager(this);
+
+        // Componentes de UI
         this.resultsTable = new ResultsTable(this);
-        // beamsTable ya no se usa - vigas se renderizan con RowFactory
         this.slabsTable = new SlabsTable(this);
         this.slabsTable.bindFilterEvents();
         this.plotModal = new PlotModal(this);
@@ -138,10 +150,9 @@ class StructuralPage {
         this.reportModal = new ReportModal(this);
         this.reportModal.init();
 
-        // Módulos extraídos
+        // Módulos de elementos
         this.wallsModule = new WallsModule(this);
         this.beamsModule = new BeamsModule(this);
-        this.dropBeamsModule = new DropBeamsModule(this);
 
         this.initPierDetailsModal();
         this.wallsModule.initSectionModal();
@@ -160,33 +171,8 @@ class StructuralPage {
             tab.addEventListener('click', () => this.navigateToPage(tab.dataset.page));
         });
 
-        // Upload area
-        this.elements.uploadArea?.addEventListener('click', () => {
-            this.elements.fileInput?.click();
-        });
-
-        this.elements.uploadArea?.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            this.elements.uploadArea.classList.add('dragover');
-        });
-
-        this.elements.uploadArea?.addEventListener('dragleave', () => {
-            this.elements.uploadArea.classList.remove('dragover');
-        });
-
-        this.elements.uploadArea?.addEventListener('drop', (e) => {
-            e.preventDefault();
-            this.elements.uploadArea.classList.remove('dragover');
-            if (e.dataTransfer.files.length > 0) {
-                this.handleFile(e.dataTransfer.files[0]);
-            }
-        });
-
-        this.elements.fileInput?.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                this.handleFile(e.target.files[0]);
-            }
-        });
+        // Upload (delegado a UploadManager)
+        this.uploadManager.bindEvents();
 
         // Filtros de resultados
         this.elements.grillaFilter?.addEventListener('change', () => this.resultsTable.onGrillaChange());
@@ -299,327 +285,31 @@ class StructuralPage {
         this.uniqueGrillas = [];
         this.uniqueStories = [];
         this.uniqueAxes = [];
-        this.materials = {};
+
+        // Reset componentes
+        this.materialsManager.reset();
         this.resultsTable.reset();
         this.beamsModule.clearBeamsTable();
         this.slabsTable.clear();
-        this.dropBeamsModule.clearDropBeamsTable();
-        this.updateMaterialsTable();
+        this.clearDropBeamsTable();
     }
 
     // =========================================================================
-    // Gestión de Materiales
+    // Delegación a Managers (Métodos de conveniencia)
     // =========================================================================
 
     /**
-     * Extrae los materiales únicos de los datos cargados y actualiza la tabla.
-     */
-    extractMaterials() {
-        const materialsMap = {};
-
-        // Extraer de piers
-        this.piersData.forEach(pier => {
-            const fc = pier.fc || pier.fc_mpa || 28;  // Default 28 MPa
-            const matName = pier.material || `C${Math.round(fc)}`;
-            if (!materialsMap[matName]) {
-                materialsMap[matName] = { fc, count: 0, type: 'normal', lambda: 1.0 };
-            }
-            materialsMap[matName].count++;
-        });
-
-        // Extraer de columnas
-        this.columnsData.forEach(col => {
-            const fc = col.fc || col.fc_mpa || 28;
-            const matName = col.material || `C${Math.round(fc)}`;
-            if (!materialsMap[matName]) {
-                materialsMap[matName] = { fc, count: 0, type: 'normal', lambda: 1.0 };
-            }
-            materialsMap[matName].count++;
-        });
-
-        // Preservar configuración existente si ya estaba definida
-        Object.keys(materialsMap).forEach(name => {
-            if (this.materials[name]) {
-                materialsMap[name].type = this.materials[name].type;
-                materialsMap[name].lambda = this.materials[name].lambda;
-            }
-        });
-
-        this.materials = materialsMap;
-        this.updateMaterialsTable();
-    }
-
-    /**
-     * Actualiza la tabla de materiales en la página de configuración.
-     */
-    updateMaterialsTable() {
-        const tbody = this.elements.materialsTbody;
-        if (!tbody) return;
-
-        const materialNames = Object.keys(this.materials);
-
-        if (materialNames.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="no-data-msg">No hay materiales cargados</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = materialNames.map(name => {
-            const mat = this.materials[name];
-            const fcDisplay = mat.fc ? mat.fc.toFixed(1) : '—';
-            return `
-                <tr data-material="${name}">
-                    <td><strong>${name}</strong></td>
-                    <td>${fcDisplay} MPa</td>
-                    <td>
-                        <select class="material-type-select" data-material="${name}">
-                            <option value="normal" ${mat.type === 'normal' ? 'selected' : ''}>Normal</option>
-                            <option value="sand_lightweight" ${mat.type === 'sand_lightweight' ? 'selected' : ''}>Arena liviana (λ=0.85)</option>
-                            <option value="all_lightweight" ${mat.type === 'all_lightweight' ? 'selected' : ''}>Todo liviano (λ=0.75)</option>
-                        </select>
-                    </td>
-                    <td class="lambda-value">${mat.lambda.toFixed(2)}</td>
-                    <td class="element-count">${mat.count} elementos</td>
-                </tr>
-            `;
-        }).join('');
-
-        // Bind eventos para cambios de tipo
-        tbody.querySelectorAll('.material-type-select').forEach(select => {
-            select.addEventListener('change', (e) => this.onMaterialTypeChange(e));
-        });
-    }
-
-    /**
-     * Maneja el cambio de tipo de concreto para un material.
-     */
-    onMaterialTypeChange(event) {
-        const select = event.target;
-        const materialName = select.dataset.material;
-        const newType = select.value;
-
-        // Calcular lambda según el tipo
-        const lambdaValues = {
-            'normal': 1.0,
-            'sand_lightweight': 0.85,
-            'all_lightweight': 0.75
-        };
-
-        this.materials[materialName].type = newType;
-        this.materials[materialName].lambda = lambdaValues[newType];
-
-        // Actualizar celda de lambda
-        const row = select.closest('tr');
-        const lambdaCell = row.querySelector('.lambda-value');
-        if (lambdaCell) {
-            lambdaCell.textContent = this.materials[materialName].lambda.toFixed(2);
-        }
-
-        console.log(`[Config] Material ${materialName} cambiado a ${newType}, λ=${lambdaValues[newType]}`);
-    }
-
-    /**
-     * Obtiene el lambda para un material específico.
+     * Obtiene el lambda para un material. Delega a MaterialsManager.
      */
     getLambdaForMaterial(materialName, fc) {
-        // Buscar por nombre
-        if (this.materials[materialName]) {
-            return this.materials[materialName].lambda;
-        }
-        // Buscar por fc aproximado
-        const approxName = `C${Math.round(fc)}`;
-        if (this.materials[approxName]) {
-            return this.materials[approxName].lambda;
-        }
-        // Default
-        return 1.0;
+        return this.materialsManager.getLambda(materialName, fc);
     }
 
-    updateElementCounts() {
-        console.log('[Upload] Elementos cargados:', {
-            piers: this.piersData.length,
-            columns: this.columnsData.length,
-            beams: this.beamsData.length,
-            slabs: this.slabsData.length
-        });
-    }
-
-    // =========================================================================
-    // Upload y Análisis
-    // =========================================================================
-
-    async handleFile(file) {
-        if (!file.name.toLowerCase().endsWith('.xlsx')) {
-            alert('Por favor selecciona un archivo Excel (.xlsx)');
-            return;
-        }
-
-        if (file.size > 50 * 1024 * 1024) {
-            alert('El archivo es demasiado grande. Máximo 50MB.');
-            return;
-        }
-
-        // Verificar que el archivo no esté bloqueado
-        try {
-            const testReader = new FileReader();
-            await new Promise((resolve, reject) => {
-                testReader.onload = resolve;
-                testReader.onerror = () => reject(new Error('locked'));
-                testReader.readAsArrayBuffer(file.slice(0, 100));
-            });
-        } catch (e) {
-            alert('No se puede acceder al archivo.\n¿Está abierto en Excel?\nCiérralo e intenta de nuevo.');
-            return;
-        }
-
-        this.elements.uploadArea?.classList.add('hidden');
-        this.elements.uploadLoading?.classList.add('active');
-
-        try {
-            // Upload
-            const uploadData = await structuralAPI.uploadFile(file);
-            if (!uploadData.success) throw new Error(uploadData.error);
-
-            this.sessionId = uploadData.session_id;
-            this.piersData = uploadData.summary.piers_list || [];
-            this.columnsData = uploadData.summary.columns_list || [];
-            this.beamsData = uploadData.summary.beams_list || [];
-            this.slabsData = uploadData.summary.slabs_list || [];
-            this.dropBeamsData = uploadData.summary.drop_beams_list || [];
-            this.uniqueGrillas = uploadData.summary.grillas || [];
-            this.uniqueStories = uploadData.summary.stories || [];
-            this.uniqueAxes = uploadData.summary.axes || [];
-
-            // Debug: log counts
-            console.log('[Upload] Parsed data:', {
-                piers: this.piersData.length,
-                columns: this.columnsData.length,
-                beams: this.beamsData.length,
-                slabs: this.slabsData.length,
-                dropBeams: this.dropBeamsData.length
-            });
-
-            // Actualizar conteos en la UI
-            this.updateElementCounts();
-
-            // Extraer materiales para la página de configuración
-            this.extractMaterials();
-
-            // Mostrar progreso
-            this.showProgressModal();
-
-            // Análisis con progreso
-            await this.runAnalysisWithProgress({
-                session_id: this.sessionId,
-                pier_updates: [],
-                generate_plots: true,
-                moment_axis: 'M3',
-                angle_deg: 0,
-                materials_config: this.materials
-            });
-
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Error: ' + error.message);
-            this.hideProgressModal();
-            this.resetUploadArea();
-        }
-    }
-
-    showProgressModal() {
-        const modal = document.getElementById('progress-modal');
-        if (modal) {
-            modal.classList.add('active');
-            this.updateProgress(0, 0, 'Iniciando análisis...');
-        }
-    }
-
-    hideProgressModal() {
-        const modal = document.getElementById('progress-modal');
-        if (modal) modal.classList.remove('active');
-    }
-
-    updateProgress(current, total, element) {
-        const progressText = document.getElementById('progress-text');
-        const progressBar = document.getElementById('progress-bar');
-        const progressPier = document.getElementById('progress-pier');
-
-        if (progressText) {
-            progressText.textContent = total > 0 ? `Procesando ${current} de ${total}` : element;
-        }
-        if (progressBar && total > 0) {
-            progressBar.style.width = `${(current / total) * 100}%`;
-        }
-        if (progressPier) {
-            progressPier.textContent = element;
-        }
-    }
-
-    runAnalysisWithProgress(params) {
-        return new Promise((resolve, reject) => {
-            structuralAPI.analyzeWithProgress(
-                params,
-                // onProgress
-                (current, total, pier) => {
-                    this.updateProgress(current, total, pier);
-                },
-                // onComplete
-                (data) => {
-                    this.hideProgressModal();
-                    if (data.success) {
-                        this.results = data.results;
-                        this.columnResults = data.column_results || [];
-                        this.beamResults = data.beam_results || [];
-                        this.slabResults = data.slab_results || [];
-                        this.dropBeamResults = data.drop_beam_results || [];
-
-                        // Log results para debug
-                        if (this.columnResults.length > 0) {
-                            console.log('[Analysis] Column results:', this.columnResults.length);
-                        }
-                        if (this.beamResults.length > 0) {
-                            console.log('[Analysis] Beam results:', this.beamResults.length);
-                        }
-                        if (this.slabResults.length > 0) {
-                            console.log('[Analysis] Slab results:', this.slabResults.length);
-                        }
-                        if (this.dropBeamResults.length > 0) {
-                            console.log('[Analysis] Drop beam results:', this.dropBeamResults.length);
-                        }
-
-                        this.resultsTable.populateFilters();
-                        this.resultsTable.render(data);
-                        this.beamsModule.renderBeamsTable();
-                        this.slabsTable.renderTable(this.slabResults);
-                        this.dropBeamsModule.renderDropBeamsTable();
-                        this.showSection('results');
-                        resolve(data);
-                    } else {
-                        reject(new Error(data.error || 'Error en análisis'));
-                    }
-                },
-                // onError
-                (error) => {
-                    this.hideProgressModal();
-                    reject(error);
-                }
-            );
-        });
-    }
-
+    /**
+     * Re-ejecuta el análisis. Delega a UploadManager.
+     */
     async reanalyze() {
-        this.showProgressModal();
-        try {
-            await this.runAnalysisWithProgress({
-                session_id: this.sessionId,
-                pier_updates: [],
-                generate_plots: true,
-                moment_axis: 'M3',
-                angle_deg: 0,
-                materials_config: this.materials
-            });
-        } catch (error) {
-            alert('Error: ' + error.message);
-        }
+        return this.uploadManager.reanalyze();
     }
 
     // =========================================================================
@@ -629,7 +319,7 @@ class StructuralPage {
     openReportModal() {
         const totalPiers = this.results?.length || 0;
         if (totalPiers === 0) {
-            alert('No hay resultados de análisis para generar informe.');
+            this.showNotification('No hay resultados de análisis para generar informe.', 'error');
             return;
         }
         this.reportModal.open(totalPiers);
@@ -704,6 +394,25 @@ class StructuralPage {
 
         this.updateElementStats(results, statsPrefix);
         console.log(`[${logPrefix}] Renderizados ${results.length} elementos`);
+    }
+
+    // =========================================================================
+    // Drop Beams (Vigas Capitel)
+    // =========================================================================
+
+    renderDropBeamsTable() {
+        this.renderElementTable(
+            this.dropBeamResults,
+            this.elements.dropBeamsTable,
+            'drop-beam', 12, 'No hay vigas capitel para analizar', 'DropBeams'
+        );
+    }
+
+    clearDropBeamsTable() {
+        if (this.elements.dropBeamsTable) {
+            this.elements.dropBeamsTable.innerHTML = '';
+        }
+        this.updateElementStats([], 'drop-beam');
     }
 }
 

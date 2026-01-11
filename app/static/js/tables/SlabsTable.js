@@ -1,56 +1,65 @@
-// app/static/js/SlabsTable.js
+// app/static/js/tables/SlabsTable.js
 /**
- * Modulo para manejo de la tabla de losas.
- * Muestra resultados de verificacion para losas 1-Way y 2-Way.
- * Usa Utils.js para funciones compartidas.
+ * Módulo para manejo de la tabla de losas.
+ * Muestra resultados de verificación para losas 1-Way y 2-Way.
+ * Extiende FilterableTable para reutilizar lógica de filtrado.
  */
 
-class SlabsTable {
+class SlabsTable extends FilterableTable {
     constructor(page) {
-        this.page = page;
-        this.slabResults = [];
-        this.filteredResults = [];
-        this.filters = { type: '', status: '' };
+        super(page);
+    }
+
+    // =========================================================================
+    // Métodos requeridos por FilterableTable
+    // =========================================================================
+
+    /**
+     * Obtiene valores de filtros desde el DOM.
+     * @returns {Object} { type, status }
+     */
+    getFilterValues() {
+        return {
+            type: document.getElementById('slab-type-filter')?.value || '',
+            status: document.getElementById('slab-status-filter')?.value || ''
+        };
+    }
+
+    /**
+     * Verifica si un resultado cumple con los filtros.
+     * @param {Object} result - Resultado de losa
+     * @returns {boolean}
+     */
+    matchesFilters(result) {
+        // Filtrar por tipo de losa
+        if (this.filters.type && result.slab_type !== this.filters.type) {
+            return false;
+        }
+        // Filtrar por estado (usa helper de FilterableTable)
+        return this.matchesStatusFilter(result, this.filters.status);
     }
 
     // =========================================================================
     // Renderizado
     // =========================================================================
 
+    /**
+     * Punto de entrada para renderizar la tabla.
+     * @param {Array} slabResults - Resultados de losas
+     */
     renderTable(slabResults) {
-        this.slabResults = slabResults || [];
+        this.results = slabResults || [];
         this.applyFilters();
     }
 
-    applyFilters() {
-        const typeFilter = document.getElementById('slab-type-filter')?.value || '';
-        const statusFilter = document.getElementById('slab-status-filter')?.value || '';
-
-        this.filters = { type: typeFilter, status: statusFilter };
-
-        this.filteredResults = this.slabResults.filter(result => {
-            // Filtrar por tipo
-            if (typeFilter && result.slab_type !== typeFilter) {
-                return false;
-            }
-            // Filtrar por estado
-            if (statusFilter) {
-                const isOk = result.overall_status === 'OK';
-                if (statusFilter === 'OK' && !isOk) return false;
-                if (statusFilter === 'FAIL' && isOk) return false;
-            }
-            return true;
-        });
-
-        this.render();
-    }
-
+    /**
+     * Renderiza la tabla con los resultados filtrados.
+     */
     render() {
         const tbody = document.querySelector('#slabs-table tbody');
         if (!tbody) return;
 
         tbody.innerHTML = '';
-        this.updateStats();
 
         this.filteredResults.forEach(result => {
             const row = this.createRow(result);
@@ -58,26 +67,30 @@ class SlabsTable {
         });
     }
 
+    /**
+     * Actualiza las estadísticas en el DOM.
+     */
     updateStats() {
-        const total = this.filteredResults.length;
-        const ok = this.filteredResults.filter(r => r.overall_status === 'OK').length;
-        const fail = total - ok;
-        const rate = total > 0 ? Math.round(ok / total * 100) : 100;
+        const stats = this.calculateStats();
 
         const totalEl = document.getElementById('slab-stat-total');
         const okEl = document.getElementById('slab-stat-ok');
         const failEl = document.getElementById('slab-stat-fail');
         const rateEl = document.getElementById('slab-stat-rate');
 
-        if (totalEl) totalEl.textContent = total;
-        if (okEl) okEl.textContent = ok;
-        if (failEl) failEl.textContent = fail;
-        if (rateEl) rateEl.textContent = rate + '%';
+        if (totalEl) totalEl.textContent = stats.total;
+        if (okEl) okEl.textContent = stats.ok;
+        if (failEl) failEl.textContent = stats.fail;
+        if (rateEl) rateEl.textContent = stats.rate + '%';
     }
+
+    // =========================================================================
+    // Creación de filas
+    // =========================================================================
 
     createRow(result) {
         const row = document.createElement('tr');
-        row.className = `slab-row ${result.overall_status === 'OK' ? 'status-ok' : 'status-fail'}`;
+        row.className = `slab-row ${getStatusClass(result)}`;
         row.dataset.slabKey = result.slab_key;
 
         row.appendChild(this.createInfoCell(result));
@@ -240,7 +253,7 @@ class SlabsTable {
     clear() {
         const tbody = document.querySelector('#slabs-table tbody');
         if (tbody) tbody.innerHTML = '';
-        this.slabResults = [];
+        this.results = [];
         this.filteredResults = [];
     }
 

@@ -9,6 +9,7 @@ from typing import List, TYPE_CHECKING
 if TYPE_CHECKING:
     from ..entities.pier import Pier
     from ..entities.drop_beam import DropBeam
+    from ..entities.column import Column
 
 
 @dataclass
@@ -122,5 +123,84 @@ class SteelLayerCalculator:
             position=width - cover,
             area=n_edge_bars * bar_area_edge
         ))
+
+        return layers
+
+    @staticmethod
+    def calculate_from_column(
+        column: 'Column',
+        direction: str = 'depth'
+    ) -> List[SteelLayer]:
+        """
+        Genera las capas de acero a partir de una columna rectangular.
+
+        Las columnas tienen barras distribuidas en el perímetro, diferente
+        a los muros que tienen malla + barras de borde.
+
+        Args:
+            column: Entidad Column con la configuración de armadura
+            direction: 'depth' para M3, 'width' para M2
+
+        Returns:
+            Lista de SteelLayer ordenadas por posición
+        """
+        if direction == 'depth':
+            return SteelLayerCalculator._calculate_column_layers(
+                dimension=column.depth,
+                cover=column.cover,
+                n_layers=column.n_bars_depth,
+                bars_per_layer=column.n_bars_width,
+                bar_area=column._bar_area_long
+            )
+        else:
+            return SteelLayerCalculator._calculate_column_layers(
+                dimension=column.width,
+                cover=column.cover,
+                n_layers=column.n_bars_width,
+                bars_per_layer=column.n_bars_depth,
+                bar_area=column._bar_area_long
+            )
+
+    @staticmethod
+    def _calculate_column_layers(
+        dimension: float,
+        cover: float,
+        n_layers: int,
+        bars_per_layer: int,
+        bar_area: float
+    ) -> List[SteelLayer]:
+        """
+        Genera capas de acero para una columna rectangular.
+
+        Args:
+            dimension: Dimensión en la dirección del momento (mm)
+            cover: Recubrimiento (mm)
+            n_layers: Número de capas de barras
+            bars_per_layer: Barras por capa
+            bar_area: Área de cada barra (mm²)
+
+        Returns:
+            Lista de SteelLayer ordenadas por posición
+        """
+        layers = []
+
+        if n_layers < 2:
+            # Mínimo 2 capas (una en cada extremo)
+            return layers
+
+        d_first = cover
+        d_last = dimension - cover
+
+        if n_layers == 2:
+            positions = [d_first, d_last]
+        else:
+            spacing = (d_last - d_first) / (n_layers - 1)
+            positions = [d_first + i * spacing for i in range(n_layers)]
+
+        for pos in positions:
+            layers.append(SteelLayer(
+                position=pos,
+                area=bars_per_layer * bar_area
+            ))
 
         return layers

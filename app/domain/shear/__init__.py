@@ -22,6 +22,11 @@ from .shear_friction import (
     ShearFrictionDesignResult,
     SurfaceCondition,
 )
+from .combined import (
+    calculate_combined_dcr,
+    calculate_combined_sf,
+    calculate_combined_dcr_from_values,
+)
 
 __all__ = [
     # verification
@@ -41,4 +46,8 @@ __all__ = [
     'ShearFrictionResult',
     'ShearFrictionDesignResult',
     'SurfaceCondition',
+    # combined biaxial shear
+    'calculate_combined_dcr',
+    'calculate_combined_sf',
+    'calculate_combined_dcr_from_values',
 ]

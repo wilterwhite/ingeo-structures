@@ -9,7 +9,7 @@ from ..constants.materials import get_bar_area
 from ..constants.reinforcement import FY_DEFAULT_MPA, COVER_DEFAULT_COLUMN_MM
 
 if TYPE_CHECKING:
-    from ..calculations.steel_layer_calculator import SteelLayer
+    from ..calculations.steel_layer_calculator import SteelLayer, SteelLayerCalculator
 
 
 @dataclass
@@ -269,56 +269,19 @@ class Column:
         Genera las capas de acero para flexion en direccion de profundidad.
 
         Las capas se ordenan desde el borde comprimido hacia el traccionado.
+        Delega a SteelLayerCalculator para centralizar la lógica.
         """
-        from ..calculations.steel_layer_calculator import SteelLayer
-
-        layers = []
-        # Posiciones de las barras en direccion de la profundidad
-        # Primera capa: cover + db/2
-        # Ultima capa: depth - cover - db/2
-        if self.n_bars_depth >= 2:
-            d_first = self.cover
-            d_last = self.depth - self.cover
-            if self.n_bars_depth == 2:
-                positions = [d_first, d_last]
-            else:
-                spacing = (d_last - d_first) / (self.n_bars_depth - 1)
-                positions = [d_first + i * spacing for i in range(self.n_bars_depth)]
-
-            # Barras por capa: n_bars_width (las barras en cada nivel)
-            bars_per_layer = self.n_bars_width
-            for pos in positions:
-                layers.append(SteelLayer(
-                    position=pos,
-                    area=bars_per_layer * self._bar_area_long
-                ))
-
-        return layers
+        from ..calculations.steel_layer_calculator import SteelLayerCalculator
+        return SteelLayerCalculator.calculate_from_column(self, direction='depth')
 
     def get_steel_layers_width(self) -> List['SteelLayer']:
         """
         Genera las capas de acero para flexion en direccion del ancho.
+
+        Delega a SteelLayerCalculator para centralizar la lógica.
         """
-        from ..calculations.steel_layer_calculator import SteelLayer
-
-        layers = []
-        if self.n_bars_width >= 2:
-            d_first = self.cover
-            d_last = self.width - self.cover
-            if self.n_bars_width == 2:
-                positions = [d_first, d_last]
-            else:
-                spacing = (d_last - d_first) / (self.n_bars_width - 1)
-                positions = [d_first + i * spacing for i in range(self.n_bars_width)]
-
-            bars_per_layer = self.n_bars_depth
-            for pos in positions:
-                layers.append(SteelLayer(
-                    position=pos,
-                    area=bars_per_layer * self._bar_area_long
-                ))
-
-        return layers
+        from ..calculations.steel_layer_calculator import SteelLayerCalculator
+        return SteelLayerCalculator.calculate_from_column(self, direction='width')
 
     # =========================================================================
     # Metodos para Protocol FlexuralElement

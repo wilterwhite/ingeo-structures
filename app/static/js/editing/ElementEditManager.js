@@ -374,7 +374,7 @@ class ElementEditManager {
         // Actualizar dropBeamResults y re-renderizar
         if (data.drop_beam_results && dropBeamKeys.length > 0) {
             this.table.page.dropBeamResults = data.drop_beam_results;
-            this.table.page.dropBeamsModule.renderDropBeamsTable();
+            this.table.page.renderDropBeamsTable();
             dropBeamKeys.forEach(key => this._unmarkRowPending(key, 'drop_beam'));
         }
     }

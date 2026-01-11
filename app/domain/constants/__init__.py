@@ -121,6 +121,7 @@ from .stiffness import (
 from .reinforcement import (
     # Constantes
     RHO_MIN,
+    MAX_SPACING_SEISMIC_MM,
     FY_DEFAULT_MPA,
     COVER_DEFAULT_PIER_MM,
     COVER_DEFAULT_COLUMN_MM,
@@ -128,4 +129,20 @@ from .reinforcement import (
     # Funciones
     check_rho_vertical_ge_horizontal,
     is_rho_v_ge_rho_h_required,
+)
+from .chapter18 import (
+    # Dimensiones mínimas
+    MIN_WIDTH_BEAM_MM,
+    MIN_COLUMN_DIM_MM,
+    # Zona de confinamiento
+    LO_MIN_MM,
+    LO_MIN_RATIO,
+    # Espaciamiento transversal
+    HX_MAX_MM,
+    HX_MAX_HIGH_AXIAL_MM,
+    SO_MIN_MM,
+    SO_MAX_MM,
+    FIRST_HOOP_MAX_MM,
+    # Materiales
+    FC_LIMIT_HIGH_AXIAL_MPA,
 )

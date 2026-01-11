@@ -16,6 +16,7 @@ Referencias:
 from typing import Optional, List
 
 from ..common import SeismicCategory
+from ..seismic_detailing_service import SeismicDetailingService
 from .results import (
     SeismicColumnResult,
     SeismicColumnShearResult,
@@ -51,6 +52,7 @@ class SeismicColumnService:
     def __init__(self):
         """Inicializa el servicio con dependencias."""
         self._shear_service = SeismicColumnShearService()
+        self._detailing = SeismicDetailingService()
 
     def verify_column(
         self,

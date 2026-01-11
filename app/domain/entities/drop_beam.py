@@ -12,7 +12,7 @@ from ..constants.materials import get_bar_area
 from ..constants.reinforcement import RHO_MIN, FY_DEFAULT_MPA
 
 if TYPE_CHECKING:
-    from ..calculations.steel_layer_calculator import SteelLayer
+    from ..calculations.steel_layer_calculator import SteelLayer, SteelLayerCalculator
 
 
 @dataclass

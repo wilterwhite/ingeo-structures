@@ -1,0 +1,559 @@
+# tests/services/presentation/test_result_formatter.py
+"""
+Tests para ResultFormatter - formateo de resultados para UI.
+"""
+import pytest
+from unittest.mock import Mock
+
+from app.services.presentation.result_formatter import (
+    ResultFormatter,
+    get_status_css_class,
+    get_dcr_css_class,
+)
+from app.services.analysis.element_orchestrator import OrchestrationResult
+from app.services.analysis.element_classifier import ElementType
+from app.services.analysis.design_behavior import DesignBehavior
+from app.domain.entities import Column, Beam, Pier, DropBeam
+
+
+# =============================================================================
+# Fixtures
+# =============================================================================
+
+@pytest.fixture
+def sample_column():
+    """Columna de prueba."""
+    return Column(
+        label="C1",
+        story="Piso 1",
+        depth=500,
+        width=400,
+        height=3000,
+        fc=30,
+        fy=420,
+        diameter_long=20,
+        n_bars_depth=3,
+        n_bars_width=4,
+        stirrup_diameter=10,
+        stirrup_spacing=100,
+        n_stirrup_legs_depth=2,
+        n_stirrup_legs_width=3,
+    )
+
+
+@pytest.fixture
+def sample_beam():
+    """Viga de prueba."""
+    return Beam(
+        label="V1",
+        story="Piso 1",
+        width=300,
+        depth=600,
+        length=6000,
+        fc=25,
+        fy=420,
+        diameter_top=16,
+        n_bars_top=3,
+        diameter_bottom=20,
+        n_bars_bottom=4,
+        stirrup_diameter=8,
+        stirrup_spacing=150,
+        n_stirrup_legs=2,
+    )
+
+
+@pytest.fixture
+def sample_pier():
+    """Pier/muro de prueba."""
+    return Pier(
+        label="M1",
+        story="Piso 1",
+        width=2000,
+        thickness=200,
+        height=2700,
+        fc=25,
+        fy=420,
+        n_meshes=2,
+        diameter_v=10,
+        spacing_v=200,
+        diameter_h=8,
+        spacing_h=200,
+        n_edge_bars=4,
+        diameter_edge=16,
+        stirrup_diameter=8,
+        stirrup_spacing=150,
+    )
+
+
+@pytest.fixture
+def sample_drop_beam():
+    """Viga capitel de prueba."""
+    return DropBeam(
+        label="VC1",
+        story="Piso 1",
+        width=200,
+        thickness=2400,
+        length=1500,
+        fc=25,
+        fy=420,
+        n_meshes=2,
+        diameter_v=10,
+        spacing_v=150,
+        diameter_h=10,
+        spacing_h=200,
+        n_edge_bars=2,
+        diameter_edge=16,
+    )
+
+
+@pytest.fixture
+def column_orchestration_result():
+    """OrchestrationResult para columna."""
+    domain_result = Mock()
+    domain_result.shear = Mock()
+    domain_result.shear.dcr = 0.65
+    domain_result.shear.phi_Vn_V2 = 500000
+    domain_result.shear.Ve = 350000
+
+    return OrchestrationResult(
+        element_type=ElementType.COLUMN_SEISMIC,
+        design_behavior=DesignBehavior.SEISMIC_COLUMN,
+        service_used='column',
+        domain_result=domain_result,
+        is_ok=True,
+        dcr_max=0.75,
+        critical_check='',
+        warnings=[],
+    )
+
+
+@pytest.fixture
+def beam_orchestration_result():
+    """OrchestrationResult para viga."""
+    domain_result = Mock()
+    domain_result.shear = Mock()
+    domain_result.shear.dcr = 0.55
+
+    return OrchestrationResult(
+        element_type=ElementType.BEAM,
+        design_behavior=DesignBehavior.SEISMIC_BEAM,
+        service_used='beam',
+        domain_result=domain_result,
+        is_ok=True,
+        dcr_max=0.60,
+        critical_check='',
+        warnings=[],
+    )
+
+
+@pytest.fixture
+def wall_orchestration_result():
+    """OrchestrationResult para muro."""
+    domain_result = Mock()
+    domain_result.flexure = Mock()
+    domain_result.flexure.sf = 1.5
+    domain_result.flexure.status = 'OK'
+    domain_result.shear = Mock()
+    domain_result.shear.dcr = 0.70
+    domain_result.shear.status = 'OK'
+    domain_result.classification = None
+    domain_result.boundary = None
+
+    return OrchestrationResult(
+        element_type=ElementType.WALL_SQUAT,
+        design_behavior=DesignBehavior.SEISMIC_WALL,
+        service_used='wall',
+        domain_result=domain_result,
+        is_ok=True,
+        dcr_max=0.70,
+        critical_check='',
+        warnings=[],
+    )
+
+
+@pytest.fixture
+def drop_beam_orchestration_result():
+    """OrchestrationResult para viga capitel."""
+    domain_result = Mock()
+    domain_result.flexure = Mock()
+    domain_result.flexure.sf = 1.8
+    domain_result.shear = Mock()
+    domain_result.shear.dcr = 0.50
+
+    return OrchestrationResult(
+        element_type=ElementType.DROP_BEAM,
+        design_behavior=DesignBehavior.DROP_BEAM,
+        service_used='wall',
+        domain_result=domain_result,
+        is_ok=True,
+        dcr_max=0.55,
+        critical_check='',
+        warnings=[],
+    )
+
+
+# =============================================================================
+# Tests para funciones auxiliares
+# =============================================================================
+
+class TestCssClasses:
+    """Tests para funciones de clases CSS."""
+
+    def test_status_ok(self):
+        """Status OK retorna clase correcta."""
+        assert get_status_css_class('OK') == 'status-ok'
+
+    def test_status_fail(self):
+        """Status NO OK retorna clase correcta."""
+        assert get_status_css_class('NO OK') == 'status-fail'
+
+    def test_status_other(self):
+        """Cualquier otro status retorna fail."""
+        assert get_status_css_class('WARN') == 'status-fail'
+
+    def test_dcr_low(self):
+        """DCR bajo retorna ok."""
+        assert get_dcr_css_class(0.5) == 'fs-ok'
+        assert get_dcr_css_class(0.67) == 'fs-ok'
+
+    def test_dcr_medium(self):
+        """DCR medio retorna warn."""
+        assert get_dcr_css_class(0.8) == 'fs-warn'
+        assert get_dcr_css_class(1.0) == 'fs-warn'
+
+    def test_dcr_high(self):
+        """DCR alto retorna fail."""
+        assert get_dcr_css_class(1.1) == 'fs-fail'
+        assert get_dcr_css_class(2.0) == 'fs-fail'
+
+
+# =============================================================================
+# Tests para format_any_element - Column
+# =============================================================================
+
+class TestFormatColumn:
+    """Tests para formateo de columnas."""
+
+    def test_format_column_basic(self, sample_column, column_orchestration_result):
+        """Formatea columna con campos básicos."""
+        formatted = ResultFormatter.format_any_element(
+            sample_column, column_orchestration_result, 'col_1'
+        )
+
+        assert formatted['element_type'] == 'column'
+        assert formatted['key'] == 'col_1'
+        assert formatted['pier_label'] == 'C1'
+        assert formatted['story'] == 'Piso 1'
+
+    def test_format_column_geometry(self, sample_column, column_orchestration_result):
+        """Incluye geometría correcta."""
+        formatted = ResultFormatter.format_any_element(
+            sample_column, column_orchestration_result, 'col_1'
+        )
+
+        geom = formatted['geometry']
+        assert geom['width_m'] == 0.5  # depth / 1000
+        assert geom['thickness_m'] == 0.4  # width / 1000
+        assert geom['fc_MPa'] == 30
+        assert geom['fy_MPa'] == 420
+
+    def test_format_column_reinforcement(self, sample_column, column_orchestration_result):
+        """Incluye refuerzo correcto."""
+        formatted = ResultFormatter.format_any_element(
+            sample_column, column_orchestration_result, 'col_1'
+        )
+
+        reinf = formatted['reinforcement']
+        assert reinf['n_bars_depth'] == 3
+        assert reinf['n_bars_width'] == 4
+        assert reinf['diameter_long'] == 20
+        assert reinf['stirrup_spacing'] == 100
+
+    def test_format_column_status(self, sample_column, column_orchestration_result):
+        """Incluye estado correcto."""
+        formatted = ResultFormatter.format_any_element(
+            sample_column, column_orchestration_result, 'col_1'
+        )
+
+        assert formatted['overall_status'] == 'OK'
+        assert formatted['status_class'] == 'status-ok'
+        assert formatted['dcr_max'] == 0.75
+
+    def test_format_column_design_info(self, sample_column, column_orchestration_result):
+        """Incluye información de diseño."""
+        formatted = ResultFormatter.format_any_element(
+            sample_column, column_orchestration_result, 'col_1'
+        )
+
+        assert formatted['design_behavior'] == 'SEISMIC_COLUMN'
+        assert formatted['service_used'] == 'column'
+        assert formatted['aci_section'] == '§18.7'
+
+    def test_format_column_failed(self, sample_column):
+        """Formatea columna que falla."""
+        domain_result = Mock()
+        domain_result.shear = None  # Evitar problemas con Mock recursivo
+        domain_result.flexure = None
+        result = OrchestrationResult(
+            element_type=ElementType.COLUMN_SEISMIC,
+            design_behavior=DesignBehavior.SEISMIC_COLUMN,
+            service_used='column',
+            domain_result=domain_result,
+            is_ok=False,
+            dcr_max=1.35,
+            critical_check='shear',
+            warnings=['Refuerzo transversal insuficiente'],
+        )
+
+        formatted = ResultFormatter.format_any_element(
+            sample_column, result, 'col_1'
+        )
+
+        assert formatted['overall_status'] == 'NO OK'
+        assert formatted['status_class'] == 'status-fail'
+        assert formatted['critical_check'] == 'shear'
+        assert 'Refuerzo transversal' in formatted['warnings'][0]
+
+
+# =============================================================================
+# Tests para format_any_element - Beam
+# =============================================================================
+
+class TestFormatBeam:
+    """Tests para formateo de vigas."""
+
+    def test_format_beam_basic(self, sample_beam, beam_orchestration_result):
+        """Formatea viga con campos básicos."""
+        formatted = ResultFormatter.format_any_element(
+            sample_beam, beam_orchestration_result, 'beam_1'
+        )
+
+        assert formatted['element_type'] == 'beam'
+        assert formatted['key'] == 'beam_1'
+        assert formatted['pier_label'] == 'V1'  # Usa pier_label para consistencia
+        assert formatted['story'] == 'Piso 1'
+
+    def test_format_beam_geometry(self, sample_beam, beam_orchestration_result):
+        """Incluye geometría correcta."""
+        formatted = ResultFormatter.format_any_element(
+            sample_beam, beam_orchestration_result, 'beam_1'
+        )
+
+        geom = formatted['geometry']
+        assert geom['thickness_m'] == 0.6  # depth / 1000
+        assert geom['width_m'] == 0.3  # width / 1000
+        assert geom['height_m'] == 6.0  # length / 1000
+
+    def test_format_beam_reinforcement(self, sample_beam, beam_orchestration_result):
+        """Incluye refuerzo correcto."""
+        formatted = ResultFormatter.format_any_element(
+            sample_beam, beam_orchestration_result, 'beam_1'
+        )
+
+        reinf = formatted['reinforcement']
+        assert reinf['n_bars_top'] == 3
+        assert reinf['n_bars_bottom'] == 4
+        assert reinf['diameter_top'] == 16
+        assert reinf['diameter_bottom'] == 20
+
+    def test_format_beam_design_info(self, sample_beam, beam_orchestration_result):
+        """Incluye información de diseño."""
+        formatted = ResultFormatter.format_any_element(
+            sample_beam, beam_orchestration_result, 'beam_1'
+        )
+
+        assert formatted['design_behavior'] == 'SEISMIC_BEAM'
+        assert formatted['service_used'] == 'beam'
+        assert formatted['aci_section'] == '§18.6'
+
+
+# =============================================================================
+# Tests para format_any_element - Pier/Wall
+# =============================================================================
+
+class TestFormatPier:
+    """Tests para formateo de muros."""
+
+    def test_format_pier_basic(self, sample_pier, wall_orchestration_result):
+        """Formatea muro con campos básicos."""
+        formatted = ResultFormatter.format_any_element(
+            sample_pier, wall_orchestration_result, 'pier_1'
+        )
+
+        assert formatted['element_type'] in ['pier', 'pier_column']
+        assert formatted['key'] == 'pier_1'
+        assert formatted['pier_label'] == 'M1'
+        assert formatted['story'] == 'Piso 1'
+
+    def test_format_pier_geometry(self, sample_pier, wall_orchestration_result):
+        """Incluye geometría correcta."""
+        formatted = ResultFormatter.format_any_element(
+            sample_pier, wall_orchestration_result, 'pier_1'
+        )
+
+        geom = formatted['geometry']
+        assert geom['width_m'] == 2.0  # width / 1000
+        assert geom['thickness_m'] == 0.2  # thickness / 1000
+        assert geom['height_m'] == 2.7  # height / 1000
+
+    def test_format_pier_has_wall_continuity(self, sample_pier, wall_orchestration_result):
+        """Incluye información de continuidad de muro."""
+        formatted = ResultFormatter.format_any_element(
+            sample_pier, wall_orchestration_result, 'pier_1'
+        )
+
+        assert 'wall_continuity' in formatted
+        continuity = formatted['wall_continuity']
+        assert 'hwcs_m' in continuity
+        assert 'hwcs_lw' in continuity
+
+    def test_format_pier_design_info(self, sample_pier, wall_orchestration_result):
+        """Incluye información de diseño."""
+        formatted = ResultFormatter.format_any_element(
+            sample_pier, wall_orchestration_result, 'pier_1'
+        )
+
+        assert formatted['design_behavior'] == 'SEISMIC_WALL'
+        assert formatted['service_used'] == 'wall'
+        assert formatted['aci_section'] == '§18.10'
+
+
+# =============================================================================
+# Tests para format_any_element - DropBeam
+# =============================================================================
+
+class TestFormatDropBeam:
+    """Tests para formateo de vigas capitel."""
+
+    def test_format_drop_beam_basic(self, sample_drop_beam, drop_beam_orchestration_result):
+        """Formatea viga capitel con campos básicos."""
+        formatted = ResultFormatter.format_any_element(
+            sample_drop_beam, drop_beam_orchestration_result, 'db_1'
+        )
+
+        assert formatted['element_type'] == 'drop_beam'
+        assert formatted['key'] == 'db_1'
+        assert formatted['pier_label'] == 'VC1'  # Usa pier_label, no label
+        assert formatted['story'] == 'Piso 1'
+
+    def test_format_drop_beam_geometry(self, sample_drop_beam, drop_beam_orchestration_result):
+        """Incluye geometría correcta."""
+        formatted = ResultFormatter.format_any_element(
+            sample_drop_beam, drop_beam_orchestration_result, 'db_1'
+        )
+
+        geom = formatted['geometry']
+        # DropBeam geometry: width_m=length, thickness_m=thickness, height_m=width
+        assert geom['width_m'] == 1.5  # length (luz libre) / 1000
+        assert geom['thickness_m'] == 2.4  # thickness (ancho tributario) / 1000
+        assert geom['height_m'] == 0.2  # width (espesor losa) / 1000
+
+    def test_format_drop_beam_reinforcement(self, sample_drop_beam, drop_beam_orchestration_result):
+        """Incluye refuerzo correcto."""
+        formatted = ResultFormatter.format_any_element(
+            sample_drop_beam, drop_beam_orchestration_result, 'db_1'
+        )
+
+        reinf = formatted['reinforcement']
+        # DropBeam reinforcement tiene estructura diferente a Wall
+        assert reinf['n_edge_bars'] == 2
+        assert reinf['diameter_edge'] == 16
+        assert 'As_edge_total' in reinf  # Área de acero de borde
+
+    def test_format_drop_beam_design_info(self, sample_drop_beam, drop_beam_orchestration_result):
+        """Incluye información de diseño."""
+        formatted = ResultFormatter.format_any_element(
+            sample_drop_beam, drop_beam_orchestration_result, 'db_1'
+        )
+
+        assert formatted['design_behavior'] == 'DROP_BEAM'
+        assert formatted['service_used'] == 'wall'
+
+
+# =============================================================================
+# Tests para format_slab_result
+# =============================================================================
+
+class TestFormatSlab:
+    """Tests para formateo de losas."""
+
+    def test_format_slab_basic(self):
+        """Formatea losa con campos básicos."""
+        slab = Mock()
+        slab.label = "L1"
+        slab.story = "Piso 1"
+        slab.slab_type = Mock()
+        slab.slab_type.value = "one_way"
+        slab.thickness = 150
+        slab.width = 1000
+
+        slab_result = {
+            'thickness_check': {'status': 'OK'},
+            'flexure': {'sf': 1.5},
+            'shear_one_way': {'sf': 2.0},
+            'reinforcement': {'rho': 0.004},
+            'overall_status': 'OK'
+        }
+        punching_result = {'status': 'N/A'}
+
+        formatted = ResultFormatter.format_slab_result(
+            slab, slab_result, punching_result, 'slab_1'
+        )
+
+        assert formatted['slab_key'] == 'slab_1'
+        assert formatted['label'] == 'L1'
+        assert formatted['story'] == 'Piso 1'
+        assert formatted['slab_type'] == 'one_way'
+        assert formatted['thickness'] == 150
+        assert formatted['overall_status'] == 'OK'
+
+
+# =============================================================================
+# Tests para casos borde
+# =============================================================================
+
+class TestEdgeCases:
+    """Tests para casos borde."""
+
+    def test_unknown_element_type(self, column_orchestration_result):
+        """Elemento desconocido retorna formato genérico."""
+        unknown = Mock()
+
+        formatted = ResultFormatter.format_any_element(
+            unknown, column_orchestration_result, 'unknown_1'
+        )
+
+        assert formatted['element_type'] == 'unknown'
+        assert formatted['key'] == 'unknown_1'
+
+    def test_result_with_warnings(self, sample_column):
+        """Formatea resultado con warnings."""
+        domain_result = Mock()
+        domain_result.shear = None  # Evitar problemas con Mock recursivo
+        domain_result.flexure = None
+        result = OrchestrationResult(
+            element_type=ElementType.COLUMN_SEISMIC,
+            design_behavior=DesignBehavior.SEISMIC_COLUMN,
+            service_used='column',
+            domain_result=domain_result,
+            is_ok=True,
+            dcr_max=0.85,
+            critical_check='',
+            warnings=['Warning 1', 'Warning 2'],
+        )
+
+        formatted = ResultFormatter.format_any_element(
+            sample_column, result, 'col_1'
+        )
+
+        assert len(formatted['warnings']) == 2
+        assert 'Warning 1' in formatted['warnings']
+
+    def test_format_with_pm_plot(self, sample_column, column_orchestration_result):
+        """Incluye gráfico P-M si se proporciona."""
+        formatted = ResultFormatter.format_any_element(
+            sample_column, column_orchestration_result, 'col_1',
+            pm_plot='base64_encoded_image'
+        )
+
+        assert formatted['pm_plot'] == 'base64_encoded_image'

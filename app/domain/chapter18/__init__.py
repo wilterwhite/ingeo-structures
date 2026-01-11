@@ -4,7 +4,7 @@ Reglas ACI 318-25 Capítulo 18: Estructuras Resistentes a Sismos.
 
 Este módulo es la ÚNICA FUENTE DE VERDAD para las reglas del Capítulo 18.
 Los servicios de aplicación (app/services/) usan estas funciones
-a través de ElementVerificationService.
+a través de ElementOrchestrator.
 
 Estructura:
 -----------
@@ -22,13 +22,15 @@ non_sfrs/           - Elementos no parte del SFRS (§18.14)
 
 Integración con Servicios de Aplicación:
 ---------------------------------------
-Todos los servicios de dominio están COMPLETAMENTE integrados en:
-  app/services/analysis/element_verification_service.py
+Todos los servicios de dominio están integrados en:
+  app/services/analysis/element_orchestrator.py
 
-ElementVerificationService usa:
-- SeismicBeamService      → verify() para vigas con is_seismic=True
-- SeismicColumnService    → verify() para columnas con is_seismic=True
-- NonSfrsService          → verify_non_sfrs() para elementos fuera del SFRS
+ElementOrchestrator usa:
+- DesignBehaviorResolver   → Determina qué servicio usar según geometría y fuerzas
+- SeismicBeamService       → verify() para vigas sísmicas
+- SeismicColumnService     → verify() para columnas sísmicas
+- SeismicWallService       → verify() para muros sísmicos
+- NonSfrsService           → verify_non_sfrs() para elementos fuera del SFRS
 - DuctileCoupledWallService → verify_coupled_wall_system() para muros acoplados
 
 Funciones de Cálculo Directo:
@@ -44,25 +46,20 @@ classify_wall_pier(lw, tw, hw)
 check_boundary_zone_reinforcement(...)
     Verifica refuerzo de zonas de borde en wall piers.
 
-Uso desde ElementVerificationService:
-------------------------------------
-    from app.services.analysis import ElementVerificationService
+Uso desde ElementOrchestrator:
+-----------------------------
+    from app.services.analysis.element_orchestrator import ElementOrchestrator
 
-    service = ElementVerificationService()
+    orchestrator = ElementOrchestrator()
 
-    # Vigas sísmicas (automático si beam.is_seismic=True)
-    result = service.verify(beam, forces)
-    seismic = result.seismic_beam  # SeismicBeamChecks
+    # Verificación unificada (el orquestador elige el servicio correcto)
+    result = orchestrator.verify(element, forces, lambda_factor, category)
 
-    # Columnas sísmicas (automático si column.is_seismic=True)
-    result = service.verify(column, forces)
-    seismic = result.seismic_column  # SeismicColumnChecks
-
-    # Elementos no-SFRS (§18.14)
-    result = service.verify_non_sfrs(element, delta_u=0.02, hsx=3000)
-
-    # Muros acoplados dúctiles (§18.10.9)
-    result = service.verify_coupled_wall_system(walls, coupling_beams)
+    # El resultado incluye:
+    # - element_type: Tipo clasificado
+    # - design_behavior: Comportamiento de diseño aplicado
+    # - service_used: Servicio utilizado ('beam', 'column', 'wall')
+    # - domain_result: Resultado del servicio de dominio
 
 Re-exports desde chapter11:
 - WallLimitsService: Límites de espesor (§11.3, §11.7)
@@ -70,6 +67,13 @@ Re-exports desde chapter11:
 """
 # Infraestructura común
 from .common import SeismicCategory
+from .seismic_detailing_service import (
+    SeismicDetailingService,
+    TransverseSpacingResult,
+    ConfinementZoneResult,
+    LateralSupportResult,
+    FirstHoopResult,
+)
 
 # Servicios desde subdirectorios
 from .design_forces import ShearAmplificationService
@@ -77,6 +81,14 @@ from .boundary_elements import BoundaryElementService
 from .wall_piers import WallPierService
 from .coupling_beams import CouplingBeamService
 from .reinforcement import SeismicReinforcementService, SeismicReinforcementResult
+from .walls import (
+    SeismicWallService,
+    SeismicWallResult,
+    WallClassificationResult,
+    WallReinforcementResult,
+    WallShearResult,
+    WallBoundaryResult,
+)
 from .columns import (
     # Servicios
     SeismicColumnService,
@@ -165,6 +177,12 @@ from ..chapter11 import (
 __all__ = [
     # Infraestructura común
     'SeismicCategory',
+    # Servicio de detallamiento común
+    'SeismicDetailingService',
+    'TransverseSpacingResult',
+    'ConfinementZoneResult',
+    'LateralSupportResult',
+    'FirstHoopResult',
     # Funciones de cálculo directo (usar desde servicios)
     'calculate_design_shear',
     'classify_wall_pier',
@@ -244,4 +262,11 @@ __all__ = [
     # design_methods (§11.8 muros esbeltos)
     'SlenderWallService',
     'SlenderWallResult',
+    # walls (§18.10 - servicio unificado)
+    'SeismicWallService',
+    'SeismicWallResult',
+    'WallClassificationResult',
+    'WallReinforcementResult',
+    'WallShearResult',
+    'WallBoundaryResult',
 ]

@@ -163,7 +163,7 @@ class BidirectionalShearResult:
     """Referencia ACI 318-25."""
 
 
-# Alias para uso en ElementVerificationResult y servicios de verificacion.
+# Alias para compatibilidad.
 # Nota: domain/shear/results.py tiene su propio ShearResult para cortante
 # unidireccional. Este BidirectionalShearResult es para verificacion con V2+V3.
 ShearResult = BidirectionalShearResult
@@ -635,80 +635,3 @@ class WallChecks:
 
     min_reinforcement: Optional[MinReinforcementResult] = None
     """Cuantia minima §18.10.2.1."""
-
-
-@dataclass
-class ElementVerificationResult:
-    """
-    Resultado unificado de verificacion para cualquier elemento estructural.
-
-    Contiene los resultados de todas las verificaciones aplicadas segun
-    el tipo de elemento (Beam, Column, Pier).
-    """
-    element_type: ElementType
-    """Tipo de elemento clasificado."""
-
-    # =========================================================================
-    # Verificaciones base (todos los elementos)
-    # =========================================================================
-    flexure: FlexureResult
-    """Resultado de flexion/flexocompresion."""
-
-    shear: ShearResult
-    """Resultado de cortante."""
-
-    # =========================================================================
-    # Estado general
-    # =========================================================================
-    overall_status: str
-    """Estado general: 'OK' o 'NO OK'."""
-
-    overall_sf: float
-    """Factor de seguridad minimo entre todas las verificaciones."""
-
-    # =========================================================================
-    # Verificaciones sismicas (vigas y columnas §18.6-18.7)
-    # =========================================================================
-    seismic_beam: Optional[SeismicBeamChecks] = None
-    """Verificaciones sismicas para vigas §18.6."""
-
-    seismic_column: Optional[SeismicColumnChecks] = None
-    """Verificaciones sismicas para columnas §18.7."""
-
-    # =========================================================================
-    # Verificaciones adicionales (muros)
-    # =========================================================================
-    wall_checks: Optional[WallChecks] = None
-    """Verificaciones adicionales para muros §18.10."""
-
-    # =========================================================================
-    # Extras
-    # =========================================================================
-    proposal: Optional[Dict[str, Any]] = None
-    """Propuesta de diseno si falla o sobrediseno."""
-
-    pm_plot: Optional[str] = None
-    """Grafico P-M en base64."""
-
-    element_info: Dict[str, Any] = field(default_factory=dict)
-    """Informacion del elemento (dimensiones, materiales, etc.)."""
-
-    @property
-    def is_ok(self) -> bool:
-        """True si todas las verificaciones pasan."""
-        return self.overall_status == "OK"
-
-    @property
-    def flexure_ok(self) -> bool:
-        """True si flexion pasa."""
-        return self.flexure.status == "OK"
-
-    @property
-    def shear_ok(self) -> bool:
-        """True si cortante pasa."""
-        return self.shear.status == "OK"
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convierte el resultado a diccionario para serializacion."""
-        from dataclasses import asdict
-        return asdict(self)

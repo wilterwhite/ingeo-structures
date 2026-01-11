@@ -17,9 +17,15 @@ import math
 from typing import List
 
 from ..common import SeismicCategory, check_Vc_zero_condition
+from ..seismic_detailing_service import SeismicDetailingService
 from ...constants.materials import get_effective_fc_shear, get_effective_fyt_shear
 from ...constants.shear import PHI_SHEAR
 from ...constants.units import N_TO_TONF
+from ...constants.chapter18 import (
+    MIN_WIDTH_BEAM_MM as MIN_WIDTH_SPECIAL_MM,
+    FIRST_HOOP_MAX_MM,
+    HX_MAX_MM,
+)
 from .results import (
     SeismicBeamResult,
     BeamDimensionalLimitsResult,
@@ -28,11 +34,6 @@ from .results import (
     BeamShearResult,
 )
 
-# Constantes en mm
-MIN_WIDTH_SPECIAL_MM = 254  # 10" = 254mm
-FIRST_HOOP_MAX_MM = 51  # 2" = 51mm
-HX_MAX_MM = 356  # 14" = 356mm
-
 
 class SeismicBeamService:
     """
@@ -40,6 +41,8 @@ class SeismicBeamService:
 
     Realiza todas las verificaciones aplicables según la categoría sísmica.
     Por defecto asume categoría SPECIAL (la más restrictiva).
+
+    Usa SeismicDetailingService para cálculos comunes de detallamiento.
 
     Example:
         service = SeismicBeamService()
@@ -50,6 +53,10 @@ class SeismicBeamService:
         # Verificación intermedia
         result = service.verify_beam(..., category=SeismicCategory.INTERMEDIATE)
     """
+
+    def __init__(self):
+        """Inicializa el servicio con dependencias."""
+        self._detailing = SeismicDetailingService()
 
     def verify_beam(
         self,
@@ -381,35 +388,40 @@ class SeismicBeamService:
         steel_grade: int,
         category: SeismicCategory,
     ) -> BeamTransverseResult:
-        """Verifica refuerzo transversal §18.6.4 / §18.4.2.4."""
+        """
+        Verifica refuerzo transversal §18.6.4 / §18.4.2.4.
+
+        Delega cálculos comunes a SeismicDetailingService.
+        """
         warnings = []
 
-        # Longitud de zona de hoops: 2h
-        zone_length = 2 * h
+        # Usar SeismicDetailingService para cálculos comunes
+        # Longitud de zona de confinamiento
+        zone_result = self._detailing.calculate_confinement_zone_length(
+            element_type='beam', h=h, d=d, category=category
+        )
+        zone_length = zone_result.lo
 
-        # Espaciamiento máximo en zona según categoría
-        if category == SeismicCategory.SPECIAL:
-            # s <= min(d/4, 6", 6*db G60, 5*db G80)
-            if steel_grade >= 80:
-                db_factor = 5 * db_long
-            else:
-                db_factor = 6 * db_long
-            s_max_zone = min(d / 4, 152, db_factor)  # 6" = 152mm
-        else:  # INTERMEDIATE
-            # s <= min(d/4, 8*db G60, 6*db G80, 24*db_trans, 12")
-            if steel_grade >= 80:
-                db_factor = 6 * db_long
-            else:
-                db_factor = 8 * db_long
-            s_max_zone = min(d / 4, db_factor, 305)  # 12" = 305mm
-
-        s_zone_ok = s_in_zone <= s_max_zone
+        # Espaciamiento en zona
+        spacing_result = self._detailing.check_transverse_spacing_in_zone(
+            s_provided=s_in_zone,
+            d=d,
+            db_long=db_long,
+            element_type='beam',
+            steel_grade=steel_grade,
+            category=category,
+        )
+        s_max_zone = spacing_result.s_max
+        s_zone_ok = spacing_result.s_ok
         if not s_zone_ok:
-            warnings.append(f"s en zona={s_in_zone:.0f}mm > s_max={s_max_zone:.0f}mm")
+            warnings.append(f"s en zona={s_in_zone:.0f}mm > s_max={s_max_zone:.0f}mm ({spacing_result.governing_limit})")
 
         # Primer hoop
-        first_hoop_max = FIRST_HOOP_MAX_MM
-        first_hoop_ok = first_hoop_distance <= first_hoop_max
+        first_hoop_result = self._detailing.check_first_hoop_position(
+            distance=first_hoop_distance, element_type='beam'
+        )
+        first_hoop_max = first_hoop_result.max_distance
+        first_hoop_ok = first_hoop_result.is_ok
         if not first_hoop_ok:
             warnings.append(f"Primer hoop={first_hoop_distance:.0f}mm > {first_hoop_max:.0f}mm")
 
@@ -419,10 +431,13 @@ class SeismicBeamService:
         if not s_outside_ok:
             warnings.append(f"s fuera zona={s_outside_zone:.0f}mm > d/2={s_max_outside:.0f}mm")
 
-        # Soporte lateral: hx <= 14"
-        hx_ok = hx <= HX_MAX_MM
+        # Soporte lateral (hx)
+        hx_result = self._detailing.check_lateral_support(
+            hx_provided=hx, element_type='beam'
+        )
+        hx_ok = hx_result.hx_ok
         if not hx_ok:
-            warnings.append(f"hx={hx:.0f}mm > {HX_MAX_MM:.0f}mm")
+            warnings.append(f"hx={hx:.0f}mm > {hx_result.hx_max:.0f}mm")
 
         is_ok = s_zone_ok and first_hoop_ok and s_outside_ok and hx_ok
 
@@ -439,7 +454,7 @@ class SeismicBeamService:
             s_max_outside=round(s_max_outside, 0),
             s_outside_ok=s_outside_ok,
             hx_provided=hx,
-            hx_max=HX_MAX_MM,
+            hx_max=hx_result.hx_max,
             hx_ok=hx_ok,
             is_ok=is_ok,
             warnings=warnings,

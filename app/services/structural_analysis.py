@@ -7,7 +7,7 @@ Este servicio actua como orquestador, delegando a servicios especializados:
 - FlexocompressionService: analisis de flexocompresion
 - ShearService: verificacion de corte
 - StatisticsService: estadisticas y graficos resumen
-- ElementService: verificacion unificada de elementos (Pier, Column, Beam)
+- ElementOrchestrator: verificacion unificada de elementos (Pier, Column, Beam, DropBeam)
 
 Referencias ACI 318-25:
 - Capitulo 9: Vigas (Beams)
@@ -26,14 +26,15 @@ from .analysis.shear_service import ShearService
 from .analysis.statistics_service import StatisticsService
 from .analysis.proposal_service import ProposalService
 from .presentation.pier_details_formatter import PierDetailsFormatter
-from .analysis.element_verification_service import ElementService
+from .analysis.element_orchestrator import ElementOrchestrator
 from .analysis.slab_service import SlabService
 from .analysis.punching_service import PunchingService
 from ..domain.entities import Pier, PierForces
-from .analysis.verification_result import ElementVerificationResult
 from ..domain.flexure import InteractionDiagramService, SlendernessService, FlexureChecker
 from ..domain.chapter11 import WallType
 from ..domain.constants import SeismicDesignCategory
+from ..domain.chapter18 import SeismicCategory
+from ..domain.shear.combined import calculate_combined_dcr, calculate_combined_sf
 
 
 class StructuralAnalysisService:
@@ -63,15 +64,15 @@ class StructuralAnalysisService:
         plot_generator: Optional[PlotGenerator] = None,
         proposal_service: Optional[ProposalService] = None,
         details_formatter: Optional[PierDetailsFormatter] = None,
-        element_service: Optional[ElementService] = None,
+        element_orchestrator: Optional[ElementOrchestrator] = None,
         slab_service: Optional[SlabService] = None,
         punching_service: Optional[PunchingService] = None
     ):
         """
-        Inicializa el servicio de analisis.
+        Inicializa el servicio de análisis.
 
         Args:
-            session_manager: Gestor de sesiones (opcional, crea uno nuevo si no se pasa)
+            session_manager: Gestor de sesiones (opcional)
             flexocompression_service: Servicio de flexocompresión (opcional)
             shear_service: Servicio de corte (opcional)
             statistics_service: Servicio de estadisticas (opcional)
@@ -80,10 +81,12 @@ class StructuralAnalysisService:
             plot_generator: Generador de graficos (opcional)
             proposal_service: Servicio de propuestas de diseño (opcional)
             details_formatter: Formateador de detalles de piers (opcional)
-            element_service: Servicio unificado de elementos (opcional)
+            element_orchestrator: Orquestador unificado de elementos (opcional)
+            slab_service: Servicio de losas (opcional)
+            punching_service: Servicio de punzonamiento (opcional)
 
         Nota: Los servicios se crean por defecto si no se pasan.
-              Pasar None explicito permite inyectar mocks para testing.
+              Pasar None explícito permite inyectar mocks para testing.
         """
         self._session_manager = session_manager or SessionManager()
         self._flexo_service = flexocompression_service or FlexocompressionService()
@@ -106,14 +109,9 @@ class StructuralAnalysisService:
         self._slab_service = slab_service or SlabService()
         self._punching_service = punching_service or PunchingService()
 
-        # Servicio unificado de elementos (reemplaza ElementAnalyzer, ColumnService, BeamService)
-        self._element_service = element_service or ElementService(
-            flexocompression_service=self._flexo_service,
-            shear_service=self._shear_service,
-            proposal_service=self._proposal_service,
-            plot_generator=self._plot_generator,
-            session_manager=self._session_manager
-        )
+        # Orquestador unificado de elementos: clasifica y delega al servicio apropiado
+        # Verifica todos los elementos: Pier, Column, Beam, DropBeam
+        self._orchestrator = element_orchestrator or ElementOrchestrator()
 
     # =========================================================================
     # Helpers - Generación de Datos de Interacción
@@ -144,31 +142,32 @@ class StructuralAnalysisService:
         self,
         piers: Dict[str, Pier],
         parsed_data: Any,
-        session_id: str,
-        generate_plots: bool = False,
-        moment_axis: str = 'M3',
-        angle_deg: float = 0
-    ) -> List[ElementVerificationResult]:
+        lambda_factor: float = 1.0,
+        category: SeismicCategory = SeismicCategory.SPECIAL
+    ) -> List[Dict[str, Any]]:
         """
-        Analiza un lote de piers y retorna los resultados.
+        Analiza un lote de piers usando ElementOrchestrator.
+
+        Clasifica automáticamente cada pier y lo verifica con el servicio
+        apropiado según ACI 318-25:
+        - §18.7 (SeismicColumnService) para piers tipo columna
+        - §18.10 (SeismicWallService) para muros esbeltos y rechonchos
 
         Args:
             piers: Diccionario de piers a analizar {key: Pier}
             parsed_data: Datos parseados de la sesión
-            session_id: ID de sesión para obtener configuración de vigas
-            generate_plots: Generar gráficos P-M individuales
-            moment_axis: Eje de momento
-            angle_deg: Ángulo para vista combinada
+            lambda_factor: Factor lambda para concreto liviano
+            category: Categoría sísmica
 
         Returns:
-            Lista de ElementVerificationResult
+            Lista de dicts formateados para la UI
         """
         # Obtener hn_ft del edificio
         hn_ft = None
         if parsed_data.building_info:
             hn_ft = parsed_data.building_info.hn_ft
 
-        results: List[ElementVerificationResult] = []
+        results = []
         for key, pier in piers.items():
             pier_forces = parsed_data.pier_forces.get(key)
 
@@ -179,16 +178,22 @@ class StructuralAnalysisService:
                 continuity_info = parsed_data.continuity_info[key]
                 hwcs = continuity_info.hwcs
 
-            result = self._element_service.verify(
-                pier,
-                pier_forces,
-                generate_plot=generate_plots,
-                moment_axis=moment_axis,
-                angle_deg=angle_deg,
+            # Usar orquestador: clasifica y delega automáticamente
+            orchestration_result = self._orchestrator.verify(
+                element=pier,
+                forces=pier_forces,
+                lambda_factor=lambda_factor,
+                category=category,
                 hwcs=hwcs,
-                hn_ft=hn_ft
+                hn_ft=hn_ft,
             )
-            results.append(result)
+
+            # Formatear resultado para UI (usando format_any_element unificado)
+            formatted = ResultFormatter.format_any_element(
+                pier, orchestration_result, key,
+                continuity_info=continuity_info
+            )
+            results.append(formatted)
 
         return results
 
@@ -203,6 +208,22 @@ class StructuralAnalysisService:
     def _validate_pier(self, session_id: str, pier_key: str) -> Optional[Dict[str, Any]]:
         """Valida que el pier existe en la sesión."""
         return self._session_manager.validate_pier(session_id, pier_key)
+
+    def _calculate_combined_shear_dcr(self, sf_v2: float, sf_v3: float) -> float:
+        """
+        Calcula el DCR combinado de cortante biaxial (vectorial).
+
+        Delega a domain/shear/combined.py para centralizar la lógica.
+        """
+        return calculate_combined_dcr(sf_v2, sf_v3)
+
+    def _calculate_combined_shear_sf(self, sf_v2: float, sf_v3: float) -> str:
+        """
+        Calcula el SF combinado de cortante biaxial.
+
+        Delega a domain/shear/combined.py para centralizar la lógica.
+        """
+        return calculate_combined_sf(sf_v2, sf_v3)
 
     # =========================================================================
     # API Pública - Gestión de Sesiones
@@ -300,46 +321,35 @@ class StructuralAnalysisService:
                             stirrup_spacing=update.get('stirrup_spacing')
                         )
 
-        # Analizar todos los piers
-        results = self._analyze_piers_batch(
+        # Analizar todos los piers usando ElementOrchestrator
+        pier_results = self._analyze_piers_batch(
             piers=parsed_data.piers,
             parsed_data=parsed_data,
-            session_id=session_id,
-            generate_plots=generate_plots,
-            moment_axis=moment_axis,
-            angle_deg=angle_deg
+            lambda_factor=1.0,
+            category=SeismicCategory.SPECIAL
         )
 
-        # Calcular estadísticas (delegado a StatisticsService)
-        statistics = self._statistics_service.calculate_statistics(results)
+        # Calcular estadísticas de piers
+        total_piers = len(pier_results)
+        ok_piers = sum(1 for r in pier_results if r.get('overall_status') == 'OK')
+        statistics = {
+            'total_piers': total_piers,
+            'ok_count': ok_piers,
+            'fail_count': total_piers - ok_piers,
+            'pass_rate': round(ok_piers / total_piers * 100, 1) if total_piers > 0 else 0,
+        }
 
-        # Generar gráfico resumen (delegado a StatisticsService)
+        # Generar gráfico resumen (TODO: adaptar para nuevo formato)
         summary_plot = None
-        if generate_plots and results:
-            summary_plot = self._statistics_service.generate_summary_plot(results)
 
-        # Formatear resultados de piers para la UI
-        pier_results = []
-        for i, r in enumerate(results):
-            key = list(parsed_data.piers.keys())[i]
-            pier = parsed_data.piers[key]
-            # Obtener continuity_info para este pier
-            continuity_info = None
-            if parsed_data.continuity_info and key in parsed_data.continuity_info:
-                continuity_info = parsed_data.continuity_info[key]
-            formatted = ResultFormatter.format_element_result(
-                pier, r, key, continuity_info
-            )
-            pier_results.append(formatted)
-
-        # Incluir columnas existentes (no re-analizarlas)
+        # Incluir columnas existentes (usando orquestador)
         column_results = []
         columns = parsed_data.columns or {}
         column_forces_dict = parsed_data.column_forces or {}
         for key, column in columns.items():
             col_forces = column_forces_dict.get(key)
-            col_result = self._element_service.verify(column, col_forces)
-            unified_result = ResultFormatter.format_element_result(
+            col_result = self._orchestrator.verify(column, col_forces)
+            unified_result = ResultFormatter.format_any_element(
                 column, col_result, key
             )
             column_results.append(unified_result)
@@ -491,7 +501,7 @@ class StructuralAnalysisService:
         total_columns = len(columns)
         total_elements = total_piers + total_columns
 
-        results = []
+        pier_results = []
         column_results = []
 
         # Obtener hn_ft del edificio
@@ -500,7 +510,7 @@ class StructuralAnalysisService:
             hn_ft = parsed_data.building_info.hn_ft
 
         # =====================================================================
-        # FASE 1: Analizar PIERS
+        # FASE 1: Analizar PIERS usando ElementOrchestrator
         # =====================================================================
         for i, (key, pier) in enumerate(piers.items(), 1):
             # Enviar progreso
@@ -524,18 +534,22 @@ class StructuralAnalysisService:
             # Obtener lambda para este pier
             lambda_factor = self._get_lambda_for_element(pier, materials_config)
 
-            # Analizar pier
-            result = self._element_service.verify(
-                pier,
-                pier_forces,
-                generate_plot=generate_plots,
-                moment_axis=moment_axis,
-                angle_deg=angle_deg,
+            # Analizar pier con orquestador
+            orchestration_result = self._orchestrator.verify(
+                element=pier,
+                forces=pier_forces,
+                lambda_factor=lambda_factor,
+                category=SeismicCategory.SPECIAL,
                 hwcs=hwcs,
                 hn_ft=hn_ft,
-                lambda_factor=lambda_factor
             )
-            results.append(result)
+
+            # Formatear resultado para UI (usando format_any_element unificado)
+            formatted = ResultFormatter.format_any_element(
+                pier, orchestration_result, key,
+                continuity_info=continuity_info
+            )
+            pier_results.append(formatted)
 
         # =====================================================================
         # FASE 2: Analizar COLUMNAS
@@ -553,11 +567,11 @@ class StructuralAnalysisService:
             # Obtener fuerzas de la columna
             col_forces = column_forces_dict.get(key)
 
-            # Verificar columna usando ElementService
-            col_result = self._element_service.verify(column, col_forces)
+            # Verificar columna usando orquestador unificado
+            col_result = self._orchestrator.verify(column, col_forces)
 
             # Convertir a formato compatible con la tabla
-            unified_result = ResultFormatter.format_element_result(
+            unified_result = ResultFormatter.format_any_element(
                 column, col_result, key
             )
             column_results.append(unified_result)
@@ -582,11 +596,11 @@ class StructuralAnalysisService:
             # Obtener fuerzas de la viga
             beam_forces = beam_forces_dict.get(key)
 
-            # Verificar viga usando ElementService
-            beam_result = self._element_service.verify(beam, beam_forces)
+            # Verificar viga usando orquestador unificado
+            beam_result = self._orchestrator.verify(beam, beam_forces)
 
             # Convertir a formato para UI
-            unified_result = ResultFormatter.format_element_result(
+            unified_result = ResultFormatter.format_any_element(
                 beam, beam_result, key
             )
             beam_results.append(unified_result)
@@ -647,22 +661,27 @@ class StructuralAnalysisService:
                 # Obtener fuerzas de la viga capitel
                 drop_beam_forces = drop_beam_forces_dict.get(key)
 
-                # Verificar usando ElementService (flexocompresión)
-                result = self._element_service.verify(
+                # Verificar usando orquestador unificado
+                result = self._orchestrator.verify(
                     drop_beam,
                     drop_beam_forces,
-                    generate_plot=generate_plots,
-                    moment_axis=moment_axis
                 )
 
                 # Formatear resultado
-                formatted = ResultFormatter.format_drop_beam_result(
+                formatted = ResultFormatter.format_any_element(
                     drop_beam, result, key
                 )
                 drop_beam_results.append(formatted)
 
-        # Calcular estadisticas de piers
-        statistics = self._statistics_service.calculate_statistics(results)
+        # Calcular estadísticas de piers (ahora son dicts)
+        total_piers_count = len(pier_results)
+        ok_piers = sum(1 for r in pier_results if r.get('overall_status') == 'OK')
+        statistics = {
+            'total_piers': total_piers_count,
+            'ok_count': ok_piers,
+            'fail_count': total_piers_count - ok_piers,
+            'pass_rate': round(ok_piers / total_piers_count * 100, 1) if total_piers_count > 0 else 0,
+        }
 
         # Agregar estadísticas de columnas, vigas y losas usando el servicio
         if column_results:
@@ -677,33 +696,11 @@ class StructuralAnalysisService:
         if drop_beam_results:
             statistics['drop_beams'] = self._statistics_service.calculate_dict_statistics(drop_beam_results)
 
-        # Generar grafico resumen (solo para piers por ahora)
+        # Generar gráfico resumen (TODO: adaptar para nuevo formato)
         summary_plot = None
-        if generate_plots and results:
-            yield {
-                "type": "progress",
-                "current": total_elements,
-                "total": total_elements,
-                "pier": "Generando resumen..."
-            }
-            summary_plot = self._statistics_service.generate_summary_plot(results)
 
-        # Formatear resultados de piers para la UI
-        pier_results_dicts = []
-        piers_list = list(piers.items())
-        for i, r in enumerate(results):
-            key, pier = piers_list[i]
-            # Obtener continuity_info para este pier
-            continuity_info = None
-            if parsed_data.continuity_info and key in parsed_data.continuity_info:
-                continuity_info = parsed_data.continuity_info[key]
-            formatted = ResultFormatter.format_element_result(
-                pier, r, key, continuity_info
-            )
-            pier_results_dicts.append(formatted)
-
-        # Unificar todos los resultados
-        all_results = pier_results_dicts + column_results
+        # Unificar todos los resultados (pier_results ya está formateado)
+        all_results = pier_results + column_results
 
         # Enviar resultado completo
         yield {
@@ -806,6 +803,8 @@ class StructuralAnalysisService:
                 'flexure_status': flexure_status,
                 'shear_sf_2': round(shear_v2.sf, 2) if shear_v2.sf < 100 else '>100',
                 'shear_sf_3': round(shear_v3.sf, 2) if shear_v3.sf < 100 else '>100',
+                'shear_dcr_combined': self._calculate_combined_shear_dcr(shear_v2.sf, shear_v3.sf),
+                'shear_sf_combined': self._calculate_combined_shear_sf(shear_v2.sf, shear_v3.sf),
                 'overall_status': status
             })
 
@@ -963,8 +962,16 @@ class StructuralAnalysisService:
             angle_deg=0
         )
 
-        # Generar gráfico resumen (delegado a StatisticsService)
-        summary_plot = self._statistics_service.generate_summary_plot(results)
+        # Convertir resultados a formato para gráfico resumen
+        summary_data = [
+            {
+                'pier_label': r.get('pier_label', ''),
+                'flexure_sf': r.get('flexure', {}).get('sf', 0),
+                'shear_sf': r.get('shear', {}).get('sf', 0)
+            }
+            for r in results
+        ]
+        summary_plot = self._statistics_service.generate_summary_from_dict(summary_data)
 
         return {
             'success': True,
@@ -1048,6 +1055,119 @@ class StructuralAnalysisService:
             beam_right_config=beam_right_config
         )
 
+    def resolve_beam_config(
+        self,
+        session_id: str,
+        beam_key: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Resuelve la configuración de una viga desde el catálogo de la sesión.
+
+        Args:
+            session_id: ID de sesión
+            beam_key: Clave de la viga ('none', 'generic', o key del catálogo)
+
+        Returns:
+            Dict con configuración de la viga, o None si es 'none' o 'generic'
+        """
+        if beam_key == 'none':
+            return None
+        if beam_key == 'generic':
+            return None  # El servicio usará la viga genérica
+
+        parsed_data = self._session_manager.get_session(session_id)
+        if not parsed_data:
+            return None
+
+        beam = parsed_data.beams.get(beam_key)
+        if beam:
+            return {
+                'width': beam.width,
+                'height': beam.depth,
+                'ln': beam.length,
+                'n_bars_top': beam.n_bars_top,
+                'diameter_top': beam.diameter_top,
+                'n_bars_bottom': beam.n_bars_bottom,
+                'diameter_bottom': beam.diameter_bottom
+            }
+        return None
+
+    def create_custom_beam(
+        self,
+        session_id: str,
+        label: str,
+        story: str,
+        length: float = 3000,
+        depth: float = 500,
+        width: float = 200,
+        fc: float = 28,
+        n_bars_top: int = 3,
+        n_bars_bottom: int = 3,
+        diameter_top: int = 16,
+        diameter_bottom: int = 16,
+        stirrup_diameter: int = 10,
+        stirrup_spacing: int = 150,
+        n_stirrup_legs: int = 2
+    ) -> Dict[str, Any]:
+        """
+        Crea una viga custom y la agrega al catálogo de la sesión.
+
+        Args:
+            session_id: ID de sesión
+            label: Etiqueta de la viga
+            story: Piso donde se ubica
+            length: Longitud en mm
+            depth: Altura en mm
+            width: Ancho en mm
+            fc: Resistencia del concreto en MPa
+            n_bars_top: Número de barras superiores
+            n_bars_bottom: Número de barras inferiores
+            diameter_top: Diámetro barras superiores en mm
+            diameter_bottom: Diámetro barras inferiores en mm
+            stirrup_diameter: Diámetro de estribos en mm
+            stirrup_spacing: Espaciamiento de estribos en mm
+            n_stirrup_legs: Número de ramas del estribo
+
+        Returns:
+            Dict con 'success', 'beam_key' o 'error'
+        """
+        from ..domain.entities import Beam
+        from ..domain.entities.beam import BeamSource
+
+        parsed_data = self._session_manager.get_session(session_id)
+        if not parsed_data:
+            return {'success': False, 'error': 'Sesión no encontrada'}
+
+        beam_key = f"{story}_{label}"
+
+        if beam_key in parsed_data.beams:
+            return {
+                'success': False,
+                'error': f'Ya existe una viga con el nombre {label} en {story}'
+            }
+
+        beam = Beam(
+            label=label,
+            story=story,
+            length=float(length),
+            depth=float(depth),
+            width=float(width),
+            fc=float(fc),
+            source=BeamSource.FRAME,
+            is_custom=True,
+            n_bars_top=int(n_bars_top),
+            n_bars_bottom=int(n_bars_bottom),
+            diameter_top=int(diameter_top),
+            diameter_bottom=int(diameter_bottom),
+            stirrup_diameter=int(stirrup_diameter),
+            stirrup_spacing=int(stirrup_spacing),
+            n_stirrup_legs=int(n_stirrup_legs)
+        )
+
+        parsed_data.beams[beam_key] = beam
+
+        return {'success': True, 'beam_key': beam_key}
+
     def analyze_single_pier(
         self,
         session_id: str,
@@ -1083,17 +1203,14 @@ class StructuralAnalysisService:
         if parsed_data.building_info:
             hn_ft = parsed_data.building_info.hn_ft
 
-        result = self._element_service.verify(
+        result = self._orchestrator.verify(
             pier,
             pier_forces,
-            generate_plot=generate_plot,
-            moment_axis='M3',
-            angle_deg=0,
             hwcs=hwcs,
             hn_ft=hn_ft
         )
 
-        return ResultFormatter.format_element_result(
+        return ResultFormatter.format_any_element(
             pier, result, pier_key, continuity_info
         )
 
@@ -1275,16 +1392,14 @@ class StructuralAnalysisService:
         for key, drop_beam in parsed_data.drop_beams.items():
             drop_beam_forces = parsed_data.drop_beam_forces.get(key)
 
-            # Verificar usando ElementService
-            result = self._element_service.verify(
+            # Verificar usando orquestador unificado
+            result = self._orchestrator.verify(
                 drop_beam,
                 drop_beam_forces,
-                generate_plot=generate_plots,
-                moment_axis=moment_axis
             )
 
             # Formatear resultado
-            formatted = ResultFormatter.format_drop_beam_result(
+            formatted = ResultFormatter.format_any_element(
                 drop_beam, result, key
             )
             drop_beam_results.append(formatted)
@@ -1296,5 +1411,40 @@ class StructuralAnalysisService:
             'success': True,
             'statistics': statistics,
             'results': drop_beam_results
+        }
+
+    def generate_drop_beam_section_diagram(
+        self,
+        session_id: str,
+        drop_beam_key: str
+    ) -> Dict[str, Any]:
+        """
+        Genera un diagrama de la sección transversal de una viga capitel.
+
+        Args:
+            session_id: ID de sesión
+            drop_beam_key: Clave de la viga capitel
+
+        Returns:
+            Diccionario con success y plot (imagen en base64)
+        """
+        parsed_data = self._session_manager.get_session(session_id)
+        if not parsed_data:
+            return {
+                'success': False,
+                'error': f'Sesión no encontrada: {session_id}'
+            }
+
+        drop_beam = parsed_data.drop_beams.get(drop_beam_key)
+        if not drop_beam:
+            return {
+                'success': False,
+                'error': f'Viga capitel no encontrada: {drop_beam_key}'
+            }
+
+        plot = self._plot_generator.generate_drop_beam_section_diagram(drop_beam)
+        return {
+            'success': True,
+            'plot': plot
         }
 

@@ -6,11 +6,13 @@ Permite definir una viga estandar que se aplica a todos los piers,
 con posibilidad de sobre-escribir valores individuales.
 """
 from dataclasses import dataclass
+from typing import Optional, TYPE_CHECKING
 
 from ..constants.reinforcement import FY_DEFAULT_MPA
-from typing import Optional
-
 from ..constants.materials import get_bar_area
+
+if TYPE_CHECKING:
+    from ..calculations.coupling_beam_capacity import CouplingBeamCapacityService
 
 
 @dataclass
@@ -82,66 +84,33 @@ class CouplingBeamConfig:
         """Profundidad efectiva para momento positivo (mm)."""
         return self.height - self.cover - self.stirrup_diameter - self.diameter_bottom / 2
 
-    def calculate_Mn(self, As: float, d: float) -> float:
-        """
-        Calcula momento nominal para una capa de acero.
-
-        Usando bloque rectangular de Whitney:
-        a = As * fy / (0.85 * fc * b)
-        Mn = As * fy * (d - a/2)
-
-        Args:
-            As: Area de acero (mm²)
-            d: Profundidad efectiva (mm)
-
-        Returns:
-            Mn en kN-m
-        """
-        # Profundidad del bloque de compresion
-        a = As * self.fy / (0.85 * self.fc * self.width)
-
-        # Verificar que a < d (armadura en tension)
-        if a >= d:
-            return 0.0
-
-        # Momento nominal (N-mm -> kN-m)
-        Mn_Nmm = As * self.fy * (d - a / 2)
-        return Mn_Nmm / 1e6  # kN-m
-
     @property
     def Mn_positive(self) -> float:
         """Momento nominal positivo (armadura inferior en tension) en kN-m."""
-        return self.calculate_Mn(self.As_bottom, self.d_bottom)
+        from ..calculations.coupling_beam_capacity import CouplingBeamCapacityService
+        return CouplingBeamCapacityService.calculate_Mn(
+            As=self.As_bottom, d=self.d_bottom, b=self.width, fy=self.fy, fc=self.fc
+        )
 
     @property
     def Mn_negative(self) -> float:
         """Momento nominal negativo (armadura superior en tension) en kN-m."""
-        return self.calculate_Mn(self.As_top, self.d_top)
-
-    def calculate_Mpr(self, Mn: float, alpha: float = 1.25) -> float:
-        """
-        Calcula momento probable.
-
-        Mpr = alpha * Mn, donde alpha = 1.25 segun ACI 318-25.
-
-        Args:
-            Mn: Momento nominal (kN-m)
-            alpha: Factor de sobrerresistencia (default 1.25)
-
-        Returns:
-            Mpr en kN-m
-        """
-        return alpha * Mn
+        from ..calculations.coupling_beam_capacity import CouplingBeamCapacityService
+        return CouplingBeamCapacityService.calculate_Mn(
+            As=self.As_top, d=self.d_top, b=self.width, fy=self.fy, fc=self.fc
+        )
 
     @property
     def Mpr_positive(self) -> float:
         """Momento probable positivo en kN-m."""
-        return self.calculate_Mpr(self.Mn_positive)
+        from ..calculations.coupling_beam_capacity import CouplingBeamCapacityService
+        return CouplingBeamCapacityService.calculate_Mpr(self.Mn_positive)
 
     @property
     def Mpr_negative(self) -> float:
         """Momento probable negativo en kN-m."""
-        return self.calculate_Mpr(self.Mn_negative)
+        from ..calculations.coupling_beam_capacity import CouplingBeamCapacityService
+        return CouplingBeamCapacityService.calculate_Mpr(self.Mn_negative)
 
     @property
     def Mpr_max(self) -> float:

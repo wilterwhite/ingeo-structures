@@ -6,10 +6,12 @@ from dataclasses import dataclass, field
 from typing import Optional, List, TYPE_CHECKING
 
 from ..constants.materials import get_bar_area
-from ..constants.reinforcement import RHO_MIN, FY_DEFAULT_MPA
+from ..constants.reinforcement import FY_DEFAULT_MPA
+from ..calculations.minimum_reinforcement import MinimumReinforcementCalculator
 
 if TYPE_CHECKING:
-    from ..calculations.steel_layer_calculator import SteelLayer
+    from ..calculations.steel_layer_calculator import SteelLayer, SteelLayerCalculator
+    from ..calculations.wall_boundary_zone import WallBoundaryZoneService
 
 
 @dataclass
@@ -78,44 +80,18 @@ class Pier:
         """
         Aplica armadura mínima según ACI 318-25.
 
-        Reglas:
-        - ρmin = 0.0025 (§11.6.1)
-        - Espesor ≤ 130mm: malla simple (§11.7.2.3)
-        - Espesor > 130mm: malla doble
-        - Diámetro por defecto: φ8
-        - Espaciamiento: redondeado hacia abajo a múltiplo de 5mm
+        Delega el cálculo al MinimumReinforcementCalculator del dominio.
         """
-        # Determinar número de mallas según espesor
-        self.n_meshes = 1 if self.thickness <= 130 else 2
+        config = MinimumReinforcementCalculator.calculate_for_pier(self.thickness)
 
-        # Diámetro φ8 por defecto
-        self.diameter_v = 8
-        self.diameter_h = 8
-        self._bar_area_v = get_bar_area(8)
-        self._bar_area_h = get_bar_area(8)
-
-        # Calcular espaciamiento para ρmin = 0.0025
-        spacing = self._calculate_min_spacing()
-        self.spacing_v = spacing
-        self.spacing_h = spacing
-
-    def _calculate_min_spacing(self) -> int:
-        """
-        Calcula espaciamiento para armadura mínima (ρ=0.25%).
-
-        Fórmula: s = n_meshes × As_barra × 1000 / (ρmin × t × 1000)
-        Redondea hacia abajo a múltiplo de 5mm para cumplir ρ >= ρmin.
-        """
-        As_min_per_m = RHO_MIN * self.thickness * 1000  # mm²/m
-        spacing_exact = self.n_meshes * self._bar_area_v * 1000 / As_min_per_m
-
-        # Redondear hacia abajo a múltiplo de 5mm (para cumplir >= ρmin)
-        spacing = int(spacing_exact // 5) * 5
-
-        # Limitar a rango típico [100, 300]
-        spacing = max(100, min(300, spacing))
-
-        return spacing
+        # Aplicar configuración calculada
+        self.n_meshes = config.n_meshes
+        self.diameter_v = config.diameter
+        self.diameter_h = config.diameter
+        self.spacing_v = config.spacing
+        self.spacing_h = config.spacing
+        self._bar_area_v = config.bar_area
+        self._bar_area_h = config.bar_area
 
     # =========================================================================
     # Propiedades de Armadura
@@ -243,42 +219,18 @@ class Pier:
 
     def _calculate_boundary_zone_steel(self, is_left: bool) -> float:
         """
-        Calcula el area de acero dentro de la zona de extremo (0.15×lw).
+        Calcula el área de acero dentro de la zona de extremo (0.15×lw).
+
+        Delega al servicio WallBoundaryZoneService.
 
         Args:
             is_left: True para extremo izquierdo, False para derecho
 
         Returns:
-            Area de acero en mm² dentro de la zona de extremo
+            Área de acero en mm² dentro de la zona de extremo
         """
-        boundary_length = 0.15 * self.width
-
-        # 1. Barras de borde: todas estan dentro de la zona de extremo
-        As_edge = self.As_edge_per_end
-
-        # 2. Barras de malla dentro de la zona
-        # Las barras de malla empiezan en x=cover y se repiten cada spacing_v
-        # Primera barra intermedia en x = cover + spacing_v
-        As_mesh = 0.0
-        if self.spacing_v > 0:
-            # Calcular cuantas barras de malla caen dentro de boundary_length
-            if is_left:
-                # Zona izquierda: desde 0 hasta boundary_length
-                # Primera barra de malla en cover, luego cada spacing_v
-                x = self.cover
-                while x < boundary_length and x < (self.width - self.cover):
-                    As_mesh += self.n_meshes * self._bar_area_v
-                    x += self.spacing_v
-            else:
-                # Zona derecha: desde (width - boundary_length) hasta width
-                start_zone = self.width - boundary_length
-                # Ultima barra en width - cover, y hacia atras cada spacing_v
-                x = self.width - self.cover
-                while x > start_zone and x > self.cover:
-                    As_mesh += self.n_meshes * self._bar_area_v
-                    x -= self.spacing_v
-
-        return As_edge + As_mesh
+        from ..calculations.wall_boundary_zone import WallBoundaryZoneService
+        return WallBoundaryZoneService.calculate_steel_in_zone(self, is_left)
 
     @property
     def As_flexure_total(self) -> float:
@@ -396,6 +348,47 @@ class Pier:
         Usado para cálculo rápido de momento elástico: M = σ × S
         """
         return self.Ig / self.y_extreme if self.y_extreme > 0 else 0
+
+    # =========================================================================
+    # Geometría como Columna (para wall piers clasificados como columna)
+    # =========================================================================
+
+    @property
+    def column_b(self) -> float:
+        """
+        Ancho de columna equivalente (mm).
+
+        Cuando un wall pier es clasificado como columna (hw/lw ≤ 2),
+        se toma b = min(width, thickness) como el lado corto.
+        """
+        return min(self.width, self.thickness)
+
+    @property
+    def column_h(self) -> float:
+        """
+        Altura de columna equivalente (mm).
+
+        Cuando un wall pier es clasificado como columna,
+        se toma h = max(width, thickness) como el lado largo.
+        """
+        return max(self.width, self.thickness)
+
+    @property
+    def column_d_V2(self) -> float:
+        """Profundidad efectiva para cortante en dirección V2 (mm)."""
+        return self.column_h - self.cover
+
+    @property
+    def column_d_V3(self) -> float:
+        """Profundidad efectiva para cortante en dirección V3 (mm)."""
+        return self.column_b - self.cover
+
+    @property
+    def Av_stirrup(self) -> float:
+        """Área de estribos para cortante (mm²)."""
+        from ..constants.materials import get_bar_area
+        bar_area = get_bar_area(self.stirrup_diameter, 78.5)
+        return self.n_stirrup_legs * bar_area
 
     # =========================================================================
     # Validación de Armadura

@@ -28,6 +28,12 @@ from .design_proposal import (
 )
 from .coupling_beam import CouplingBeamConfig, PierCouplingConfig
 from .protocols import FlexuralElement
+from .value_objects import (
+    MeshReinforcementConfig,
+    EdgeBarConfig,
+    StirrupConfig,
+    BoundaryZoneDefinition,
+)
 
 __all__ = [
     # Piers
@@ -61,4 +67,9 @@ __all__ = [
     'PierCouplingConfig',
     # Protocols
     'FlexuralElement',
+    # Value Objects
+    'MeshReinforcementConfig',
+    'EdgeBarConfig',
+    'StirrupConfig',
+    'BoundaryZoneDefinition',
 ]

@@ -1,25 +1,75 @@
-// app/structural/static/js/ResultsTable.js
+// app/static/js/tables/ResultsTable.js
 /**
  * Módulo para manejo de la tabla de resultados.
  * Usa RowFactory para crear filas de piers y columnas.
+ * Extiende FilterableTable para reutilizar lógica de filtrado y estadísticas.
  */
 
-class ResultsTable {
+class ResultsTable extends FilterableTable {
     constructor(page) {
-        this.page = page;
+        super(page);
         this.rowFactory = new RowFactory(this);
-        this.expandedPiers = new Set();
-        this.combinationsCache = {};
         this.plotsCache = {};
 
-        // Estado de vigas estándar (para "Genérica")
-        this.standardBeam = { width: 200, height: 500, ln: 1500, nbars: 2, diam: 12 };
-        this.customBeamPiers = new Set();
-        this.pierBeamConfigs = {};
-        this.pierBeamAssignments = {};  // { pierKey: { izq: 'beamKey', der: 'beamKey' } }
-
-        // Manager de edición de piers (incluye botón de recálculo)
+        // Managers especializados
+        this.combinationsManager = new CombinationsManager(this);
+        this.couplingBeamManager = new CouplingBeamManager(this);
         this.editManager = new PierEditManager(this);
+    }
+
+    // =========================================================================
+    // Propiedades para CombinationsManager (delegación)
+    // =========================================================================
+
+    /** @returns {Set} Piers expandidos - delegado a CombinationsManager */
+    get expandedPiers() { return this.combinationsManager.expandedPiers; }
+
+    /** @returns {Object} Cache de combinaciones - delegado a CombinationsManager */
+    get combinationsCache() { return this.combinationsManager.combinationsCache; }
+
+    // =========================================================================
+    // Métodos requeridos por FilterableTable
+    // =========================================================================
+
+    /**
+     * Obtiene valores de filtros desde el DOM.
+     * @returns {Object}
+     */
+    getFilterValues() {
+        return {
+            grilla: this.elements.grillaFilter?.value || '',
+            story: this.elements.storyFilter?.value || '',
+            axis: this.elements.axisFilter?.value || '',
+            status: this.elements.statusFilter?.value || '',
+            elementType: this.elements.elementTypeFilter?.value || ''
+        };
+    }
+
+    /**
+     * Verifica si un resultado cumple con los filtros.
+     * @param {Object} result
+     * @returns {boolean}
+     */
+    matchesFilters(result) {
+        const filters = this.filters;
+
+        if (filters.grilla) {
+            const parts = result.pier_label.split('-');
+            const grilla = parts.length > 0 ? parts[0] : '';
+            if (grilla !== filters.grilla) return false;
+        }
+        if (filters.story && result.story !== filters.story) return false;
+        if (filters.axis) {
+            const parts = result.pier_label.split('-');
+            const axis = parts.length > 1 ? parts[1] : '';
+            if (axis !== filters.axis) return false;
+        }
+        if (filters.elementType) {
+            const elementType = result.element_type || 'pier';
+            if (elementType !== filters.elementType) return false;
+        }
+        // Filtrar por estado (usa helper de FilterableTable)
+        return this.matchesStatusFilter(result, filters.status);
     }
 
     // =========================================================================
@@ -98,49 +148,57 @@ class ResultsTable {
         this.applyFilters();
     }
 
+    /**
+     * Aplica filtros y actualiza la tabla.
+     * Sobrescribe FilterableTable.applyFilters() para agregar lógica específica.
+     */
     applyFilters() {
-        this.page.filters.grilla = this.elements.grillaFilter?.value || '';
-        this.page.filters.story = this.elements.storyFilter?.value || '';
-        this.page.filters.axis = this.elements.axisFilter?.value || '';
-        this.page.filters.status = this.elements.statusFilter?.value || '';
-        this.page.filters.elementType = this.elements.elementTypeFilter?.value || '';
+        // Obtener filtros y aplicar a page.filters para compatibilidad
+        this.filters = this.getFilterValues();
+        Object.assign(this.page.filters, this.filters);
 
-        const filtered = this.getFilteredResults();
-        this.renderTable(filtered);
-        this.updateStatistics(this.calculateStatistics(filtered));
+        // Filtrar resultados usando método heredado matchesFilters
+        this.filteredResults = this.page.results.filter(r => this.matchesFilters(r));
+
+        // Renderizar y actualizar stats
+        this.renderTable(this.filteredResults);
+        this.updateStats();
         this.updateSummaryPlot();
     }
 
+    /**
+     * Obtiene resultados filtrados (alias para compatibilidad).
+     * @returns {Array}
+     */
     getFilteredResults() {
-        return this.page.results.filter(result => {
-            if (this.filters.grilla) {
-                const parts = result.pier_label.split('-');
-                const grilla = parts.length > 0 ? parts[0] : '';
-                if (grilla !== this.filters.grilla) return false;
-            }
-            if (this.filters.story && result.story !== this.filters.story) return false;
-            if (this.filters.axis) {
-                const parts = result.pier_label.split('-');
-                const axis = parts.length > 1 ? parts[1] : '';
-                if (axis !== this.filters.axis) return false;
-            }
-            if (this.filters.status) {
-                const isOk = result.overall_status === 'OK';
-                if (this.filters.status === 'OK' && !isOk) return false;
-                if (this.filters.status === 'FAIL' && isOk) return false;
-            }
-            if (this.filters.elementType) {
-                const elementType = result.element_type || 'pier';
-                if (elementType !== this.filters.elementType) return false;
-            }
-            return true;
-        });
+        return this.filteredResults.length > 0
+            ? this.filteredResults
+            : this.page.results.filter(r => this.matchesFilters(r));
     }
 
+    /**
+     * Actualiza estadísticas en el DOM.
+     * Implementa método abstracto de FilterableTable.
+     */
+    updateStats() {
+        const stats = this.calculateStats();
+        // Convertir rate a pass_rate para compatibilidad
+        stats.pass_rate = stats.rate;
+        this.updateStatistics(stats);
+    }
+
+    /**
+     * Método legacy para compatibilidad - usa calculateStats() de FilterableTable.
+     * @deprecated Usar calculateStats() directamente
+     */
     calculateStatistics(results) {
-        const total = results.length;
-        const ok = results.filter(r => r.overall_status === 'OK').length;
-        return { total, ok, fail: total - ok, pass_rate: total > 0 ? (ok / total * 100) : 0 };
+        // Temporalmente usar results pasados, luego deprecar
+        const temp = this.filteredResults;
+        this.filteredResults = results;
+        const stats = this.calculateStats();
+        this.filteredResults = temp;
+        stats.pass_rate = stats.rate;
+        return stats;
     }
 
     // =========================================================================
@@ -435,154 +493,31 @@ class ResultsTable {
     }
 
     // =========================================================================
-    // Combinaciones
+    // Combinaciones - Delegado a CombinationsManager
     // =========================================================================
 
     appendComboRows(container, pierKey) {
-        const isExpanded = this.expandedPiers.has(pierKey);
-        const displayStyle = isExpanded ? '' : 'display: none;';
-
-        if (isExpanded && this.combinationsCache[pierKey]) {
-            this.combinationsCache[pierKey].forEach(combo => {
-                container.appendChild(this.createComboRow(combo, pierKey, displayStyle));
-            });
-        } else {
-            const loadingRow = document.createElement('tr');
-            loadingRow.className = 'combo-row';
-            loadingRow.dataset.pierKey = pierKey;
-            loadingRow.style.cssText = displayStyle;
-            loadingRow.innerHTML = '<td colspan="12" style="text-align:center; color: #6b7280;">Cargando...</td>';
-            container.appendChild(loadingRow);
-        }
-    }
-
-    createComboRow(combo, pierKey, displayStyle = '') {
-        const tr = document.createElement('tr');
-        tr.className = 'combo-row';
-        tr.dataset.pierKey = pierKey;
-        tr.dataset.comboIndex = combo.index;
-        if (displayStyle) tr.style.cssText = displayStyle;
-
-        const shearSf2 = parseFloat(combo.shear_sf_2) || 100;
-        const shearSf3 = parseFloat(combo.shear_sf_3) || 100;
-        const dcrCombined = Math.sqrt(Math.pow(1/shearSf2, 2) + Math.pow(1/shearSf3, 2));
-        const comboShearSf = 1.0 / dcrCombined;
-        const comboShearDisplay = comboShearSf >= 100 ? '>100' : comboShearSf.toFixed(2);
-
-        tr.innerHTML = `
-            <td class="combo-indent" colspan="2"><span class="combo-name">${combo.full_name || combo.name}</span></td>
-            <td class="combo-forces-cell" colspan="4">P=${combo.P} | M2=${combo.M2} | M3=${combo.M3}</td>
-            <td class="fs-value ${getFsClass(combo.flexure_sf)}">${combo.flexure_sf}</td>
-            <td></td>
-            <td class="fs-value ${getFsClass(comboShearDisplay)}">${comboShearDisplay}</td>
-            <td class="combo-forces-cell">V2=${combo.V2} | V3=${combo.V3} | DCR: ${formatDcr(dcrCombined)}</td>
-            <td></td>
-            <td class="actions-cell"><button class="action-btn" data-action="diagram-combo">📊</button></td>
-        `;
-
-        tr.querySelector('[data-action="diagram-combo"]')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.showCombinationDiagram(pierKey, combo.index);
-        });
-
-        return tr;
+        this.combinationsManager.appendComboRows(container, pierKey);
     }
 
     async toggleExpand(pierKey) {
-        const { resultsTable } = this.elements;
-        const pierRow = resultsTable?.querySelector(`.pier-row[data-pier-key="${pierKey}"]`);
-        const comboRows = resultsTable?.querySelectorAll(`.combo-row[data-pier-key="${pierKey}"]`);
-        if (!pierRow) return;
-
-        if (this.expandedPiers.has(pierKey)) {
-            this.expandedPiers.delete(pierKey);
-            pierRow.classList.remove('expanded');
-            comboRows?.forEach(row => row.style.display = 'none');
-        } else {
-            this.expandedPiers.add(pierKey);
-            pierRow.classList.add('expanded');
-            if (!this.combinationsCache[pierKey]) {
-                await this.loadCombinations(pierKey);
-            } else {
-                comboRows?.forEach(row => row.style.display = '');
-            }
-        }
+        await this.combinationsManager.toggleExpand(pierKey);
     }
 
     async loadCombinations(pierKey) {
-        try {
-            const data = await structuralAPI.getPierCombinations(this.sessionId, pierKey);
-            if (data.success) {
-                this.combinationsCache[pierKey] = data.combinations;
-                const { resultsTable } = this.elements;
-                resultsTable?.querySelectorAll(`.combo-row[data-pier-key="${pierKey}"]`).forEach(r => r.remove());
-
-                const pierRow = resultsTable?.querySelector(`.pier-row[data-pier-key="${pierKey}"]`);
-                if (!pierRow) return;
-
-                let insertAfter = pierRow;
-                data.combinations.forEach(combo => {
-                    const tr = this.createComboRow(combo, pierKey);
-                    insertAfter.insertAdjacentElement('afterend', tr);
-                    insertAfter = tr;
-                });
-            }
-        } catch (error) {
-            console.error('Error loading combinations:', error);
-        }
-    }
-
-    async showCombinationDiagram(pierKey, comboIndex) {
-        const combo = this.combinationsCache[pierKey]?.[comboIndex];
-        if (!combo) return;
-        try {
-            const data = await structuralAPI.analyzeCombination({
-                session_id: this.sessionId, pier_key: pierKey,
-                combination_index: comboIndex, generate_plot: true
-            });
-            if (data.success && data.pm_plot) {
-                this.page.plotModal.open(pierKey, pierKey.replace('_', ' - '), data.pm_plot, combo);
-            }
-        } catch (error) {
-            console.error('Error getting combination diagram:', error);
-        }
+        await this.combinationsManager.loadCombinations(pierKey);
     }
 
     async toggleAllExpand() {
-        const { resultsTable } = this.elements;
-        if (!resultsTable) return false;
-
-        const pierKeys = Array.from(resultsTable.querySelectorAll('.pier-row:not(.column-type)')).map(r => r.dataset.pierKey);
-        if (pierKeys.length === 0) return false;
-
-        const hasExpanded = pierKeys.some(key => this.expandedPiers.has(key));
-
-        if (hasExpanded) {
-            this.collapseAll();
-            return false;
-        } else {
-            await this.expandAll(pierKeys);
-            return true;
-        }
+        return await this.combinationsManager.toggleAllExpand();
     }
 
     collapseAll() {
-        const { resultsTable } = this.elements;
-        if (!resultsTable) return;
-        this.expandedPiers.clear();
-        resultsTable.querySelectorAll('.combo-row').forEach(r => r.style.display = 'none');
-        resultsTable.querySelectorAll('.pier-row').forEach(r => r.classList.remove('expanded'));
+        this.combinationsManager.collapseAll();
     }
 
     async expandAll(pierKeys) {
-        const { resultsTable } = this.elements;
-        if (!resultsTable) return;
-
-        pierKeys.forEach(key => this.expandedPiers.add(key));
-        resultsTable.querySelectorAll('.pier-row').forEach(r => r.classList.add('expanded'));
-
-        await Promise.all(pierKeys.filter(k => !this.combinationsCache[k]).map(k => this.loadCombinations(k)));
-        resultsTable.querySelectorAll('.combo-row').forEach(r => r.style.display = '');
+        await this.combinationsManager.expandAll(pierKeys);
     }
 
     // =========================================================================
@@ -654,8 +589,7 @@ class ResultsTable {
     }
 
     reset() {
-        this.expandedPiers.clear();
-        this.combinationsCache = {};
+        this.combinationsManager.clear();
         this.plotsCache = {};
         this.customBeamPiers.clear();
         this.pierBeamConfigs = {};

@@ -21,7 +21,9 @@ from .common import (
     get_json_data,
     handle_errors,
     require_session,
+    require_session_data,
     require_session_and_pier,
+    require_element,
     get_session_or_404,
 )
 
@@ -371,40 +373,13 @@ def assign_coupling_beam(session_id: str, pier_key: str, data: dict):
         {"success": true, "result": {...}}
     """
     service = get_analysis_service()
-    parsed_data = service.get_session_data(session_id)
-
-    if not parsed_data:
-        return jsonify({
-            'success': False,
-            'error': f'Sesión no encontrada: {session_id}'
-        }), 404
 
     beam_left_key = data.get('beam_left', 'generic')
     beam_right_key = data.get('beam_right', 'generic')
 
-    # Resolver vigas desde el catálogo
-    def resolve_beam_config(beam_key):
-        if beam_key == 'none':
-            return None  # Sin viga
-        if beam_key == 'generic':
-            # Usar viga genérica de la sesión
-            return None  # El servicio usará la viga genérica
-        # Buscar viga específica
-        beam = parsed_data.beams.get(beam_key)
-        if beam:
-            return {
-                'width': beam.width,
-                'height': beam.depth,
-                'ln': beam.length,
-                'n_bars_top': beam.n_bars_top,
-                'diameter_top': beam.diameter_top,
-                'n_bars_bottom': beam.n_bars_bottom,
-                'diameter_bottom': beam.diameter_bottom
-            }
-        return None
-
-    beam_left_config = resolve_beam_config(beam_left_key)
-    beam_right_config = resolve_beam_config(beam_right_key)
+    # Resolver vigas usando el servicio (lógica de negocio delegada)
+    beam_left_config = service.resolve_beam_config(session_id, beam_left_key)
+    beam_right_config = service.resolve_beam_config(session_id, beam_right_key)
 
     # Guardar configuración de vigas
     service.set_pier_coupling_config(
@@ -414,36 +389,6 @@ def assign_coupling_beam(session_id: str, pier_key: str, data: dict):
         has_beam_right=beam_right_key != 'none',
         beam_left_config=beam_left_config,
         beam_right_config=beam_right_config
-    )
-
-    # Re-analizar el pier y retornar resultado actualizado
-    result = service.analyze_single_pier(
-        session_id=session_id,
-        pier_key=pier_key,
-        generate_plot=True
-    )
-
-    return jsonify({
-        'success': True,
-        'result': result
-    })
-
-
-@bp.route('/set-pier-beam', methods=['POST'])
-@handle_errors
-@require_session_and_pier
-def set_pier_beam(session_id: str, pier_key: str, data: dict):
-    """Configura vigas de acople para un pier y retorna el resultado re-analizado (DEPRECATED)."""
-    service = get_analysis_service()
-
-    # Guardar configuración de vigas
-    service.set_pier_coupling_config(
-        session_id=session_id,
-        pier_key=pier_key,
-        has_beam_left=data.get('has_beam_left', True),
-        has_beam_right=data.get('has_beam_right', True),
-        beam_left_config=parse_beam_config(data.get('beam_left')),
-        beam_right_config=parse_beam_config(data.get('beam_right'))
     )
 
     # Re-analizar el pier y retornar resultado actualizado
@@ -562,59 +507,37 @@ def create_custom_beam(session_id: str, data: dict):
     Response:
         {"success": true, "beam_key": "Story1_VC1"}
     """
-    from ..domain.entities.beam import Beam, BeamSource
-
     service = get_analysis_service()
-    parsed_data = service.get_session_data(session_id)
 
-    if not parsed_data:
-        return jsonify({
-            'success': False,
-            'error': f'Sesión no encontrada: {session_id}'
-        }), 404
-
-    label = data.get('label', 'Custom')
-    story = data.get('story', 'Story1')
-    beam_key = f"{story}_{label}"
-
-    # Verificar que no exista una viga con ese key
-    if beam_key in parsed_data.beams:
-        return jsonify({
-            'success': False,
-            'error': f'Ya existe una viga con el nombre {label} en {story}'
-        }), 400
-
-    # Crear la viga custom
-    beam = Beam(
-        label=label,
-        story=story,
-        length=float(data.get('length', 3000)),
-        depth=float(data.get('depth', 500)),
-        width=float(data.get('width', 200)),
-        fc=float(data.get('fc', 28)),
-        source=BeamSource.FRAME,
-        is_custom=True,
-        n_bars_top=int(data.get('n_bars_top', 3)),
-        n_bars_bottom=int(data.get('n_bars_bottom', 3)),
-        diameter_top=int(data.get('diameter_top', 16)),
-        diameter_bottom=int(data.get('diameter_bottom', 16)),
-        stirrup_diameter=int(data.get('stirrup_diameter', 10)),
-        stirrup_spacing=int(data.get('stirrup_spacing', 150)),
-        n_stirrup_legs=int(data.get('n_stirrup_legs', 2))
+    # Delegar creación de viga al servicio
+    result = service.create_custom_beam(
+        session_id=session_id,
+        label=data.get('label', 'Custom'),
+        story=data.get('story', 'Story1'),
+        length=data.get('length', 3000),
+        depth=data.get('depth', 500),
+        width=data.get('width', 200),
+        fc=data.get('fc', 28),
+        n_bars_top=data.get('n_bars_top', 3),
+        n_bars_bottom=data.get('n_bars_bottom', 3),
+        diameter_top=data.get('diameter_top', 16),
+        diameter_bottom=data.get('diameter_bottom', 16),
+        stirrup_diameter=data.get('stirrup_diameter', 10),
+        stirrup_spacing=data.get('stirrup_spacing', 150),
+        n_stirrup_legs=data.get('n_stirrup_legs', 2)
     )
 
-    # Agregar al diccionario de vigas
-    parsed_data.beams[beam_key] = beam
+    if not result.get('success'):
+        return jsonify(result), 400
 
-    return jsonify({
-        'success': True,
-        'beam_key': beam_key
-    })
+    return jsonify(result)
 
 
 @bp.route('/update-beam-reinforcement', methods=['POST'])
 @handle_errors
-def update_beam_reinforcement():
+@require_session_data
+@require_element('beam_key', 'beams', 'Viga')
+def update_beam_reinforcement(session_id: str, data: dict, parsed_data, beam_key: str, beam):
     """
     Actualiza la enfierradura de una viga.
 
@@ -636,35 +559,8 @@ def update_beam_reinforcement():
     Response:
         {"success": true, "beam_key": "Story1_B1"}
     """
-    data = get_json_data()
-    session_id = data.get('session_id')
-    beam_key = data.get('beam_key')
     reinforcement = data.get('reinforcement', {})
 
-    if not session_id or not beam_key:
-        return jsonify({
-            'success': False,
-            'error': 'Se requiere session_id y beam_key'
-        }), 400
-
-    service = get_analysis_service()
-    parsed_data = service.get_session_data(session_id)
-
-    if not parsed_data:
-        return jsonify({
-            'success': False,
-            'error': f'Sesión no encontrada: {session_id}'
-        }), 404
-
-    # Buscar la viga
-    beam = parsed_data.beams.get(beam_key)
-    if not beam:
-        return jsonify({
-            'success': False,
-            'error': f'Viga no encontrada: {beam_key}'
-        }), 404
-
-    # Actualizar enfierradura
     beam.update_reinforcement(
         n_bars_top=reinforcement.get('n_bars_top'),
         n_bars_bottom=reinforcement.get('n_bars_bottom'),

@@ -82,31 +82,14 @@ def get_drop_beam_section_diagram(session_id: str, data: dict):
             'error': 'Se requiere drop_beam_key'
         }), 400
 
+    # Delegar al servicio de análisis
     service = get_analysis_service()
-    parsed_data = service.get_session_data(session_id)
+    result = service.generate_drop_beam_section_diagram(session_id, drop_beam_key)
 
-    if not parsed_data:
-        return jsonify({
-            'success': False,
-            'error': f'Sesión no encontrada: {session_id}'
-        }), 404
+    if not result.get('success'):
+        return jsonify(result), 404
 
-    drop_beam = parsed_data.drop_beams.get(drop_beam_key)
-    if not drop_beam:
-        return jsonify({
-            'success': False,
-            'error': f'Viga capitel no encontrada: {drop_beam_key}'
-        }), 404
-
-    # Generar diagrama de sección
-    from ..services.presentation.plot_generator import PlotGenerator
-    plot_gen = PlotGenerator()
-    plot = plot_gen.generate_drop_beam_section_diagram(drop_beam)
-
-    return jsonify({
-        'success': True,
-        'plot': plot
-    })
+    return jsonify(result)
 
 
 @bp.route('/update-drop-beam-reinforcement', methods=['POST'])

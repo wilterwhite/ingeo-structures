@@ -93,7 +93,16 @@
       "Bash(sort:*)",
       "Bash(for class in \"status-ok\" \"status-fail\" \"critical-combo\" \"dcr-info\" \"slenderness-info\" \"capacity-line\" \"capacity-ref\" \"capacity-value\")",
       "Bash(do echo -n \"$class: \" grep -r \"$class\" app/static/js/*.js app/templates/*.html)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(dir /s \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\static\")",
+      "Bash(node --check:*)",
+      "Bash(dir /S /B \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\")",
+      "Bash(while read f)",
+      "Bash(do if ! grep -q \"from\\|import\" \"$f\")",
+      "Bash(then echo \"$f\")",
+      "Bash(fi)",
+      "Bash(del \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\application\\column_analysis_service.py\")",
+      "Bash(del \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\application\\beam_analysis_service.py\")"
     ]
   }
 }

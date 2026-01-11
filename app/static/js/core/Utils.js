@@ -85,19 +85,40 @@ function getFailureModeLabel(mode) {
 }
 
 // =============================================================================
-// Cálculos de Armadura
+// Conversiones de Unidades
 // =============================================================================
 
 /**
- * Calcula el área de acero por metro lineal.
- * @param {number} nMeshes - Número de mallas (1 o 2)
- * @param {number} diameter - Diámetro de barra (mm)
- * @param {number} spacing - Espaciamiento (mm)
- * @returns {number} Área de acero (mm²/m)
+ * Convierte metros a milímetros.
+ * @param {number} meters - Valor en metros
+ * @returns {number} Valor en milímetros (redondeado)
  */
-function calculateAsPerMeter(nMeshes, diameter, spacing) {
-    const barArea = BAR_AREAS[diameter] || 50.3;
-    return nMeshes * (barArea / spacing) * 1000;
+function metersToMm(meters) {
+    return Math.round((meters || 0) * 1000);
+}
+
+/**
+ * Convierte metros a centímetros.
+ * @param {number} meters - Valor en metros
+ * @param {number} decimals - Decimales (default: 0)
+ * @returns {string} Valor en centímetros formateado
+ */
+function metersToCm(meters, decimals = 0) {
+    return ((meters || 0) * 100).toFixed(decimals);
+}
+
+/**
+ * Formatea dimensiones de sección (ancho x alto).
+ * @param {number} width_m - Ancho en metros
+ * @param {number} height_m - Alto en metros
+ * @param {string} unit - Unidad ('mm' o 'cm', default: 'mm')
+ * @returns {string} "ancho × alto" formateado
+ */
+function formatSectionDimensions(width_m, height_m, unit = 'mm') {
+    if (unit === 'cm') {
+        return `${metersToCm(width_m)} × ${metersToCm(height_m)}`;
+    }
+    return `${metersToMm(width_m)} × ${metersToMm(height_m)}`;
 }
 
 // =============================================================================
@@ -111,9 +132,38 @@ function calculateAsPerMeter(nMeshes, diameter, spacing) {
  */
 function calculateElementStats(results) {
     const total = results?.length || 0;
-    const ok = results?.filter(r => r.overall_status === 'OK').length || 0;
+    const ok = results?.filter(r => isStatusOk(r)).length || 0;
     const fail = total - ok;
     const rate = total > 0 ? ((ok / total) * 100).toFixed(0) : 0;
     return { total, ok, fail, rate };
+}
+
+// =============================================================================
+// Helpers de Estado
+// =============================================================================
+
+/**
+ * Verifica si un resultado tiene estado OK.
+ * @param {Object} result - Resultado con overall_status
+ * @returns {boolean}
+ */
+function isStatusOk(result) {
+    return result?.overall_status === 'OK';
+}
+
+/**
+ * Retorna clase CSS según estado del resultado.
+ * Usa status_class del backend si está disponible,
+ * de lo contrario calcula localmente.
+ * @param {Object} result - Resultado con overall_status y opcionalmente status_class
+ * @returns {string} 'status-ok' o 'status-fail'
+ */
+function getStatusClass(result) {
+    // Preferir la clase CSS calculada por el backend
+    if (result?.status_class) {
+        return result.status_class;
+    }
+    // Fallback: calcular localmente
+    return isStatusOk(result) ? 'status-ok' : 'status-fail';
 }
 

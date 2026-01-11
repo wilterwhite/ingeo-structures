@@ -7,12 +7,13 @@ manejo de errores y acceso a servicios.
 """
 import logging
 from functools import wraps
-from typing import Callable, Any
+from typing import Callable, Any, Tuple
 
 from flask import request, jsonify
 
 from ..services.structural_analysis import StructuralAnalysisService
 from ..services.factory import ServiceFactory
+from ..domain.chapter18.common import SeismicCategory
 
 logger = logging.getLogger(__name__)
 
@@ -100,61 +101,49 @@ def require_session(f: Callable) -> Callable:
     return decorated
 
 
-def require_session_and_pier(f: Callable) -> Callable:
+def require_session_and_element(element_key_name: str) -> Callable:
     """
-    Decorador que valida session_id y pier_key en el request JSON.
+    Decorador genérico que valida session_id y una clave de elemento.
 
-    Extrae ambos valores, pasándolos como kwargs al endpoint.
-    Retorna 400 si falta alguno.
+    Args:
+        element_key_name: Nombre de la clave del elemento (ej: 'pier_key', 'slab_key')
 
     Uso:
         @bp.route('/endpoint', methods=['POST'])
         @handle_errors
-        @require_session_and_pier
+        @require_session_and_element('pier_key')
         def endpoint(session_id: str, pier_key: str, data: dict):
             ...
     """
-    @wraps(f)
-    def decorated(*args, **kwargs) -> Any:
-        data = get_json_data()
-        session_id = data.get('session_id')
-        pier_key = data.get('pier_key')
+    def decorator(f: Callable) -> Callable:
+        @wraps(f)
+        def decorated(*args, **kwargs) -> Any:
+            data = get_json_data()
+            session_id = data.get('session_id')
+            element_key = data.get(element_key_name)
 
-        if not session_id or not pier_key:
-            return jsonify({
-                'success': False,
-                'error': 'Se requiere session_id y pier_key'
-            }), 400
+            if not session_id or not element_key:
+                return jsonify({
+                    'success': False,
+                    'error': f'Se requiere session_id y {element_key_name}'
+                }), 400
 
-        return f(*args, session_id=session_id, pier_key=pier_key, data=data, **kwargs)
-    return decorated
+            # Pasar element_key con su nombre original
+            kwargs[element_key_name] = element_key
+            return f(*args, session_id=session_id, data=data, **kwargs)
+        return decorated
+    return decorator
+
+
+# Aliases para compatibilidad hacia atrás
+def require_session_and_pier(f: Callable) -> Callable:
+    """Alias de require_session_and_element('pier_key')."""
+    return require_session_and_element('pier_key')(f)
 
 
 def require_session_and_slab(f: Callable) -> Callable:
-    """
-    Decorador que valida session_id y slab_key en el request JSON.
-
-    Uso:
-        @bp.route('/endpoint', methods=['POST'])
-        @handle_errors
-        @require_session_and_slab
-        def endpoint(session_id: str, slab_key: str, data: dict):
-            ...
-    """
-    @wraps(f)
-    def decorated(*args, **kwargs) -> Any:
-        data = get_json_data()
-        session_id = data.get('session_id')
-        slab_key = data.get('slab_key')
-
-        if not session_id or not slab_key:
-            return jsonify({
-                'success': False,
-                'error': 'Se requiere session_id y slab_key'
-            }), 400
-
-        return f(*args, session_id=session_id, slab_key=slab_key, data=data, **kwargs)
-    return decorated
+    """Alias de require_session_and_element('slab_key')."""
+    return require_session_and_element('slab_key')(f)
 
 
 def get_session_or_404(session_id: str):
@@ -178,3 +167,177 @@ def get_session_or_404(session_id: str):
         }), 404)
 
     return parsed_data, None
+
+
+def require_session_data(f: Callable) -> Callable:
+    """
+    Decorador que valida session_id y obtiene parsed_data.
+
+    Combina require_session + get_session_or_404 en un solo decorador.
+    Pasa session_id, data y parsed_data como kwargs.
+
+    Uso:
+        @bp.route('/endpoint', methods=['POST'])
+        @handle_errors
+        @require_session_data
+        def endpoint(session_id: str, data: dict, parsed_data):
+            # parsed_data ya está validado y disponible
+            ...
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs) -> Any:
+        data = get_json_data()
+        session_id = data.get('session_id')
+
+        if not session_id:
+            return jsonify({
+                'success': False,
+                'error': 'Se requiere session_id'
+            }), 400
+
+        parsed_data, error = get_session_or_404(session_id)
+        if error:
+            return error
+
+        return f(*args, session_id=session_id, data=data, parsed_data=parsed_data, **kwargs)
+    return decorated
+
+
+def require_element(element_key_name: str, collection_name: str, element_type_label: str) -> Callable:
+    """
+    Decorador que valida existencia de un elemento en parsed_data.
+
+    Debe usarse DESPUÉS de require_session_data.
+
+    Args:
+        element_key_name: Nombre del parámetro en data (ej: 'column_key')
+        collection_name: Nombre de la colección en parsed_data (ej: 'columns')
+        element_type_label: Etiqueta para mensajes de error (ej: 'Columna')
+
+    Uso:
+        @bp.route('/endpoint', methods=['POST'])
+        @handle_errors
+        @require_session_data
+        @require_element('column_key', 'columns', 'Columna')
+        def endpoint(session_id: str, data: dict, parsed_data, column_key: str, column):
+            # column ya está validada y disponible
+            ...
+    """
+    def decorator(f: Callable) -> Callable:
+        @wraps(f)
+        def decorated(*args, session_id: str, data: dict, parsed_data, **kwargs) -> Any:
+            element_key = data.get(element_key_name)
+
+            if not element_key:
+                return jsonify({
+                    'success': False,
+                    'error': f'Se requiere {element_key_name}'
+                }), 400
+
+            collection = getattr(parsed_data, collection_name, {})
+            if element_key not in collection:
+                return jsonify({
+                    'success': False,
+                    'error': f'{element_type_label} "{element_key}" no encontrada'
+                }), 404
+
+            element = collection[element_key]
+            kwargs[element_key_name] = element_key
+            kwargs[collection_name.rstrip('s')] = element  # 'columns' -> 'column'
+
+            return f(*args, session_id=session_id, data=data, parsed_data=parsed_data, **kwargs)
+        return decorated
+    return decorator
+
+
+def parse_seismic_params(data: dict) -> Tuple[SeismicCategory, float]:
+    """
+    Parsea parámetros sísmicos desde request data.
+
+    Extrae la categoría sísmica y el factor lambda del diccionario
+    de datos del request, con valores por defecto seguros.
+
+    Args:
+        data: Diccionario con datos del request JSON
+
+    Returns:
+        Tuple con (SeismicCategory, lambda_factor)
+        - category: SPECIAL, INTERMEDIATE u ORDINARY (default: SPECIAL)
+        - lambda_factor: Factor para concreto liviano (default: 1.0)
+    """
+    category_str = data.get('category', 'SPECIAL').upper()
+    try:
+        category = SeismicCategory[category_str]
+    except KeyError:
+        category = SeismicCategory.SPECIAL
+
+    lambda_factor = float(data.get('lambda_factor', 1.0))
+    return category, lambda_factor
+
+
+def calculate_statistics(results: list) -> dict:
+    """
+    Calcula estadísticas OK/FAIL de una lista de resultados.
+
+    Args:
+        results: Lista de resultados con campo 'overall_status'
+
+    Returns:
+        Dict con total, ok_count, fail_count, pass_rate
+    """
+    total = len(results)
+    ok_count = sum(1 for r in results if r.get('overall_status') == 'OK')
+    return {
+        'total': total,
+        'ok_count': ok_count,
+        'fail_count': total - ok_count,
+        'pass_rate': round(ok_count / total * 100, 1) if total > 0 else 0,
+    }
+
+
+def analyze_elements_generic(
+    elements: dict,
+    forces_dict: dict,
+    orchestrator,
+    result_formatter,
+    category: SeismicCategory,
+    lambda_factor: float,
+) -> Tuple[list, dict]:
+    """
+    Análisis genérico para cualquier tipo de elemento estructural.
+
+    Este método centraliza la lógica común de análisis de beams, columns,
+    y otros elementos que usan ElementOrchestrator.
+
+    Args:
+        elements: Diccionario {element_key: element}
+        forces_dict: Diccionario {element_key: forces}
+        orchestrator: Instancia de ElementOrchestrator
+        result_formatter: Clase ResultFormatter para formateo
+        category: Categoría sísmica
+        lambda_factor: Factor para concreto liviano
+
+    Returns:
+        Tuple (results_list, statistics_dict)
+    """
+    results = []
+
+    for key, element in elements.items():
+        forces = forces_dict.get(key)
+
+        # Verificar usando orquestador (clasifica y delega automáticamente)
+        orchestration_result = orchestrator.verify(
+            element=element,
+            forces=forces,
+            lambda_factor=lambda_factor,
+            category=category,
+        )
+
+        # Formatear resultado para UI
+        formatted = result_formatter.format_any_element(
+            element, orchestration_result, key
+        )
+        results.append(formatted)
+
+    statistics = calculate_statistics(results)
+    return results, statistics

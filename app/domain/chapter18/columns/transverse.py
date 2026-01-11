@@ -17,16 +17,14 @@ Referencias:
 import math
 from typing import List, Tuple
 from .results import TransverseReinforcementResult
-
-# Constantes en mm (convertidas de pulgadas)
-LO_MIN_MM = 457  # 18 pulgadas
-HX_MAX_NORMAL_MM = 356  # 14 pulgadas
-HX_MAX_HIGH_AXIAL_MM = 203  # 8 pulgadas
-SO_MIN_MM = 102  # 4 pulgadas
-SO_MAX_MM = 152  # 6 pulgadas
-
-# Límite de f'c para condición especial
-FC_LIMIT_MPA = 70  # 10,000 psi ≈ 70 MPa
+from ...constants.chapter18 import (
+    LO_MIN_MM,
+    HX_MAX_MM as HX_MAX_NORMAL_MM,
+    HX_MAX_HIGH_AXIAL_MM,
+    SO_MIN_MM,
+    SO_MAX_MM,
+    FC_LIMIT_HIGH_AXIAL_MPA as FC_LIMIT_MPA,
+)
 
 
 def calculate_lo(

@@ -146,8 +146,8 @@
 │   │   └── structural_analysis.py         (1041 líneas)  # Servicio principal de análisis estructural
 │   │   ├── analysis/
 │   │   │   ├── __init__.py                    (  49 líneas)  # Inicialización del módulo
-│   │   │   ├── element_classifier.py          ( 199 líneas)  # Módulo Python
-│   │   │   ├── element_verification_service.py (1124 líneas)  # Módulo Python
+│   │   │   ├── element_classifier.py          ( 199 líneas)  # Clasificador de tipos de elementos
+│   │   │   ├── element_orchestrator.py        ( 350 líneas)  # Orquestador unificado de verificación
 │   │   │   ├── flexocompression_service.py    ( 472 líneas)  # Módulo Python
 │   │   │   ├── formatting.py                  (  94 líneas)  # Módulo Python
 │   │   │   ├── proposal_service.py            ( 166 líneas)  # Generación de propuestas de diseño

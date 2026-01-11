@@ -178,34 +178,3 @@ def calculate_punching_Vc(
         position=position.value,
         aci_reference='ACI 318-25 22.6.5.2'
     )
-
-
-def check_punching_shear_reinforcement_needed(
-    Vu_kN: float,
-    phi_Vc_kN: float
-) -> Tuple[bool, str]:
-    """
-    Verifica si se requiere refuerzo de cortante por punzonamiento.
-
-    Segun 22.6.6:
-    - Si Vu <= 0.5*phi*Vc: No requiere refuerzo (tipicamente no aplica para punzonamiento)
-    - Si Vu > phi*Vc: Requiere refuerzo o rediseno
-
-    Args:
-        Vu_kN: Cortante ultimo (kN)
-        phi_Vc_kN: Capacidad de diseno del concreto (kN)
-
-    Returns:
-        Tupla (requiere_refuerzo, mensaje)
-    """
-    if Vu_kN <= phi_Vc_kN:
-        return False, "OK - No requiere refuerzo de punzonamiento"
-    else:
-        return True, "Requiere refuerzo de punzonamiento (studs o barras)"
-
-
-# TODO: Constante huerfana - requerida por ACI 318-25 §8.10.4.1 pero no usada aun.
-# Factor maximo para Vn con refuerzo de barras/mallas: Vn <= 6*lambda*sqrt(f'c)*bo*d
-# Para studs: Vn <= 8*lambda*sqrt(f'c)*bo*d
-VC_MAX_FACTOR_BARS = 0.50   # 6/12 en SI (equivale a 6*sqrt(f'c) en US)
-VC_MAX_FACTOR_STUDS = 0.66  # 8/12 en SI (equivale a 8*sqrt(f'c) en US)

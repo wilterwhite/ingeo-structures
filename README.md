@@ -162,7 +162,7 @@ app/
 │   ├── analysis/
 │   │   ├── __init__.py
 │   │   ├── element_classifier.py            # Clasificador elementos
-│   │   ├── element_verification_service.py  # Verificación unificada
+│   │   ├── element_orchestrator.py          # Orquestador unificado de verificación
 │   │   ├── flexocompression_service.py      # Servicio flexocompresión
 │   │   ├── shear/                           # Servicio de corte
 │   │   │   ├── __init__.py

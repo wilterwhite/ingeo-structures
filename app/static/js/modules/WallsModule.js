@@ -12,6 +12,28 @@ class WallsModule {
     }
 
     // =========================================================================
+    // Helpers de Renderizado de Tablas
+    // =========================================================================
+
+    /**
+     * Renderiza una tabla de diseño genérica.
+     * @param {string} tbodyId - ID del tbody
+     * @param {Object} designData - Datos de diseño con has_data y rows
+     * @param {Function} rowRenderer - Función que genera HTML para cada fila
+     * @param {number} colspan - Número de columnas para mensaje vacío
+     */
+    _renderDesignTable(tbodyId, designData, rowRenderer, colspan = 8) {
+        const tbody = document.getElementById(tbodyId);
+        if (!tbody) return;
+
+        if (designData && designData.has_data && designData.rows.length > 0) {
+            tbody.innerHTML = designData.rows.map(rowRenderer).join('');
+        } else {
+            tbody.innerHTML = `<tr><td colspan="${colspan}" class="no-data">Sin datos de carga</td></tr>`;
+        }
+    }
+
+    // =========================================================================
     // Pier Details Modal
     // =========================================================================
 
@@ -51,12 +73,12 @@ class WallsModule {
                     }
                 }
             } else {
-                alert('Error: ' + data.error);
+                this.page.showNotification('Error: ' + data.error, 'error');
                 this.closePierDetailsModal();
             }
         } catch (error) {
             console.error('Error getting pier capacities:', error);
-            alert('Error: ' + error.message);
+            this.page.showNotification('Error: ' + error.message, 'error');
             this.closePierDetailsModal();
         } finally {
             pierDetailsLoading.classList.remove('active');
@@ -188,7 +210,7 @@ class WallsModule {
             flexureBody.innerHTML = `
                 <tr>
                     <td>${flexure.location}</td>
-                    <td class="${this._getDcrClass(flexure.dcr)}">${flexure.dcr}</td>
+                    <td class="${getDcrClass(flexure.dcr)}">${flexure.dcr}</td>
                     <td class="combo-cell">${combo_name}</td>
                     <td>${flexure.Pu_tonf}</td>
                     <td>${flexure.Mu2_tonf_m}</td>
@@ -204,7 +226,7 @@ class WallsModule {
             shearBody.innerHTML = shear.rows.map(row => `
                 <tr>
                     <td>${row.direction}</td>
-                    <td class="${this._getDcrClass(row.dcr)}">${row.dcr}</td>
+                    <td class="${getDcrClass(row.dcr)}">${row.dcr}</td>
                     <td class="combo-cell">${combo_name}</td>
                     <td>${row.Pu_tonf}</td>
                     <td>${row.Mu_tonf_m}</td>
@@ -278,23 +300,18 @@ class WallsModule {
         }
 
         // Sección 5: Flexural Design
-        const flexureBody = document.getElementById('det-flexure-body');
-        if (flexure_design && flexure_design.has_data && flexure_design.rows.length > 0) {
-            flexureBody.innerHTML = flexure_design.rows.map(row => `
-                <tr>
-                    <td>${row.location}</td>
-                    <td class="${this._getDcrClass(row.dcr)}">${row.dcr}</td>
-                    <td class="combo-cell">${row.combo}</td>
-                    <td>${row.Pu_tonf}</td>
-                    <td>${row.Mu2_tonf_m}</td>
-                    <td>${row.Mu3_tonf_m}</td>
-                    <td>${row.phi_Mn_tonf_m}</td>
-                    <td>${row.c_mm}</td>
-                </tr>
-            `).join('');
-        } else {
-            flexureBody.innerHTML = '<tr><td colspan="8" class="no-data">Sin datos de carga</td></tr>';
-        }
+        this._renderDesignTable('det-flexure-body', flexure_design, row => `
+            <tr>
+                <td>${row.location}</td>
+                <td class="${getDcrClass(row.dcr)}">${row.dcr}</td>
+                <td class="combo-cell">${row.combo}</td>
+                <td>${row.Pu_tonf}</td>
+                <td>${row.Mu2_tonf_m}</td>
+                <td>${row.Mu3_tonf_m}</td>
+                <td>${row.phi_Mn_tonf_m}</td>
+                <td>${row.c_mm}</td>
+            </tr>
+        `);
 
         // Sección 6: Shear Design
         const phiVElement = document.getElementById('det-phi-v');
@@ -303,42 +320,32 @@ class WallsModule {
             phiVElement.textContent = `(φv = ${phi_v.toFixed(2)})`;
         }
 
-        const shearBody = document.getElementById('det-shear-body');
-        if (shear_design && shear_design.has_data && shear_design.rows.length > 0) {
-            shearBody.innerHTML = shear_design.rows.map(row => `
-                <tr>
-                    <td>${row.direction}</td>
-                    <td class="${this._getDcrClass(row.dcr)}">${row.dcr}</td>
-                    <td class="combo-cell">${row.combo}</td>
-                    <td>${row.Pu_tonf}</td>
-                    <td>${row.Mu_tonf_m}</td>
-                    <td>${row.Vu_tonf}</td>
-                    <td>${row.phi_Vc_tonf}</td>
-                    <td>${row.phi_Vn_tonf}</td>
-                </tr>
-            `).join('');
-        } else {
-            shearBody.innerHTML = '<tr><td colspan="8" class="no-data">Sin datos de carga</td></tr>';
-        }
+        this._renderDesignTable('det-shear-body', shear_design, row => `
+            <tr>
+                <td>${row.direction}</td>
+                <td class="${getDcrClass(row.dcr)}">${row.dcr}</td>
+                <td class="combo-cell">${row.combo}</td>
+                <td>${row.Pu_tonf}</td>
+                <td>${row.Mu_tonf_m}</td>
+                <td>${row.Vu_tonf}</td>
+                <td>${row.phi_Vc_tonf}</td>
+                <td>${row.phi_Vn_tonf}</td>
+            </tr>
+        `);
 
         // Sección 7: Boundary Element Check
-        const boundaryBody = document.getElementById('det-boundary-body');
-        if (boundary_check && boundary_check.has_data && boundary_check.rows.length > 0) {
-            boundaryBody.innerHTML = boundary_check.rows.map(row => `
-                <tr>
-                    <td>${row.location}</td>
-                    <td class="combo-cell">${row.combo}</td>
-                    <td>${row.Pu_tonf}</td>
-                    <td>${row.Mu_tonf_m}</td>
-                    <td>${row.sigma_comp_MPa}</td>
-                    <td>${row.sigma_limit_MPa}</td>
-                    <td>${row.c_mm}</td>
-                    <td class="${row.required === 'Yes' ? 'status-fail' : 'status-ok'}">${row.required}</td>
-                </tr>
-            `).join('');
-        } else {
-            boundaryBody.innerHTML = '<tr><td colspan="8" class="no-data">Sin datos de carga</td></tr>';
-        }
+        this._renderDesignTable('det-boundary-body', boundary_check, row => `
+            <tr>
+                <td>${row.location}</td>
+                <td class="combo-cell">${row.combo}</td>
+                <td>${row.Pu_tonf}</td>
+                <td>${row.Mu_tonf_m}</td>
+                <td>${row.sigma_comp_MPa}</td>
+                <td>${row.sigma_limit_MPa}</td>
+                <td>${row.c_mm}</td>
+                <td class="${row.required === 'Yes' ? 'status-fail' : 'status-ok'}">${row.required}</td>
+            </tr>
+        `);
 
         // Sección 8: Pure Capacities
         if (slenderness && slenderness.is_slender) {
@@ -352,20 +359,6 @@ class WallsModule {
         document.getElementById('det-phi-mn2').textContent = capacities.phi_Mn2_tonf_m;
         document.getElementById('det-phi-vn2').textContent = capacities.phi_Vn2_tonf;
         document.getElementById('det-phi-vn3').textContent = capacities.phi_Vn3_tonf;
-    }
-
-    _getDcrClass(dcr) {
-        if (dcr === '<0.01' || (typeof dcr === 'number' && dcr <= 1.0)) {
-            return 'status-ok';
-        }
-        return 'status-fail';
-    }
-
-    _getSfClass(sf) {
-        if (sf === '>100' || (typeof sf === 'number' && sf >= 1)) {
-            return 'status-ok';
-        }
-        return 'status-fail';
     }
 
     closePierDetailsModal() {
@@ -400,12 +393,12 @@ class WallsModule {
                 sectionModalImg.src = `data:image/png;base64,${data.section_diagram}`;
                 sectionModalImg.style.display = 'block';
             } else {
-                alert('Error: ' + (data.error || 'No se pudo generar el diagrama'));
+                this.page.showNotification('Error: ' + (data.error || 'No se pudo generar el diagrama'), 'error');
                 this.closeSectionModal();
             }
         } catch (error) {
             console.error('Error getting section diagram:', error);
-            alert('Error: ' + error.message);
+            this.page.showNotification('Error: ' + error.message, 'error');
             this.closeSectionModal();
         } finally {
             sectionModalLoading.classList.remove('active');
@@ -433,12 +426,12 @@ class WallsModule {
                 sectionModalImg.src = `data:image/png;base64,${data.section_diagram}`;
                 sectionModalImg.style.display = 'block';
             } else {
-                alert('Error: ' + (data.error || 'No se pudo generar el diagrama'));
+                this.page.showNotification('Error: ' + (data.error || 'No se pudo generar el diagrama'), 'error');
                 this.closeSectionModal();
             }
         } catch (error) {
             console.error('Error getting proposed section diagram:', error);
-            alert('Error: ' + error.message);
+            this.page.showNotification('Error: ' + error.message, 'error');
             this.closeSectionModal();
         } finally {
             sectionModalLoading.classList.remove('active');

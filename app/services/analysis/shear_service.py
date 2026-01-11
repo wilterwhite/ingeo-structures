@@ -332,7 +332,7 @@ class ShearService:
     ) -> BoundaryElementResult:
         """Verifica si se requiere elemento de borde según §18.10.6."""
         hwcs_lw = pier.height / pier.width if pier.width > 0 else 0
-        Ag = pier.width * pier.thickness
+        Ag = pier.Ag
         Ach = Ag * 0.85
 
         # Determinar método
@@ -575,29 +575,22 @@ class ShearService:
         lambda_factor: float = 1.0
     ) -> Dict[str, Any]:
         """Verifica cortante de un Pier tratado como columna."""
-        # Convertir Pier a parámetros de columna
         if not pier_forces or not pier_forces.combinations:
             return self._empty_column_shear_result()
 
-        b = min(pier.width, pier.thickness)
-        h = max(pier.width, pier.thickness)
-        cover = pier.cover if hasattr(pier, 'cover') else 40
-        d = h - cover
-        Av = pier.Av_stirrup if hasattr(pier, 'Av_stirrup') else 0
-        s = pier.stirrup_spacing if hasattr(pier, 'stirrup_spacing') else 100
-
+        # Usar propiedades de geometría de columna de la entidad Pier
         result = self._column_shear.verify_seismic_column_shear(
             lu=pier.height,
-            Ag=pier.width * pier.thickness,
+            Ag=pier.Ag,
             fc=pier.fc,
-            bw_V2=b,
-            d_V2=d,
-            Av_V2=Av,
-            bw_V3=h,
-            d_V3=b - cover,
-            Av_V3=Av,
+            bw_V2=pier.column_b,
+            d_V2=pier.column_d_V2,
+            Av_V2=pier.Av_stirrup,
+            bw_V3=pier.column_h,
+            d_V3=pier.column_d_V3,
+            Av_V3=pier.Av_stirrup,
             fyt=pier.fy,
-            s=s,
+            s=pier.stirrup_spacing,
             Vu_V2=max(abs(c.V2) for c in pier_forces.combinations),
             Vu_V3=max(abs(c.V3) for c in pier_forces.combinations),
             Pu=max(abs(c.P) for c in pier_forces.combinations),
