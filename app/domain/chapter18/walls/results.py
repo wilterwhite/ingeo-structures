@@ -83,6 +83,9 @@ class WallShearResult:
     dcr: float
     is_ok: bool
 
+    # Factor φv usado
+    phi_v: float = 0.60  # Default SPECIAL
+
     # Amplificación (si aplica)
     amplification: Optional[ShearAmplificationResult] = None
     aci_reference: str = "ACI 318-25 §18.10.4"

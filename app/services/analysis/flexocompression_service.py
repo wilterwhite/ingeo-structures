@@ -169,12 +169,17 @@ class FlexocompressionService:
             exceeds_axial, phi_Pn_max = False, 0.0
             has_tension, tension_combos = False, 0
 
+        # DCR centralizado: se calcula UNA VEZ aquí
+        # DCR = 1/SF = Mu/φMn (demand/capacity)
+        dcr = 1 / sf if sf > 0 and sf < float('inf') else 0
+
         return {
             'sf': sf,
+            'dcr': round(dcr, 3),            # DCR centralizado (Mu/φMn)
             'status': status,
             'critical_combo': critical,
             'phi_Mn_0': phi_Mn_0,           # Capacidad a P=0 (flexion pura)
-            'phi_Mn_at_Pu': phi_Mn_at_Pu,   # Capacidad a Pu critico
+            'phi_Mn_at_Pu': phi_Mn_at_Pu,   # Capacidad a Pu critico (via ray-casting)
             'Pu': critical_Pu,
             'Mu': critical_Mu,
             'design_curve': design_curve,

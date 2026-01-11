@@ -328,6 +328,18 @@
 .formula-tag.formula-column { background: #ede9fe; color: #7c3aed; }
 .formula-tag.formula-wall { background: #e0f2fe; color: #0369a1; }
 
+/* Phi factor tag */
+.phi-tag {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 500;
+    padding: 1px 3px;
+    border-radius: 2px;
+    margin-left: 2px;
+    background: #fef3c7;
+    color: #92400e;
+}
+
 /* Element type badges */
 .element-type-badge {
     display: inline-block;

@@ -17,6 +17,7 @@ from typing import Optional, Union, TYPE_CHECKING
 
 from .design_behavior import DesignBehavior
 from .element_classifier import ElementType
+from ...domain.constants.units import TONF_TO_N
 
 if TYPE_CHECKING:
     from ...domain.entities import Beam, Column, Pier, DropBeam
@@ -156,9 +157,9 @@ class DesignBehaviorResolver:
             return False
 
         # Umbral: Ag * f'c / divisor, convertido a tonf
-        # (mm2 * MPa) / 10 = N/10 → tonf
+        # (mm² × MPa) = N → / TONF_TO_N → tonf
         threshold_N = Ag * fc / divisor  # N
-        threshold_tonf = threshold_N / 1000 / 9.80665  # tonf
+        threshold_tonf = threshold_N / TONF_TO_N  # N → tonf
 
         # Obtener Pu maximo de las fuerzas
         Pu_max = self._get_max_axial(forces)

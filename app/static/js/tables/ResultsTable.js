@@ -82,6 +82,7 @@ class ResultsTable extends FilterableTable {
 
     get elements() { return this.page.elements; }
     get filters() { return this.page.filters; }
+    set filters(value) { Object.assign(this.page.filters, value); }
     get piersData() { return this.page.piersData; }
     get sessionId() { return this.page.sessionId; }
 
@@ -157,14 +158,13 @@ class ResultsTable extends FilterableTable {
      * Sobrescribe FilterableTable.applyFilters() para agregar lógica específica.
      */
     applyFilters() {
-        // Obtener filtros y aplicar a page.filters para compatibilidad
+        // Actualizar filtros (el setter sincroniza con page.filters)
         this.filters = this.getFilterValues();
-        Object.assign(this.page.filters, this.filters);
 
-        // Filtrar resultados usando método heredado matchesFilters
+        // Filtrar resultados
         this.filteredResults = this.page.results.filter(r => this.matchesFilters(r));
 
-        // Renderizar y actualizar stats
+        // Renderizar y actualizar
         this.renderTable(this.filteredResults);
         this.updateStats();
         this.updateSummaryPlot();

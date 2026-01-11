@@ -22,7 +22,7 @@ from ..reinforcement import SeismicReinforcementService
 from ..design_forces import ShearAmplificationService
 from ...constants.reinforcement import RHO_MIN, MAX_SPACING_SEISMIC_MM
 from ...constants.materials import get_effective_fc_shear
-from ...constants.shear import PHI_SHEAR
+from ...constants.shear import PHI_SHEAR, PHI_SHEAR_SEISMIC
 from ...constants.units import N_TO_TONF, TONF_TO_N, TONFM_TO_NMM
 from ..results import WallPierDesignResult
 
@@ -229,7 +229,8 @@ class SeismicWallService:
         shear = self._check_shear(
             hw, lw, tw, fc, fyt, rho_h,
             Vu, hwcs_actual, hn_ft,
-            classification.is_wall_pier, use_omega_0, lambda_factor
+            classification.is_wall_pier, use_omega_0, lambda_factor,
+            category=category
         )
 
         if shear.dcr > dcr_max:
@@ -487,7 +488,7 @@ class SeismicWallService:
         # Doble cortina (§18.10.2.2)
         Acv = lw * tw
         hw_lw = hw / lw if lw > 0 else 0
-        threshold_double = 2 * lambda_factor * math.sqrt(fc) * Acv * N_TO_TONF
+        threshold_double = 2 * lambda_factor * math.sqrt(fc) * Acv / TONF_TO_N  # N → tonf
 
         requires_double = (abs(Vu) > threshold_double) or (hw_lw >= 2.0)
         has_double = n_meshes >= 2
@@ -553,6 +554,7 @@ class SeismicWallService:
         is_wall_pier: bool,
         use_omega_0: bool,
         lambda_factor: float,
+        category: SeismicCategory = SeismicCategory.SPECIAL,
     ) -> WallShearResult:
         """Verifica cortante §18.10.3, §18.10.4."""
         Acv = lw * tw  # mm²
@@ -584,19 +586,23 @@ class SeismicWallService:
 
         # Vc = alpha_c × lambda × sqrt(f'c) × Acv (en N)
         Vc_N = alpha_c * lambda_factor * math.sqrt(fc_eff) * Acv
-        Vc_tonf = Vc_N * N_TO_TONF
+        Vc_tonf = Vc_N / N_TO_TONF  # Dividir para convertir N → tonf
 
         # Vs = rho_h × fyt × Acv (en N)
         Vs_N = rho_h * fyt * Acv
-        Vs_tonf = Vs_N * N_TO_TONF
+        Vs_tonf = Vs_N / N_TO_TONF  # Dividir para convertir N → tonf
 
         # Vn
         Vn_tonf = Vc_tonf + Vs_tonf
-        phi_Vn = PHI_SHEAR * Vn_tonf
+        # Usar φv según categoría sísmica (§21.2.4.1)
+        # SPECIAL: φv=0.60, INTERMEDIATE/ORDINARY: φv=0.75
+        from ...constants.shear import get_phi_shear
+        phi_v = get_phi_shear(category)
+        phi_Vn = phi_v * Vn_tonf
 
         # Límite máximo §18.10.4.4: Vn <= 0.66 × sqrt(f'c) × Acv
         Vn_max_N = 0.66 * math.sqrt(fc_eff) * Acv
-        Vn_max_tonf = Vn_max_N * N_TO_TONF
+        Vn_max_tonf = Vn_max_N / N_TO_TONF  # Dividir para convertir N → tonf
         Vn_max_ok = Vn_tonf <= Vn_max_tonf
 
         # DCR
@@ -614,6 +620,7 @@ class SeismicWallService:
             Vn_max_ok=Vn_max_ok,
             dcr=round(dcr, 3),
             is_ok=is_ok,
+            phi_v=phi_v,  # Factor φv usado según categoría sísmica
             amplification=amplification,
             aci_reference="ACI 318-25 §18.10.4",
         )

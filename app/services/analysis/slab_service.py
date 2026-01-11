@@ -267,10 +267,10 @@ class SlabService:
         # Calcular As requerido (simplificado)
         As_req = self._calculate_As_required(Mu, slab)
 
-        # Verificacion
-        sf = phi_Mn / Mu if Mu > 0 else float('inf')
+        # Verificacion - DCR = Mu/phi_Mn, SF = 1/DCR
         dcr = Mu / phi_Mn if phi_Mn > 0 else 0
-        status = "OK" if sf >= 1.0 else "NO OK"
+        sf = 1 / dcr if dcr > 0 else float('inf')
+        status = "OK" if dcr <= 1.0 else "NO OK"
 
         dcr_rounded = round(dcr, 3)
         return {
@@ -370,9 +370,10 @@ class SlabService:
         width_m = slab.width / 1000  # m
         phi_Vn_total = phi_Vc * width_m  # tonf para el ancho del corte
 
-        sf = phi_Vn_total / Vu if Vu > 0 else float('inf')
+        # DCR = Vu/phi_Vn, SF = 1/DCR
         dcr = Vu / phi_Vn_total if phi_Vn_total > 0 else 0
-        status = "OK" if sf >= 1.0 else "NO OK"
+        sf = 1 / dcr if dcr > 0 else float('inf')
+        status = "OK" if dcr <= 1.0 else "NO OK"
 
         dcr_rounded = round(dcr, 3)
         return {

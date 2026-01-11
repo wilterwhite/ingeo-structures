@@ -13,12 +13,24 @@ if TYPE_CHECKING:
 
 @dataclass
 class FlexureCheckResult:
-    """Resultado de verificación de flexocompresión."""
-    safety_factor: float      # Factor de seguridad mínimo
+    """
+    Resultado de verificación de flexocompresión.
+
+    NOMENCLATURA DE φMn:
+    - phi_Mn_0: Capacidad a P=0 (flexión pura). Usado para referencia/comparación.
+    - phi_Mn_at_Pu: Capacidad "efectiva" al Pu crítico, calculada vía ray-casting.
+      Esta es la capacidad que da el SF calculado: phi_Mn_at_Pu = Mu × SF.
+      NO es interpolación horizontal en la curva P-M.
+
+    DCR (Demand/Capacity Ratio):
+    - Calculado como DCR = 1/SF = Mu/phi_Mn_at_Pu
+    - Consistente con el método ray-casting usado para calcular SF
+    """
+    safety_factor: float      # Factor de seguridad mínimo (via ray-casting)
     status: str               # "OK" o "NO OK"
     critical_combo: str       # Combinación crítica
-    phi_Mn_0: float          # Capacidad de momento a P=0 (tonf-m)
-    phi_Mn_at_Pu: float      # Capacidad de momento a Pu crítico (tonf-m)
+    phi_Mn_0: float          # Capacidad de momento a P=0 (tonf-m) - flexión pura
+    phi_Mn_at_Pu: float      # Capacidad "efectiva" al Pu crítico (tonf-m) = Mu × SF
     critical_Pu: float       # Carga axial crítica (tonf)
     critical_Mu: float       # Momento crítico (tonf-m)
     is_inside: bool          # Si el punto crítico está dentro de la curva
@@ -274,7 +286,16 @@ class FlexureChecker:
 
         status = "OK" if min_sf >= 1.0 else "NO OK"
         phi_Mn_0 = FlexureChecker.get_phi_Mn_at_P0(points)
-        phi_Mn_at_Pu = FlexureChecker.get_phi_Mn_at_P(points, critical_Pu)
+
+        # φMn_at_Pu calculado consistente con ray-casting:
+        # Si SF = d_capacity / d_demand, y el rayo escala proporcionalmente,
+        # entonces φMn en la curva = Mu × SF
+        # Esto es el φMn "efectivo" que da el SF calculado
+        if min_sf < float('inf') and min_sf > 0 and critical_Mu > 0:
+            phi_Mn_at_Pu = critical_Mu * min_sf
+        else:
+            # Fallback a interpolación horizontal si no hay demanda
+            phi_Mn_at_Pu = FlexureChecker.get_phi_Mn_at_P(points, critical_Pu)
 
         # Detectar si Pu excede la capacidad axial máxima
         phi_Pn_max = max(p.phi_Pn for p in points) if points else 0.0

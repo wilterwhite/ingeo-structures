@@ -167,6 +167,7 @@ def analyze_stream(session_id: str, data: dict):
     moment_axis = data.get('moment_axis', 'M3')
     angle_deg = data.get('angle_deg', 0)
     materials_config = data.get('materials_config', {})
+    seismic_category = data.get('seismic_category', 'SPECIAL')
 
     service = get_analysis_service()
 
@@ -181,7 +182,8 @@ def analyze_stream(session_id: str, data: dict):
                 generate_plots=generate_plots,
                 moment_axis=moment_axis,
                 angle_deg=angle_deg,
-                materials_config=materials_config
+                materials_config=materials_config,
+                seismic_category=seismic_category
             ):
                 yield f"data: {json.dumps(event)}\n\n"
         except Exception as e:

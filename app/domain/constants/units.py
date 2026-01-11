@@ -17,11 +17,10 @@ Referencias: ACI 318-25 Appendix E
 # Basado en gravedad estandar: g = 9.80665 m/s²
 # 1 tonf (metric ton-force) = 1000 kg × g = 9806.65 N
 
-# NOTA: Por compatibilidad historica, N_TO_TONF tiene el valor 9806.65
-# Uso: tonf_to_N = value_tonf * N_TO_TONF
-#      N_to_tonf = value_N / N_TO_TONF
-TONF_TO_N = 9806.65        # 1 tonf = 9806.65 N (multiplicar tonf × esto = N)
-N_TO_TONF = TONF_TO_N      # Alias por compatibilidad (dividir N por esto para obtener tonf)
+# Conversiones de fuerza tonf <-> N
+# 1 tonf (metric ton-force) = 1000 kg × g = 9806.65 N
+TONF_TO_N = 9806.65        # tonf → N: multiplicar (ej: 1 tonf * TONF_TO_N = 9806.65 N)
+N_TO_TONF = TONF_TO_N      # Alias: para N → tonf usar DIVIDIR (ej: 9806.65 N / N_TO_TONF = 1 tonf)
 
 # Otras conversiones de fuerza
 KGF_TO_N = 9.80665         # 1 kgf = 9.80665 N (exacto)

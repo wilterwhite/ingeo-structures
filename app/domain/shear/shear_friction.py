@@ -32,7 +32,7 @@ from ..constants.shear import (
     SHEAR_FRICTION_VN_MAX_OTHER_MPa,
     SHEAR_FRICTION_FY_LIMIT_MPa,
 )
-from ..constants.units import N_TO_TONF
+from ..constants.units import TONF_TO_N, N_TO_TONF
 
 
 class SurfaceCondition(Enum):
@@ -313,8 +313,8 @@ class ShearFrictionService:
             ShearFrictionResult con todos los resultados
         """
         # Convertir demandas de tonf a N
-        Vu_N = abs(Vu) * N_TO_TONF
-        Nu_N = Nu * N_TO_TONF  # Nu ya es positivo para compresion
+        Vu_N = abs(Vu) * TONF_TO_N
+        Nu_N = Nu * TONF_TO_N  # Nu ya es positivo para compresion
 
         # Obtener coeficiente de friccion
         mu = self.get_mu(surface, lambda_concrete)
@@ -409,8 +409,8 @@ class ShearFrictionService:
             ShearFrictionDesignResult con refuerzo requerido
         """
         # Convertir a N
-        Vu_N = abs(Vu) * N_TO_TONF
-        Nu_N = Nu * N_TO_TONF
+        Vu_N = abs(Vu) * TONF_TO_N
+        Nu_N = Nu * TONF_TO_N
 
         # Obtener mu y limitar fy
         mu = self.get_mu(surface, lambda_concrete)

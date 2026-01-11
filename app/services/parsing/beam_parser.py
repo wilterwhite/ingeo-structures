@@ -7,9 +7,12 @@ Soporta dos tipos de vigas:
 2. Spandrels: Spandrel Section Properties + Spandrel Forces
 """
 from typing import Dict, List, Tuple
+import logging
 import pandas as pd
 
 from ...domain.entities.beam import Beam, BeamSource, BeamShape
+
+logger = logging.getLogger(__name__)
 from ...domain.entities.beam_forces import BeamForces
 from ...domain.entities.load_combination import LoadCombination
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
@@ -112,9 +115,9 @@ class BeamParser:
             try:
                 depth = float(row.get('depth', 0)) * 1000  # altura
                 width = float(row.get('width', 0)) * 1000  # ancho
-            except (ValueError, TypeError):
-                depth = 600
-                width = 300
+            except (ValueError, TypeError) as e:
+                logger.warning("Sección '%s' con geometría inválida, omitiendo: %s", name, e)
+                continue
 
             if depth <= 0 or width <= 0:
                 continue
@@ -159,8 +162,9 @@ class BeamParser:
             # La columna puede ser 'diameter' o 't3' según la versión de ETABS
             try:
                 diameter = float(row.get('diameter', 0) or row.get('t3', 0)) * 1000
-            except (ValueError, TypeError):
-                diameter = 500
+            except (ValueError, TypeError) as e:
+                logger.warning("Sección circular '%s' con diámetro inválido, omitiendo: %s", name, e)
+                continue
 
             if diameter <= 0:
                 continue
@@ -266,8 +270,9 @@ class BeamParser:
             # Tracking de stations para calcular longitud
             try:
                 station = float(row.get('station', 0))
-            except (ValueError, TypeError):
-                station = 0
+            except (ValueError, TypeError) as e:
+                logger.warning("Station inválida para viga '%s', usando 0: %s", beam_key, e)
+                station = 0  # Station 0 es válido como fallback
 
             if beam_key not in beam_lengths:
                 beam_lengths[beam_key] = (station, station)
@@ -302,7 +307,8 @@ class BeamParser:
                     M3=float(row.get('m3', 0))
                 )
                 beam_forces[beam_key].combinations.append(combo)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
+                logger.warning("Combinación inválida para viga '%s', omitiendo: %s", beam_key, e)
                 continue
 
             if story not in stories:
@@ -462,7 +468,8 @@ class BeamParser:
                         M3=float(row.get('m3', 0))
                     )
                     beam_forces[spandrel_key].combinations.append(combo)
-                except (ValueError, TypeError):
+                except (ValueError, TypeError) as e:
+                    logger.warning("Combinación inválida para spandrel '%s', omitiendo: %s", spandrel_key, e)
                     continue
 
         # 3. Crear vigas spandrel

@@ -137,7 +137,10 @@ class StructuralPage {
 
             // Materiales (Config page)
             materialsTableWrapper: document.getElementById('materials-table-wrapper'),
-            materialsTbody: document.getElementById('materials-tbody')
+            materialsTbody: document.getElementById('materials-tbody'),
+
+            // Categoría Sísmica (Config page)
+            seismicCategory: document.getElementById('seismic-category')
         };
     }
 
@@ -193,6 +196,9 @@ class StructuralPage {
         this.elements.stdBeamLn?.addEventListener('change', () => this.beamsModule.onStandardBeamChange());
         this.elements.stdBeamNbars?.addEventListener('change', () => this.beamsModule.onStandardBeamChange());
         this.elements.stdBeamDiam?.addEventListener('change', () => this.beamsModule.onStandardBeamChange());
+
+        // Categoría sísmica - re-analizar si hay datos cargados
+        this.elements.seismicCategory?.addEventListener('change', () => this.onSeismicCategoryChange());
 
         // Botones de navegación
         document.getElementById('new-file-btn')?.addEventListener('click', () => {
@@ -315,6 +321,34 @@ class StructuralPage {
      */
     async reanalyze() {
         return this.uploadManager.reanalyze();
+    }
+
+    // =========================================================================
+    // Categoría Sísmica
+    // =========================================================================
+
+    /**
+     * Obtiene la categoría sísmica seleccionada.
+     * @returns {string} 'SPECIAL', 'INTERMEDIATE', o 'ORDINARY'
+     */
+    getSeismicCategory() {
+        return this.elements.seismicCategory?.value || 'SPECIAL';
+    }
+
+    /**
+     * Maneja el cambio de categoría sísmica.
+     * Re-analiza si hay datos cargados.
+     */
+    async onSeismicCategoryChange() {
+        const category = this.getSeismicCategory();
+        console.log(`Categoría sísmica cambiada a: ${category}`);
+
+        // Solo re-analizar si hay una sesión activa con datos
+        if (this.sessionId && this.results?.length > 0) {
+            this.showNotification(`Actualizando análisis con categoría ${category}...`, 'info');
+            await this.reanalyze();
+            this.showNotification(`Análisis actualizado con φv según ${category}`, 'info');
+        }
     }
 
     // =========================================================================

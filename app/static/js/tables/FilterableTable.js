@@ -9,7 +9,26 @@ class FilterableTable {
         this.page = page;
         this.results = [];
         this.filteredResults = [];
-        this.filters = {};
+        this._localFilters = {};  // Filtros locales (para subclases que no usan page.filters)
+    }
+
+    // =========================================================================
+    // Acceso a filtros
+    // =========================================================================
+
+    /**
+     * Getter para filtros. Subclases pueden sobrescribir para usar otra fuente.
+     * Por defecto usa filtros locales.
+     */
+    get filters() {
+        return this._localFilters;
+    }
+
+    /**
+     * Setter para filtros. Subclases pueden sobrescribir.
+     */
+    set filters(value) {
+        this._localFilters = value;
     }
 
     // =========================================================================

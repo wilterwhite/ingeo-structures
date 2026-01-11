@@ -315,9 +315,16 @@ class WallsModule {
 
         // Sección 6: Shear Design
         const phiVElement = document.getElementById('det-phi-v');
-        if (phiVElement && shear_design) {
+        const phiVParamElement = document.getElementById('det-phi-v-param');
+        if (shear_design) {
             const phi_v = shear_design.phi_v || 0.60;
-            phiVElement.textContent = `(φv = ${phi_v.toFixed(2)})`;
+            if (phiVElement) {
+                phiVElement.textContent = `(φv = ${phi_v.toFixed(2)})`;
+            }
+            // Sincronizar con Design Code Parameters
+            if (phiVParamElement) {
+                phiVParamElement.textContent = phi_v.toFixed(2);
+            }
         }
 
         this._renderDesignTable('det-shear-body', shear_design, row => `

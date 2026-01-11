@@ -10,6 +10,8 @@ Usado por ElementOrchestrator para normalizar fuerzas de cualquier elemento.
 from typing import Dict, Optional, Tuple, Union, TYPE_CHECKING
 from dataclasses import dataclass
 
+from ...domain.constants.units import TONF_TO_N
+
 if TYPE_CHECKING:
     from ...domain.entities import BeamForces, ColumnForces, PierForces, DropBeamForces
 
@@ -241,8 +243,8 @@ class ForceExtractor:
         Pu_max = max(abs(P_max), abs(P_min))
 
         # Umbral: Ag * f'c / divisor, convertido a tonf
-        # (mm² * MPa) = N → /1000 → kN → /9.80665 → tonf
+        # (mm² × MPa) = N → / TONF_TO_N → tonf
         threshold_N = Ag * fc / divisor
-        threshold_tonf = threshold_N / 1000 / 9.80665
+        threshold_tonf = threshold_N / TONF_TO_N
 
         return Pu_max >= threshold_tonf

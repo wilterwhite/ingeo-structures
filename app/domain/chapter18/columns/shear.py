@@ -17,7 +17,7 @@ import math
 from typing import Optional
 
 from ...constants.materials import LAMBDA_NORMAL
-from ...constants.shear import PHI_SHEAR
+from ...constants.shear import PHI_SHEAR_SEISMIC
 from ...constants.units import N_TO_TONF
 from ...shear.concrete_shear import calculate_Vc_beam, check_Vc_zero_condition
 from ...shear.steel_shear import calculate_Vs_beam_column
@@ -108,8 +108,9 @@ class SeismicColumnShearService:
         Vs = vs_result.Vs_N
 
         # Vn y phi_Vn
+        # φ = 0.60 para columnas sísmicas especiales (§21.2.4.1)
         Vn = Vc + Vs
-        phi_Vn = PHI_SHEAR * Vn
+        phi_Vn = PHI_SHEAR_SEISMIC * Vn
 
         return ColumnShearCapacity(
             Vc=Vc / N_TO_TONF,

@@ -106,29 +106,45 @@ const SharedCells = {
         const dcrDisplay = formatDcr(dcr);
         // Usar dcr_class del backend (centralizado)
         const dcrClass = result.shear?.dcr_class || getDcrClass(dcr);
+        // Factor φv usado (§21.2.4.1: 0.60 SPECIAL, 0.75 otros)
+        const phi_v = result.shear?.phi_v || 0.60;
 
         const td = document.createElement('td');
         td.className = `fs-value ${dcrClass}`;
-        td.title = `Combo: ${result.shear?.critical_combo || '-'}\n${shearTitle}`;
+        td.title = `Combo: ${result.shear?.critical_combo || '-'}\n${shearTitle}\nφv = ${phi_v.toFixed(2)} (§21.2.4)`;
         td.innerHTML = `
             <span class="fs-number">${dcrDisplay}</span>
             <span class="formula-tag formula-${formulaType}">${shearType}</span>
+            <span class="phi-tag" title="Factor φv (§21.2.4)">φ${phi_v.toFixed(2)}</span>
         `;
         return td;
     },
 
     /**
      * Celda de capacidad a cortante.
+     * Muestra Vu original y Ve amplificado si hay amplificación (§18.10.3.3)
      */
     createShearCapCell(result) {
         const phiVn = result.shear?.phi_Vn_2 || 0;
-        const Vu = result.shear?.Vu_2 || 0;
+        const VuOriginal = result.shear?.Vu_original || result.shear?.Vu_2 || 0;
+        const Ve = result.shear?.Ve || result.shear?.Vu_2 || 0;
         const Vc = result.shear?.Vc || 0;
         const Vs = result.shear?.Vs || 0;
 
+        // Detectar si hay amplificación significativa (>1%)
+        const hasAmplification = Ve > VuOriginal * 1.01;
+
         const td = document.createElement('td');
         td.className = 'capacity-cell';
-        td.innerHTML = `φVn=${phiVn}t, Vu=${Vu}t<br>Vc=${Vc}t + Vs=${Vs}t`;
+
+        if (hasAmplification) {
+            // Mostrar Vu original → Ve amplificado
+            td.title = `Vu análisis=${VuOriginal}t → Ve diseño=${Ve}t (§18.10.3.3)\nVc=${Vc}t + Vs=${Vs}t`;
+            td.innerHTML = `φVn=${phiVn}t, Vu=${VuOriginal}t<br>Ve=${Ve}t (Ωv×Vu)`;
+        } else {
+            td.title = `Vc=${Vc}t + Vs=${Vs}t`;
+            td.innerHTML = `φVn=${phiVn}t, Vu=${VuOriginal}t<br>Vc=${Vc}t + Vs=${Vs}t`;
+        }
         return td;
     },
 

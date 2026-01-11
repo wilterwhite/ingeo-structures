@@ -4,10 +4,13 @@ Generador de informes PDF para verificacion estructural ACI 318-25.
 """
 import io
 import base64
+import logging
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 
 from reportlab.lib import colors
+
+logger = logging.getLogger(__name__)
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, mm
@@ -290,7 +293,8 @@ class PDFReportGenerator:
                 img_data = base64.b64decode(summary_plot)
                 img = Image(io.BytesIO(img_data), width=6*inch, height=3*inch)
                 elements.append(img)
-            except Exception:
+            except Exception as e:
+                logger.warning("Error decodificando gráfico resumen: %s", e)
                 elements.append(Paragraph(
                     "(Grafico no disponible)",
                     self.styles['CenteredText']
@@ -593,7 +597,8 @@ class PDFReportGenerator:
                 img_data = base64.b64decode(plot_base64)
                 img = Image(io.BytesIO(img_data), width=5.5*inch, height=3.5*inch)
                 elements.append(img)
-            except Exception:
+            except Exception as e:
+                logger.warning("Error decodificando diagrama P-M para '%s': %s", pier_key, e)
                 elements.append(Paragraph("(Diagrama no disponible)", self.styles['Normal']))
 
             elements.append(Spacer(1, 0.2*inch))
@@ -642,7 +647,8 @@ class PDFReportGenerator:
                 img_data = base64.b64decode(diagram_base64)
                 img = Image(io.BytesIO(img_data), width=4*inch, height=3*inch)
                 elements.append(img)
-            except Exception:
+            except Exception as e:
+                logger.warning("Error decodificando diagrama de sección para '%s': %s", pier_key, e)
                 elements.append(Paragraph("(Seccion no disponible)", self.styles['Normal']))
 
             elements.append(Spacer(1, 0.2*inch))

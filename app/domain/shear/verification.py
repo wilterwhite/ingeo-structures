@@ -35,7 +35,7 @@ from ..constants.shear import (
     get_phi_shear,
 )
 # SeismicCategory se importa localmente donde se necesita para evitar circular imports
-from ..constants.units import N_TO_TONF
+from ..constants.units import TONF_TO_N, N_TO_TONF
 from ..constants.reinforcement import check_rho_vertical_ge_horizontal
 from .results import (
     ShearResult,
@@ -378,7 +378,7 @@ class ShearVerificationService:
             seismic_category = SeismicCategory.SPECIAL
 
         # Convertir Nu de tonf a N para calculo interno
-        Nu_N = Nu * N_TO_TONF
+        Nu_N = Nu * TONF_TO_N
         alpha_sh = ALPHA_SH_MIN  # Default para columnas
 
         if self.is_wall(lw, tw):

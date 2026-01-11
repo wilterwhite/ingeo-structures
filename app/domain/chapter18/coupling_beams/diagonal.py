@@ -7,7 +7,7 @@ Vn = 2 * Avd * fy * sin(alpha) <= 10*sqrt(f'c)*Acw
 """
 import math
 
-from ...constants.shear import PHI_SHEAR
+from ...constants.phi_chapter21 import PHI_SHEAR_DIAGONAL
 from ...constants.units import N_TO_TONF, TONF_TO_N
 from ..results import DiagonalShearResult
 
@@ -61,7 +61,7 @@ def calculate_diagonal_shear_strength(
         Vn_calc=round(Vn_calc, 2),
         Vn_max=round(Vn_max, 2),
         Vn=round(Vn, 2),
-        phi_Vn=round(PHI_SHEAR * Vn, 2),
+        phi_Vn=round(PHI_SHEAR_DIAGONAL * Vn, 2),  # φ=0.85 para refuerzo diagonal (§21.2.4.4)
         aci_reference="ACI 318-25 Ec. 18.10.7.4"
     )
 
@@ -70,7 +70,7 @@ def required_diagonal_area(
     Vu: float,
     fy: float,
     alpha_deg: float,
-    phi: float = 0.75
+    phi: float = 0.85
 ) -> float:
     """
     Calcula el área de refuerzo diagonal requerida.
@@ -82,7 +82,7 @@ def required_diagonal_area(
         Vu: Demanda de cortante (tonf)
         fy: Fluencia del acero (MPa)
         alpha_deg: Ángulo de diagonales (grados)
-        phi: Factor de reducción (default 0.75)
+        phi: Factor de reducción (default 0.85 para diagonal, §21.2.4.4)
 
     Returns:
         Área de refuerzo diagonal requerida en cada grupo (mm2)

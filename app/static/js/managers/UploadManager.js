@@ -15,21 +15,32 @@ class UploadManager {
     bindEvents() {
         const { uploadArea, fileInput } = this.page.elements;
 
+        // Prevenir que el navegador abra archivos soltados en cualquier parte
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+        });
+
         uploadArea?.addEventListener('click', () => {
             fileInput?.click();
         });
 
         uploadArea?.addEventListener('dragover', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             uploadArea.classList.add('dragover');
         });
 
-        uploadArea?.addEventListener('dragleave', () => {
+        uploadArea?.addEventListener('dragleave', (e) => {
+            e.preventDefault();
             uploadArea.classList.remove('dragover');
         });
 
         uploadArea?.addEventListener('drop', (e) => {
             e.preventDefault();
+            e.stopPropagation();
             uploadArea.classList.remove('dragover');
             if (e.dataTransfer.files.length > 0) {
                 this.handleFile(e.dataTransfer.files[0]);
@@ -90,7 +101,8 @@ class UploadManager {
                 generate_plots: true,
                 moment_axis: 'M3',
                 angle_deg: 0,
-                materials_config: this.page.materialsManager.getConfig()
+                materials_config: this.page.materialsManager.getConfig(),
+                seismic_category: this.page.getSeismicCategory()
             });
 
         } catch (error) {
@@ -244,7 +256,8 @@ class UploadManager {
                 generate_plots: true,
                 moment_axis: 'M3',
                 angle_deg: 0,
-                materials_config: this.page.materialsManager.getConfig()
+                materials_config: this.page.materialsManager.getConfig(),
+                seismic_category: this.page.getSeismicCategory()
             });
         } catch (error) {
             this.page.showNotification('Error: ' + error.message, 'error');

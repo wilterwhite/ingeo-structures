@@ -6,6 +6,7 @@ Proporciona decoradores y funciones comunes para validación,
 manejo de errores y acceso a servicios.
 """
 import logging
+import threading
 from functools import wraps
 from typing import Callable, Any, Tuple
 
@@ -40,25 +41,26 @@ bp = Blueprint('common', __name__, url_prefix='/api')
 
 logger = logging.getLogger(__name__)
 
-# Instancias globales (singleton pattern)
+# Instancias globales (singleton pattern con thread-safety)
 _analysis_service = None
 _orchestrator = None
 _statistics_service = None
 _element_details_service = None
 _element_analysis_service = None
+_singleton_lock = threading.Lock()
 
 
 def get_analysis_service() -> StructuralAnalysisService:
     """
     Obtiene o crea la instancia del servicio de análisis.
 
-    Nota: Este patrón singleton simple es suficiente para Flask
-    en modo desarrollo. Para producción con workers múltiples,
-    considerar usar Flask-Caching o similar.
+    Thread-safe mediante double-checked locking pattern.
     """
     global _analysis_service
     if _analysis_service is None:
-        _analysis_service = ServiceFactory.create_default_analysis_service()
+        with _singleton_lock:
+            if _analysis_service is None:
+                _analysis_service = ServiceFactory.create_default_analysis_service()
     return _analysis_service
 
 
@@ -67,36 +69,44 @@ def get_orchestrator() -> ElementOrchestrator:
     Obtiene o crea la instancia del orquestador de elementos.
 
     ElementOrchestrator es stateless, por lo que una sola instancia
-    es suficiente para toda la aplicación.
+    es suficiente para toda la aplicación. Thread-safe.
     """
     global _orchestrator
     if _orchestrator is None:
-        _orchestrator = ElementOrchestrator()
+        with _singleton_lock:
+            if _orchestrator is None:
+                _orchestrator = ElementOrchestrator()
     return _orchestrator
 
 
 def get_statistics_service() -> StatisticsService:
-    """Obtiene o crea la instancia del servicio de estadísticas."""
+    """Obtiene o crea la instancia del servicio de estadísticas. Thread-safe."""
     global _statistics_service
     if _statistics_service is None:
-        _statistics_service = StatisticsService()
+        with _singleton_lock:
+            if _statistics_service is None:
+                _statistics_service = StatisticsService()
     return _statistics_service
 
 
 def get_element_details_service() -> ElementDetailsService:
-    """Obtiene o crea la instancia del servicio de detalles de elementos."""
+    """Obtiene o crea la instancia del servicio de detalles de elementos. Thread-safe."""
     global _element_details_service
     if _element_details_service is None:
-        session_manager = get_analysis_service()._session_manager
-        _element_details_service = ElementDetailsService(session_manager)
+        with _singleton_lock:
+            if _element_details_service is None:
+                session_manager = get_analysis_service()._session_manager
+                _element_details_service = ElementDetailsService(session_manager)
     return _element_details_service
 
 
 def get_element_analysis_service() -> ElementAnalysisService:
-    """Obtiene o crea la instancia del servicio de análisis de elementos."""
+    """Obtiene o crea la instancia del servicio de análisis de elementos. Thread-safe."""
     global _element_analysis_service
     if _element_analysis_service is None:
-        _element_analysis_service = ElementAnalysisService()
+        with _singleton_lock:
+            if _element_analysis_service is None:
+                _element_analysis_service = ElementAnalysisService()
     return _element_analysis_service
 
 

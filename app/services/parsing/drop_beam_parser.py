@@ -8,10 +8,13 @@ Formato esperado del nombre del corte:
 "Scut Losa S02-29x150 eje CL - Eje C3"
 """
 import re
+import logging
 from typing import Dict, List, Tuple, Optional
 import pandas as pd
 
 from ...domain.entities.drop_beam import DropBeam
+
+logger = logging.getLogger(__name__)
 from ...domain.entities.drop_beam_forces import DropBeamForces
 from ...domain.entities.slab_forces import SlabSectionCut
 from ...domain.entities.load_combination import LoadCombination
@@ -193,7 +196,8 @@ class DropBeamParser:
                 M3=float(row.get('m2', 0))    # M2 -> M3
             )
 
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as e:
+            logger.warning("Combinación inválida para drop_beam '%s', omitiendo: %s", combo_name, e)
             return None
 
     def set_default_fc(self, fc: float):

@@ -111,7 +111,10 @@
       "Bash(ls -la \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\application\"\" 2>&1 || echo \"Directory does not exist \")",
       "Bash(test:*)",
       "Bash(xargs:*)",
-      "Bash(del \"C:\\Users\\willi\\Github\\ingeo-structures\\nul\")"
+      "Bash(del \"C:\\Users\\willi\\Github\\ingeo-structures\\nul\")",
+      "Bash(ls -la \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\analysis\"\" | grep \".py \")",
+      "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && grep \"\"^class \"\" {}')",
+      "Bash(python -m flask:*)"
     ]
   }
 }

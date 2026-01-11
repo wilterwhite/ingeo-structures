@@ -309,26 +309,86 @@ class ResultFormatter:
             'Vs': 0,
             'Ve': 0,
             'omega_v': None,
-            'formula_type': formula_type
+            'formula_type': formula_type,
+            'phi_v': 0.60  # Default para SPECIAL (§21.2.4.1)
         }
 
         if hasattr(domain_result, 'shear') and domain_result.shear:
             sh = domain_result.shear
             dcr = getattr(sh, 'dcr', base_dcr)
+            Vc = getattr(sh, 'Vc', 0) if not hasattr(sh, 'capacity_V2') else (sh.capacity_V2.Vc if sh.capacity_V2 else 0)
+            Vs = getattr(sh, 'Vs', 0) if not hasattr(sh, 'capacity_V2') else (sh.capacity_V2.Vs if sh.capacity_V2 else 0)
+            # Obtener Vu original y Ve amplificado
+            Vu_original = getattr(sh, 'Vu', 0)
+            Ve_amplified = getattr(sh, 'Ve', Vu_original)  # Fallback a Vu si no hay Ve
             shear_data.update({
-                'dcr': dcr,
+                'dcr': round(dcr, 2),
                 'dcr_class': get_dcr_css_class(dcr),
-                'dcr_2': dcr,
-                'dcr_combined': dcr,
-                'phi_Vn_2': getattr(sh, 'phi_Vn', getattr(sh, 'phi_Vn_V2', 0)),
-                'Vu_2': getattr(sh, 'Ve', 0),
-                'Vc': getattr(sh, 'Vc', 0) if not hasattr(sh, 'capacity_V2') else (sh.capacity_V2.Vc if sh.capacity_V2 else 0),
-                'Vs': getattr(sh, 'Vs', 0) if not hasattr(sh, 'capacity_V2') else (sh.capacity_V2.Vs if sh.capacity_V2 else 0),
+                'dcr_2': round(dcr, 2),
+                'dcr_combined': round(dcr, 2),
+                'phi_Vn_2': round(getattr(sh, 'phi_Vn', getattr(sh, 'phi_Vn_V2', 0)), 2),
+                'Vu_2': round(Ve_amplified, 2),  # Mantener compatibilidad (usado para DCR)
+                'Vu_original': round(Vu_original, 2),  # Vu del análisis
+                'Ve': round(Ve_amplified, 2),  # Ve amplificado (§18.10.3.3)
+                'Vc': round(Vc, 2),
+                'Vs': round(Vs, 2),
+                'phi_v': getattr(sh, 'phi_v', 0.60),  # Factor φv usado
             })
             if dcr > 0:
                 shear_data['sf'] = round(1.0 / dcr, 2)
 
         return shear_data
+
+    @staticmethod
+    def _extract_flexure_from_result(
+        result: 'OrchestrationResult',
+        base_dcr: float
+    ) -> Dict[str, Any]:
+        """
+        Extrae datos de flexión del OrchestrationResult.
+
+        Prioriza flexure_data del result (calculado por FlexocompressionService)
+        sobre datos del domain_result (que puede no tener flexure).
+        """
+        flexure_data = {
+            'sf': 1.0 / base_dcr if base_dcr > 0 else 100.0,
+            'dcr': round(base_dcr, 2),
+            'dcr_class': get_dcr_css_class(base_dcr),
+            'status': 'OK' if base_dcr <= 1.0 else 'NO OK',
+            'critical_combo': 'envelope',
+            'phi_Mn_at_Pu': 0,
+            'Mu': 0,
+            'phi_Mn_0': 0,
+            'Pu': 0,
+            'phi_Pn_max': 0,
+            'exceeds_axial': False,
+            'has_tension': False,
+            'tension_combos': 0
+        }
+
+        # Buscar datos de flexure en result.flexure_data (del FlexocompressionService)
+        if hasattr(result, 'flexure_data') and result.flexure_data:
+            flex = result.flexure_data
+            # DCR y SF vienen centralizados del servicio (calculados vía ray-casting)
+            dcr = flex.get('dcr', base_dcr)
+            sf = flex.get('sf', 1.0 / dcr if dcr > 0 else 100.0)
+            flexure_data.update({
+                'Mu': round(flex.get('Mu', 0), 2),
+                'phi_Mn_at_Pu': round(flex.get('phi_Mn_at_Pu', 0), 2),
+                'phi_Mn_0': round(flex.get('phi_Mn_0', 0), 2),
+                'Pu': round(flex.get('Pu', 0), 2),
+                'phi_Pn_max': round(flex.get('phi_Pn_max', 0), 2),
+                'exceeds_axial': flex.get('exceeds_axial_capacity', False),
+                'has_tension': flex.get('has_tension', False),
+                'tension_combos': flex.get('tension_combos', 0),
+                'critical_combo': flex.get('critical_combo', 'envelope'),
+                'sf': round(sf, 2) if sf < 100 else 100.0,
+                'dcr': round(dcr, 3),  # Precisión 3 decimales como el servicio
+                'status': flex.get('status', 'OK'),
+            })
+            flexure_data['dcr_class'] = get_dcr_css_class(flexure_data['dcr'])
+
+        return flexure_data
 
     # =========================================================================
     # Formateo de resultados de ElementOrchestrator (arquitectura unificada)
@@ -419,7 +479,10 @@ class ResultFormatter:
                 'aci_section': result.design_behavior.aci_section
             }
 
-        # Cortante específico de muros
+        # Extraer datos de flexión y cortante
+        formatted['flexure'] = ResultFormatter._extract_flexure_from_result(
+            result, result.dcr_max
+        )
         formatted['shear'] = ResultFormatter._extract_shear_from_domain(
             domain_result, result.dcr_max, 'wall'
         )
@@ -504,7 +567,10 @@ class ResultFormatter:
             'aci_section': '§18.7'
         }
 
-        # Cortante específico de columnas
+        # Extraer datos de flexión y cortante
+        formatted['flexure'] = ResultFormatter._extract_flexure_from_result(
+            result, result.dcr_max
+        )
         formatted['shear'] = ResultFormatter._extract_shear_from_domain(
             domain_result, result.dcr_max, 'column'
         )
@@ -599,9 +665,9 @@ class ResultFormatter:
         formatted['grilla'] = pier.grilla
         formatted['axis'] = pier.eje
 
-        # Actualizar flexure con SF del domain_result si existe
-        if isinstance(domain_result, dict) and 'SF' in domain_result:
-            formatted['flexure']['sf'] = domain_result['SF']
+        # Actualizar flexure con sf del domain_result si existe
+        if isinstance(domain_result, dict) and 'sf' in domain_result:
+            formatted['flexure']['sf'] = domain_result['sf']
 
         # Shear básico para flexure (sin datos detallados)
         formatted['shear']['formula_type'] = 'flexure'
@@ -703,7 +769,10 @@ class ResultFormatter:
             pm_plot=pm_plot
         )
 
-        # Cortante específico de columnas
+        # Extraer datos de flexión y cortante
+        formatted['flexure'] = ResultFormatter._extract_flexure_from_result(
+            result, result.dcr_max
+        )
         formatted['shear'] = ResultFormatter._extract_shear_from_domain(
             domain_result, result.dcr_max, 'column'
         )
@@ -788,7 +857,10 @@ class ResultFormatter:
             pm_plot=pm_plot
         )
 
-        # Cortante específico de drop beams (usa formato wall)
+        # Extraer datos de flexión y cortante
+        formatted['flexure'] = ResultFormatter._extract_flexure_from_result(
+            result, result.dcr_max
+        )
         formatted['shear'] = ResultFormatter._extract_shear_from_domain(
             domain_result, result.dcr_max, 'wall'
         )

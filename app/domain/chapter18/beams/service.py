@@ -18,7 +18,7 @@ from typing import List
 
 from ..common import SeismicCategory
 from ..seismic_detailing_service import SeismicDetailingService
-from ...constants.shear import PHI_SHEAR
+from ...constants.shear import PHI_SHEAR_SEISMIC
 from ...constants.units import N_TO_TONF, TONF_TO_N
 from ...shear.concrete_shear import calculate_Vc_beam, check_Vc_zero_condition
 from ...shear.steel_shear import calculate_Vs_beam_column
@@ -509,13 +509,14 @@ class SeismicBeamService:
         Vs = vs_result.Vs_N
 
         # Vn y phi_Vn
+        # φ = 0.60 para vigas sísmicas especiales (§21.2.4.1)
         Vn = Vc + Vs
-        phi_Vn = PHI_SHEAR * Vn
+        phi_Vn = PHI_SHEAR_SEISMIC * Vn
 
-        # Convertir a tonf
-        Vc_tonf = Vc * N_TO_TONF
-        Vs_tonf = Vs * N_TO_TONF
-        phi_Vn_tonf = phi_Vn * N_TO_TONF
+        # Convertir a tonf (dividir N por TONF_TO_N)
+        Vc_tonf = Vc / TONF_TO_N
+        Vs_tonf = Vs / TONF_TO_N
+        phi_Vn_tonf = phi_Vn / TONF_TO_N
 
         # DCR
         dcr = Vu_design / phi_Vn_tonf if phi_Vn_tonf > 0 else float('inf')

@@ -52,6 +52,7 @@ class OrchestrationResult:
     dcr_max: float
     critical_check: str
     warnings: list
+    flexure_data: Optional[Dict[str, Any]] = None  # Datos de flexión (Mu, phi_Mn, etc.)
 
 
 @dataclass
@@ -251,6 +252,9 @@ class ElementOrchestrator:
             lambda_factor=lambda_factor,
         )
 
+        # Calcular datos de flexión usando FlexocompressionService
+        flexure_data = self._flexo_service.check_flexure(element, forces, moment_axis='M3')
+
         return OrchestrationResult(
             element_type=element_type,
             design_behavior=design_behavior,
@@ -260,6 +264,7 @@ class ElementOrchestrator:
             dcr_max=result.dcr_max,
             critical_check=result.critical_check,
             warnings=result.warnings,
+            flexure_data=flexure_data,
         )
 
     def _verify_as_wall(
@@ -299,6 +304,9 @@ class ElementOrchestrator:
                 category=category,
             )
 
+        # Calcular datos de flexión usando FlexocompressionService
+        flexure_data = self._flexo_service.check_flexure(element, forces, moment_axis='M3')
+
         return OrchestrationResult(
             element_type=element_type,
             design_behavior=design_behavior,
@@ -308,6 +316,7 @@ class ElementOrchestrator:
             dcr_max=result.dcr_max,
             critical_check=result.critical_check,
             warnings=result.warnings,
+            flexure_data=flexure_data,
         )
 
     def _verify_as_beam(
@@ -361,11 +370,8 @@ class ElementOrchestrator:
         # Calcular capacidad usando flexocompression service
         result = self._flexo_service.check_flexure(element, forces, moment_axis)
 
-        dcr = 0
-        if result and 'SF' in result:
-            sf = result['SF']
-            dcr = 1 / sf if sf > 0 else float('inf')
-
+        # DCR viene directamente del servicio (centralizado)
+        dcr = result.get('dcr', 0) if result else 0
         is_ok = dcr <= 1.0
 
         return OrchestrationResult(
