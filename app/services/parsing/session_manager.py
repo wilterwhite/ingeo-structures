@@ -377,6 +377,80 @@ class SessionManager:
         parsed_data.pier_coupling_configs[pier_key] = config
         return True
 
+    # =========================================================================
+    # CACHE DE RESULTADOS DE ANÁLISIS
+    # =========================================================================
+
+    def store_analysis_result(
+        self,
+        session_id: str,
+        element_key: str,
+        result: Dict[str, Any]
+    ) -> bool:
+        """
+        Almacena el resultado de análisis de un elemento.
+
+        Permite que el modal use los mismos datos que la tabla sin recalcular.
+
+        Args:
+            session_id: ID de sesión
+            element_key: Clave del elemento (ej: "Cielo P1_PFel-A20-2")
+            result: Resultado formateado del análisis
+
+        Returns:
+            True si se almacenó correctamente
+        """
+        parsed_data = self.get_session(session_id)
+        if not parsed_data:
+            return False
+
+        parsed_data.analysis_cache[element_key] = result
+        return True
+
+    def get_analysis_result(
+        self,
+        session_id: str,
+        element_key: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Obtiene el resultado de análisis de un elemento desde el cache.
+
+        Args:
+            session_id: ID de sesión
+            element_key: Clave del elemento
+
+        Returns:
+            Resultado formateado o None si no existe
+        """
+        parsed_data = self.get_session(session_id)
+        if not parsed_data:
+            return None
+
+        return parsed_data.analysis_cache.get(element_key)
+
+    def clear_analysis_cache(self, session_id: str) -> bool:
+        """
+        Limpia el cache de resultados de análisis.
+
+        Útil cuando se modifica la armadura y hay que recalcular.
+
+        Args:
+            session_id: ID de sesión
+
+        Returns:
+            True si se limpió correctamente
+        """
+        parsed_data = self.get_session(session_id)
+        if not parsed_data:
+            return False
+
+        parsed_data.analysis_cache.clear()
+        return True
+
+    # =========================================================================
+    # VIGAS DE ACOPLE
+    # =========================================================================
+
     def get_pier_Mpr_total(
         self,
         session_id: str,

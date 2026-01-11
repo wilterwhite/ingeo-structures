@@ -70,6 +70,10 @@ class ParsedData:
     default_coupling_beam: Optional['CouplingBeamConfig'] = field(default=None)
     pier_coupling_configs: Dict[str, 'PierCouplingConfig'] = field(default_factory=dict)
 
+    # Cache de resultados de análisis (para evitar recálculos en modal)
+    # key: element_key (ej: "Cielo P1_PFel-A20-2"), value: formatted result dict
+    analysis_cache: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+
     @property
     def has_piers(self) -> bool:
         """True si hay piers cargados."""

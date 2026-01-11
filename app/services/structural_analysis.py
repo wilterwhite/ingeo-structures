@@ -141,9 +141,7 @@ class StructuralAnalysisService:
     def _analyze_piers_batch(
         self,
         piers: Dict[str, Pier],
-        parsed_data: Any,
-        lambda_factor: float = 1.0,
-        category: SeismicCategory = SeismicCategory.SPECIAL
+        parsed_data: Any
     ) -> List[Dict[str, Any]]:
         """
         Analiza un lote de piers usando _analyze_element.
@@ -156,8 +154,6 @@ class StructuralAnalysisService:
         Args:
             piers: Diccionario de piers a analizar {key: Pier}
             parsed_data: Datos parseados de la sesión
-            lambda_factor: Factor lambda para concreto liviano (no usado, para compat)
-            category: Categoría sísmica (no usado, para compat)
 
         Returns:
             Lista de dicts formateados para la UI
@@ -299,7 +295,8 @@ class StructuralAnalysisService:
         forces,
         materials_config: Optional[Dict] = None,
         continuity_info=None,
-        hn_ft: Optional[float] = None
+        hn_ft: Optional[float] = None,
+        seismic_category: SeismicCategory = SeismicCategory.SPECIAL
     ) -> Dict[str, Any]:
         """
         Analiza un elemento individual usando ElementOrchestrator.
@@ -314,6 +311,7 @@ class StructuralAnalysisService:
             materials_config: Config de materiales para lambda (opcional)
             continuity_info: Info de continuidad para piers (opcional)
             hn_ft: Altura del edificio en pies (opcional)
+            seismic_category: Categoría sísmica (SPECIAL, INTERMEDIATE, ORDINARY)
 
         Returns:
             Diccionario formateado para la UI
@@ -331,7 +329,7 @@ class StructuralAnalysisService:
             element=element,
             forces=forces,
             lambda_factor=lambda_factor,
-            category=SeismicCategory.SPECIAL,
+            category=seismic_category,
             hwcs=hwcs,
             hn_ft=hn_ft,
         )
@@ -398,7 +396,8 @@ class StructuralAnalysisService:
         generate_plots: bool = True,
         moment_axis: str = 'M3',
         angle_deg: float = 0,
-        materials_config: Optional[Dict] = None
+        materials_config: Optional[Dict] = None,
+        seismic_category: str = 'SPECIAL'
     ):
         """
         Ejecuta el análisis estructural con progreso (generador para SSE).
@@ -410,6 +409,7 @@ class StructuralAnalysisService:
             drop_beam_updates: Actualizaciones de armadura de vigas capitel
             materials_config: Configuración de materiales con lambda por tipo de concreto.
                 Format: {material_name: {fc, type, lambda}, ...}
+            seismic_category: Categoría sísmica ('SPECIAL', 'INTERMEDIATE', 'ORDINARY')
 
         Yields:
             Dict con eventos de progreso:
@@ -418,6 +418,15 @@ class StructuralAnalysisService:
             - {"type": "error", "message": "..."}
         """
         materials_config = materials_config or {}
+
+        # Convertir string a enum de categoría sísmica
+        # El frontend envía 'SPECIAL', 'INTERMEDIATE', 'ORDINARY'
+        category_map = {
+            'SPECIAL': SeismicCategory.SPECIAL,
+            'INTERMEDIATE': SeismicCategory.INTERMEDIATE,
+            'ORDINARY': SeismicCategory.ORDINARY,
+        }
+        category_enum = category_map.get(seismic_category.upper(), SeismicCategory.SPECIAL)
 
         # Validar sesión
         error = self._validate_session(session_id)
@@ -436,6 +445,9 @@ class StructuralAnalysisService:
             beam_updates=beam_updates,
             drop_beam_updates=drop_beam_updates,
         )
+
+        # Limpiar cache de análisis previo (se recalculará todo)
+        self._session_manager.clear_analysis_cache(session_id)
 
         # Contar elementos para barra de progreso
         piers = parsed_data.piers
@@ -473,9 +485,13 @@ class StructuralAnalysisService:
                 key, pier, parsed_data.pier_forces.get(key),
                 materials_config=materials_config,
                 continuity_info=continuity_info,
-                hn_ft=hn_ft
+                hn_ft=hn_ft,
+                seismic_category=category_enum
             )
             pier_results.append(formatted)
+
+            # Guardar en cache para que el modal no recalcule
+            self._session_manager.store_analysis_result(session_id, key, formatted)
 
         # =====================================================================
         # FASE 2: Analizar COLUMNAS (usando _analyze_element)
@@ -489,8 +505,14 @@ class StructuralAnalysisService:
                 "total": total_elements,
                 "pier": f"Columna: {column.story} - {column.label}"
             }
-            formatted = self._analyze_element(key, column, column_forces_dict.get(key))
+            formatted = self._analyze_element(
+                key, column, column_forces_dict.get(key),
+                seismic_category=category_enum
+            )
             column_results.append(formatted)
+
+            # Guardar en cache para que el modal no recalcule
+            self._session_manager.store_analysis_result(session_id, key, formatted)
 
         # =====================================================================
         # FASE 3: Analizar VIGAS (usando _analyze_element)
@@ -504,7 +526,10 @@ class StructuralAnalysisService:
                 "total": total_elements,
                 "pier": f"Viga: {beam.story} - {beam.label}"
             }
-            formatted = self._analyze_element(key, beam, beam_forces_dict.get(key))
+            formatted = self._analyze_element(
+                key, beam, beam_forces_dict.get(key),
+                seismic_category=category_enum
+            )
             beam_results.append(formatted)
 
         # =====================================================================
@@ -534,7 +559,10 @@ class StructuralAnalysisService:
                 "total": total_elements,
                 "pier": f"V. Capitel: {drop_beam.story} - {drop_beam.label}"
             }
-            formatted = self._analyze_element(key, drop_beam, drop_beam_forces_dict.get(key))
+            formatted = self._analyze_element(
+                key, drop_beam, drop_beam_forces_dict.get(key),
+                seismic_category=category_enum
+            )
             drop_beam_results.append(formatted)
 
         # Calcular estadísticas

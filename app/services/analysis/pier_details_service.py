@@ -26,10 +26,13 @@ Nota: Anteriormente llamado PierDetailsFormatter en presentation/.
 Movido a analysis/ porque es un servicio completo, no un simple formatter.
 """
 from typing import Dict, Any, Optional, List, Tuple, TYPE_CHECKING
+import logging
 
 from ..parsing.session_manager import SessionManager
+
+logger = logging.getLogger(__name__)
 from ...domain.constants.units import TONF_TO_N, TONFM_TO_NMM
-from ...domain.constants.shear import PHI_SHEAR
+from ...domain.constants.shear import PHI_SHEAR_SEISMIC
 from ...domain.chapter18.boundary_elements import (
     calculate_boundary_stress as _calculate_boundary_stress,
     BoundaryStressAnalysis,
@@ -119,6 +122,32 @@ class PierDetailsService(ElementDetailsService):
     def _validate_pier(self, session_id: str, pier_key: str) -> Optional[Dict[str, Any]]:
         """Valida que el pier existe en la sesión."""
         return self._session_manager.validate_pier(session_id, pier_key)
+
+    def _find_critical_combination(
+        self,
+        pier_forces,
+        critical_combo_name: str
+    ) -> Optional[Any]:
+        """
+        Busca una combinación por nombre en la lista de combinaciones.
+
+        Args:
+            pier_forces: Objeto con lista de combinaciones
+            critical_combo_name: Nombre de la combinación a buscar
+                                 (puede ser "name" o "name (location)")
+
+        Returns:
+            La combinación encontrada o None
+        """
+        for combo in pier_forces.combinations:
+            # Coincidencia exacta con nombre completo
+            combo_full_name = f"{combo.name} ({combo.location})"
+            if combo_full_name == critical_combo_name:
+                return combo
+            # Coincidencia parcial con solo el nombre
+            if combo.name == critical_combo_name or combo.name in critical_combo_name:
+                return combo
+        return None
 
     # =========================================================================
     # Capacidades y Diagramas
@@ -348,12 +377,10 @@ class PierDetailsService(ElementDetailsService):
         # Buscar la combinación crítica para obtener M2 y M3 separados
         M2_critical = 0
         M3_critical = 0
-        for combo in pier_forces.combinations:
-            combo_name = f"{combo.name} ({combo.location})"
-            if combo_name == critical_combo_name or combo.name in critical_combo_name:
-                M2_critical = combo.M2
-                M3_critical = combo.M3
-                break
+        critical_combo = self._find_critical_combination(pier_forces, critical_combo_name)
+        if critical_combo:
+            M2_critical = critical_combo.M2
+            M3_critical = critical_combo.M3
 
         # Calcular c (profundidad del eje neutro) para el punto crítico
         c_mm = self._calculate_neutral_axis_depth(pier, Pu, Mu)
@@ -361,8 +388,8 @@ class PierDetailsService(ElementDetailsService):
         # Cuantía actual (usar propiedad de la entidad)
         rho_actual = pier.rho_vertical
 
-        # Calcular D/C (Demand/Capacity) = 1/SF = Mu/φMn
-        dcr = 1 / sf if sf > 0 else 0
+        # DCR viene directamente del servicio (centralizado, método ray-casting)
+        dcr = flexure_result.get('dcr', 1 / sf if sf > 0 else 0)
 
         return {
             'has_data': True,
@@ -403,7 +430,11 @@ class PierDetailsService(ElementDetailsService):
                 pier, direction='primary', apply_slenderness=False, k=0.8
             )
             return self._flexo_service.get_c_at_point(interaction_points, Pu, Mu)
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "Error calculando eje neutro para Pu=%.2f, Mu=%.2f: %s",
+                Pu, Mu, str(e)
+            )
             return None
 
     def _get_shear_design_data(
@@ -443,21 +474,19 @@ class PierDetailsService(ElementDetailsService):
 
         # Combo crítico - buscar el nombre completo con ubicación
         critical_combo_name = shear_result.get('critical_combo', 'N/A')
-        critical_combo = critical_combo_name  # Por defecto solo el nombre
+        critical_combo_display = critical_combo_name  # Por defecto solo el nombre
 
-        # Buscar Pu y Mu de la combinación crítica y construir nombre completo
+        # Buscar Pu y Mu de la combinación crítica
         Pu_crit = 0
         Mu_crit = 0
-        for combo in pier_forces.combinations:
-            if combo.name == critical_combo_name:
-                Pu_crit = combo.P
-                Mu_crit = max(abs(combo.M2), abs(combo.M3))
-                # Construir nombre completo con ubicación
-                critical_combo = f"{combo.name} ({combo.location})"
-                break
+        found_combo = self._find_critical_combination(pier_forces, critical_combo_name)
+        if found_combo:
+            Pu_crit = found_combo.P
+            Mu_crit = max(abs(found_combo.M2), abs(found_combo.M3))
+            critical_combo_display = f"{found_combo.name} ({found_combo.location})"
 
         # Obtener phi_v usado (§21.2.4.1: 0.60 para SPECIAL, 0.75 para otros)
-        phi_v = shear_result.get('phi_v', PHI_SHEAR)
+        phi_v = shear_result.get('phi_v', PHI_SHEAR_SEISMIC)
 
         # Calcular φVc usando el phi_v correcto
         phi_Vc_2 = Vc_2 * phi_v if Vc_2 else phi_Vn_2 - (Vs_2 * phi_v if Vs_2 else 0)
@@ -470,7 +499,7 @@ class PierDetailsService(ElementDetailsService):
             rows.append({
                 'direction': 'V2',
                 'dcr': round(dcr_2, 3) if dcr_2 >= 0.01 else '<0.01',
-                'combo': critical_combo,
+                'combo': critical_combo_display,
                 'Pu_tonf': round(Pu_crit, 2),
                 'Mu_tonf_m': round(Mu_crit, 2),
                 'Vu_tonf': round(Vu_2, 2),
@@ -483,7 +512,7 @@ class PierDetailsService(ElementDetailsService):
             rows.append({
                 'direction': 'V3',
                 'dcr': round(dcr_3, 3) if dcr_3 >= 0.01 else '<0.01',
-                'combo': critical_combo,
+                'combo': critical_combo_display,
                 'Pu_tonf': round(Pu_crit, 2),
                 'Mu_tonf_m': round(Mu_crit, 2),
                 'Vu_tonf': round(Vu_3, 2),
@@ -494,7 +523,7 @@ class PierDetailsService(ElementDetailsService):
         return {
             'has_data': len(rows) > 0,
             'rows': rows,
-            'critical_combo': critical_combo,
+            'critical_combo': critical_combo_display,
             'phi_v': phi_v  # Factor φv usado (0.60 SPECIAL, 0.75 otros)
         }
 
@@ -662,7 +691,11 @@ class PierDetailsService(ElementDetailsService):
         combo_index: int
     ) -> Dict[str, Any]:
         """
-        Calcula los detalles de diseño para una combinación específica.
+        Obtiene los detalles de diseño para una combinación específica.
+
+        IMPORTANTE: Esta función usa el cache del análisis inicial para evitar
+        recálculos. Para combinaciones no críticas, delega a los servicios
+        centralizados con la convención de signos correcta.
 
         Args:
             session_id: ID de sesión
@@ -686,14 +719,46 @@ class PierDetailsService(ElementDetailsService):
             return {'success': False, 'error': 'Índice de combinación inválido'}
 
         combo = pier_forces.combinations[combo_index]
+        combo_full_name = f"{combo.name} ({combo.location})"
 
-        # Calcular datos de flexión para esta combinación
-        flexure_data = self._calc_flexure_for_combo(pier, combo)
+        # Intentar obtener resultado del cache (calculado durante análisis inicial)
+        cached_result = self._session_manager.get_analysis_result(session_id, pier_key)
 
-        # Calcular datos de corte para esta combinación
-        shear_data = self._calc_shear_for_combo(pier, combo)
+        # Verificar si esta combinación es la crítica (ya calculada en el cache)
+        is_critical_flexure = False
+        is_critical_shear = False
 
-        # Calcular datos de boundary para esta combinación
+        if cached_result:
+            cached_flexure = cached_result.get('flexure', {})
+            cached_shear = cached_result.get('shear', {})
+
+            # Verificar si el combo actual es el crítico de flexión
+            critical_flex_combo = cached_flexure.get('critical_combo', '')
+            if combo_full_name == critical_flex_combo or combo.name == critical_flex_combo:
+                is_critical_flexure = True
+
+            # Verificar si el combo actual es el crítico de cortante
+            critical_shear_combo = cached_shear.get('critical_combo', '')
+            if combo_full_name == critical_shear_combo or combo.name == critical_shear_combo:
+                is_critical_shear = True
+
+        # Obtener datos de flexión
+        if is_critical_flexure and cached_result:
+            # Usar datos del cache (ya calculados correctamente)
+            flexure_data = self._build_flexure_from_cache(cached_result, combo)
+        else:
+            # Calcular usando servicio centralizado (con convención de signos correcta)
+            flexure_data = self._calc_flexure_for_combo(pier, combo)
+
+        # Obtener datos de cortante
+        if is_critical_shear and cached_result:
+            # Usar datos del cache
+            shear_data = self._build_shear_from_cache(cached_result, combo)
+        else:
+            # Calcular usando servicio centralizado
+            shear_data = self._calc_shear_for_combo(pier, combo)
+
+        # Calcular datos de boundary (siempre recalcular para la combo específica)
         boundary_data = self._calc_boundary_for_combo(pier, combo)
 
         return {
@@ -712,9 +777,62 @@ class PierDetailsService(ElementDetailsService):
             'boundary': boundary_data
         }
 
+    def _build_flexure_from_cache(
+        self,
+        cached_result: Dict[str, Any],
+        combo
+    ) -> Dict[str, Any]:
+        """Construye datos de flexión desde el cache del análisis inicial."""
+        cached_flexure = cached_result.get('flexure', {})
+        return {
+            'location': combo.location,
+            'Pu_tonf': round(combo.P, 2),
+            'Mu2_tonf_m': round(combo.M2, 2),
+            'Mu3_tonf_m': round(combo.M3, 2),
+            'phi_Mn_tonf_m': cached_flexure.get('phi_Mn_at_Pu', 0),
+            'c_mm': cached_flexure.get('c', '—'),
+            'dcr': cached_flexure.get('dcr', 0)
+        }
+
+    def _build_shear_from_cache(
+        self,
+        cached_result: Dict[str, Any],
+        combo
+    ) -> Dict[str, Any]:
+        """Construye datos de cortante desde el cache del análisis inicial."""
+        cached_shear = cached_result.get('shear', {})
+        return {
+            'rows': [
+                {
+                    'direction': 'V2',
+                    'dcr': cached_shear.get('dcr', 0),
+                    'combo': f"{combo.name} ({combo.location})",
+                    'Pu_tonf': round(combo.P, 2),
+                    'Mu_tonf_m': round(max(abs(combo.M2), abs(combo.M3)), 2),
+                    'Vu_tonf': round(abs(combo.V2), 2),
+                    'phi_Vc_tonf': cached_shear.get('phi_Vc', 0),
+                    'phi_Vn_tonf': cached_shear.get('phi_Vn', 0)
+                }
+            ],
+            'has_data': True
+        }
+
     def _calc_flexure_for_combo(self, pier, combo) -> Dict[str, Any]:
-        """Calcula datos de flexión para una combinación específica."""
-        Pu = combo.P
+        """
+        Calcula datos de flexión para una combinación específica.
+
+        Usa método ray-casting consistente con check_flexure() para
+        garantizar que DCR y φMn sean coherentes entre tabla y modal.
+
+        IMPORTANTE: Convención de signos:
+        - ETABS: P negativo = compresión
+        - FlexureChecker: P positivo = compresión
+        - Por eso usamos -combo.P
+        """
+        from ...domain.flexure import FlexureChecker
+
+        # CORREGIDO: Convertir a convención positivo = compresión
+        Pu = -combo.P  # ETABS: negativo = compresión → positivo para cálculo
         M2 = combo.M2
         M3 = combo.M3
         Mu = max(abs(M2), abs(M3))
@@ -724,18 +842,26 @@ class PierDetailsService(ElementDetailsService):
             pier, direction='primary', apply_slenderness=False, k=0.8
         )
 
-        # Obtener φMn a este Pu
-        phi_Mn_at_Pu = self._flexo_service.get_phi_Mn_at_Pu(interaction_points, Pu)
+        # Calcular SF usando ray-casting (consistente con check_flexure)
+        sf, _ = FlexureChecker.calculate_safety_factor(interaction_points, Pu, Mu)
 
-        # Calcular D/C (Demand/Capacity) = Mu/φMn
-        dcr = Mu / phi_Mn_at_Pu if phi_Mn_at_Pu > 0 else 0
+        # DCR = 1/SF (consistente con método ray-casting)
+        dcr = 1 / sf if sf > 0 and sf < float('inf') else 0
 
-        # Calcular c
+        # φMn "efectivo" del ray-casting = Mu × SF
+        # Esto garantiza consistencia: DCR = Mu / φMn = Mu / (Mu × SF) = 1/SF
+        if sf > 0 and sf < float('inf') and Mu > 0:
+            phi_Mn_at_Pu = Mu * sf
+        else:
+            # Fallback para casos sin demanda
+            phi_Mn_at_Pu = self._flexo_service.get_phi_Mn_at_Pu(interaction_points, Pu)
+
+        # Calcular c (también con Pu convertido)
         c_mm = self._calculate_neutral_axis_depth(pier, Pu, Mu)
 
         return {
             'location': combo.location,
-            'Pu_tonf': round(Pu, 2),
+            'Pu_tonf': round(combo.P, 2),  # Mostrar P original de ETABS para display
             'Mu2_tonf_m': round(M2, 2),
             'Mu3_tonf_m': round(M3, 2),
             'phi_Mn_tonf_m': round(phi_Mn_at_Pu, 2),
@@ -744,20 +870,28 @@ class PierDetailsService(ElementDetailsService):
         }
 
     def _calc_shear_for_combo(self, pier, combo) -> Dict[str, Any]:
-        """Calcula datos de corte para una combinación específica."""
-        Pu = combo.P
+        """
+        Calcula datos de corte para una combinación específica.
+
+        IMPORTANTE: Convención de signos:
+        - ETABS: P negativo = compresión
+        - ShearService.get_shear_capacity: Nu positivo = compresión (en kN)
+        - Por eso usamos -combo.P y convertimos a kN
+        """
+        # CORREGIDO: Convertir a convención positivo = compresión
+        Pu = -combo.P  # ETABS: negativo = compresión → positivo para cálculo
         V2 = abs(combo.V2)
         V3 = abs(combo.V3)
         Mu = max(abs(combo.M2), abs(combo.M3))
 
-        # Obtener capacidades de corte
+        # Obtener capacidades de corte (Nu en kN, positivo = compresión)
         shear_cap = self._shear_service.get_shear_capacity(pier, Nu=Pu * 9.80665)
 
         phi_Vn_2 = shear_cap.get('phi_Vn_2', 0)
         phi_Vn_3 = shear_cap.get('phi_Vn_3', 0)
         Vc_2 = shear_cap.get('Vc_2', 0)
         Vc_3 = shear_cap.get('Vc_3', 0)
-        phi_v = shear_cap.get('phi_v', PHI_SHEAR)
+        phi_v = shear_cap.get('phi_v', PHI_SHEAR_SEISMIC)
 
         # Calcular D/C para cada dirección (phi ya incluido en phi_Vn_*)
         dcr_2 = V2 / phi_Vn_2 if phi_Vn_2 > 0 else 0
@@ -769,7 +903,7 @@ class PierDetailsService(ElementDetailsService):
                 {
                     'direction': 'V2',
                     'dcr': round(dcr_2, 3) if dcr_2 >= 0.01 else '<0.01',
-                    'Pu_tonf': round(Pu, 2),
+                    'Pu_tonf': round(combo.P, 2),  # Mostrar P original de ETABS
                     'Mu_tonf_m': round(Mu, 2),
                     'Vu_tonf': round(V2, 2),
                     'phi_Vc_tonf': round(Vc_2 * phi_v, 2),
@@ -778,7 +912,7 @@ class PierDetailsService(ElementDetailsService):
                 {
                     'direction': 'V3',
                     'dcr': round(dcr_3, 3) if dcr_3 >= 0.01 else '<0.01',
-                    'Pu_tonf': round(Pu, 2),
+                    'Pu_tonf': round(combo.P, 2),  # Mostrar P original de ETABS
                     'Mu_tonf_m': round(Mu, 2),
                     'Vu_tonf': round(V3, 2),
                     'phi_Vc_tonf': round(Vc_3 * phi_v, 2),
@@ -788,12 +922,21 @@ class PierDetailsService(ElementDetailsService):
         }
 
     def _calc_boundary_for_combo(self, pier, combo) -> Dict[str, Any]:
-        """Calcula datos de boundary element para una combinación específica."""
-        Mu = max(abs(combo.M2), abs(combo.M3))
-        stress = calculate_boundary_stress(pier, combo.P, Mu)
+        """
+        Calcula datos de boundary element para una combinación específica.
 
-        c_left = self._calculate_neutral_axis_depth(pier, combo.P, Mu) if stress.required_left else None
-        c_right = self._calculate_neutral_axis_depth(pier, combo.P, Mu) if stress.required_right else None
+        IMPORTANTE: Convención de signos:
+        - ETABS: P negativo = compresión
+        - calculate_boundary_stress: P positivo = compresión
+        - Por eso usamos -combo.P
+        """
+        # CORREGIDO: Convertir a convención positivo = compresión
+        Pu = -combo.P
+        Mu = max(abs(combo.M2), abs(combo.M3))
+        stress = calculate_boundary_stress(pier, Pu, Mu)
+
+        c_left = self._calculate_neutral_axis_depth(pier, Pu, Mu) if stress.required_left else None
+        c_right = self._calculate_neutral_axis_depth(pier, Pu, Mu) if stress.required_right else None
 
         return {
             'rows': [
