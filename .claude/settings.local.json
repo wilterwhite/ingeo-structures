@@ -102,7 +102,8 @@
       "Bash(then echo \"$f\")",
       "Bash(fi)",
       "Bash(del \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\application\\column_analysis_service.py\")",
-      "Bash(del \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\application\\beam_analysis_service.py\")"
+      "Bash(del \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\application\\beam_analysis_service.py\")",
+      "Bash(git commit -m \"$(cat <<''EOF''\nRefactor: limpieza arquitectónica y eliminación de código legacy\n\n- Eliminar app/services/application/ (5 archivos legacy no usados)\n- Eliminar element_verification_service.py (reemplazado por element_orchestrator)\n- Eliminar DropBeamsModule.js (módulo vacío, métodos movidos a StructuralPage)\n- Eliminar ruta deprecated /set-pier-beam\n- Eliminar docs/plan-unificacion-flujos-diseno.md (plan ya ejecutado)\n\n- Crear domain/constants/chapter18.py con constantes centralizadas\n- Crear domain/shear/combined.py para cálculo DCR biaxial\n- Crear funciones genéricas en routes/common.py (calculate_statistics, analyze_elements_generic)\n- Consolidar calculate_so() en chapter18/columns/transverse.py\n\n- Actualizar documentación (README, PROJECT_STRUCTURE, chapter18/__init__)\n- Verificar uso consistente de @handle_errors en rutas\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
     ]
   }
 }

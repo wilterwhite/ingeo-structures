@@ -87,6 +87,7 @@ class SeismicWallService:
         lambda_factor: float = 1.0,
         check_boundary: bool = True,
         use_omega_0: bool = False,
+        category: SeismicCategory = SeismicCategory.SPECIAL,
     ) -> SeismicWallResult:
         """
         Verifica un muro sísmico especial usando entidad Pier.
@@ -101,6 +102,7 @@ class SeismicWallService:
             lambda_factor: Factor para concreto liviano (default 1.0)
             check_boundary: Si verificar elementos de borde (default True)
             use_omega_0: Si usar Omega_0 en lugar de factores §18.10.3.3
+            category: Categoría sísmica (SPECIAL, INTERMEDIATE, ORDINARY)
 
         Returns:
             SeismicWallResult con todas las verificaciones
@@ -128,6 +130,7 @@ class SeismicWallService:
             lambda_factor=lambda_factor,
             check_boundary=check_boundary,
             use_omega_0=use_omega_0,
+            category=category,
         )
 
     def verify_wall_direct(
@@ -606,6 +609,7 @@ class SeismicWallService:
         Mu: float = 0,
         Pu: float = 0,
         lambda_factor: float = 1.0,
+        category: SeismicCategory = SeismicCategory.SPECIAL,
     ) -> SeismicWallResult:
         """
         Verifica una viga capitel como muro.
@@ -619,6 +623,7 @@ class SeismicWallService:
             Mu: Momento último (tonf-m)
             Pu: Carga axial (tonf)
             lambda_factor: Factor para concreto liviano
+            category: Categoría sísmica (default SPECIAL)
 
         Returns:
             SeismicWallResult con verificaciones
@@ -641,4 +646,5 @@ class SeismicWallService:
             Pu=Pu,
             lambda_factor=lambda_factor,
             check_boundary=True,
+            category=category,
         )

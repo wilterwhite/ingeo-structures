@@ -248,10 +248,20 @@ class GeometryNormalizer:
 
     @staticmethod
     def _pier_to_column_geom(pier: 'Pier') -> ColumnGeometry:
-        """Extrae geometria de Pier para verificacion tipo columna."""
-        # Para pier como columna, usar column_b y column_h
-        b = getattr(pier, 'column_b', pier.thickness)
-        h = getattr(pier, 'column_h', pier.width)
+        """
+        Extrae geometria de Pier para verificacion tipo columna (§18.7).
+
+        Cuando un Pier es clasificado como WALL_PIER_COLUMN (lw/tw <= 2.5, hw/lw < 2.0),
+        se trata como columna sismica. La geometria se normaliza:
+        - b = min(width, thickness) - dimension menor
+        - h = max(width, thickness) - dimension mayor
+
+        Esto permite que el mismo servicio SeismicColumnService verifique
+        tanto columnas como wall piers clasificados como columna.
+        """
+        # Normalizar geometria: b = lado corto, h = lado largo
+        b = min(pier.width, pier.thickness)
+        h = max(pier.width, pier.thickness)
 
         # Ash para pier: area de estribo * num ramas
         stirrup_area = math.pi * (pier.stirrup_diameter / 2) ** 2

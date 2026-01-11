@@ -11,13 +11,14 @@ son "thick" y contienen la lógica real de verificación.
 
 Usa ForceExtractor y GeometryNormalizer para evitar duplicación de código.
 """
-from typing import Union, Optional, Dict, Any, TYPE_CHECKING
-from dataclasses import dataclass
+from typing import Union, Optional, Dict, Any, List, TYPE_CHECKING
+from dataclasses import dataclass, field
 
 from .element_classifier import ElementClassifier, ElementType
 from .design_behavior_resolver import DesignBehaviorResolver
 from .design_behavior import DesignBehavior
 from .flexocompression_service import FlexocompressionService
+from .shear_service import ShearService
 from .force_extractor import ForceExtractor
 from .geometry_normalizer import GeometryNormalizer
 from ...domain.chapter18 import (
@@ -26,10 +27,13 @@ from ...domain.chapter18 import (
     SeismicWallService,
     SeismicCategory,
 )
+from ...domain.flexure import FlexureChecker
+from ...domain.shear.combined import calculate_combined_dcr
 
 if TYPE_CHECKING:
     from ...domain.entities import Beam, Column, Pier, DropBeam
     from ...domain.entities import BeamForces, ColumnForces, PierForces, DropBeamForces
+    from ...domain.entities import LoadCombination
 
 
 @dataclass
@@ -48,6 +52,62 @@ class OrchestrationResult:
     dcr_max: float
     critical_check: str
     warnings: list
+
+
+@dataclass
+class CombinationResult:
+    """
+    Resultado de verificación para UNA combinación de carga específica.
+
+    Usado para análisis detallado por combinación (ej: get_pier_combinations).
+    Contiene factores de seguridad individuales para flexión y cortante.
+    """
+    # Identificación de la combinación
+    index: int
+    name: str
+    location: str
+    step_type: str
+
+    # Fuerzas de la combinación
+    P: float               # Carga axial (tonf, positivo=compresión)
+    V2: float              # Cortante V2 (tonf)
+    V3: float              # Cortante V3 (tonf)
+    M2: float              # Momento M2 (tonf-m)
+    M3: float              # Momento M3 (tonf-m)
+    M_resultant: float     # Momento resultante (tonf-m)
+    angle_deg: float       # Ángulo del momento (grados)
+
+    # Resultados de verificación
+    flexure_sf: float      # Factor de seguridad a flexión
+    flexure_status: str    # 'OK', 'NO OK'
+    shear_sf_v2: float     # Factor de seguridad cortante V2
+    shear_sf_v3: float     # Factor de seguridad cortante V3
+    shear_dcr_combined: float  # DCR combinado biaxial
+    overall_status: str    # 'OK', 'NO OK'
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convierte a diccionario para serialización."""
+        return {
+            'index': self.index,
+            'name': self.name,
+            'location': self.location,
+            'step_type': self.step_type,
+            'full_name': f"{self.name} ({self.location})" if self.location else self.name,
+            'P': round(self.P, 2),
+            'M2': round(self.M2, 2),
+            'M3': round(self.M3, 2),
+            'V2': round(self.V2, 2),
+            'V3': round(self.V3, 2),
+            'M_resultant': round(self.M_resultant, 2),
+            'angle_deg': round(self.angle_deg, 1),
+            'flexure_sf': round(self.flexure_sf, 2) if self.flexure_sf < 100 else '>100',
+            'flexure_status': self.flexure_status,
+            'shear_sf_2': round(self.shear_sf_v2, 2) if self.shear_sf_v2 < 100 else '>100',
+            'shear_sf_3': round(self.shear_sf_v3, 2) if self.shear_sf_v3 < 100 else '>100',
+            'shear_dcr_combined': round(self.shear_dcr_combined, 3),
+            'shear_sf_combined': f"{1/self.shear_dcr_combined:.2f}" if self.shear_dcr_combined > 0 else '>100',
+            'overall_status': self.overall_status,
+        }
 
 
 class ElementOrchestrator:
@@ -86,6 +146,7 @@ class ElementOrchestrator:
         beam_service: Optional[SeismicBeamService] = None,
         wall_service: Optional[SeismicWallService] = None,
         flexo_service: Optional[FlexocompressionService] = None,
+        shear_service: Optional[ShearService] = None,
     ):
         """
         Inicializa el orquestador con servicios de dominio.
@@ -99,6 +160,7 @@ class ElementOrchestrator:
         self._beam_service = beam_service or SeismicBeamService()
         self._wall_service = wall_service or SeismicWallService()
         self._flexo_service = flexo_service or FlexocompressionService()
+        self._shear_service = shear_service or ShearService()
 
     def verify(
         self,
@@ -146,7 +208,7 @@ class ElementOrchestrator:
         elif service_type == 'wall':
             return self._verify_as_wall(
                 element, forces, element_type, design_behavior,
-                lambda_factor, hwcs, hn_ft
+                lambda_factor, category, hwcs, hn_ft
             )
 
         elif service_type == 'beam':
@@ -207,6 +269,7 @@ class ElementOrchestrator:
         element_type: ElementType,
         design_behavior: DesignBehavior,
         lambda_factor: float,
+        category: SeismicCategory,
         hwcs: Optional[float],
         hn_ft: Optional[float],
     ) -> OrchestrationResult:
@@ -225,6 +288,7 @@ class ElementOrchestrator:
                 drop_beam=element,
                 Vu=Vu, Mu=Mu, Pu=Pu,
                 lambda_factor=lambda_factor,
+                category=category,
             )
         else:
             result = self._wall_service.verify_wall(
@@ -232,6 +296,7 @@ class ElementOrchestrator:
                 Vu=Vu, Mu=Mu, Pu=Pu,
                 hwcs=hwcs, hn_ft=hn_ft,
                 lambda_factor=lambda_factor,
+                category=category,
             )
 
         return OrchestrationResult(
@@ -366,3 +431,140 @@ class ElementOrchestrator:
             'requires_pm_diagram': behavior.requires_pm_diagram,
             'requires_seismic_checks': behavior.requires_seismic_checks,
         }
+
+    # =========================================================================
+    # VERIFICACIÓN POR COMBINACIÓN
+    # =========================================================================
+
+    def verify_combination(
+        self,
+        element: Union['Beam', 'Column', 'Pier', 'DropBeam'],
+        combination: 'LoadCombination',
+        index: int = 0,
+        *,
+        interaction_points: Optional[List] = None,
+        lambda_factor: float = 1.0,
+    ) -> CombinationResult:
+        """
+        Verifica un elemento para UNA combinación de carga específica.
+
+        Este método centraliza la lógica que antes estaba en get_pier_combinations()
+        de structural_analysis.py, permitiendo verificar cualquier elemento
+        contra una combinación individual.
+
+        Args:
+            element: Entidad del elemento (Pier, Column, Beam, DropBeam)
+            combination: Combinación de carga a verificar
+            index: Índice de la combinación (para tracking)
+            interaction_points: Puntos del diagrama P-M (si ya calculado, para reutilizar)
+            lambda_factor: Factor para concreto liviano (default 1.0)
+
+        Returns:
+            CombinationResult con SF de flexión, cortante y estado general
+        """
+        # Si no tenemos interaction_points, generarlos
+        if interaction_points is None:
+            interaction_points, _ = self._flexo_service.generate_interaction_curve(
+                element, direction='primary', apply_slenderness=True, k=0.8
+            )
+
+        # Extraer fuerzas de la combinación
+        P = combination.P_compression  # Positivo = compresión
+        M = combination.moment_resultant
+        V2 = abs(combination.V2)
+        V3 = abs(combination.V3)
+
+        # 1. Verificar flexión usando FlexureChecker
+        demand_point = [(P, M, combination.name)]
+        flexure_result = FlexureChecker.check_flexure(interaction_points, demand_point)
+        flexure_sf = flexure_result.safety_factor
+        flexure_status = flexure_result.status
+
+        # 2. Verificar cortante bidireccional
+        # Obtener geometría para verificación de cortante
+        shear_result = self._shear_service.verify_bidirectional_shear(
+            lw=element.width,
+            tw=element.thickness,
+            hw=element.height,
+            fc=element.fc,
+            fy=element.fy,
+            rho_h=element.rho_horizontal,
+            Vu2_max=V2,
+            Vu3_max=V3,
+            Nu=P,
+            lambda_factor=lambda_factor,
+        )
+        shear_sf_v2 = shear_result.result_V2.sf
+        shear_sf_v3 = shear_result.result_V3.sf
+
+        # 3. Calcular DCR combinado biaxial
+        shear_dcr_combined = calculate_combined_dcr(shear_sf_v2, shear_sf_v3)
+
+        # 4. Estado general
+        fs_min = min(
+            flexure_sf if flexure_sf < 100 else 100,
+            shear_sf_v2 if shear_sf_v2 < 100 else 100,
+            shear_sf_v3 if shear_sf_v3 < 100 else 100,
+        )
+        overall_status = 'OK' if fs_min >= 1.0 else 'NO OK'
+
+        return CombinationResult(
+            index=index,
+            name=combination.name,
+            location=combination.location,
+            step_type=combination.step_type,
+            P=P,
+            V2=combination.V2,
+            V3=combination.V3,
+            M2=combination.M2,
+            M3=combination.M3,
+            M_resultant=M,
+            angle_deg=combination.moment_angle_deg,
+            flexure_sf=flexure_sf,
+            flexure_status=flexure_status,
+            shear_sf_v2=shear_sf_v2,
+            shear_sf_v3=shear_sf_v3,
+            shear_dcr_combined=shear_dcr_combined,
+            overall_status=overall_status,
+        )
+
+    def verify_all_combinations(
+        self,
+        element: Union['Beam', 'Column', 'Pier', 'DropBeam'],
+        forces: Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces'],
+        *,
+        lambda_factor: float = 1.0,
+        apply_slenderness: bool = True,
+    ) -> List[CombinationResult]:
+        """
+        Verifica un elemento para TODAS sus combinaciones de carga.
+
+        Optimiza generando el diagrama P-M una sola vez y reutilizándolo.
+
+        Args:
+            element: Entidad del elemento
+            forces: Fuerzas con lista de combinaciones
+            lambda_factor: Factor para concreto liviano
+            apply_slenderness: Aplicar reducción por esbeltez al diagrama P-M
+
+        Returns:
+            Lista de CombinationResult, uno por cada combinación
+        """
+        # Generar diagrama P-M una sola vez
+        interaction_points, _ = self._flexo_service.generate_interaction_curve(
+            element, direction='primary', apply_slenderness=apply_slenderness, k=0.8
+        )
+
+        # Verificar cada combinación
+        results = []
+        for i, combo in enumerate(forces.combinations):
+            result = self.verify_combination(
+                element=element,
+                combination=combo,
+                index=i,
+                interaction_points=interaction_points,
+                lambda_factor=lambda_factor,
+            )
+            results.append(result)
+
+        return results

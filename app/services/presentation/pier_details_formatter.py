@@ -4,8 +4,11 @@ Formateador de detalles de piers para UI.
 
 Prepara datos estructurados para el modal de detalles de pier,
 incluyendo capacidades, verificaciones y tablas estilo ETABS.
+
+Usa ElementOrchestrator para verificaciones, manteniendo servicios
+de dominio solo para generación de gráficos y curvas.
 """
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, TYPE_CHECKING
 
 from ..parsing.session_manager import SessionManager
 from ...domain.constants.units import TONF_TO_N, TONFM_TO_NMM
@@ -20,6 +23,9 @@ from ..analysis.flexocompression_service import FlexocompressionService
 from ..analysis.shear_service import ShearService
 from ...domain.flexure import SlendernessService
 from ...domain.chapter18.reinforcement import SeismicReinforcementService
+
+if TYPE_CHECKING:
+    from ..analysis.element_orchestrator import ElementOrchestrator
 
 
 def calculate_boundary_stress(pier, P_tonf: float, M_tonfm: float) -> BoundaryStressAnalysis:
@@ -47,31 +53,41 @@ def calculate_boundary_stress(pier, P_tonf: float, M_tonfm: float) -> BoundarySt
 
 class PierDetailsFormatter:
     """
-    Servicio para cálculo de capacidades de piers.
+    Servicio para formateo de detalles de piers para UI.
 
-    Calcula capacidades puras sin análisis de interacción,
-    y genera diagramas de sección transversal.
+    Usa ElementOrchestrator para verificaciones, manteniendo servicios
+    de dominio solo para generación de gráficos y curvas de interacción.
     """
 
     def __init__(
         self,
         session_manager: SessionManager,
+        orchestrator: Optional['ElementOrchestrator'] = None,
         flexocompression_service: Optional[FlexocompressionService] = None,
         shear_service: Optional[ShearService] = None,
         slenderness_service: Optional[SlendernessService] = None,
         plot_generator: Optional[PlotGenerator] = None
     ):
         """
-        Inicializa el servicio de capacidades.
+        Inicializa el servicio de formateo.
 
         Args:
             session_manager: Gestor de sesiones (requerido)
-            flexocompression_service: Servicio de flexocompresión (opcional)
-            shear_service: Servicio de corte (opcional)
+            orchestrator: Orquestador de verificación (opcional)
+            flexocompression_service: Servicio para gráficos P-M (opcional)
+            shear_service: Servicio para capacidades de corte (opcional)
             slenderness_service: Servicio de esbeltez (opcional)
             plot_generator: Generador de gráficos (opcional)
         """
         self._session_manager = session_manager
+
+        # Import lazy para evitar circular
+        if orchestrator is None:
+            from ..analysis.element_orchestrator import ElementOrchestrator
+            orchestrator = ElementOrchestrator()
+        self._orchestrator = orchestrator
+
+        # Servicios de dominio para gráficos y capacidades
         self._flexo_service = flexocompression_service or FlexocompressionService()
         self._shear_service = shear_service or ShearService()
         self._slenderness_service = slenderness_service or SlendernessService()

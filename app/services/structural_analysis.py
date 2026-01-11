@@ -735,7 +735,12 @@ class StructuralAnalysisService:
         session_id: str,
         pier_key: str
     ) -> Dict[str, Any]:
-        """Obtiene las combinaciones de carga de un pier con sus FS calculados."""
+        """
+        Obtiene las combinaciones de carga de un pier con sus FS calculados.
+
+        Usa ElementOrchestrator.verify_all_combinations() para centralizar
+        la lógica de verificación.
+        """
         # Validar pier
         error = self._validate_pier(session_id, pier_key)
         if error:
@@ -747,66 +752,21 @@ class StructuralAnalysisService:
         if pier_forces is None:
             return {'success': False, 'error': f'Forces not found for pier: {pier_key}'}
 
-        # Generar datos de interacción (con reducción por esbeltez)
+        # Usar orquestador para verificar todas las combinaciones
+        combination_results = self._orchestrator.verify_all_combinations(
+            element=pier,
+            forces=pier_forces,
+            lambda_factor=1.0,
+            apply_slenderness=True,
+        )
+
+        # Convertir a formato de diccionario para la UI
+        combinations_with_fs = [result.to_dict() for result in combination_results]
+
+        # Obtener phi_Mn_0 para verificación de capacidad
         _, interaction_points, phi_Mn_0 = self._generate_interaction_data(
             pier, apply_slenderness=True
         )
-
-        # Calcular FS para cada combinación
-        combinations_with_fs = []
-        for i, combo in enumerate(pier_forces.combinations):
-            # FS Flexión - usar FlexureChecker directamente
-            P = -combo.P  # Convertir a positivo = compresión
-            M = combo.moment_resultant
-            demand_point = [(P, M, combo.name)]
-            flexure_result = FlexureChecker.check_flexure(interaction_points, demand_point)
-            flexure_sf = flexure_result.safety_factor
-            flexure_status = flexure_result.status
-
-            # FS Corte V2 y V3 (usa verify_bidirectional_shear para consistencia)
-            combined_shear = self._shear_service.verify_bidirectional_shear(
-                lw=pier.width,
-                tw=pier.thickness,
-                hw=pier.height,
-                fc=pier.fc,
-                fy=pier.fy,
-                rho_h=pier.rho_horizontal,
-                Vu2_max=abs(combo.V2),
-                Vu3_max=abs(combo.V3),
-                Nu=P
-            )
-            shear_v2 = combined_shear.result_V2
-            shear_v3 = combined_shear.result_V3
-
-            # Estado general de esta combinación
-            fs_min = min(
-                flexure_sf if flexure_sf < 100 else 100,
-                shear_v2.sf if shear_v2.sf < 100 else 100,
-                shear_v3.sf if shear_v3.sf < 100 else 100
-            )
-            status = 'OK' if fs_min >= 1.0 else 'NO OK'
-
-            combinations_with_fs.append({
-                'index': i,
-                'name': combo.name,
-                'location': combo.location,
-                'step_type': combo.step_type,
-                'full_name': f"{combo.name} ({combo.location})" if combo.location else combo.name,
-                'P': round(-combo.P, 2),  # tonf (positivo = compresión)
-                'M2': round(combo.M2, 2),
-                'M3': round(combo.M3, 2),
-                'V2': round(combo.V2, 2),
-                'V3': round(combo.V3, 2),
-                'M_resultant': round(combo.moment_resultant, 2),
-                'angle_deg': round(combo.moment_angle_deg, 1),
-                'flexure_sf': round(flexure_sf, 2) if flexure_sf < 100 else '>100',
-                'flexure_status': flexure_status,
-                'shear_sf_2': round(shear_v2.sf, 2) if shear_v2.sf < 100 else '>100',
-                'shear_sf_3': round(shear_v3.sf, 2) if shear_v3.sf < 100 else '>100',
-                'shear_dcr_combined': self._calculate_combined_shear_dcr(shear_v2.sf, shear_v3.sf),
-                'shear_sf_combined': self._calculate_combined_shear_sf(shear_v2.sf, shear_v3.sf),
-                'overall_status': status
-            })
 
         # Verificación de capacidad (muro fuerte - viga débil)
         # phi_Mn_muro >= 1.2 × Mpr_vigas
@@ -842,7 +802,11 @@ class StructuralAnalysisService:
         combination_index: int,
         generate_plot: bool = True
     ) -> Dict[str, Any]:
-        """Analiza un pier para una combinación específica."""
+        """
+        Analiza un pier para una combinación específica.
+
+        Usa ElementOrchestrator.verify_combination() para la verificación.
+        """
         # Validar pier
         error = self._validate_pier(session_id, pier_key)
         if error:
@@ -858,17 +822,19 @@ class StructuralAnalysisService:
         combo = pier_forces.combinations[combination_index]
         angle_deg = combo.moment_angle_deg
 
-        # Generar datos de interacción
+        # Generar datos de interacción para reutilizar
         _, interaction_points, _ = self._generate_interaction_data(pier)
         design_curve = self._interaction_service.get_design_curve(interaction_points)
 
-        # Calcular SF para esta combinación - usar FlexureChecker directamente
-        P = -combo.P
-        M = combo.moment_resultant
-        demand_points = [(P, M, f"{combo.name} ({combo.location})")]
-        flexure_result = FlexureChecker.check_flexure(interaction_points, demand_points)
-        flexure_sf = flexure_result.safety_factor
-        flexure_status = flexure_result.status
+        # Usar orquestador para verificar la combinación
+        result = self._orchestrator.verify_combination(
+            element=pier,
+            combination=combo,
+            index=combination_index,
+            interaction_points=interaction_points,
+        )
+        flexure_sf = result.flexure_sf
+        flexure_status = result.flexure_status
 
         # Generar gráfico
         pm_plot = ""
@@ -894,7 +860,7 @@ class StructuralAnalysisService:
                 'name': combo.name,
                 'location': combo.location,
                 'step_type': combo.step_type,
-                'P': P,
+                'P': result.P,
                 'M2': combo.M2,
                 'M3': combo.M3,
                 'M_resultant': combo.moment_resultant,

@@ -350,47 +350,6 @@ class Pier:
         return self.Ig / self.y_extreme if self.y_extreme > 0 else 0
 
     # =========================================================================
-    # Geometría como Columna (para wall piers clasificados como columna)
-    # =========================================================================
-
-    @property
-    def column_b(self) -> float:
-        """
-        Ancho de columna equivalente (mm).
-
-        Cuando un wall pier es clasificado como columna (hw/lw ≤ 2),
-        se toma b = min(width, thickness) como el lado corto.
-        """
-        return min(self.width, self.thickness)
-
-    @property
-    def column_h(self) -> float:
-        """
-        Altura de columna equivalente (mm).
-
-        Cuando un wall pier es clasificado como columna,
-        se toma h = max(width, thickness) como el lado largo.
-        """
-        return max(self.width, self.thickness)
-
-    @property
-    def column_d_V2(self) -> float:
-        """Profundidad efectiva para cortante en dirección V2 (mm)."""
-        return self.column_h - self.cover
-
-    @property
-    def column_d_V3(self) -> float:
-        """Profundidad efectiva para cortante en dirección V3 (mm)."""
-        return self.column_b - self.cover
-
-    @property
-    def Av_stirrup(self) -> float:
-        """Área de estribos para cortante (mm²)."""
-        from ..constants.materials import get_bar_area
-        bar_area = get_bar_area(self.stirrup_diameter, 78.5)
-        return self.n_stirrup_legs * bar_area
-
-    # =========================================================================
     # Validación de Armadura
     # =========================================================================
 

@@ -3,18 +3,19 @@
 Servicio de propuestas de diseño para piers.
 
 Orquesta la generación de propuestas delegando la lógica de búsqueda
-a domain/proposals/. Este servicio solo coordina los servicios de
-verificación y el generador de propuestas.
+a domain/proposals/. Este servicio usa ElementOrchestrator para
+verificaciones, garantizando consistencia con el resto del sistema.
 """
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, TYPE_CHECKING
 
 from ...domain.entities import Pier, PierForces
 from ...domain.entities.design_proposal import DesignProposal
 from ...domain.chapter18.wall_piers import WallPierService
 from ...domain.proposals import DesignGenerator
 from ...domain.proposals.failure_analysis import OVERDESIGNED_SF_MIN, OVERDESIGNED_DCR_MAX
-from .flexocompression_service import FlexocompressionService
-from .shear_service import ShearService
+
+if TYPE_CHECKING:
+    from .element_orchestrator import ElementOrchestrator
 
 
 class ProposalService:
@@ -22,23 +23,25 @@ class ProposalService:
     Servicio para generar propuestas de diseño inteligentes.
 
     Orquesta:
-    - FlexocompressionService: Verificación de flexión
-    - ShearService: Verificación de corte
+    - ElementOrchestrator: Verificación unificada de elementos
     - DesignGenerator: Lógica de búsqueda iterativa (en domain/)
 
     Este servicio es un thin wrapper que:
-    1. Coordina las verificaciones
+    1. Coordina las verificaciones a través del orquestador
     2. Delega la generación de propuestas a domain/proposals/
     """
 
     def __init__(
         self,
-        flexocompression_service: Optional[FlexocompressionService] = None,
-        shear_service: Optional[ShearService] = None,
+        orchestrator: Optional['ElementOrchestrator'] = None,
         wall_pier_service: Optional[WallPierService] = None
     ):
-        self._flexo_service = flexocompression_service or FlexocompressionService()
-        self._shear_service = shear_service or ShearService()
+        # Import lazy para evitar circular
+        if orchestrator is None:
+            from .element_orchestrator import ElementOrchestrator
+            orchestrator = ElementOrchestrator()
+
+        self._orchestrator = orchestrator
         self._wall_pier_service = wall_pier_service or WallPierService()
 
         # Crear generador con funciones de verificación inyectadas
@@ -49,17 +52,36 @@ class ProposalService:
         )
 
     def _verify_flexure(self, pier: Pier, pier_forces: Optional[PierForces]) -> float:
-        """Verifica flexión y retorna SF."""
-        result = self._flexo_service.check_flexure(
-            pier, pier_forces, moment_axis='M3', direction='primary', k=0.8
-        )
-        sf = result.get('sf', 0)
+        """
+        Verifica flexión y retorna SF.
+
+        Usa el orquestador para verificación consistente.
+        """
+        result = self._orchestrator.verify(pier, pier_forces)
+        # El orquestador devuelve dcr_max, convertir a SF
+        if result.dcr_max > 0:
+            sf = 1 / result.dcr_max
+        else:
+            sf = 100
         return min(sf, 100)  # Cap at 100
 
     def _verify_shear(self, pier: Pier, pier_forces: Optional[PierForces]) -> float:
-        """Verifica corte y retorna DCR."""
-        result = self._shear_service.check_shear(pier, pier_forces)
-        return result.get('dcr_combined', 0)
+        """
+        Verifica corte y retorna DCR.
+
+        Usa verificación por combinación para obtener DCR combinado.
+        """
+        if pier_forces is None or not pier_forces.combinations:
+            return 0
+
+        # Verificar todas las combinaciones y obtener el peor DCR
+        results = self._orchestrator.verify_all_combinations(pier, pier_forces)
+        if not results:
+            return 0
+
+        # El peor DCR combinado
+        max_dcr = max(r.shear_dcr_combined for r in results)
+        return max_dcr
 
     # =========================================================================
     # MÉTODOS DELEGADOS AL GENERADOR (para compatibilidad con tests)
@@ -121,8 +143,8 @@ class ProposalService:
         """
         Analiza un pier y genera propuesta si falla.
 
-        Convenience method que realiza verificaciones y genera propuesta
-        en una sola llamada.
+        Usa ElementOrchestrator para verificaciones, garantizando
+        consistencia con el resto del sistema.
 
         Args:
             pier: Pier a analizar
@@ -131,23 +153,28 @@ class ProposalService:
         Returns:
             Tuple (verification_results, proposal)
         """
-        # Verificar flexión
-        flexure_result = self._flexo_service.check_flexure(
-            pier, pier_forces, moment_axis='M3', direction='primary', k=0.8
-        )
-        flexure_sf = flexure_result.get('sf', 100)
-        slenderness = flexure_result.get('slenderness', {})
-        slenderness_reduction = slenderness.get('reduction', 1.0)
+        # Usar orquestador para verificación completa
+        result = self._orchestrator.verify(pier, pier_forces)
 
-        # Verificar corte
-        shear_result = self._shear_service.check_shear(pier, pier_forces)
-        shear_dcr = shear_result.get('dcr_combined', 0)
+        # Convertir DCR a SF para flexión
+        if result.dcr_max > 0:
+            flexure_sf = 1 / result.dcr_max
+        else:
+            flexure_sf = 100
+
+        # Obtener DCR de corte combinado
+        shear_dcr = self._verify_shear(pier, pier_forces)
+
+        # Determinar slenderness_reduction del domain_result si disponible
+        slenderness_reduction = 1.0
+        if hasattr(result.domain_result, 'slenderness_reduction'):
+            slenderness_reduction = result.domain_result.slenderness_reduction
 
         verification = {
             'flexure_sf': flexure_sf,
-            'flexure_status': flexure_result.get('status', 'OK'),
+            'flexure_status': 'OK' if flexure_sf >= 1.0 else 'NO OK',
             'shear_dcr': shear_dcr,
-            'shear_status': shear_result.get('status', 'OK'),
+            'shear_status': 'OK' if shear_dcr <= 1.0 else 'NO OK',
             'slenderness_reduction': slenderness_reduction,
             'overall_ok': flexure_sf >= 1.0 and shear_dcr <= 1.0
         }

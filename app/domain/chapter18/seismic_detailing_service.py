@@ -19,7 +19,6 @@ from typing import Optional, Tuple
 from enum import Enum
 
 from .common import SeismicCategory
-from .columns.transverse import calculate_so as _calculate_so_core
 from ..constants.chapter18 import (
     FIRST_HOOP_MAX_MM,
     HX_MAX_MM as HX_MAX_BEAM_MM,
@@ -375,6 +374,9 @@ class SeismicDetailingService:
         Returns:
             Tuple de (so en mm, expresion usada)
         """
+        # Import lazy para evitar circular import
+        from .columns.transverse import calculate_so as _calculate_so_core
+
         # Usar funcion centralizada de columns/transverse.py
         so_mm = _calculate_so_core(hx)
 

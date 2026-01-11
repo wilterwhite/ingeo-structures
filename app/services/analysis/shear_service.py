@@ -12,7 +12,7 @@ Mantiene la misma API pública pero elimina capas de indirección.
 """
 from typing import Dict, Any, Optional, List, Tuple
 
-from ...domain.entities import Pier, PierForces, Column, ColumnForces
+from ...domain.entities import Pier, PierForces
 from ...domain.shear import (
     ShearVerificationService,
     WallClassificationService as DomainWallClassificationService,
@@ -26,7 +26,6 @@ from ...domain.chapter18 import (
     BoundaryElementResult,
     CouplingBeamService as DomainCouplingBeamService,
     CouplingBeamDesignResult,
-    SeismicColumnShearService,
 )
 from ...domain.chapter18.common import SeismicCategory
 from ...domain.chapter18.design_forces import ShearAmplificationResult
@@ -53,7 +52,6 @@ class ShearService:
         self._amplification = DomainShearAmplificationService()
         self._boundary = DomainBoundaryElementService()
         self._coupling = DomainCouplingBeamService()
-        self._column_shear = SeismicColumnShearService()
 
     # =========================================================================
     # VERIFICACIÓN DE MUROS
@@ -491,131 +489,3 @@ class ShearService:
             }
         return response
 
-    # =========================================================================
-    # CORTANTE DE COLUMNAS (§22.5 y §18.7.6)
-    # =========================================================================
-
-    def check_column_shear(
-        self,
-        column: Column,
-        column_forces: Optional[ColumnForces],
-        Mpr_top: float = 0,
-        Mpr_bottom: float = 0,
-        lambda_factor: float = 1.0
-    ) -> Dict[str, Any]:
-        """Verifica cortante de una columna según ACI 318-25."""
-        if not column_forces or not column_forces.combinations:
-            return self._empty_column_shear_result()
-
-        # Geometría para V2 (cortante en dirección de width)
-        bw_V2 = column.width
-        d_V2 = column.depth - column.cover
-        Av_V2 = column.Av if hasattr(column, 'Av') else 0
-
-        # Geometría para V3 (cortante en dirección de depth)
-        bw_V3 = column.depth
-        d_V3 = column.width - column.cover
-        Av_V3 = Av_V2  # Asume mismo refuerzo transversal
-
-        result = self._column_shear.verify_seismic_column_shear(
-            lu=column.height,
-            Ag=column.Ag,
-            fc=column.fc,
-            bw_V2=bw_V2,
-            d_V2=d_V2,
-            Av_V2=Av_V2,
-            bw_V3=bw_V3,
-            d_V3=d_V3,
-            Av_V3=Av_V3,
-            fyt=column.fy,
-            s=column.stirrup_spacing,
-            Vu_V2=max(abs(c.V2) for c in column_forces.combinations) if column_forces.combinations else 0,
-            Vu_V3=max(abs(c.V3) for c in column_forces.combinations) if column_forces.combinations else 0,
-            Pu=max(abs(c.P) for c in column_forces.combinations) if column_forces.combinations else 0,
-            Mpr_top=Mpr_top,
-            Mpr_bottom=Mpr_bottom,
-            lambda_factor=lambda_factor
-        )
-
-        sf = 1.0 / result.dcr if result.dcr > 0 else float('inf')
-
-        # Calcular DCRs individuales
-        dcr_2 = result.Vu_V2 / result.phi_Vn_V2 if result.phi_Vn_V2 > 0 else 0
-        dcr_3 = result.Vu_V3 / result.phi_Vn_V3 if result.phi_Vn_V3 > 0 else 0
-
-        return {
-            'status': 'OK' if result.is_ok else 'NO OK',
-            'Ve': round(result.Ve, 2),
-            'phi_Vn_V2': round(result.phi_Vn_V2, 2),
-            'phi_Vn_V3': round(result.phi_Vn_V3, 2),
-            'dcr_2': round(dcr_2, 3),
-            'dcr_3': round(dcr_3, 3),
-            'dcr_combined': round(result.dcr, 3),
-            'sf': format_safety_factor(sf),
-            'Vc': round(result.capacity_V2.Vc if result.capacity_V2 else 0, 2),
-            'Vs': round(result.capacity_V2.Vs if result.capacity_V2 else 0, 2),
-            'Vc_is_zero': result.Vc_is_zero,
-            'aci_reference': 'ACI 318-25 §18.7.6',
-        }
-
-    def _empty_column_shear_result(self) -> Dict[str, Any]:
-        """Resultado vacío para columnas sin fuerzas."""
-        return {
-            'status': 'OK',
-            'Ve': 0, 'phi_Vn_V2': 0, 'phi_Vn_V3': 0,
-            'dcr_2': 0, 'dcr_3': 0, 'dcr_combined': 0,
-            'sf': 100.0, 'Vc': 0, 'Vs': 0, 'Vc_is_zero': False,
-            'aci_reference': 'ACI 318-25 §22.5',
-        }
-
-    def check_column_shear_from_pier(
-        self,
-        pier: Pier,
-        pier_forces: Optional[PierForces],
-        lambda_factor: float = 1.0
-    ) -> Dict[str, Any]:
-        """Verifica cortante de un Pier tratado como columna."""
-        if not pier_forces or not pier_forces.combinations:
-            return self._empty_column_shear_result()
-
-        # Usar propiedades de geometría de columna de la entidad Pier
-        result = self._column_shear.verify_seismic_column_shear(
-            lu=pier.height,
-            Ag=pier.Ag,
-            fc=pier.fc,
-            bw_V2=pier.column_b,
-            d_V2=pier.column_d_V2,
-            Av_V2=pier.Av_stirrup,
-            bw_V3=pier.column_h,
-            d_V3=pier.column_d_V3,
-            Av_V3=pier.Av_stirrup,
-            fyt=pier.fy,
-            s=pier.stirrup_spacing,
-            Vu_V2=max(abs(c.V2) for c in pier_forces.combinations),
-            Vu_V3=max(abs(c.V3) for c in pier_forces.combinations),
-            Pu=max(abs(c.P) for c in pier_forces.combinations),
-            Mpr_top=0,
-            Mpr_bottom=0,
-            lambda_factor=lambda_factor
-        )
-
-        sf = 1.0 / result.dcr if result.dcr > 0 else float('inf')
-
-        # Calcular DCRs individuales
-        dcr_2 = result.Vu_V2 / result.phi_Vn_V2 if result.phi_Vn_V2 > 0 else 0
-        dcr_3 = result.Vu_V3 / result.phi_Vn_V3 if result.phi_Vn_V3 > 0 else 0
-
-        return {
-            'status': 'OK' if result.is_ok else 'NO OK',
-            'Ve': round(result.Ve, 2),
-            'phi_Vn_2': round(result.phi_Vn_V2, 2),
-            'phi_Vn_3': round(result.phi_Vn_V3, 2),
-            'dcr_2': round(dcr_2, 3),
-            'dcr_3': round(dcr_3, 3),
-            'dcr_combined': round(result.dcr, 3),
-            'sf': format_safety_factor(sf),
-            'Vc': round(result.capacity_V2.Vc if result.capacity_V2 else 0, 2),
-            'Vs': round(result.capacity_V2.Vs if result.capacity_V2 else 0, 2),
-            'Vc_is_zero': result.Vc_is_zero,
-            'aci_reference': 'ACI 318-25 §18.7.6',
-        }
