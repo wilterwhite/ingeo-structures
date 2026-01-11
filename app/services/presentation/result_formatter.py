@@ -255,6 +255,7 @@ class ResultFormatter:
             }
 
         overall_status = 'OK' if result.is_ok else 'NO OK'
+        flexure_dcr = result.dcr_max  # DCR de flexión directo
 
         return {
             'element_type': 'pier',
@@ -277,7 +278,8 @@ class ResultFormatter:
                 'rho_horizontal': round(pier.rho_horizontal, 5)
             },
             'flexure': {
-                'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
+                'sf': 1.0 / flexure_dcr if flexure_dcr > 0 else 100.0,
+                'dcr': flexure_dcr,  # DCR directo para evitar cálculo en frontend
                 'status': 'OK' if result.is_ok else 'NO OK',
                 'critical_combo': 'envelope',
                 'phi_Mn_at_Pu': 0,
@@ -425,6 +427,7 @@ class ResultFormatter:
             },
             'flexure': {
                 'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
+                'dcr': result.dcr_max,  # DCR directo
                 'status': 'OK' if result.is_ok else 'NO OK',
                 'critical_combo': 'envelope',
                 'phi_Mn_at_Pu': 0,
@@ -500,6 +503,7 @@ class ResultFormatter:
             },
             'flexure': {
                 'sf': domain_result.get('SF', 0) if isinstance(domain_result, dict) else 0,
+                'dcr': result.dcr_max,  # DCR directo
                 'status': 'OK' if result.is_ok else 'NO OK',
                 'critical_combo': 'envelope',
                 'phi_Mn_at_Pu': 0,
@@ -512,6 +516,7 @@ class ResultFormatter:
             },
             'shear': {
                 'sf': 100.0,
+                'dcr': 0,  # DCR directo
                 'status': 'N/A',
                 'critical_combo': 'N/A',
                 'dcr_2': 0,
@@ -669,6 +674,7 @@ class ResultFormatter:
             },
             'flexure': {
                 'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
+                'dcr': result.dcr_max,  # DCR directo
                 'status': overall_status,
                 'critical_combo': 'envelope',
                 'phi_Mn_at_Pu': 0, 'Mu': 0, 'phi_Mn_0': 0,
@@ -736,6 +742,7 @@ class ResultFormatter:
             },
             'flexure': {
                 'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
+                'dcr': result.dcr_max,  # DCR directo
                 'status': overall_status,
                 'critical_combo': 'envelope',
                 'phi_Mn_at_Pu': 0, 'Mu': 0, 'phi_Mn_0': 0,
@@ -817,6 +824,7 @@ class ResultFormatter:
             },
             'flexure': {
                 'sf': 1.0 / result.dcr_max if result.dcr_max > 0 else 100.0,
+                'dcr': result.dcr_max,  # DCR directo
                 'status': overall_status,
                 'critical_combo': 'envelope',
                 'phi_Mn_at_Pu': 0, 'Mu': 0, 'phi_Mn_0': 0,
@@ -839,4 +847,151 @@ class ResultFormatter:
             'dcr_max': result.dcr_max,
             'critical_check': result.critical_check,
             'warnings': result.warnings
+        }
+
+    # =========================================================================
+    # Formateo de Capacidades (sin OrchestrationResult)
+    # =========================================================================
+
+    @staticmethod
+    def format_beam_capacities(
+        beam: 'Beam',
+        beam_forces=None
+    ) -> Dict[str, Any]:
+        """
+        Formatea capacidades y propiedades de una viga para la UI.
+
+        Este método NO usa OrchestrationResult, solo formatea las propiedades
+        del elemento Beam directamente.
+
+        Args:
+            beam: Entidad Beam
+            beam_forces: Fuerzas de la viga (opcional)
+
+        Returns:
+            Dict con propiedades formateadas
+        """
+        # Información de la viga
+        beam_info = {
+            'label': beam.label,
+            'story': beam.story,
+            'source': beam.source.value if hasattr(beam.source, 'value') else str(beam.source),
+            'length_mm': beam.length,
+            'depth_mm': beam.depth,
+            'width_mm': beam.width,
+            'fc_MPa': beam.fc,
+            'fy_MPa': beam.fy,
+            'cover_mm': beam.cover,
+            'd_mm': round(beam.d, 1),
+            'ln_mm': round(beam.ln_calculated, 1),
+            'aspect_ratio': round(beam.aspect_ratio, 2),
+            'is_deep': beam.is_deep,
+            'section_name': beam.section_name,
+        }
+
+        # Información de refuerzo
+        reinforcement = {
+            'n_bars_top': beam.n_bars_top,
+            'n_bars_bottom': beam.n_bars_bottom,
+            'diameter_top': beam.diameter_top,
+            'diameter_bottom': beam.diameter_bottom,
+            'As_top_mm2': round(beam.As_top, 1),
+            'As_bottom_mm2': round(beam.As_bottom, 1),
+            'As_total_mm2': round(beam.As_flexure_total, 1),
+            'stirrup_diameter': beam.stirrup_diameter,
+            'stirrup_spacing': beam.stirrup_spacing,
+            'n_stirrup_legs': beam.n_stirrup_legs,
+            'Av_mm2': round(beam.Av, 1),
+        }
+
+        # Fuerzas si están disponibles
+        forces = None
+        if beam_forces:
+            critical = beam_forces.get_critical_shear()
+            if critical:
+                forces = {
+                    'combo_name': critical.combo_name,
+                    'V2_tonf': round(critical.V2, 2),
+                    'M3_tonf_m': round(critical.M3, 2),
+                }
+
+        # Momentos probables si están calculados
+        mpr_info = None
+        if beam.Mpr_left or beam.Mpr_right:
+            mpr_info = {
+                'Mpr_left_tonf_m': round(beam.Mpr_left or 0, 2),
+                'Mpr_right_tonf_m': round(beam.Mpr_right or 0, 2),
+            }
+
+        return {
+            'beam': beam_info,
+            'reinforcement': reinforcement,
+            'forces': forces,
+            'mpr': mpr_info
+        }
+
+    @staticmethod
+    def format_column_capacities(
+        column: 'Column',
+        column_forces=None
+    ) -> Dict[str, Any]:
+        """
+        Formatea capacidades y propiedades de una columna para la UI.
+
+        Este método NO usa OrchestrationResult, solo formatea las propiedades
+        del elemento Column directamente.
+
+        Args:
+            column: Entidad Column
+            column_forces: Fuerzas de la columna (opcional)
+
+        Returns:
+            Dict con propiedades formateadas
+        """
+        # Información de la columna
+        column_info = {
+            'label': column.label,
+            'story': column.story,
+            'depth_mm': column.depth,
+            'width_mm': column.width,
+            'height_mm': column.height,
+            'fc_MPa': column.fc,
+            'fy_MPa': column.fy,
+            'cover_mm': column.cover,
+            'Ag_mm2': column.Ag,
+            'section_name': column.section_name,
+        }
+
+        # Información de refuerzo
+        reinforcement = {
+            'n_total_bars': column.n_total_bars,
+            'n_bars_depth': column.n_bars_depth,
+            'n_bars_width': column.n_bars_width,
+            'diameter_long': column.diameter_long,
+            'As_longitudinal_mm2': round(column.As_longitudinal, 1),
+            'rho_longitudinal': round(column.rho_longitudinal, 4),
+            'stirrup_diameter': column.stirrup_diameter,
+            'stirrup_spacing': column.stirrup_spacing,
+            'n_stirrup_legs_depth': column.n_stirrup_legs_depth,
+            'n_stirrup_legs_width': column.n_stirrup_legs_width,
+        }
+
+        # Fuerzas si están disponibles
+        forces = None
+        if column_forces:
+            critical = column_forces.get_critical_combination()
+            if critical:
+                forces = {
+                    'combo_name': critical.combo_name,
+                    'P_tonf': round(critical.P, 2),
+                    'V2_tonf': round(critical.V2, 2),
+                    'V3_tonf': round(critical.V3, 2),
+                    'M2_tonf_m': round(critical.M2, 2),
+                    'M3_tonf_m': round(critical.M3, 2),
+                }
+
+        return {
+            'column': column_info,
+            'reinforcement': reinforcement,
+            'forces': forces
         }

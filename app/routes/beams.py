@@ -106,62 +106,10 @@ def get_beam_capacities(session_id: str, data: dict, parsed_data, beam_key: str,
     """
     beam_forces = parsed_data.beam_forces.get(beam_key)
 
-    # Información de la viga
-    beam_info = {
-        'label': beam.label,
-        'story': beam.story,
-        'source': beam.source.value,
-        'length_mm': beam.length,
-        'depth_mm': beam.depth,
-        'width_mm': beam.width,
-        'fc_MPa': beam.fc,
-        'fy_MPa': beam.fy,
-        'cover_mm': beam.cover,
-        'd_mm': round(beam.d, 1),
-        'ln_mm': round(beam.ln_calculated, 1),
-        'aspect_ratio': round(beam.aspect_ratio, 2),
-        'is_deep': beam.is_deep,
-        'section_name': beam.section_name,
-    }
-
-    # Información de refuerzo
-    reinforcement = {
-        'n_bars_top': beam.n_bars_top,
-        'n_bars_bottom': beam.n_bars_bottom,
-        'diameter_top': beam.diameter_top,
-        'diameter_bottom': beam.diameter_bottom,
-        'As_top_mm2': round(beam.As_top, 1),
-        'As_bottom_mm2': round(beam.As_bottom, 1),
-        'As_total_mm2': round(beam.As_flexure_total, 1),
-        'stirrup_diameter': beam.stirrup_diameter,
-        'stirrup_spacing': beam.stirrup_spacing,
-        'n_stirrup_legs': beam.n_stirrup_legs,
-        'Av_mm2': round(beam.Av, 1),
-    }
-
-    # Fuerzas si están disponibles
-    forces = None
-    if beam_forces:
-        critical = beam_forces.get_critical_shear()
-        if critical:
-            forces = {
-                'combo_name': critical.combo_name,
-                'V2_tonf': round(critical.V2, 2),
-                'M3_tonf_m': round(critical.M3, 2),
-            }
-
-    # Momentos probables si están calculados
-    mpr_info = None
-    if beam.Mpr_left or beam.Mpr_right:
-        mpr_info = {
-            'Mpr_left_tonf_m': round(beam.Mpr_left or 0, 2),
-            'Mpr_right_tonf_m': round(beam.Mpr_right or 0, 2),
-        }
+    # Usar formatter para construir respuesta
+    formatted = ResultFormatter.format_beam_capacities(beam, beam_forces)
 
     return jsonify({
         'success': True,
-        'beam': beam_info,
-        'reinforcement': reinforcement,
-        'forces': forces,
-        'mpr': mpr_info
+        **formatted
     })

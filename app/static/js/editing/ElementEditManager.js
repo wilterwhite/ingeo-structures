@@ -360,7 +360,9 @@ class ElementEditManager {
         if (pierKeys.length > 0 || columnKeys.length > 0) {
             const filtered = this.table.getFilteredResults();
             this.table.renderTable(filtered);
-            this.table.updateStatistics(this.table.calculateStatistics(filtered));
+            const stats = this.table.calculateStats();
+            stats.pass_rate = stats.rate;  // Compatibilidad
+            this.table.updateStatistics(stats);
             this.table.updateSummaryPlot();
         }
 

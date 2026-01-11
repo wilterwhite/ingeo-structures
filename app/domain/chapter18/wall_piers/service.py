@@ -25,6 +25,7 @@ from .classification import classify_wall_pier
 from .shear_design import calculate_design_shear, verify_shear_strength
 from .transverse import calculate_transverse_requirements
 from .boundary_zones import check_boundary_zone_reinforcement
+from ...constants.shear import WALL_PIER_HW_LW_LIMIT
 
 if TYPE_CHECKING:
     from ...entities.pier import Pier
@@ -350,10 +351,10 @@ class WallPierService:
                 "verificar (a)-(f)"
             )
 
-        # Verificar zonas de extremo §18.10.2.4 (si hw/lw >= 2.0)
+        # Verificar zonas de extremo §18.10.2.4 (si hw/lw >= WALL_PIER_HW_LW_LIMIT)
         boundary_zone_check = None
         hw_lw = hw / lw if lw > 0 else 0
-        if hw_lw >= 2.0 and (As_boundary_left > 0 or As_boundary_right > 0):
+        if hw_lw >= WALL_PIER_HW_LW_LIMIT and (As_boundary_left > 0 or As_boundary_right > 0):
             boundary_zone_check = check_boundary_zone_reinforcement(
                 hw=hw,
                 lw=lw,

@@ -47,12 +47,8 @@ FACTORES DE REDUCCION (Seccion 21.2):
 # FACTORES DE REDUCCION DE RESISTENCIA (ACI 318-25 Tabla 21.2.1)
 # =============================================================================
 
-# Re-exportar desde phi.py para compatibilidad
-from .phi_chapter21 import PHI_SHEAR
-
-# Factor reducido para elementos sísmicos especiales (§21.2.4.1)
-# Aplica a: muros estructurales especiales, vigas de acople, juntas SMF
-PHI_SHEAR_SEISMIC = 0.60
+# Importar factores phi desde la fuente canónica (phi_chapter21.py)
+from .phi_chapter21 import PHI_SHEAR, PHI_SHEAR_SEISMIC
 
 
 # =============================================================================

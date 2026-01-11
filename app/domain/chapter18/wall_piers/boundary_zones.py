@@ -15,6 +15,7 @@ Referencias:
 import math
 from typing import List
 from ...constants.units import MPA_TO_PSI
+from ...constants.shear import WALL_PIER_HW_LW_LIMIT
 from ..results import BoundaryZoneCheck
 
 
@@ -54,9 +55,9 @@ def check_boundary_zone_reinforcement(
     """
     warnings: List[str] = []
 
-    # 1. Verificar aplicabilidad: hw/lw >= 2.0
+    # 1. Verificar aplicabilidad: hw/lw >= WALL_PIER_HW_LW_LIMIT (2.0)
     hw_lw = hw / lw if lw > 0 else 0
-    applies = hw_lw >= 2.0
+    applies = hw_lw >= WALL_PIER_HW_LW_LIMIT
 
     # 2. Calcular cuantia minima segun §18.10.2.4(a)
     # rho_min = 6 * sqrt(f'c) / fy con f'c y fy en psi
@@ -114,7 +115,7 @@ def check_boundary_zone_reinforcement(
         # No aplica: verificacion pasa automaticamente
         is_ok = True
         warnings.append(
-            f"§18.10.2.4 no aplica: hw/lw = {hw_lw:.2f} < 2.0"
+            f"§18.10.2.4 no aplica: hw/lw = {hw_lw:.2f} < {WALL_PIER_HW_LW_LIMIT}"
         )
 
     return BoundaryZoneCheck(

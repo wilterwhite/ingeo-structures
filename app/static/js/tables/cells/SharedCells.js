@@ -48,8 +48,9 @@ const SharedCells = {
     createFlexureSfCell(result) {
         const hasTension = result.flexure?.has_tension || false;
         const tensionCombos = result.flexure?.tension_combos || 0;
+        // Usar DCR directo del backend si está disponible, si no, calcular de SF
         const sf = result.flexure?.sf ?? 0;
-        const dcr = sf > 0 ? (1 / sf) : 0;
+        const dcr = result.flexure?.dcr ?? (sf > 0 ? (1 / sf) : 0);
         const dcrDisplay = formatDcr(dcr);
 
         const sl = result.slenderness || {};
@@ -99,8 +100,9 @@ const SharedCells = {
         const formulaType = result.shear?.formula_type || 'wall';
         const shearType = formulaType === 'column' ? 'COL' : 'MURO';
         const shearTitle = formulaType === 'column' ? 'Fórmula COLUMNA (ACI 22.5)' : 'Fórmula MURO (ACI 18.10.4)';
+        // Usar DCR directo del backend si está disponible, si no, calcular de SF
         const sf = result.shear?.sf ?? 0;
-        const dcr = sf > 0 ? (1 / sf) : 0;
+        const dcr = result.shear?.dcr ?? (sf > 0 ? (1 / sf) : 0);
         const dcrDisplay = formatDcr(dcr);
 
         const td = document.createElement('td');

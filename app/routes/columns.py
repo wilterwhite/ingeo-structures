@@ -102,51 +102,10 @@ def get_column_capacities(session_id: str, data: dict, parsed_data, column_key: 
     """
     column_forces = parsed_data.column_forces.get(column_key)
 
-    # Información de la columna
-    column_info = {
-        'label': column.label,
-        'story': column.story,
-        'depth_mm': column.depth,
-        'width_mm': column.width,
-        'height_mm': column.height,
-        'fc_MPa': column.fc,
-        'fy_MPa': column.fy,
-        'cover_mm': column.cover,
-        'Ag_mm2': column.Ag,
-        'section_name': column.section_name,
-    }
-
-    # Información de refuerzo
-    reinforcement = {
-        'n_total_bars': column.n_total_bars,
-        'n_bars_depth': column.n_bars_depth,
-        'n_bars_width': column.n_bars_width,
-        'diameter_long': column.diameter_long,
-        'As_longitudinal_mm2': round(column.As_longitudinal, 1),
-        'rho_longitudinal': round(column.rho_longitudinal, 4),
-        'stirrup_diameter': column.stirrup_diameter,
-        'stirrup_spacing': column.stirrup_spacing,
-        'n_stirrup_legs_depth': column.n_stirrup_legs_depth,
-        'n_stirrup_legs_width': column.n_stirrup_legs_width,
-    }
-
-    # Fuerzas si están disponibles
-    forces = None
-    if column_forces:
-        critical = column_forces.get_critical_combination()
-        if critical:
-            forces = {
-                'combo_name': critical.combo_name,
-                'P_tonf': round(critical.P, 2),
-                'V2_tonf': round(critical.V2, 2),
-                'V3_tonf': round(critical.V3, 2),
-                'M2_tonf_m': round(critical.M2, 2),
-                'M3_tonf_m': round(critical.M3, 2),
-            }
+    # Usar formatter para construir respuesta
+    formatted = ResultFormatter.format_column_capacities(column, column_forces)
 
     return jsonify({
         'success': True,
-        'column': column_info,
-        'reinforcement': reinforcement,
-        'forces': forces
+        **formatted
     })

@@ -187,19 +187,6 @@ class ResultsTable extends FilterableTable {
         this.updateStatistics(stats);
     }
 
-    /**
-     * Método legacy para compatibilidad - usa calculateStats() de FilterableTable.
-     * @deprecated Usar calculateStats() directamente
-     */
-    calculateStatistics(results) {
-        // Temporalmente usar results pasados, luego deprecar
-        const temp = this.filteredResults;
-        this.filteredResults = results;
-        const stats = this.calculateStats();
-        this.filteredResults = temp;
-        stats.pass_rate = stats.rate;
-        return stats;
-    }
 
     // =========================================================================
     // Renderizado Principal
@@ -280,108 +267,29 @@ class ResultsTable extends FilterableTable {
     }
 
     // =========================================================================
-    // Vigas de Acople (para piers)
+    // Vigas de Acople - Delegado a CouplingBeamManager
     // =========================================================================
 
+    /** Crea celda de viga - delegado a CouplingBeamManager */
     createVigaCell(pierKey, side) {
-        const td = document.createElement('td');
-        td.className = 'viga-cell';
-        td.dataset.pierKey = pierKey;
-        td.dataset.side = side;
-
-        // Obtener la viga actualmente asignada (si hay)
-        const assignedBeamKey = this.getAssignedBeamKey(pierKey, side);
-
-        // Construir opciones del dropdown
-        const options = this.buildBeamOptions(assignedBeamKey, pierKey, side);
-
-        td.innerHTML = `
-            <select class="beam-selector" data-pier="${pierKey}" data-side="${side}" title="Seleccionar viga de acople">
-                ${options}
-            </select>
-            <span class="assigned-beam-info">${this.getBeamInfoText(assignedBeamKey)}</span>
-        `;
-
-        // Evento de cambio - delegado al editManager
-        const select = td.querySelector('.beam-selector');
-        select.addEventListener('change', () => {
-            // Guardar asignación localmente
-            if (!this.pierBeamAssignments[pierKey]) {
-                this.pierBeamAssignments[pierKey] = { izq: 'generic', der: 'generic' };
-            }
-            this.pierBeamAssignments[pierKey][side] = select.value;
-
-            // Actualizar info text
-            const infoSpan = td.querySelector('.assigned-beam-info');
-            if (infoSpan) {
-                infoSpan.textContent = this.getBeamInfoText(select.value);
-            }
-
-            // Notificar al editManager para recálculo pendiente
-            this.editManager.onBeamAssignmentChange(pierKey, side, select.value);
-        });
-
-        return td;
+        return this.couplingBeamManager.createVigaCell(pierKey, side);
     }
 
-    /**
-     * Construye las opciones del dropdown de vigas.
-     */
-    buildBeamOptions(currentValue, pierKey, side) {
-        const otherSide = side === 'izq' ? 'der' : 'izq';
-        const otherBeamKey = this.getAssignedBeamKey(pierKey, otherSide);
-
-        let html = `
-            <option value="generic" ${currentValue === 'generic' ? 'selected' : ''}>Genérica</option>
-            <option value="none" ${currentValue === 'none' ? 'selected' : ''}>Sin viga</option>
-        `;
-
-        // Agregar vigas disponibles (ETABS + custom)
-        const beams = this.page.beamsData || [];
-        if (beams.length > 0) {
-            html += '<optgroup label="Vigas disponibles">';
-            beams.forEach(beam => {
-                const beamKey = `${beam.story}_${beam.label}`;
-                const isDisabled = beamKey === otherBeamKey;  // No permitir la misma viga en ambos lados
-                const isSelected = currentValue === beamKey;
-                const customBadge = beam.is_custom ? ' [CUSTOM]' : '';
-                html += `<option value="${beamKey}" ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}>${beam.label} - ${beam.story}${customBadge}</option>`;
-            });
-            html += '</optgroup>';
-        }
-
-        return html;
-    }
-
-    /**
-     * Obtiene la key de la viga asignada a un pier/lado.
-     */
+    /** Obtiene asignación de viga - delegado a CouplingBeamManager */
     getAssignedBeamKey(pierKey, side) {
-        const config = this.pierBeamAssignments?.[pierKey]?.[side];
-        return config || 'generic';  // default: genérica
+        return this.couplingBeamManager.getAssignedBeamKey(pierKey, side);
     }
 
-    /**
-     * Obtiene texto informativo de la viga asignada.
-     */
-    getBeamInfoText(beamKey) {
-        if (beamKey === 'generic') return '';
-        if (beamKey === 'none') return 'No calc';
-
-        // Buscar en beamsData
-        const beams = this.page.beamsData || [];
-        const beam = beams.find(b => `${b.story}_${b.label}` === beamKey);
-        if (beam) {
-            return `${beam.width}×${beam.depth}`;
-        }
-        return '';
+    /** Acceso a asignaciones para compatibilidad */
+    get pierBeamAssignments() {
+        return this.couplingBeamManager.getAssignments();
     }
 
     getBeamConfig(pierKey, side) {
-        if (this.customBeamPiers.has(pierKey) && this.pierBeamConfigs[pierKey]?.[side]) {
+        if (this.customBeamPiers?.has(pierKey) && this.pierBeamConfigs?.[pierKey]?.[side]) {
             return this.pierBeamConfigs[pierKey][side];
         }
-        return this.standardBeam;
+        return this.couplingBeamManager.standardBeam;
     }
 
     togglePierBeamLock(pierKey) {
@@ -390,9 +298,10 @@ class ResultsTable extends FilterableTable {
             delete this.pierBeamConfigs[pierKey];
         } else {
             this.customBeamPiers.add(pierKey);
+            const standardBeam = this.couplingBeamManager.standardBeam;
             this.pierBeamConfigs[pierKey] = {
-                izq: { ...this.standardBeam },
-                der: { ...this.standardBeam }
+                izq: { ...standardBeam },
+                der: { ...standardBeam }
             };
         }
         this.updatePierBeamCells(pierKey);
@@ -425,7 +334,8 @@ class ResultsTable extends FilterableTable {
         const diam = parseInt(cell.querySelector(`.edit-viga-diam-${side}`)?.value) || 12;
 
         if (!this.pierBeamConfigs[pierKey]) {
-            this.pierBeamConfigs[pierKey] = { izq: { ...this.standardBeam }, der: { ...this.standardBeam } };
+            const standardBeam = this.couplingBeamManager.standardBeam;
+            this.pierBeamConfigs[pierKey] = { izq: { ...standardBeam }, der: { ...standardBeam } };
         }
         this.pierBeamConfigs[pierKey][side] = { width, height, ln, nbars, diam };
 
@@ -463,7 +373,7 @@ class ResultsTable extends FilterableTable {
                 delete this.combinationsCache[pierKey];
                 const filtered = this.getFilteredResults();
                 this.renderTable(filtered);
-                this.updateStatistics(this.calculateStatistics(filtered));
+                this.updateStats();  // Usar método heredado
                 this.updateSummaryPlot();
             }
         } catch (error) {
@@ -474,7 +384,7 @@ class ResultsTable extends FilterableTable {
     }
 
     updateStandardBeam(beam) {
-        this.standardBeam = { ...beam };
+        this.couplingBeamManager.standardBeam = { ...beam };
         document.querySelectorAll('.viga-cell.locked').forEach(cell => {
             const pierKey = cell.dataset.pierKey;
             const side = cell.dataset.side;
@@ -486,7 +396,7 @@ class ResultsTable extends FilterableTable {
 
     async saveStandardBeam() {
         try {
-            await structuralAPI.setDefaultBeam(this.sessionId, this.standardBeam);
+            await structuralAPI.setDefaultBeam(this.sessionId, this.couplingBeamManager.standardBeam);
         } catch (error) {
             console.error('Error guardando viga estándar:', error);
         }
