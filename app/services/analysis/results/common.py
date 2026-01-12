@@ -3,12 +3,41 @@
 Dataclasses comunes de resultado para verificacion de elementos estructurales.
 
 Incluye:
+- AciVerificationResult: Clase base para todas las verificaciones ACI
 - SlendernessResult: Verificacion de esbeltez
 - FlexureResult: Verificacion de flexion/flexocompresion
 - BidirectionalShearResult: Verificacion de cortante bidireccional
 """
 from dataclasses import dataclass
 from typing import Optional
+
+
+@dataclass
+class AciVerificationResult:
+    """
+    Clase base para resultados de verificacion ACI 318-25.
+
+    Proporciona campos comunes que todas las verificaciones deben tener:
+    - overall_ok: Indica si la verificacion pasa
+    - aci_reference: Seccion del codigo aplicable
+    - status: Estado legible ('OK', 'NO OK')
+
+    Uso:
+        @dataclass
+        class MyVerificationResult(AciVerificationResult):
+            aci_reference: str = "ACI 318-25 §X.X"
+            # campos especificos...
+    """
+    overall_ok: bool = True
+    """True si la verificacion pasa."""
+
+    aci_reference: str = ""
+    """Referencia ACI 318-25 aplicable (ej: '§18.6.2')."""
+
+    @property
+    def status(self) -> str:
+        """Estado legible de la verificacion."""
+        return "OK" if self.overall_ok else "NO OK"
 
 
 @dataclass

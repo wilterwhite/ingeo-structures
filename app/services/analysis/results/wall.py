@@ -8,6 +8,8 @@ Section 18.10: Special Structural Walls
 from dataclasses import dataclass
 from typing import Dict, Optional, Any
 
+from .common import AciVerificationResult
+
 
 @dataclass
 class WallClassification:
@@ -29,12 +31,12 @@ class WallClassification:
 
 
 @dataclass
-class BoundaryResult:
+class BoundaryResult(AciVerificationResult):
     """Resultado de verificacion de elementos de borde §18.10.6."""
-    required: bool
+    required: bool = False
     """True si se requieren elementos de borde."""
 
-    method: str
+    method: str = ""
     """Metodo de verificacion: 'displacement' o 'stress'."""
 
     sigma_max: float = 0.0
@@ -46,16 +48,13 @@ class BoundaryResult:
     length_mm: float = 0.0
     """Longitud requerida de elemento de borde (mm)."""
 
-    status: str = "OK"
-    """Estado de verificacion."""
-
     aci_reference: str = "ACI 318-25 §18.10.6"
 
 
 @dataclass
-class EndZonesResult:
+class EndZonesResult(AciVerificationResult):
     """Resultado de verificacion de zonas de extremo §18.10.2.4."""
-    applies: bool
+    applies: bool = False
     """True si aplica (hw/lw >= 2.0)."""
 
     hw_lw: float = 0.0
@@ -76,32 +75,31 @@ class EndZonesResult:
     right_ok: bool = True
     """True si zona derecha cumple."""
 
-    status: str = "OK"
-    """Estado general."""
-
     length_mm: float = 0.0
     """Longitud de zona de extremo (mm)."""
 
+    aci_reference: str = "ACI 318-25 §18.10.2.4"
+
 
 @dataclass
-class MinReinforcementResult:
+class MinReinforcementResult(AciVerificationResult):
     """Resultado de verificacion de cuantia minima §18.10.2.1."""
-    rho_v_min: float
+    rho_v_min: float = 0.0
     """Cuantia vertical minima requerida."""
 
-    rho_h_min: float
+    rho_h_min: float = 0.0
     """Cuantia horizontal minima requerida."""
 
-    rho_v_actual: float
+    rho_v_actual: float = 0.0
     """Cuantia vertical actual."""
 
-    rho_h_actual: float
+    rho_h_actual: float = 0.0
     """Cuantia horizontal actual."""
 
-    rho_v_ok: bool
+    rho_v_ok: bool = True
     """True si cuantia vertical cumple."""
 
-    rho_h_ok: bool
+    rho_h_ok: bool = True
     """True si cuantia horizontal cumple."""
 
     spacing_max: float = 457.0
@@ -113,8 +111,7 @@ class MinReinforcementResult:
     spacing_h_ok: bool = True
     """True si espaciamiento horizontal cumple."""
 
-    status: str = "OK"
-    """Estado general."""
+    aci_reference: str = "ACI 318-25 §18.10.2.1"
 
 
 @dataclass

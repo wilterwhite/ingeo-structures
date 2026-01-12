@@ -1323,12 +1323,59 @@ class ElementDetailsService:
                 'phi_Vn_tonf': round(phi_Vn_3, 2)
             })
 
+        # Obtener información de amplificación de cortante (§18.10.3.3)
+        amplification_info = self._get_shear_amplification_info(element, Vu_2, element_type)
+
         return {
             'has_data': len(rows) > 0,
             'rows': rows,
             'critical_combo': critical_combo_display,
-            'phi_v': phi_v
+            'phi_v': phi_v,
+            # Información de amplificación para el frontend
+            'amplification': amplification_info
         }
+
+    def _get_shear_amplification_info(
+        self,
+        element,
+        Vu: float,
+        element_type: str
+    ) -> Dict[str, Any]:
+        """
+        Obtiene información de amplificación de cortante.
+
+        Centraliza la lógica de qué causa la amplificación y cómo mostrarla,
+        evitando duplicar esta lógica en el frontend.
+        """
+        if element_type in ('beam', 'column'):
+            # Para vigas: amplificación por Mpr (§18.6.5.1)
+            return {
+                'has_amplification': False,  # Se calcula diferente para vigas
+                'reason': 'Mpr/Ln',
+                'aci_reference': '§18.6.5.1',
+                'formula_display': 'Ve = (Mpr1+Mpr2)/ln'
+            }
+
+        # Para pier y drop_beam: usar ShearService
+        try:
+            amp_dict = self._shear_service.get_amplification_dict(element, Vu)
+            has_amp = amp_dict.get('applies', False) and amp_dict.get('amplification', 1.0) > 1.01
+            return {
+                'has_amplification': has_amp,
+                'Vu_original': amp_dict.get('Vu_original', Vu),
+                'Ve': amp_dict.get('Ve', Vu),
+                'Omega_v': amp_dict.get('Omega_v', 1.0),
+                'reason': 'Ωv×Vu' if has_amp else None,
+                'aci_reference': amp_dict.get('aci_reference', '§18.10.3.3'),
+                'formula_display': 'Ve = Ωv×Vu' if has_amp else None
+            }
+        except Exception:
+            return {
+                'has_amplification': False,
+                'reason': None,
+                'aci_reference': None,
+                'formula_display': None
+            }
 
     def _get_combinations_list_generic(
         self,

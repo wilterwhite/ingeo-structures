@@ -139,7 +139,8 @@ const SharedCells = {
 
     /**
      * Celda de capacidad a cortante.
-     * Muestra Vu original y Ve amplificado si hay amplificación (§18.10.3.3)
+     * Muestra Vu original y Ve amplificado si hay amplificación.
+     * La info de amplificación viene del backend (shear.amplification).
      */
     createShearCapCell(result) {
         const phiVn = result.shear?.phi_Vn_2 || 0;
@@ -147,20 +148,17 @@ const SharedCells = {
         const Ve = result.shear?.Ve || result.shear?.Vu_2 || 0;
         const Vc = result.shear?.Vc || 0;
         const Vs = result.shear?.Vs || 0;
-        const formulaType = result.shear?.formula_type || 'wall';
 
-        // Detectar si hay amplificación significativa (>1%)
-        const hasAmplification = Ve > VuOriginal * 1.01;
+        // Usar info de amplificación del backend
+        const amp = result.shear?.amplification || {};
+        const hasAmplification = amp.has_amplification || false;
 
         const td = document.createElement('td');
         td.className = 'capacity-cell';
 
         if (hasAmplification) {
-            // Texto según tipo de elemento
-            // Vigas: Ve = (Mpr1+Mpr2)/ln (§18.6.5.1)
-            // Muros: Ve = Ωv×Vu (§18.10.3.3)
-            const veSource = formulaType === 'beam' ? 'Mpr' : 'Ωv×Vu';
-            const veRef = formulaType === 'beam' ? '§18.6.5' : '§18.10.3.3';
+            const veSource = amp.reason || 'Ωv×Vu';
+            const veRef = amp.aci_reference || '§18.10.3.3';
             td.title = `Vu análisis=${VuOriginal}t → Ve diseño=${Ve}t (${veRef})\nVc=${Vc}t + Vs=${Vs}t`;
             td.innerHTML = `φVn=${phiVn}t, Vu=${VuOriginal}t<br>Ve=${Ve}t (${veSource})`;
         } else {

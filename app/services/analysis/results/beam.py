@@ -8,11 +8,13 @@ Section 18.6: Beams of Special Moment Frames
 from dataclasses import dataclass
 from typing import Optional
 
+from .common import AciVerificationResult
+
 
 @dataclass
-class SeismicBeamDimensionalResult:
+class SeismicBeamDimensionalResult(AciVerificationResult):
     """Verificacion de limites dimensionales de vigas §18.6.2."""
-    ln_d_ratio: float
+    ln_d_ratio: float = 0.0
     """Relacion luz libre / peralte efectivo."""
 
     ln_d_min: float = 4.0
@@ -33,19 +35,16 @@ class SeismicBeamDimensionalResult:
     projection_ok: bool = True
     """True si proyeccion lateral cumple §18.6.2.1(c)."""
 
-    overall_ok: bool = True
-    """True si todos los limites cumplen."""
-
     aci_reference: str = "ACI 318-25 §18.6.2"
 
 
 @dataclass
-class SeismicBeamLongitudinalResult:
+class SeismicBeamLongitudinalResult(AciVerificationResult):
     """Verificacion de refuerzo longitudinal de vigas §18.6.3."""
-    rho_max: float
+    rho_max: float = 0.0
     """Cuantia maxima permitida."""
 
-    rho_actual: float
+    rho_actual: float = 0.0
     """Cuantia actual."""
 
     rho_ok: bool = True
@@ -69,19 +68,16 @@ class SeismicBeamLongitudinalResult:
     M_any_ratio_ok: bool = True
     """True si M_any >= 0.25*M_max (§18.6.3.2(b))."""
 
-    overall_ok: bool = True
-    """True si todos los requisitos cumplen."""
-
     aci_reference: str = "ACI 318-25 §18.6.3"
 
 
 @dataclass
-class SeismicBeamTransverseResult:
+class SeismicBeamTransverseResult(AciVerificationResult):
     """Verificacion de refuerzo transversal de vigas §18.6.4."""
-    s_hoop: float
+    s_hoop: float = 0.0
     """Espaciamiento de estribos en zona de confinamiento (mm)."""
 
-    s_max: float
+    s_max: float = 0.0
     """Espaciamiento maximo permitido (mm): min(d/4, 6db, 150mm)."""
 
     s_ok: bool = True
@@ -102,25 +98,22 @@ class SeismicBeamTransverseResult:
     confinement_length: float = 0.0
     """Longitud de confinamiento requerida (mm): 2h."""
 
-    overall_ok: bool = True
-    """True si todos los requisitos cumplen."""
-
     aci_reference: str = "ACI 318-25 §18.6.4"
 
 
 @dataclass
-class SeismicBeamShearResult:
+class SeismicBeamShearResult(AciVerificationResult):
     """Verificacion de cortante de vigas sismicas §18.6.5."""
-    Mpr_left: float
+    Mpr_left: float = 0.0
     """Momento probable extremo izquierdo (tonf-m)."""
 
-    Mpr_right: float
+    Mpr_right: float = 0.0
     """Momento probable extremo derecho (tonf-m)."""
 
-    Ve: float
+    Ve: float = 0.0
     """Cortante de diseno por capacidad (tonf): (Mpr1+Mpr2)/ln."""
 
-    phi_Vn: float
+    phi_Vn: float = 0.0
     """Capacidad de cortante de diseno (tonf)."""
 
     Vc: float = 0.0
@@ -135,14 +128,11 @@ class SeismicBeamShearResult:
     sf: float = 1.0
     """Factor de seguridad (phi_Vn / Ve)."""
 
-    status: str = "OK"
-    """Estado: 'OK' o 'NO OK'."""
-
     aci_reference: str = "ACI 318-25 §18.6.5"
 
 
 @dataclass
-class SeismicBeamChecks:
+class SeismicBeamChecks(AciVerificationResult):
     """Resultado completo de verificacion sismica de vigas §18.6."""
     dimensional: Optional[SeismicBeamDimensionalResult] = None
     """Limites dimensionales §18.6.2."""
@@ -158,8 +148,5 @@ class SeismicBeamChecks:
 
     seismic_category: str = "SPECIAL"
     """Categoria sismica: 'SPECIAL', 'INTERMEDIATE', 'ORDINARY'."""
-
-    overall_ok: bool = True
-    """True si todas las verificaciones pasan."""
 
     aci_reference: str = "ACI 318-25 §18.6"

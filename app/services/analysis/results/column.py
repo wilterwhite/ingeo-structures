@@ -8,11 +8,13 @@ Section 18.7: Columns of Special Moment Frames
 from dataclasses import dataclass
 from typing import Optional
 
+from .common import AciVerificationResult
+
 
 @dataclass
-class SeismicColumnDimensionalResult:
+class SeismicColumnDimensionalResult(AciVerificationResult):
     """Verificacion de limites dimensionales de columnas §18.7.2."""
-    b_min: float
+    b_min: float = 0.0
     """Dimension minima de la seccion (mm)."""
 
     b_min_req: float = 300.0
@@ -30,22 +32,19 @@ class SeismicColumnDimensionalResult:
     aspect_ratio_ok: bool = True
     """True si aspect_ratio >= 0.4."""
 
-    overall_ok: bool = True
-    """True si todos los limites cumplen."""
-
     aci_reference: str = "ACI 318-25 §18.7.2"
 
 
 @dataclass
-class SeismicColumnStrongResult:
+class SeismicColumnStrongResult(AciVerificationResult):
     """Verificacion columna fuerte-viga debil §18.7.3.2."""
-    sum_Mnc: float
+    sum_Mnc: float = 0.0
     """Suma de Mn de columnas en el nudo (tonf-m)."""
 
-    sum_Mnb: float
+    sum_Mnb: float = 0.0
     """Suma de Mn de vigas en el nudo (tonf-m)."""
 
-    ratio: float
+    ratio: float = 0.0
     """Relacion sum_Mnc / sum_Mnb."""
 
     ratio_required: float = 1.2
@@ -61,9 +60,9 @@ class SeismicColumnStrongResult:
 
 
 @dataclass
-class SeismicColumnLongitudinalResult:
+class SeismicColumnLongitudinalResult(AciVerificationResult):
     """Verificacion de refuerzo longitudinal de columnas §18.7.4."""
-    rho: float
+    rho: float = 0.0
     """Cuantia longitudinal actual."""
 
     rho_min: float = 0.01
@@ -81,22 +80,19 @@ class SeismicColumnLongitudinalResult:
     n_bars_ok: bool = True
     """True si numero de barras cumple."""
 
-    overall_ok: bool = True
-    """True si todos los requisitos cumplen."""
-
     aci_reference: str = "ACI 318-25 §18.7.4"
 
 
 @dataclass
-class SeismicColumnTransverseResult:
+class SeismicColumnTransverseResult(AciVerificationResult):
     """Verificacion de refuerzo transversal de columnas §18.7.5."""
-    lo: float
+    lo: float = 0.0
     """Longitud de confinamiento (mm): max(h, lu/6, 450mm)."""
 
-    s: float
+    s: float = 0.0
     """Espaciamiento de estribos actual (mm)."""
 
-    s_max: float
+    s_max: float = 0.0
     """Espaciamiento maximo en lo (mm): min(h/4, 6db, so)."""
 
     s_ok: bool = True
@@ -120,25 +116,22 @@ class SeismicColumnTransverseResult:
     Ash_ok: bool = True
     """True si Ash_provided >= Ash_required."""
 
-    overall_ok: bool = True
-    """True si todos los requisitos cumplen."""
-
     aci_reference: str = "ACI 318-25 §18.7.5"
 
 
 @dataclass
-class SeismicColumnShearDetailedResult:
+class SeismicColumnShearDetailedResult(AciVerificationResult):
     """Verificacion de cortante de columnas sismicas §18.7.6."""
-    Mpr_top: float
+    Mpr_top: float = 0.0
     """Momento probable en extremo superior (tonf-m)."""
 
-    Mpr_bottom: float
+    Mpr_bottom: float = 0.0
     """Momento probable en extremo inferior (tonf-m)."""
 
-    Ve: float
+    Ve: float = 0.0
     """Cortante de diseno por capacidad (tonf): (Mpr_top + Mpr_bottom) / lu."""
 
-    phi_Vn: float
+    phi_Vn: float = 0.0
     """Capacidad de cortante de diseno (tonf)."""
 
     Vc: float = 0.0
@@ -153,14 +146,11 @@ class SeismicColumnShearDetailedResult:
     sf: float = 1.0
     """Factor de seguridad (phi_Vn / Ve)."""
 
-    status: str = "OK"
-    """Estado: 'OK' o 'NO OK'."""
-
     aci_reference: str = "ACI 318-25 §18.7.6"
 
 
 @dataclass
-class SeismicColumnChecks:
+class SeismicColumnChecks(AciVerificationResult):
     """Resultado completo de verificacion sismica de columnas §18.7."""
     dimensional: Optional[SeismicColumnDimensionalResult] = None
     """Limites dimensionales §18.7.2."""
@@ -179,8 +169,5 @@ class SeismicColumnChecks:
 
     seismic_category: str = "SPECIAL"
     """Categoria sismica: 'SPECIAL', 'INTERMEDIATE', 'ORDINARY'."""
-
-    overall_ok: bool = True
-    """True si todas las verificaciones pasan."""
 
     aci_reference: str = "ACI 318-25 §18.7"

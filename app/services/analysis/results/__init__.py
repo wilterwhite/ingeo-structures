@@ -3,12 +3,13 @@
 Dataclasses de resultado para verificaciones estructurales.
 
 Organizados por tipo de elemento:
-- common: Resultados comunes (SlendernessResult, FlexureResult, ShearResult)
+- common: Resultados comunes (AciVerificationResult, SlendernessResult, etc.)
 - beam: Verificaciones de vigas sismicas §18.6
 - column: Verificaciones de columnas sismicas §18.7
 - wall: Verificaciones de muros sismicos §18.10
 """
 from .common import (
+    AciVerificationResult,
     SlendernessResult,
     FlexureResult,
     BidirectionalShearResult,
@@ -39,6 +40,7 @@ from .wall import (
 
 __all__ = [
     # Common
+    'AciVerificationResult',
     'SlendernessResult',
     'FlexureResult',
     'BidirectionalShearResult',
