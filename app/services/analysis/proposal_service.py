@@ -83,26 +83,6 @@ class ProposalService:
         max_dcr = max(r.shear_dcr_combined for r in results)
         return max_dcr
 
-    # =========================================================================
-    # MÉTODOS DELEGADOS AL GENERADOR (para compatibilidad con tests)
-    # =========================================================================
-
-    def _pier_to_config(self, pier: Pier):
-        """Convierte pier a configuración de armadura."""
-        return self._generator._pier_to_config(pier)
-
-    def _apply_config_to_pier(self, pier: Pier, config):
-        """Aplica configuración a pier (crea copia)."""
-        return self._generator._apply_config_to_pier(pier, config)
-
-    def _classify_pier(self, pier: Pier):
-        """Clasifica pier según Tabla R18.10.1."""
-        return self._generator._classify_pier(pier)
-
-    def _get_min_thickness_for_pier(self, pier: Pier) -> float:
-        """Obtiene espesor mínimo según clasificación."""
-        return self._generator._get_min_thickness_for_pier(pier)
-
     def generate_proposal(
         self,
         pier: Pier,

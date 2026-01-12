@@ -13,19 +13,25 @@ const ColumnCells = {
     createGeometryCell(result) {
         const geom = result.geometry || {};
 
-        // Dimensiones de sección en cm (backend envía en metros: width_m, thickness_m)
-        const depthCm = ((geom.width_m || 0) * 100).toFixed(0);
-        const widthCm = ((geom.thickness_m || 0) * 100).toFixed(0);
-        const sectionCm = `${depthCm} × ${widthCm}`;
+        // Usar dimensiones pre-formateadas del backend si están disponibles
+        let sectionCm;
+        if (result.dimensions_display) {
+            sectionCm = result.dimensions_display;
+        } else {
+            // Fallback: usar metersToCm de Utils.js
+            const depthCm = metersToCm(geom.width_m);
+            const widthCm = metersToCm(geom.thickness_m);
+            sectionCm = `${depthCm} × ${widthCm} cm`;
+        }
 
         // Altura en metros
         const heightM = geom.height_m || 0;
 
         const td = document.createElement('td');
         td.className = 'geometry-cell';
-        td.title = `Sección: ${depthCm}×${widthCm} cm\nAltura: ${heightM.toFixed(2)}m`;
+        td.title = `Sección: ${sectionCm}\nAltura: ${heightM.toFixed(2)}m`;
         td.innerHTML = `
-            <span class="geom-dims">${sectionCm} cm</span>
+            <span class="geom-dims">${sectionCm}</span>
             <span class="geom-hwcs">altura=${heightM.toFixed(1)}m</span>
         `;
         return td;

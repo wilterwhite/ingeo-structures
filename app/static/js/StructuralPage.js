@@ -334,7 +334,6 @@ class StructuralPage {
      */
     async onSeismicCategoryChange() {
         const category = this.getSeismicCategory();
-        console.log(`Categoría sísmica cambiada a: ${category}`);
 
         // Solo re-analizar si hay una sesión activa con datos
         if (this.sessionId && this.results?.length > 0) {
@@ -425,7 +424,6 @@ class StructuralPage {
         });
 
         this.updateElementStats(results, statsPrefix);
-        console.log(`[${logPrefix}] Renderizados ${results.length} elementos`);
     }
 
     // =========================================================================

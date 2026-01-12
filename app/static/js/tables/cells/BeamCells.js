@@ -132,11 +132,17 @@ const BeamCells = {
         const td = document.createElement('td');
         td.className = 'geometry-cell';
         const geom = result.geometry || {};
-        // Usar campos unificados del backend: width_m (largo), thickness_m (espesor)
-        const width = geom.width_m ? (geom.width_m * 100).toFixed(0) : 0;
-        const thickness = geom.thickness_m ? (geom.thickness_m * 100).toFixed(0) : 0;
-        td.innerHTML = `${width}×${thickness} cm`;
-        td.title = `Sección: ${width}×${thickness} cm`;
+        // Usar dimensiones pre-formateadas del backend si están disponibles
+        if (result.dimensions_display) {
+            td.innerHTML = result.dimensions_display;
+            td.title = `Sección: ${result.dimensions_display}`;
+        } else {
+            // Fallback: usar metersToCm de Utils.js
+            const width = metersToCm(geom.width_m);
+            const thickness = metersToCm(geom.thickness_m);
+            td.innerHTML = `${width}×${thickness} cm`;
+            td.title = `Sección: ${width}×${thickness} cm`;
+        }
         return td;
     },
 

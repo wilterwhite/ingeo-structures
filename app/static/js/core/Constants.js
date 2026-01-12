@@ -63,7 +63,6 @@ const StructuralConstants = {
             this.options = data.options || {};
 
             this._loaded = true;
-            console.log('[Constants] Cargadas desde backend:', Object.keys(data));
         } catch (error) {
             console.error('[Constants] Error cargando constantes:', error);
             // Usar fallbacks si falla la carga

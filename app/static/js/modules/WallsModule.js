@@ -65,7 +65,7 @@ class WallsModule {
         pierDetailsTitle.textContent = elementLabel;
         pierDetailsLoading.classList.add('active');
 
-        // Mostrar/ocultar secciones según tipo
+        // Mostrar/ocultar secciones iniciales (fallback, se actualiza con display_config)
         this._toggleSectionsForType(elementType);
 
         try {
@@ -75,6 +75,10 @@ class WallsModule {
 
             if (data.success) {
                 this._currentPierData = data;
+                // Actualizar secciones con display_config del backend si está disponible
+                if (data.display_config) {
+                    this._toggleSectionsForType(elementType, data.display_config);
+                }
                 this.updateElementDetailsContent(data, elementType);
                 this.populateComboSelector(data.combinations_list || []);
 
@@ -105,27 +109,33 @@ class WallsModule {
     }
 
     /**
-     * Muestra/oculta secciones del modal según el tipo de elemento.
+     * Muestra/oculta secciones del modal según display_config del backend.
+     * Si no hay display_config, usa fallback basado en elementType.
      */
-    _toggleSectionsForType(elementType) {
-        // Boundary check: solo pier y drop_beam
+    _toggleSectionsForType(elementType, displayConfig = null) {
+        // Usar display_config del backend si está disponible, sino fallback
+        const config = displayConfig || {
+            show_slenderness: elementType === 'pier' || elementType === 'column',
+            show_boundary_check: elementType === 'pier' || elementType === 'drop_beam',
+            show_pure_capacities: elementType !== 'beam',
+        };
+
+        // Boundary check
         const boundarySection = document.getElementById('boundary-check-section');
         if (boundarySection) {
-            const showBoundary = elementType === 'pier' || elementType === 'drop_beam';
-            boundarySection.style.display = showBoundary ? '' : 'none';
+            boundarySection.style.display = config.show_boundary_check ? '' : 'none';
         }
 
-        // Slenderness: solo pier, column (beams con axial alta se maneja en updateContent)
+        // Slenderness
         const slendernessSection = document.getElementById('slenderness-section');
         if (slendernessSection) {
-            const showSlenderness = elementType === 'pier' || elementType === 'column';
-            slendernessSection.style.display = showSlenderness ? '' : 'none';
+            slendernessSection.style.display = config.show_slenderness ? '' : 'none';
         }
 
-        // Pure capacities: todos excepto beams sin carga axial (se maneja en updateContent)
+        // Pure capacities
         const capacitiesSection = document.getElementById('pure-capacities-section');
         if (capacitiesSection) {
-            capacitiesSection.style.display = '';  // Visible por defecto, se oculta en updateContent si no hay datos
+            capacitiesSection.style.display = config.show_pure_capacities ? '' : 'none';
         }
 
         // Actualizar título según tipo

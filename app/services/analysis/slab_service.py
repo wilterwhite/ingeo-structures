@@ -33,8 +33,7 @@ from ...domain.constants.shear import PHI_SHEAR
 from ...domain.constants.units import N_TO_TONF, NMM_TO_TONFM
 from ...domain.chapter22 import calculate_flexural_capacity, calculate_As_required
 from ...domain.shear.concrete_shear import calculate_Vc_beam
-from .formatting import format_safety_factor
-from ..presentation.result_formatter import get_dcr_css_class
+from ..presentation.result_formatter import format_safety_factor, get_dcr_css_class
 
 
 # Wrapper para compatibilidad - usa string ">100"

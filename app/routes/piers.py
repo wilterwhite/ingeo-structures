@@ -750,8 +750,7 @@ def process_e2k():
     Returns:
         El archivo E2K modificado con los Section Cuts generados.
     """
-    from io import BytesIO
-    import re
+    from ..services.parsing.e2k_processor import E2KProcessor
 
     if 'file' not in request.files:
         return jsonify({'success': False, 'error': 'No se proporcionó archivo'}), 400
@@ -764,85 +763,26 @@ def process_e2k():
         return jsonify({'success': False, 'error': 'El archivo debe ser .e2k'}), 400
 
     try:
-        # Leer contenido del archivo
-        content = file.read()
-        try:
-            text = content.decode('utf-8')
-        except UnicodeDecodeError:
-            text = content.decode('latin-1')
-
-        lines = text.splitlines()
-
-        # Extraer grupos (líneas de definición sin POINT ni AREA)
-        group_pattern = r'^\s*GROUP\s+"([^"]+)"\s*$'
-        groups = set()
-        for line in lines:
-            match = re.match(group_pattern, line)
-            if match:
-                groups.add(match.group(1))
-        groups = sorted(groups)
-
-        # Extraer section cuts existentes
-        scut_pattern = r'SECTIONCUT\s+"([^"]+)"'
-        existing_scuts = set()
-        for line in lines:
-            match = re.search(scut_pattern, line)
-            if match:
-                existing_scuts.add(match.group(1))
-
-        # Generar nuevos section cuts
-        new_scuts = []
-        for group_name in groups:
-            scut_name = f"SCut-{group_name}"
-            if scut_name not in existing_scuts:
-                scut_line = f'  SECTIONCUT "{scut_name}"  DEFINEDBY "Group"  GROUP "{group_name}"  CUTFOR "Analysis"  ROTABOUTZ 0 ROTABOUTYY 0 ROTABOUTXXX 0'
-                new_scuts.append(scut_line)
-
-        if not new_scuts:
-            return jsonify({
-                'success': False,
-                'error': 'No hay nuevos section cuts para generar. Todos los grupos ya tienen section cuts.'
-            }), 400
-
-        # Insertar section cuts en el archivo
-        output = []
-        section_cuts_found = False
-
-        for line in lines:
-            if line.strip() == '$ SECTION CUTS':
-                section_cuts_found = True
-                output.append(line)
-                for scut in new_scuts:
-                    output.append(scut)
-                continue
-
-            if not section_cuts_found and line.strip() == '$ DIMENSION LINES':
-                output.append('')
-                output.append('$ SECTION CUTS')
-                for scut in new_scuts:
-                    output.append(scut)
-                output.append('')
-
-            output.append(line)
-
-        # Generar archivo de respuesta
-        output_content = '\n'.join(output)
-        output_bytes = output_content.encode('utf-8')
+        processor = E2KProcessor()
+        result = processor.process(file.read())
 
         # Nombre del archivo de salida
         original_name = file.filename.rsplit('.', 1)[0]
         output_filename = f"{original_name}_with_scuts.e2k"
 
         return Response(
-            output_bytes,
+            result.content.encode('utf-8'),
             mimetype='application/octet-stream',
             headers={
                 'Content-Disposition': f'attachment; filename="{output_filename}"',
-                'X-Section-Cuts-Generated': str(len(new_scuts)),
-                'X-Total-Groups': str(len(groups))
+                'X-Section-Cuts-Generated': str(result.n_section_cuts),
+                'X-Total-Groups': str(result.n_groups)
             }
         )
 
+    except ValueError as e:
+        # Error esperado (no hay section cuts nuevos)
+        return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
         logger.error(f"Error procesando E2K: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500

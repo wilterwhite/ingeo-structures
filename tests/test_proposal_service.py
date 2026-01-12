@@ -136,7 +136,7 @@ class TestReinforcementConfig:
 
     def test_config_from_pier(self, proposal_service, failing_pier):
         """Crea configuración desde pier."""
-        config = proposal_service._pier_to_config(failing_pier)
+        config = proposal_service._generator._pier_to_config(failing_pier)
 
         assert config.n_edge_bars == 2
         assert config.diameter_edge == 10
@@ -263,7 +263,7 @@ class TestApplyConfigToPier:
             spacing_v=150
         )
 
-        new_pier = proposal_service._apply_config_to_pier(failing_pier, config)
+        new_pier = proposal_service._generator._apply_config_to_pier(failing_pier, config)
 
         # El pier original no cambia
         assert failing_pier.n_edge_bars == 2
@@ -392,7 +392,7 @@ class TestColumnMinimumThickness:
 
     def test_classify_pier_detects_column(self, proposal_service, column_with_500mm_width):
         """Detecta correctamente cuando un pier es columna sísmica."""
-        classification, is_column, needs_300mm = proposal_service._classify_pier(
+        classification, is_column, needs_300mm = proposal_service._generator._classify_pier(
             column_with_500mm_width
         )
 
@@ -402,7 +402,7 @@ class TestColumnMinimumThickness:
 
     def test_classify_pier_detects_wall(self, proposal_service, wall_classified_pier):
         """No requiere 300mm para piers clasificados como muro."""
-        classification, is_column, needs_300mm = proposal_service._classify_pier(
+        classification, is_column, needs_300mm = proposal_service._generator._classify_pier(
             wall_classified_pier
         )
 
@@ -411,12 +411,12 @@ class TestColumnMinimumThickness:
 
     def test_min_thickness_for_column(self, proposal_service, column_with_500mm_width):
         """Columnas sísmicas tienen espesor mínimo de 300mm."""
-        min_t = proposal_service._get_min_thickness_for_pier(column_with_500mm_width)
+        min_t = proposal_service._generator._get_min_thickness_for_pier(column_with_500mm_width)
         assert min_t == 300.0
 
     def test_min_thickness_for_wall(self, proposal_service, wall_classified_pier):
         """Muros mantienen su espesor actual como mínimo."""
-        min_t = proposal_service._get_min_thickness_for_pier(wall_classified_pier)
+        min_t = proposal_service._generator._get_min_thickness_for_pier(wall_classified_pier)
         assert min_t == 200.0  # Espesor actual
 
     def test_column_proposal_has_min_300mm(self, proposal_service, column_with_500mm_width):

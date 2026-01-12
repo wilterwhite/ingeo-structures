@@ -31,7 +31,7 @@ from ...domain.chapter18.common import SeismicCategory
 from ...domain.chapter18.design_forces import ShearAmplificationResult
 from ...domain.constants.units import TONF_TO_N, TONFM_TO_NMM, N_TO_TONF
 from ...domain.constants.shear import PHI_SHEAR
-from .formatting import format_safety_factor
+from ..presentation.result_formatter import format_safety_factor
 
 
 class ShearService:

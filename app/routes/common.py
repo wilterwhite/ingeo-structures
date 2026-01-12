@@ -142,7 +142,6 @@ def handle_errors(f: Callable) -> Callable:
             import traceback
             tb = traceback.format_exc()
             logger.error(f"Error en {f.__name__}: {str(e)}\n{tb}")
-            print(f"\n[ERROR] {f.__name__}: {str(e)}\n{tb}", flush=True)  # Debug
             return jsonify({
                 'success': False,
                 'error': f'Error interno: {str(e)}'

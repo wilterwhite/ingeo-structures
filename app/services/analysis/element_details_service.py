@@ -806,7 +806,32 @@ class ElementDetailsService:
         else:
             result['combinations_list'] = []
 
+        # Configuración de display para el frontend
+        result['display_config'] = self._get_display_config(element_type)
+
         return result
+
+    def _get_display_config(self, element_type: str) -> Dict[str, bool]:
+        """
+        Retorna configuración de visibilidad de secciones del modal.
+
+        Centraliza la lógica de qué secciones mostrar según el tipo de elemento,
+        evitando duplicar esta lógica en el frontend.
+        """
+        return {
+            # Esbeltez: pier y column (drop_beam y beam no la tienen)
+            'show_slenderness': element_type in ('pier', 'column'),
+            # Elementos de borde: pier y drop_beam (ACI 318-25 §18.10.6)
+            'show_boundary_check': element_type in ('pier', 'drop_beam'),
+            # Capacidades puras P-M: todos excepto beams sin carga axial
+            'show_pure_capacities': element_type != 'beam',
+            # Vigas de acoplamiento: solo pier
+            'show_coupling_beams': element_type == 'pier',
+            # Detallado sísmico: todos los elementos
+            'show_seismic_detailing': True,
+            # Armadura de refuerzo: todos
+            'show_reinforcement': True,
+        }
 
     def _format_element_info(
         self,

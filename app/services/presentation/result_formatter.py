@@ -9,6 +9,7 @@ Métodos principales:
 - format_any_element: Formatea cualquier elemento (Pier, Column, Beam, DropBeam)
 - format_slab_result: Formatea resultados de losas (servicio separado)
 """
+import math
 from typing import Dict, Any, Union, TYPE_CHECKING
 
 from ...domain.constants.phi_chapter21 import get_dcr_status
@@ -18,6 +19,27 @@ if TYPE_CHECKING:
     from ..analysis.element_orchestrator import OrchestrationResult
     from ...domain.entities import Beam, Column, Pier, DropBeam
     from ...domain.calculations.wall_continuity import WallContinuityInfo
+
+
+def format_safety_factor(
+    value: float,
+    as_string: bool = True,
+    max_value: float = 100.0
+) -> Union[float, str]:
+    """
+    Formatea factor de seguridad para serialización JSON.
+
+    Args:
+        value: Factor de seguridad a formatear
+        as_string: Si True, retorna ">100" para valores grandes; si False, retorna 100.0
+        max_value: Valor máximo a mostrar (default 100.0)
+
+    Returns:
+        Factor formateado como string ">100" o float redondeado
+    """
+    if math.isinf(value) or value > max_value:
+        return f">{int(max_value)}" if as_string else max_value
+    return round(value, 2)
 
 
 def get_status_css_class(status: str) -> str:

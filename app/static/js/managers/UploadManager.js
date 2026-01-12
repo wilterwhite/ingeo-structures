@@ -156,14 +156,6 @@ class UploadManager {
         this.page.uniqueStories = summary.stories || [];
         this.page.uniqueAxes = summary.axes || [];
 
-        console.log('[Upload] Parsed data:', {
-            piers: this.page.piersData.length,
-            columns: this.page.columnsData.length,
-            beams: this.page.beamsData.length,
-            slabs: this.page.slabsData.length,
-            dropBeams: this.page.dropBeamsData.length
-        });
-
         // Extraer materiales
         this.page.materialsManager.extractFromData(
             this.page.piersData,

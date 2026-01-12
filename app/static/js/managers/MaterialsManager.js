@@ -110,7 +110,6 @@ class MaterialsManager {
             lambdaCell.textContent = lambda.toFixed(2);
         }
 
-        console.log(`[Materials] ${materialName} → ${newType}, λ=${lambda}`);
     }
 
     /**
