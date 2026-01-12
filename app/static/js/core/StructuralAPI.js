@@ -9,6 +9,69 @@ class StructuralAPI {
     }
 
     /**
+     * Procesa un stream SSE de forma robusta.
+     * @param {Response} response - Response del fetch
+     * @param {Object} handlers - {onProgress, onComplete, onError}
+     */
+    _processSSEStream(response, { onProgress, onComplete, onError }) {
+        if (!response.ok) {
+            onError(new Error(`HTTP ${response.status}`));
+            return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        const read = async () => {
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+
+                    if (value) {
+                        buffer += decoder.decode(value, { stream: !done });
+                    }
+
+                    // Procesar líneas completas
+                    const lines = buffer.split('\n');
+                    buffer = done ? '' : lines.pop();
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+
+                        try {
+                            const event = JSON.parse(line.slice(6));
+
+                            if (event.type === 'progress') {
+                                onProgress?.(event);
+                            } else if (event.type === 'complete') {
+                                reader.cancel();
+                                onComplete(event.result);
+                                return;
+                            } else if (event.type === 'error') {
+                                reader.cancel();
+                                onError(new Error(event.message));
+                                return;
+                            }
+                        } catch (e) {
+                            console.error('SSE parse error:', e);
+                        }
+                    }
+
+                    if (done) {
+                        onError(new Error('Stream cerrado sin evento complete'));
+                        return;
+                    }
+                }
+            } catch (err) {
+                onError(err);
+            }
+        };
+
+        read();
+    }
+
+    /**
      * Realiza una petición HTTP.
      * @param {string} endpoint - Endpoint relativo
      * @param {Object} options - Opciones de fetch
@@ -65,54 +128,21 @@ class StructuralAPI {
      * @param {Function} onProgress - Callback para progreso (current, total, element)
      * @returns {Promise<Object>} Resultado del upload
      */
-    uploadWithProgress(file, onProgress) {
+    async uploadWithProgress(file, onProgress) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${this.baseUrl}/upload-stream`, {
+            method: 'POST',
+            body: formData
+        });
+
         return new Promise((resolve, reject) => {
-            const formData = new FormData();
-            formData.append('file', file);
-
-            fetch(`${this.baseUrl}/upload-stream`, {
-                method: 'POST',
-                body: formData
-            }).then(response => {
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '';
-
-                const processChunk = ({ done, value }) => {
-                    if (value) {
-                        buffer += decoder.decode(value, { stream: !done });
-                    }
-
-                    // Procesar líneas completas
-                    const lines = buffer.split('\n');
-                    buffer = done ? '' : lines.pop();
-
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const event = JSON.parse(line.slice(6));
-                                if (event.type === 'progress') {
-                                    onProgress(event.current, event.total, event.element);
-                                } else if (event.type === 'complete') {
-                                    resolve(event.result);
-                                    return;
-                                } else if (event.type === 'error') {
-                                    reject(new Error(event.message));
-                                    return;
-                                }
-                            } catch (e) {
-                                console.error('Error parsing SSE:', e);
-                            }
-                        }
-                    }
-
-                    if (!done) {
-                        reader.read().then(processChunk);
-                    }
-                };
-
-                reader.read().then(processChunk);
-            }).catch(reject);
+            this._processSSEStream(response, {
+                onProgress: (e) => onProgress?.(e.current, e.total, e.element),
+                onComplete: resolve,
+                onError: reject
+            });
         });
     }
 
@@ -166,54 +196,22 @@ class StructuralAPI {
      * Análisis con progreso en tiempo real (SSE).
      * @param {Object} params - Parámetros del análisis
      * @param {Function} onProgress - Callback para progreso (current, total, pier)
-     * @param {Function} onComplete - Callback cuando termina
-     * @param {Function} onError - Callback para errores
+     * @returns {Promise<Object>} Resultado del análisis
      */
-    analyzeWithProgress(params, onProgress, onComplete, onError) {
-        fetch(`${this.baseUrl}/analyze-stream`, {
+    async analyzeWithProgress(params, onProgress) {
+        const response = await fetch(`${this.baseUrl}/analyze-stream`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(params)
-        }).then(response => {
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
+        });
 
-            const processChunk = ({ done, value }) => {
-                if (value) {
-                    buffer += decoder.decode(value, { stream: !done });
-                }
-
-                // Procesar líneas completas
-                const lines = buffer.split('\n');
-                buffer = done ? '' : lines.pop();
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const event = JSON.parse(line.slice(6));
-                            if (event.type === 'progress') {
-                                onProgress(event.current, event.total, event.pier);
-                            } else if (event.type === 'complete') {
-                                onComplete(event.result);
-                                return;
-                            } else if (event.type === 'error') {
-                                onError(new Error(event.message));
-                                return;
-                            }
-                        } catch (e) {
-                            console.error('Error parsing SSE:', e);
-                        }
-                    }
-                }
-
-                if (!done) {
-                    reader.read().then(processChunk);
-                }
-            };
-
-            reader.read().then(processChunk);
-        }).catch(onError);
+        return new Promise((resolve, reject) => {
+            this._processSSEStream(response, {
+                onProgress: (e) => onProgress?.(e.current, e.total, e.pier),
+                onComplete: resolve,
+                onError: reject
+            });
+        });
     }
 
     // =========================================================================

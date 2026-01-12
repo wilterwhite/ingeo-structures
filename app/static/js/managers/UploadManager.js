@@ -72,8 +72,7 @@ class UploadManager {
 
         // Si es archivo E2K, procesarlo para generar Section Cuts
         if (file.name.toLowerCase().endsWith('.e2k')) {
-            await this.handleE2KFile(file);
-            return;
+            return this.handleE2KFile(file);
         }
 
         this.page.elements.uploadArea?.classList.add('hidden');
@@ -89,13 +88,17 @@ class UploadManager {
             );
 
             if (!uploadData.success) throw new Error(uploadData.error);
-
-            // Guardar datos parseados
             this.storeUploadData(uploadData);
 
             // Fase 2: Análisis con progreso
             this.showProgressModal();
-            await this.runAnalysisWithProgress({
+
+            // Delay necesario: el navegador limita conexiones simultáneas al mismo host.
+            // Sin esto, el fetch del análisis puede quedar bloqueado esperando que
+            // la conexión del upload-stream se libere completamente.
+            await new Promise(r => setTimeout(r, 100));
+
+            const params = {
                 session_id: this.page.sessionId,
                 pier_updates: [],
                 generate_plots: true,
@@ -103,10 +106,24 @@ class UploadManager {
                 angle_deg: 0,
                 materials_config: this.page.materialsManager.getConfig(),
                 seismic_category: this.page.getSeismicCategory()
-            });
+            };
+
+            const result = await structuralAPI.analyzeWithProgress(
+                params,
+                (current, total, pier) => {
+                    this.updateProgress(current, total, pier);
+                }
+            );
+
+            this.hideProgressModal();
+            if (result.success) {
+                this.onAnalysisComplete(result);
+            } else {
+                throw new Error(result.error || 'Error en análisis');
+            }
 
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error en análisis:', error);
             this.page.showNotification('Error: ' + error.message, 'error');
             this.hideProgressModal();
             this.resetUploadArea();
@@ -271,36 +288,6 @@ class UploadManager {
     }
 
     /**
-     * Ejecuta el análisis con callbacks de progreso.
-     */
-    runAnalysisWithProgress(params) {
-        return new Promise((resolve, reject) => {
-            structuralAPI.analyzeWithProgress(
-                params,
-                // onProgress
-                (current, total, pier) => {
-                    this.updateProgress(current, total, pier);
-                },
-                // onComplete
-                (data) => {
-                    this.hideProgressModal();
-                    if (data.success) {
-                        this.onAnalysisComplete(data);
-                        resolve(data);
-                    } else {
-                        reject(new Error(data.error || 'Error en análisis'));
-                    }
-                },
-                // onError
-                (error) => {
-                    this.hideProgressModal();
-                    reject(error);
-                }
-            );
-        });
-    }
-
-    /**
      * Procesa los resultados del análisis.
      */
     onAnalysisComplete(data) {
@@ -311,20 +298,6 @@ class UploadManager {
         page.beamResults = data.beam_results || [];
         page.slabResults = data.slab_results || [];
         page.dropBeamResults = data.drop_beam_results || [];
-
-        // Log para debug
-        if (page.columnResults.length > 0) {
-            console.log('[Analysis] Column results:', page.columnResults.length);
-        }
-        if (page.beamResults.length > 0) {
-            console.log('[Analysis] Beam results:', page.beamResults.length);
-        }
-        if (page.slabResults.length > 0) {
-            console.log('[Analysis] Slab results:', page.slabResults.length);
-        }
-        if (page.dropBeamResults.length > 0) {
-            console.log('[Analysis] Drop beam results:', page.dropBeamResults.length);
-        }
 
         // Renderizar resultados
         page.resultsTable.populateFilters();
@@ -354,16 +327,29 @@ class UploadManager {
     async reanalyze() {
         this.showProgressModal();
         try {
-            await this.runAnalysisWithProgress({
-                session_id: this.page.sessionId,
-                pier_updates: [],
-                generate_plots: true,
-                moment_axis: 'M3',
-                angle_deg: 0,
-                materials_config: this.page.materialsManager.getConfig(),
-                seismic_category: this.page.getSeismicCategory()
-            });
+            const result = await structuralAPI.analyzeWithProgress(
+                {
+                    session_id: this.page.sessionId,
+                    pier_updates: [],
+                    generate_plots: true,
+                    moment_axis: 'M3',
+                    angle_deg: 0,
+                    materials_config: this.page.materialsManager.getConfig(),
+                    seismic_category: this.page.getSeismicCategory()
+                },
+                (current, total, pier) => {
+                    this.updateProgress(current, total, pier);
+                }
+            );
+
+            this.hideProgressModal();
+            if (result.success) {
+                this.onAnalysisComplete(result);
+            } else {
+                throw new Error(result.error || 'Error en análisis');
+            }
         } catch (error) {
+            this.hideProgressModal();
             this.page.showNotification('Error: ' + error.message, 'error');
         }
     }
