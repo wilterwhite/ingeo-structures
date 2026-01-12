@@ -7,6 +7,7 @@
 class BeamsModule {
     constructor(page) {
         this.page = page;
+        this.beamFilters = null;  // Filtros Excel-style para vigas
     }
 
     // =========================================================================
@@ -142,11 +143,49 @@ class BeamsModule {
     // =========================================================================
 
     renderBeamsTable() {
+        // Obtener resultados (filtrados si hay filtros activos)
+        const results = this.beamFilters?.getResults() || this.page.beamResults;
+        let filtered = results;
+
+        // Aplicar filtros si existen
+        if (this.beamFilters && Object.keys(this.beamFilters.filters).length > 0) {
+            filtered = results.filter(r => this.beamFilters.matchesFilters(r));
+            filtered = this.beamFilters.sortResults(filtered);
+        }
+
         this.page.renderElementTable(
-            this.page.beamResults,
+            filtered,
             this.page.elements.beamsTableBody,
             'beam', 11, 'No hay vigas para analizar', 'Beams'
         );
+
+        // Inicializar o actualizar filtros Excel-style
+        this._initBeamFilters();
+    }
+
+    /**
+     * Inicializa los filtros de columna para la tabla de vigas.
+     */
+    _initBeamFilters() {
+        if (!this.beamFilters) {
+            this.beamFilters = new ColumnFilters(
+                this,
+                'beams-table',
+                ColumnFilters.BEAMS_CONFIG
+            );
+            // Callback para re-renderizar cuando se apliquen filtros
+            this.beamFilters.onFilterApply = (filtered) => {
+                this.page.renderElementTable(
+                    filtered,
+                    this.page.elements.beamsTableBody,
+                    'beam', 11, 'No hay vigas para analizar', 'Beams'
+                );
+                this._initBeamFilters();  // Re-crear botones
+            };
+        }
+        // Actualizar los resultados disponibles
+        this.beamFilters.setResults(this.page.beamResults);
+        this.beamFilters.createHeaderButtons();
     }
 
     clearBeamsTable() {

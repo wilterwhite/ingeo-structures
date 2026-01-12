@@ -234,6 +234,7 @@ class ResultFormatter:
                 'width_m': geometry.get('width_mm', 0) / 1000,
                 'thickness_m': geometry.get('thickness_mm', 0) / 1000,
                 'height_m': geometry.get('height_mm', 0) / 1000,
+                'length_m': geometry.get('length_mm', geometry.get('height_mm', 0)) / 1000,  # Para vigas
                 'fc_MPa': geometry.get('fc', 0),
                 'fy_MPa': geometry.get('fy', 0)
             },
@@ -318,8 +319,8 @@ class ResultFormatter:
             dcr = getattr(sh, 'dcr', base_dcr)
             Vc = getattr(sh, 'Vc', 0) if not hasattr(sh, 'capacity_V2') else (sh.capacity_V2.Vc if sh.capacity_V2 else 0)
             Vs = getattr(sh, 'Vs', 0) if not hasattr(sh, 'capacity_V2') else (sh.capacity_V2.Vs if sh.capacity_V2 else 0)
-            # Obtener Vu original y Ve amplificado
-            Vu_original = getattr(sh, 'Vu', 0)
+            # Obtener Vu original - puede ser 'Vu' (vigas/muros) o 'Vu_V2' (columnas)
+            Vu_original = getattr(sh, 'Vu', 0) or getattr(sh, 'Vu_V2', 0)
             Ve_amplified = getattr(sh, 'Ve', Vu_original)  # Fallback a Vu si no hay Ve
             shear_data.update({
                 'dcr': round(dcr, 2),
@@ -786,11 +787,14 @@ class ResultFormatter:
         key: str
     ) -> Dict[str, Any]:
         """Formatea resultado de Beam desde OrchestrationResult."""
-        # Para beams: width_m=width, thickness_m=depth, height_m=length
+        domain_result = result.domain_result
+
+        # Para beams: width_m=width (ancho), thickness_m=depth (altura), length_m=length (luz)
         geometry = {
             'width_mm': beam.width,
             'thickness_mm': beam.depth,
-            'height_mm': beam.length,
+            'height_mm': beam.length,  # Mantener para compatibilidad
+            'length_mm': beam.length,  # Luz de la viga
             'fc': beam.fc,
             'fy': beam.fy
         }
@@ -815,7 +819,13 @@ class ResultFormatter:
             pm_plot=None
         )
 
-        formatted['shear']['formula_type'] = 'beam'
+        # Extraer datos de flexión y cortante del domain_result
+        formatted['flexure'] = ResultFormatter._extract_flexure_from_result(
+            result, result.dcr_max
+        )
+        formatted['shear'] = ResultFormatter._extract_shear_from_domain(
+            domain_result, result.dcr_max, 'beam'
+        )
 
         return formatted
 

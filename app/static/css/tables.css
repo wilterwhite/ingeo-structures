@@ -86,14 +86,219 @@
 .results-table th:nth-child(3), .results-table td:nth-child(3) { width: 70px; }   /* Geometría */
 .results-table th:nth-child(4), .results-table td:nth-child(4) { width: 110px; }  /* Enfierradura */
 .results-table th:nth-child(5), .results-table td:nth-child(5) { width: 75px; }   /* Borde */
-.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 100px; }  /* V.Izq */
-.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 100px; }  /* V.Der */
+.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 60px; }   /* V.Izq */
+.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 60px; }   /* V.Der */
 .results-table th:nth-child(8), .results-table td:nth-child(8) { width: 55px; }   /* D/C Flex */
 .results-table th:nth-child(9), .results-table td:nth-child(9) { width: 95px; }   /* Cap. Flexión */
 .results-table th:nth-child(10), .results-table td:nth-child(10) { width: 55px; } /* D/C Corte */
 .results-table th:nth-child(11), .results-table td:nth-child(11) { width: 140px; } /* Cap. Corte */
 .results-table th:nth-child(12), .results-table td:nth-child(12) { width: 70px; }  /* Propuesta */
 .results-table th:nth-child(13), .results-table td:nth-child(13) { width: 55px; }  /* Acciones */
+
+/* ==========================================================================
+   COLUMN FILTERS - Headers con filtros tipo Excel
+   ========================================================================== */
+
+.results-table th.filterable {
+    padding: 4px 2px;
+}
+
+.th-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+}
+
+.th-label {
+    flex: 1;
+    text-align: center;
+}
+
+.filter-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    padding: 2px 4px;
+    border-radius: 2px;
+    opacity: 0.5;
+    transition: all 0.15s ease;
+}
+
+.filter-btn:hover {
+    opacity: 1;
+    background: var(--bg-secondary);
+}
+
+.filter-btn.active {
+    opacity: 1;
+    color: var(--primary-color);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+/* Dropdown de filtro */
+.column-filter-dropdown {
+    position: fixed;
+    z-index: 1000;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 180px;
+    max-width: 220px;
+    font-size: 0.8rem;
+}
+
+.column-filter-dropdown .filter-search {
+    padding: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.column-filter-dropdown .filter-search input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.column-filter-dropdown .filter-search input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.column-filter-dropdown .filter-actions {
+    display: flex;
+    gap: 4px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.column-filter-dropdown .filter-actions button {
+    flex: 1;
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.column-filter-dropdown .filter-actions button:hover {
+    background: var(--bg-color);
+}
+
+.column-filter-dropdown .filter-options {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.column-filter-dropdown .filter-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+
+.column-filter-dropdown .filter-option:hover {
+    background: var(--bg-secondary);
+}
+
+.column-filter-dropdown .filter-option input {
+    margin: 0;
+}
+
+.column-filter-dropdown .filter-footer {
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.column-filter-dropdown .filter-footer button {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.column-filter-dropdown .clear-filter {
+    background: white;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-secondary);
+}
+
+.column-filter-dropdown .apply-filter {
+    background: var(--primary-color);
+    color: white;
+}
+
+.column-filter-dropdown .apply-filter:hover {
+    background: var(--primary-hover);
+}
+
+/* Dropdown numérico */
+.column-filter-dropdown.numeric .filter-sort {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px;
+}
+
+.column-filter-dropdown.numeric .filter-sort button {
+    padding: 6px 8px;
+    text-align: left;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.column-filter-dropdown.numeric .filter-sort button:hover {
+    background: var(--bg-secondary);
+}
+
+.column-filter-dropdown.numeric .filter-sort button.active {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--primary-color);
+}
+
+.column-filter-dropdown.numeric hr {
+    margin: 0;
+    border: none;
+    border-top: 1px solid var(--border-color);
+}
+
+.column-filter-dropdown .filter-range {
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+}
+
+.column-filter-dropdown .filter-range select {
+    width: 50px;
+    padding: 4px;
+    font-size: 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.column-filter-dropdown .filter-range input {
+    flex: 1;
+    padding: 4px 6px;
+    font-size: 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    width: 70px;
+}
 
 /* ==========================================================================
    REINFORCEMENT CELLS - BASE STYLES (SHARED)
@@ -232,12 +437,15 @@
 .viga-cell .beam-selector {
     padding: 2px 4px;
     font-size: 0.75rem;
-    min-width: 100px;
-    max-width: 140px;
+    width: 100%;
+    max-width: 60px;
     border: 1px solid var(--border-color);
     border-radius: 4px;
     background: var(--bg-secondary);
     cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .viga-cell .beam-selector:hover {
@@ -300,6 +508,13 @@
     font-size: 0.8rem;
     text-align: center;
     cursor: help;
+}
+
+/* Vigas - celdas de capacidad más anchas para evitar wrap excesivo */
+#beams-table .capacity-cell,
+#drop-beams-table .capacity-cell {
+    min-width: 120px;
+    white-space: nowrap;
 }
 
 .capacity-main {

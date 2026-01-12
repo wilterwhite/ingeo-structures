@@ -163,42 +163,6 @@
                         <span class="stat-item stat-fail"><strong id="stat-fail">0</strong> Fail</span>
                         <span class="stat-item"><strong id="stat-rate">0%</strong></span>
                     </div>
-                    <div class="toolbar-divider"></div>
-                    <div class="filter-group">
-                        <label>Grilla:</label>
-                        <select id="grilla-filter">
-                            <option value="">Todas</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Piso:</label>
-                        <select id="story-filter">
-                            <option value="">Todos</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Eje:</label>
-                        <select id="axis-filter">
-                            <option value="">Todos</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Estado:</label>
-                        <select id="status-filter">
-                            <option value="">Todos</option>
-                            <option value="OK">OK</option>
-                            <option value="FAIL">Fail</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Tipo:</label>
-                        <select id="element-type-filter">
-                            <option value="">Todos</option>
-                            <option value="pier">Pier</option>
-                            <option value="column">Columna</option>
-                        </select>
-                    </div>
-                    <div class="toolbar-divider"></div>
 
                     <!-- Viga de acople (para muros acoplados) -->
                     <div class="standard-beam-config">
@@ -648,8 +612,8 @@
                     </table>
                 </div>
 
-                <!-- Sección 7: Boundary Element Check -->
-                <div class="etabs-section">
+                <!-- Sección 7: Boundary Element Check (solo pier/drop_beam) -->
+                <div class="etabs-section" id="boundary-check-section">
                     <h4>Boundary Element Check (ACI 18.10.6.3)</h4>
                     <table class="etabs-table">
                         <thead>
@@ -672,8 +636,8 @@
                     </table>
                 </div>
 
-                <!-- Sección 8: Pure Capacities (resumen) -->
-                <div class="etabs-section">
+                <!-- Sección 8: Pure Capacities (oculto para beams sin axial alto) -->
+                <div class="etabs-section" id="pure-capacities-section">
                     <h4>Pure Capacities (without interaction)</h4>
                     <table class="etabs-table">
                         <thead>
@@ -942,6 +906,8 @@
     <!-- Editing -->
     <script src="{{ url_for('structural_static', filename='js/editing/RecalcButton.js') }}?v=1"></script>
     <script src="{{ url_for('structural_static', filename='js/editing/ElementEditManager.js') }}?v=1"></script>
+    <!-- Filters -->
+    <script src="{{ url_for('structural_static', filename='js/filters/ColumnFilters.js') }}?v=1"></script>
     <!-- Tables -->
     <script src="{{ url_for('structural_static', filename='js/tables/FilterableTable.js') }}?v=1"></script>
     <script src="{{ url_for('structural_static', filename='js/tables/cells/SharedCells.js') }}?v=1"></script>

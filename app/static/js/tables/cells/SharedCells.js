@@ -51,8 +51,8 @@ const SharedCells = {
         // DCR siempre viene del backend (domain/constants/phi_chapter21.py)
         const dcr = result.flexure?.dcr ?? 0;
         const dcrDisplay = formatDcr(dcr);
-        // Usar dcr_class del backend (centralizado)
-        const dcrClass = result.dcr_class || result.flexure?.dcr_class || getDcrClass(dcr);
+        // Usar dcr_class específico de flexure (no el general del result)
+        const dcrClass = result.flexure?.dcr_class || getDcrClass(dcr);
 
         const sl = result.slenderness || {};
         const slenderInfo = sl.is_slender
@@ -63,12 +63,19 @@ const SharedCells = {
         td.className = `fs-value ${dcrClass}`;
         td.title = `Combo: ${result.flexure?.critical_combo || '-'}\n${slenderInfo}`;
 
-        let tensionWarning = '';
-        if (hasTension) {
-            tensionWarning = `<span class="tension-warning" title="${tensionCombos} combinación(es) con tracción">⚡${tensionCombos}</span>`;
+        const elementType = result.element_type || '';
+        const designBehavior = result.design_behavior || '';
+        let warningHtml = '';
+
+        if (elementType === 'beam' && designBehavior === 'SEISMIC_BEAM_COLUMN') {
+            // Vigas con axial significativo → se diseñan como columna (§18.6.4.6)
+            warningHtml = `<span class="tension-warning" title="Viga con carga axial significativa - diseño como columna (§18.6.4.6)">📊</span>`;
+        } else if (hasTension && elementType !== 'beam') {
+            // Tracción solo relevante para muros/columnas, no para vigas
+            warningHtml = `<span class="tension-warning" title="${tensionCombos} combinación(es) con tracción">⚡${tensionCombos}</span>`;
         }
 
-        td.innerHTML = `<span class="fs-number">${dcrDisplay}</span>${tensionWarning}`;
+        td.innerHTML = `<span class="fs-number">${dcrDisplay}</span>${warningHtml}`;
         return td;
     },
 
@@ -77,6 +84,7 @@ const SharedCells = {
      */
     createFlexureCapCell(result) {
         const exceedsAxial = result.flexure?.exceeds_axial || false;
+        const Pu = result.flexure?.Pu || 0;
         const Mu = result.flexure?.Mu || 0;
         const phiMnPu = result.flexure?.phi_Mn_at_Pu || 0;
 
@@ -84,12 +92,12 @@ const SharedCells = {
         td.className = 'capacity-cell';
 
         if (exceedsAxial) {
-            td.title = `Pu=${result.flexure.Pu}t > φPn_max=${result.flexure.phi_Pn_max}t`;
+            td.title = `Pu=${Pu}t > φPn_max=${result.flexure.phi_Pn_max}t`;
             td.innerHTML = `<span class="capacity-main axial-exceeded">⚠️ Pu>φPn</span>`;
         } else {
             const phiMn0 = result.flexure?.phi_Mn_0 || 0;
             td.title = `φMn₀=${phiMn0}t-m (P=0)`;
-            td.innerHTML = `Mu=${Mu}t-m<br>φMn=${phiMnPu}t-m`;
+            td.innerHTML = `Pu=${Pu}t, Mu=${Mu}t-m<br>φMn=${phiMnPu}t-m`;
         }
         return td;
     },
@@ -99,8 +107,18 @@ const SharedCells = {
      */
     createShearSfCell(result) {
         const formulaType = result.shear?.formula_type || 'wall';
-        const shearType = formulaType === 'column' ? 'COL' : 'MURO';
-        const shearTitle = formulaType === 'column' ? 'Fórmula COLUMNA (ACI 22.5)' : 'Fórmula MURO (ACI 18.10.4)';
+        // Mapear formula_type a etiqueta y título
+        let shearType, shearTitle;
+        if (formulaType === 'column') {
+            shearType = 'COL';
+            shearTitle = 'Fórmula COLUMNA (ACI 22.5)';
+        } else if (formulaType === 'beam') {
+            shearType = 'VIGA';
+            shearTitle = 'Fórmula VIGA (ACI §18.6.5)';
+        } else {
+            shearType = 'MURO';
+            shearTitle = 'Fórmula MURO (ACI 18.10.4)';
+        }
         // DCR siempre viene del backend (domain/constants/phi_chapter21.py)
         const dcr = result.shear?.dcr ?? 0;
         const dcrDisplay = formatDcr(dcr);
@@ -115,7 +133,6 @@ const SharedCells = {
         td.innerHTML = `
             <span class="fs-number">${dcrDisplay}</span>
             <span class="formula-tag formula-${formulaType}">${shearType}</span>
-            <span class="phi-tag" title="Factor φv (§21.2.4)">φ${phi_v.toFixed(2)}</span>
         `;
         return td;
     },
@@ -130,6 +147,7 @@ const SharedCells = {
         const Ve = result.shear?.Ve || result.shear?.Vu_2 || 0;
         const Vc = result.shear?.Vc || 0;
         const Vs = result.shear?.Vs || 0;
+        const formulaType = result.shear?.formula_type || 'wall';
 
         // Detectar si hay amplificación significativa (>1%)
         const hasAmplification = Ve > VuOriginal * 1.01;
@@ -138,9 +156,13 @@ const SharedCells = {
         td.className = 'capacity-cell';
 
         if (hasAmplification) {
-            // Mostrar Vu original → Ve amplificado
-            td.title = `Vu análisis=${VuOriginal}t → Ve diseño=${Ve}t (§18.10.3.3)\nVc=${Vc}t + Vs=${Vs}t`;
-            td.innerHTML = `φVn=${phiVn}t, Vu=${VuOriginal}t<br>Ve=${Ve}t (Ωv×Vu)`;
+            // Texto según tipo de elemento
+            // Vigas: Ve = (Mpr1+Mpr2)/ln (§18.6.5.1)
+            // Muros: Ve = Ωv×Vu (§18.10.3.3)
+            const veSource = formulaType === 'beam' ? 'Mpr' : 'Ωv×Vu';
+            const veRef = formulaType === 'beam' ? '§18.6.5' : '§18.10.3.3';
+            td.title = `Vu análisis=${VuOriginal}t → Ve diseño=${Ve}t (${veRef})\nVc=${Vc}t + Vs=${Vs}t`;
+            td.innerHTML = `φVn=${phiVn}t, Vu=${VuOriginal}t<br>Ve=${Ve}t (${veSource})`;
         } else {
             td.title = `Vc=${Vc}t + Vs=${Vs}t`;
             td.innerHTML = `φVn=${phiVn}t, Vu=${VuOriginal}t<br>Vc=${Vc}t + Vs=${Vs}t`;

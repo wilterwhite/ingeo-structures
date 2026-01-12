@@ -44,6 +44,9 @@ class StructuralPage {
         this.slabsTable = null;
         this.plotModal = null;
         this.reportModal = null;
+
+        // Filtros Excel-style para drop beams
+        this.dropBeamFilters = null;
     }
 
     // =========================================================================
@@ -102,11 +105,6 @@ class StructuralPage {
             // Resultados
             resultsTable: document.getElementById('results-table')?.querySelector('tbody'),
             summaryPlotContainer: document.getElementById('summary-plot-container'),
-            grillaFilter: document.getElementById('grilla-filter'),
-            storyFilter: document.getElementById('story-filter'),
-            axisFilter: document.getElementById('axis-filter'),
-            statusFilter: document.getElementById('status-filter'),
-            elementTypeFilter: document.getElementById('element-type-filter'),
             // Viga estándar
             stdBeamWidth: document.getElementById('std-beam-width'),
             stdBeamHeight: document.getElementById('std-beam-height'),
@@ -182,12 +180,7 @@ class StructuralPage {
         // Upload (delegado a UploadManager)
         this.uploadManager.bindEvents();
 
-        // Filtros de resultados
-        this.elements.grillaFilter?.addEventListener('change', () => this.resultsTable.onGrillaChange());
-        this.elements.storyFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
-        this.elements.axisFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
-        this.elements.statusFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
-        this.elements.elementTypeFilter?.addEventListener('change', () => this.resultsTable.applyFilters());
+        // Generar reporte
         this.elements.generateReportBtn?.addEventListener('click', () => this.openReportModal());
 
         // Viga estándar (para muros acoplados)
@@ -440,11 +433,49 @@ class StructuralPage {
     // =========================================================================
 
     renderDropBeamsTable() {
+        // Obtener resultados (filtrados si hay filtros activos)
+        const results = this.dropBeamFilters?.getResults() || this.dropBeamResults;
+        let filtered = results;
+
+        // Aplicar filtros si existen
+        if (this.dropBeamFilters && Object.keys(this.dropBeamFilters.filters).length > 0) {
+            filtered = results.filter(r => this.dropBeamFilters.matchesFilters(r));
+            filtered = this.dropBeamFilters.sortResults(filtered);
+        }
+
         this.renderElementTable(
-            this.dropBeamResults,
+            filtered,
             this.elements.dropBeamsTable,
-            'drop-beam', 12, 'No hay vigas capitel para analizar', 'DropBeams'
+            'drop-beam', 11, 'No hay vigas capitel para analizar', 'DropBeams'
         );
+
+        // Inicializar o actualizar filtros Excel-style
+        this._initDropBeamFilters();
+    }
+
+    /**
+     * Inicializa los filtros de columna para la tabla de vigas capitel.
+     */
+    _initDropBeamFilters() {
+        if (!this.dropBeamFilters) {
+            this.dropBeamFilters = new ColumnFilters(
+                this,
+                'drop-beams-table',
+                ColumnFilters.DROP_BEAMS_CONFIG
+            );
+            // Callback para re-renderizar cuando se apliquen filtros
+            this.dropBeamFilters.onFilterApply = (filtered) => {
+                this.renderElementTable(
+                    filtered,
+                    this.elements.dropBeamsTable,
+                    'drop-beam', 11, 'No hay vigas capitel para analizar', 'DropBeams'
+                );
+                this._initDropBeamFilters();  // Re-crear botones
+            };
+        }
+        // Actualizar los resultados disponibles
+        this.dropBeamFilters.setResults(this.dropBeamResults);
+        this.dropBeamFilters.createHeaderButtons();
     }
 
     clearDropBeamsTable() {

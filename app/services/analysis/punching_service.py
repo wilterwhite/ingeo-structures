@@ -175,15 +175,15 @@ class PunchingService:
 
         if total == 0:
             return {
-                'total_checked': 0,
-                'ok_count': 0,
-                'fail_count': 0,
+                'total': 0,
+                'ok': 0,
+                'fail': 0,
                 'pass_rate': 100,
                 'message': 'No hay losas 2-Way para verificar punzonamiento'
             }
 
-        ok_count = sum(1 for r in applicable if r['status'] == 'OK')
-        fail_count = total - ok_count
+        ok = sum(1 for r in applicable if r['status'] == 'OK')
+        fail = total - ok
 
         # Encontrar caso critico
         min_sf = float('inf')
@@ -199,10 +199,10 @@ class PunchingService:
                 critical_slab = slab_key
 
         return {
-            'total_checked': total,
-            'ok_count': ok_count,
-            'fail_count': fail_count,
-            'pass_rate': round(ok_count / total * 100, 1) if total > 0 else 100,
+            'total': total,
+            'ok': ok,
+            'fail': fail,
+            'pass_rate': round(ok / total * 100, 1) if total > 0 else 100,
             'min_sf': round(min_sf, 2) if min_sf < 100 else '>100',
             'critical_slab': critical_slab
         }

@@ -26,7 +26,7 @@ from .analysis.shear_service import ShearService
 from .analysis.statistics_service import StatisticsService
 from .analysis.proposal_service import ProposalService
 from .analysis.reinforcement_update_service import ReinforcementUpdateService
-from .analysis.pier_details_service import PierDetailsService
+from .analysis.element_details_service import ElementDetailsService
 from .analysis.element_orchestrator import ElementOrchestrator
 from .analysis.slab_service import SlabService
 from .analysis.punching_service import PunchingService
@@ -61,7 +61,7 @@ class StructuralAnalysisService:
         interaction_service: Optional[InteractionDiagramService] = None,
         plot_generator: Optional[PlotGenerator] = None,
         proposal_service: Optional[ProposalService] = None,
-        details_formatter: Optional[PierDetailsService] = None,
+        details_formatter: Optional[ElementDetailsService] = None,
         element_orchestrator: Optional[ElementOrchestrator] = None,
         slab_service: Optional[SlabService] = None,
         punching_service: Optional[PunchingService] = None
@@ -104,7 +104,7 @@ class StructuralAnalysisService:
         self._proposal_service = proposal_service or ProposalService(
             orchestrator=self._orchestrator
         )
-        self._details_formatter = details_formatter or PierDetailsService(
+        self._details_formatter = details_formatter or ElementDetailsService(
             session_manager=self._session_manager,
             orchestrator=self._orchestrator,
             flexocompression_service=self._flexo_service,
@@ -367,13 +367,13 @@ class StructuralAnalysisService:
         Returns:
             Diccionario con estadísticas por tipo de elemento
         """
-        total_piers_count = len(pier_results)
-        ok_piers = sum(1 for r in pier_results if r.get('overall_status') == 'OK')
+        total = len(pier_results)
+        ok = sum(1 for r in pier_results if r.get('overall_status') == 'OK')
         statistics = {
-            'total_piers': total_piers_count,
-            'ok_count': ok_piers,
-            'fail_count': total_piers_count - ok_piers,
-            'pass_rate': round(ok_piers / total_piers_count * 100, 1) if total_piers_count > 0 else 0,
+            'total': total,
+            'ok': ok,
+            'fail': total - ok,
+            'pass_rate': round(ok / total * 100, 1) if total > 0 else 0,
         }
 
         if column_results:
@@ -834,6 +834,27 @@ class StructuralAnalysisService:
     def get_pier_capacities(self, session_id: str, pier_key: str) -> Dict[str, Any]:
         """Calcula las capacidades puras del pier (sin interacción)."""
         return self._details_formatter.get_pier_capacities(session_id, pier_key)
+
+    def get_element_capacities(
+        self,
+        session_id: str,
+        element_key: str,
+        element_type: str = 'pier'
+    ) -> Dict[str, Any]:
+        """
+        Obtiene capacidades de cualquier tipo de elemento estructural.
+
+        Args:
+            session_id: ID de sesión
+            element_key: Clave del elemento (Story_Label)
+            element_type: 'pier', 'column', 'beam', 'drop_beam'
+
+        Returns:
+            Dict con información completa del elemento estilo ETABS
+        """
+        return self._details_formatter.get_element_capacities(
+            session_id, element_key, element_type
+        )
 
     def get_combination_details(
         self,

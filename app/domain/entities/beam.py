@@ -252,12 +252,16 @@ class Beam:
 
     def get_section_dimensions(self, direction: str = 'primary') -> Tuple[float, float]:
         """
-        Dimensiones para curva P-M: (ancho, peralte).
+        Dimensiones para curva P-M: (dimension en direccion del momento, espesor).
 
-        Para vigas, siempre retorna (width, depth) ya que
-        tipicamente se flexionan solo en un plano (M3).
+        Para vigas: retorna (depth, width) porque depth=h es la dimension
+        en la direccion del momento (M3), y width=bw es el espesor.
+
+        Esto es consistente con InteractionDiagramService que interpreta:
+        - width como h (altura en direccion del momento)
+        - thickness como b (ancho de la seccion)
         """
-        return (self.width, self.depth)
+        return (self.depth, self.width)
 
     # =========================================================================
     # Metodos de Actualizacion

@@ -74,7 +74,7 @@ class RowFactory {
     _createColumnRow(row, result, colKey, isExpanded) {
         row.appendChild(SharedCells.createInfoCell(result, 'column'));
         row.appendChild(SharedCells.createStoryCell(result));
-        row.appendChild(ColumnCells.createHeightCell(result));
+        row.appendChild(ColumnCells.createGeometryCell(result));
         row.appendChild(ColumnCells.createLongitudinalCell(result, colKey));
         row.appendChild(ColumnCells.createStirrupsCell(result, colKey));
         row.appendChild(SharedCells.createEmptyCell());
@@ -194,9 +194,14 @@ class RowFactory {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const action = btn.dataset.action;
-                if (action === 'section') this.table.page.wallsModule.showSectionDiagram(elementKey, elementLabel);
-                else if (action === 'info') this.table.page.wallsModule.showPierDetails(elementKey, elementLabel);
-                else if (action === 'diagram') this.table.page.plotModal.open(elementKey, elementLabel, this.table.plotsCache[elementKey]);
+                if (action === 'section') {
+                    this.table.page.wallsModule.showSectionDiagram(elementKey, elementLabel);
+                } else if (action === 'info') {
+                    // Modal de detalles unificado para todos los tipos
+                    this.table.page.wallsModule.showElementDetails(elementKey, elementLabel, elementType);
+                } else if (action === 'diagram') {
+                    this.table.page.plotModal.open(elementKey, elementLabel, this.table.plotsCache[elementKey]);
+                }
             });
         });
 

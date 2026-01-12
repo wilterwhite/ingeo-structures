@@ -17,7 +17,6 @@ from .force_extractor import ForceExtractor, ForceEnvelope
 from .geometry_normalizer import GeometryNormalizer, ColumnGeometry, BeamGeometry, WallGeometry
 from .verification_config import VerificationConfig, get_config
 from .element_details_service import ElementDetailsService
-from .pier_details_service import PierDetailsService
 from .verification_result import (
     FlexureResult,
     BidirectionalShearResult,
@@ -39,7 +38,6 @@ __all__ = [
     'ElementOrchestrator',
     'OrchestrationResult',
     'ElementDetailsService',
-    'PierDetailsService',
     # Clasificación y comportamiento de diseño
     'ElementClassifier',
     'ElementType',

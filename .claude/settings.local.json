@@ -116,7 +116,9 @@
       "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && grep \"\"^class \"\" {}')",
       "Bash(python -m flask:*)",
       "Bash(python scripts/e2k_section_cuts_generator.py:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nRefactor: limpiar flujo SSE y centralizar procesamiento de streams\n\n- Centralizar lógica SSE en helper _processSSEStream() con reader.cancel()\n- Simplificar uploadWithProgress() y analyzeWithProgress() usando el helper\n- Eliminar wrapper runAnalysisWithProgress() redundante\n- Agregar threaded=True a Flask para conexiones concurrentes\n- Documentar delay de 100ms necesario por límite de conexiones del navegador\n- Eliminar logs de debug temporales\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nRefactor: limpiar flujo SSE y centralizar procesamiento de streams\n\n- Centralizar lógica SSE en helper _processSSEStream() con reader.cancel()\n- Simplificar uploadWithProgress() y analyzeWithProgress() usando el helper\n- Eliminar wrapper runAnalysisWithProgress() redundante\n- Agregar threaded=True a Flask para conexiones concurrentes\n- Documentar delay de 100ms necesario por límite de conexiones del navegador\n- Eliminar logs de debug temporales\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git -C \"C:\\Users\\willi\\Github\\ingeo-structures\" log --all --oneline -- \"*flexure*\" \"*dcr*\" \"*color*\")",
+      "Bash(git mv:*)"
     ]
   }
 }

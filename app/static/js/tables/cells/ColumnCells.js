@@ -6,14 +6,27 @@
 
 const ColumnCells = {
     /**
-     * Celda de altura de columna.
+     * Celda de geometría de columna (similar a pier).
+     * Muestra: dimensiones de sección + altura
+     * Backend envía: width_mm (depth), thickness_mm (width), height_mm
      */
-    createHeightCell(result) {
+    createGeometryCell(result) {
+        const geom = result.geometry || {};
+
+        // Dimensiones de sección en cm (backend envía en metros: width_m, thickness_m)
+        const depthCm = ((geom.width_m || 0) * 100).toFixed(0);
+        const widthCm = ((geom.thickness_m || 0) * 100).toFixed(0);
+        const sectionCm = `${depthCm} × ${widthCm}`;
+
+        // Altura en metros
+        const heightM = geom.height_m || 0;
+
         const td = document.createElement('td');
-        td.className = 'height-cell';
+        td.className = 'geometry-cell';
+        td.title = `Sección: ${depthCm}×${widthCm} cm\nAltura: ${heightM.toFixed(2)}m`;
         td.innerHTML = `
-            <span class="height-value">${result.geometry?.height_m?.toFixed(2) || 0}m</span>
-            <span class="height-label">altura</span>
+            <span class="geom-dims">${sectionCm} cm</span>
+            <span class="geom-hwcs">altura=${heightM.toFixed(1)}m</span>
         `;
         return td;
     },

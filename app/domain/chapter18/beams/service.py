@@ -220,6 +220,13 @@ class SeismicBeamService:
 
         # §18.6.5 / §18.4.2.3 - Cortante (aplica para SPECIAL e INTERMEDIATE)
         if category in (SeismicCategory.SPECIAL, SeismicCategory.INTERMEDIATE):
+            # Calcular Mpr si no se proporcionan (diseño por capacidad §18.6.5.1)
+            # Mpr = 1.25 * Mn donde Mn se calcula con Whitney
+            if Mpr_left <= 0 and Mpr_right <= 0 and As_top > 0 and As_bottom > 0:
+                Mpr_left, Mpr_right = self._calculate_Mpr_pair(
+                    As_top, As_bottom, bw, d, fy, fc
+                )
+
             if Vu > 0 or (Mpr_left > 0 and Mpr_right > 0):
                 Ag = bw * h
                 shear = self._check_shear(
@@ -460,6 +467,63 @@ class SeismicBeamService:
             is_ok=is_ok,
             warnings=warnings,
         )
+
+    def _calculate_Mpr_pair(
+        self,
+        As_top: float,
+        As_bottom: float,
+        bw: float,
+        d: float,
+        fy: float,
+        fc: float,
+        alpha: float = 1.25
+    ) -> tuple:
+        """
+        Calcula par de momentos probables Mpr para diseño por capacidad §18.6.5.1.
+
+        Para vigas en curvatura reversa:
+        - Mpr_left = Mpr del refuerzo superior (momento negativo)
+        - Mpr_right = Mpr del refuerzo inferior (momento positivo)
+
+        Args:
+            As_top: Área de refuerzo superior (mm²)
+            As_bottom: Área de refuerzo inferior (mm²)
+            bw: Ancho del alma (mm)
+            d: Profundidad efectiva (mm)
+            fy: Fluencia del acero (MPa)
+            fc: Resistencia del concreto (MPa)
+            alpha: Factor de sobrerresistencia (default 1.25 según ACI)
+
+        Returns:
+            Tuple (Mpr_left, Mpr_right) en tonf-m
+        """
+        def calc_Mn(As: float) -> float:
+            """Calcula Mn usando bloque Whitney."""
+            if As <= 0:
+                return 0.0
+            # Profundidad del bloque de compresión
+            a = As * fy / (0.85 * fc * bw)
+            if a >= d:
+                return 0.0
+            # Mn en N-mm -> tonf-m (dividir por 1e6 para kN-m, luego /9.81 para tonf-m)
+            Mn_Nmm = As * fy * (d - a / 2)
+            Mn_kNm = Mn_Nmm / 1e6
+            return Mn_kNm / 9.81  # kN-m a tonf-m
+
+        # Momento negativo (As_top en tracción) - típicamente mayor
+        Mn_neg = calc_Mn(As_top)
+        Mpr_neg = alpha * Mn_neg
+
+        # Momento positivo (As_bottom en tracción)
+        Mn_pos = calc_Mn(As_bottom)
+        Mpr_pos = alpha * Mn_pos
+
+        # En curvatura reversa, un extremo tiene M- y el otro M+
+        # Retornamos el mayor de ambos para cada extremo (conservador)
+        Mpr_left = max(Mpr_neg, Mpr_pos)
+        Mpr_right = max(Mpr_neg, Mpr_pos)
+
+        return (Mpr_left, Mpr_right)
 
     def _check_shear(
         self,

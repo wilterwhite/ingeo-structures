@@ -275,6 +275,25 @@ class StructuralAPI {
     }
 
     /**
+     * Obtiene capacidades de cualquier tipo de elemento estructural.
+     * Endpoint unificado para pier, column, beam y drop_beam.
+     * @param {string} sessionId - ID de sesión
+     * @param {string} elementKey - Clave del elemento (Story_Label)
+     * @param {string} elementType - 'pier', 'column', 'beam', 'drop_beam'
+     * @returns {Promise<Object>} Información completa del elemento
+     */
+    async getElementCapacities(sessionId, elementKey, elementType = 'pier') {
+        return this.request('/element-capacities', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                element_key: elementKey,
+                element_type: elementType
+            })
+        });
+    }
+
+    /**
      * Obtiene los detalles de diseño para una combinación específica.
      * @param {string} sessionId - ID de sesión
      * @param {string} pierKey - Clave del pier (Story_Label)

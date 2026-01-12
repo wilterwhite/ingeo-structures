@@ -132,10 +132,11 @@ const BeamCells = {
         const td = document.createElement('td');
         td.className = 'geometry-cell';
         const geom = result.geometry || {};
+        // Usar campos unificados del backend: width_m (largo), thickness_m (espesor)
         const width = geom.width_m ? (geom.width_m * 100).toFixed(0) : 0;
-        const depth = geom.depth_m ? (geom.depth_m * 100).toFixed(0) : 0;
-        td.innerHTML = `${width}×${depth} cm`;
-        td.title = `Sección: ${width}×${depth} cm`;
+        const thickness = geom.thickness_m ? (geom.thickness_m * 100).toFixed(0) : 0;
+        td.innerHTML = `${width}×${thickness} cm`;
+        td.title = `Sección: ${width}×${thickness} cm`;
         return td;
     },
 

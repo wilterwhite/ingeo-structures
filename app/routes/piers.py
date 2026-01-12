@@ -404,6 +404,58 @@ def get_combination_details(session_id: str, pier_key: str, data: dict):
     return jsonify(result)
 
 
+@bp.route('/element-capacities', methods=['POST'])
+@handle_errors
+@require_session
+def get_element_capacities(session_id: str, data: dict):
+    """
+    Obtiene capacidades de cualquier tipo de elemento estructural.
+
+    Endpoint unificado para pier, column, beam y drop_beam.
+
+    Request (JSON):
+        {
+            "session_id": "uuid-xxx",
+            "element_key": "Story1_M1",
+            "element_type": "pier"  // pier, column, beam, drop_beam
+        }
+
+    Response:
+        {
+            "success": true,
+            "element_type": "pier",
+            "element_info": {...},
+            "reinforcement": {...},
+            "capacities": {...},
+            "slenderness": {...},
+            "flexure_design": {...},
+            "shear_design": {...},
+            "boundary_check": {...},  // solo pier/drop_beam
+            "combinations_list": [...]
+        }
+    """
+    element_type = data.get('element_type', 'pier')
+    element_key = data.get('element_key')
+
+    if not element_key:
+        return jsonify({
+            'success': False,
+            'error': 'element_key es requerido'
+        }), 400
+
+    valid_types = ('pier', 'column', 'beam', 'drop_beam')
+    if element_type not in valid_types:
+        return jsonify({
+            'success': False,
+            'error': f'element_type debe ser uno de: {", ".join(valid_types)}'
+        }), 400
+
+    service = get_analysis_service()
+    result = service.get_element_capacities(session_id, element_key, element_type)
+
+    return jsonify(result)
+
+
 @bp.route('/section-diagram', methods=['POST'])
 @handle_errors
 @require_session_and_pier

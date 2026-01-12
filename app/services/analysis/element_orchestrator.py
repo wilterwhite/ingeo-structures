@@ -333,7 +333,13 @@ class ElementOrchestrator:
         geom = GeometryNormalizer.to_beam(element)
         envelope = ForceExtractor.extract_envelope(forces)
 
+        # Extraer fuerzas del análisis
+        Vu = envelope.V2_max
+        Pu = envelope.P_max
+
         # Llamar servicio
+        # Nota: Mpr_left/Mpr_right son para diseño por capacidad (§18.6.5.1)
+        # Si Vu > 0, el cortante se calcula con Ve = Vu (sin Mpr)
         result = self._beam_service.verify_beam(
             bw=geom.bw, h=geom.h, d=geom.d, ln=geom.ln, cover=geom.cover,
             fc=geom.fc, fy=geom.fy, fyt=geom.fyt,
@@ -342,10 +348,14 @@ class ElementOrchestrator:
             db_long=geom.db_long,
             s_in_zone=geom.s_in_zone, s_outside_zone=geom.s_outside_zone,
             Av=geom.Av,
-            Vu=envelope.V2_max, Mpr_left=0, Mpr_right=0,
+            Vu=Vu, Mpr_left=0, Mpr_right=0,
+            Pu=Pu,
             category=category,
             lambda_factor=lambda_factor,
         )
+
+        # Calcular datos de flexión usando FlexocompressionService
+        flexure_data = self._flexo_service.check_flexure(element, forces, moment_axis='M3')
 
         return OrchestrationResult(
             element_type=element_type,
@@ -356,6 +366,7 @@ class ElementOrchestrator:
             dcr_max=result.dcr_max,
             critical_check=result.critical_check,
             warnings=result.warnings,
+            flexure_data=flexure_data,
         )
 
     def _verify_flexure(

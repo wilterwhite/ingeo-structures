@@ -19,6 +19,9 @@ class ResultsTable extends FilterableTable {
         this.combinationsManager = new CombinationsManager(this);
         this.couplingBeamManager = new CouplingBeamManager(this);
         this.editManager = new PierEditManager(this);
+
+        // Filtros de columna tipo Excel
+        this.columnFilters = new ColumnFilters(this);
     }
 
     // =========================================================================
@@ -36,44 +39,13 @@ class ResultsTable extends FilterableTable {
     // =========================================================================
 
     /**
-     * Obtiene valores de filtros desde el DOM.
-     * @returns {Object}
-     */
-    getFilterValues() {
-        return {
-            grilla: this.elements.grillaFilter?.value || '',
-            story: this.elements.storyFilter?.value || '',
-            axis: this.elements.axisFilter?.value || '',
-            status: this.elements.statusFilter?.value || '',
-            elementType: this.elements.elementTypeFilter?.value || ''
-        };
-    }
-
-    /**
      * Verifica si un resultado cumple con los filtros.
+     * Delegado a ColumnFilters.
      * @param {Object} result
      * @returns {boolean}
      */
     matchesFilters(result) {
-        const filters = this.filters;
-
-        if (filters.grilla) {
-            const parts = result.pier_label.split('-');
-            const grilla = parts.length > 0 ? parts[0] : '';
-            if (grilla !== filters.grilla) return false;
-        }
-        if (filters.story && result.story !== filters.story) return false;
-        if (filters.axis) {
-            const parts = result.pier_label.split('-');
-            const axis = parts.length > 1 ? parts[1] : '';
-            if (axis !== filters.axis) return false;
-        }
-        if (filters.elementType) {
-            const elementType = result.element_type || 'pier';
-            if (elementType !== filters.elementType) return false;
-        }
-        // Filtrar por estado (usa helper de FilterableTable)
-        return this.matchesStatusFilter(result, filters.status);
+        return this.columnFilters.matchesFilters(result);
     }
 
     // =========================================================================
@@ -87,91 +59,19 @@ class ResultsTable extends FilterableTable {
     get sessionId() { return this.page.sessionId; }
 
     // =========================================================================
-    // Filtros
+    // Filtros (delegados a ColumnFilters)
     // =========================================================================
 
-    populateFilters() {
-        const { grillaFilter, storyFilter } = this.elements;
-
-        if (grillaFilter) {
-            grillaFilter.innerHTML = '<option value="">Todas</option>';
-            this.page.uniqueGrillas.forEach(grilla => {
-                const option = document.createElement('option');
-                option.value = grilla;
-                option.textContent = grilla;
-                grillaFilter.appendChild(option);
-            });
-        }
-
-        if (storyFilter) {
-            storyFilter.innerHTML = '<option value="">Todos</option>';
-            this.page.uniqueStories.forEach(story => {
-                const option = document.createElement('option');
-                option.value = story;
-                option.textContent = story;
-                storyFilter.appendChild(option);
-            });
-        }
-
-        this.updateAxisFilter();
-    }
-
-    updateAxisFilter() {
-        const { grillaFilter, axisFilter } = this.elements;
-        if (!axisFilter) return;
-
-        const selectedGrilla = grillaFilter?.value || '';
-        const currentAxis = axisFilter.value;
-
-        let axes;
-        if (selectedGrilla) {
-            const axesSet = new Set();
-            this.page.results.forEach(result => {
-                const parts = result.pier_label.split('-');
-                const grilla = parts[0] || '';
-                const axis = parts[1] || '';
-                if (grilla === selectedGrilla && axis) axesSet.add(axis);
-            });
-            axes = [...axesSet].sort();
-        } else {
-            axes = this.page.uniqueAxes;
-        }
-
-        axisFilter.innerHTML = '<option value="">Todos</option>';
-        axes.forEach(axis => {
-            const option = document.createElement('option');
-            option.value = axis;
-            option.textContent = axis;
-            axisFilter.appendChild(option);
-        });
-
-        if (axes.includes(currentAxis)) axisFilter.value = currentAxis;
-    }
-
-    onGrillaChange() {
-        this.updateAxisFilter();
-        this.applyFilters();
-    }
-
     /**
-     * Aplica filtros y actualiza la tabla.
-     * Sobrescribe FilterableTable.applyFilters() para agregar lógica específica.
+     * Inicializa filtros (llamado después del render inicial).
+     * Los filtros de columna se manejan en ColumnFilters.
      */
-    applyFilters() {
-        // Actualizar filtros (el setter sincroniza con page.filters)
-        this.filters = this.getFilterValues();
-
-        // Filtrar resultados
-        this.filteredResults = this.page.results.filter(r => this.matchesFilters(r));
-
-        // Renderizar y actualizar
-        this.renderTable(this.filteredResults);
-        this.updateStats();
-        this.updateSummaryPlot();
+    populateFilters() {
+        // Ya no se usan filtros de toolbar, ColumnFilters se inicializa en render()
     }
 
     /**
-     * Obtiene resultados filtrados (alias para compatibilidad).
+     * Obtiene resultados filtrados.
      * @returns {Array}
      */
     getFilteredResults() {
@@ -182,11 +82,9 @@ class ResultsTable extends FilterableTable {
 
     /**
      * Actualiza estadísticas en el DOM.
-     * Implementa método abstracto de FilterableTable.
      */
     updateStats() {
         const stats = this.calculateStats();
-        // Convertir rate a pass_rate para compatibilidad
         stats.pass_rate = stats.rate;
         this.updateStatistics(stats);
     }
@@ -200,14 +98,19 @@ class ResultsTable extends FilterableTable {
         this.updateStatistics(data.statistics);
         this.renderSummaryPlot(data.summary_plot);
         this.renderTable(data.results);
+
+        // Inicializar filtros de columna después de renderizar
+        this.columnFilters.init();
     }
 
     updateStatistics(stats) {
+        if (!stats) return;
         const { statTotal, statOk, statFail, statRate } = this.elements;
-        if (statTotal) statTotal.textContent = stats.total;
-        if (statOk) statOk.textContent = stats.ok;
-        if (statFail) statFail.textContent = stats.fail;
-        if (statRate) statRate.textContent = stats.pass_rate.toFixed(1) + '%';
+        // Backend usa nomenclatura unificada: total, ok, fail, pass_rate
+        if (statTotal) statTotal.textContent = stats.total ?? 0;
+        if (statOk) statOk.textContent = stats.ok ?? 0;
+        if (statFail) statFail.textContent = stats.fail ?? 0;
+        if (statRate) statRate.textContent = (stats.pass_rate ?? 0).toFixed(1) + '%';
     }
 
     renderSummaryPlot(plotBase64) {

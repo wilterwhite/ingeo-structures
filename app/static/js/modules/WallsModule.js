@@ -9,6 +9,7 @@ class WallsModule {
         this._currentPierKey = null;
         this._currentPierLabel = null;
         this._currentPierData = null;
+        this._currentElementType = 'pier';  // pier, column, beam, drop_beam
     }
 
     // =========================================================================
@@ -38,25 +39,43 @@ class WallsModule {
     // =========================================================================
 
     async showPierDetails(pierKey, pierLabel) {
+        // Delegar al método unificado
+        return this.showElementDetails(pierKey, pierLabel, 'pier');
+    }
+
+    /**
+     * Muestra el modal de detalles unificado para cualquier tipo de elemento.
+     * @param {string} elementKey - Clave del elemento (Story_Label)
+     * @param {string} elementLabel - Etiqueta para mostrar
+     * @param {string} elementType - 'pier', 'column', 'beam', 'drop_beam'
+     */
+    async showElementDetails(elementKey, elementLabel, elementType = 'pier') {
         const { pierDetailsModal, pierDetailsTitle, pierDetailsLoading } = this.page.elements;
 
         if (!pierDetailsModal) return;
 
-        // Guardar referencia del pier actual para el selector de combos
-        this._currentPierKey = pierKey;
-        this._currentPierLabel = pierLabel;
+        // Guardar referencia del elemento actual
+        this._currentPierKey = elementKey;
+        this._currentPierLabel = elementLabel;
+        this._currentElementType = elementType;
 
         // Abrir modal y mostrar loading
         pierDetailsModal.classList.add('active');
-        pierDetailsTitle.textContent = pierLabel;
+        pierDetailsModal.dataset.elementType = elementType;  // Para CSS condicional
+        pierDetailsTitle.textContent = elementLabel;
         pierDetailsLoading.classList.add('active');
 
+        // Mostrar/ocultar secciones según tipo
+        this._toggleSectionsForType(elementType);
+
         try {
-            const data = await structuralAPI.getPierCapacities(this.page.sessionId, pierKey);
+            const data = await structuralAPI.getElementCapacities(
+                this.page.sessionId, elementKey, elementType
+            );
 
             if (data.success) {
                 this._currentPierData = data;
-                this.updatePierDetailsContent(data);
+                this.updateElementDetailsContent(data, elementType);
                 this.populateComboSelector(data.combinations_list || []);
 
                 // Cargar datos de la primera combinación (la más crítica)
@@ -65,7 +84,7 @@ class WallsModule {
                     const firstComboIndex = combinations[0].index;
                     const comboDetails = await structuralAPI.getCombinationDetails(
                         this.page.sessionId,
-                        pierKey,
+                        elementKey,
                         firstComboIndex
                     );
                     if (comboDetails.success) {
@@ -77,11 +96,48 @@ class WallsModule {
                 this.closePierDetailsModal();
             }
         } catch (error) {
-            console.error('Error getting pier capacities:', error);
+            console.error('Error getting element capacities:', error);
             this.page.showNotification('Error: ' + error.message, 'error');
             this.closePierDetailsModal();
         } finally {
             pierDetailsLoading.classList.remove('active');
+        }
+    }
+
+    /**
+     * Muestra/oculta secciones del modal según el tipo de elemento.
+     */
+    _toggleSectionsForType(elementType) {
+        // Boundary check: solo pier y drop_beam
+        const boundarySection = document.getElementById('boundary-check-section');
+        if (boundarySection) {
+            const showBoundary = elementType === 'pier' || elementType === 'drop_beam';
+            boundarySection.style.display = showBoundary ? '' : 'none';
+        }
+
+        // Slenderness: solo pier, column (beams con axial alta se maneja en updateContent)
+        const slendernessSection = document.getElementById('slenderness-section');
+        if (slendernessSection) {
+            const showSlenderness = elementType === 'pier' || elementType === 'column';
+            slendernessSection.style.display = showSlenderness ? '' : 'none';
+        }
+
+        // Pure capacities: todos excepto beams sin carga axial (se maneja en updateContent)
+        const capacitiesSection = document.getElementById('pure-capacities-section');
+        if (capacitiesSection) {
+            capacitiesSection.style.display = '';  // Visible por defecto, se oculta en updateContent si no hay datos
+        }
+
+        // Actualizar título según tipo
+        const typeLabels = {
+            'pier': 'Pier Details',
+            'column': 'Column Details',
+            'beam': 'Beam Details',
+            'drop_beam': 'Drop Beam Details'
+        };
+        const typeTitle = document.getElementById('element-type-title');
+        if (typeTitle) {
+            typeTitle.textContent = typeLabels[elementType] || 'Element Details';
         }
     }
 
@@ -255,49 +311,50 @@ class WallsModule {
     }
 
     updatePierDetailsContent(data) {
-        const { pier_info, reinforcement, slenderness, capacities,
+        // Compatibilidad: delegar al método unificado
+        this.updateElementDetailsContent(data, 'pier');
+    }
+
+    /**
+     * Actualiza el contenido del modal para cualquier tipo de elemento.
+     */
+    updateElementDetailsContent(data, elementType = 'pier') {
+        const { element_info, reinforcement, slenderness, capacities,
                 flexure_design, shear_design, boundary_check } = data;
 
-        // Sección 1: Pier Details
-        document.getElementById('det-story').textContent = pier_info.story;
-        document.getElementById('det-pier').textContent = pier_info.label;
-        document.getElementById('det-length').textContent = pier_info.width_m;
-        document.getElementById('det-thickness').textContent = pier_info.thickness_m;
-        document.getElementById('det-height').textContent = pier_info.height_m;
-        document.getElementById('det-ag').textContent = pier_info.Ag_m2 ||
-            (pier_info.width_m * pier_info.thickness_m).toFixed(4);
+        // Para compatibilidad con piers antiguos
+        const info = element_info || data.pier_info;
+        const reinf = reinforcement || data.reinforcement;
+
+        // Sección 1: Element Details (adaptado según tipo)
+        document.getElementById('det-story').textContent = info.story;
+        document.getElementById('det-pier').textContent = info.label;
+
+        // Dimensiones varían según tipo
+        if (elementType === 'pier') {
+            document.getElementById('det-length').textContent = info.width_m;
+            document.getElementById('det-thickness').textContent = info.thickness_m;
+            document.getElementById('det-height').textContent = info.height_m;
+        } else if (elementType === 'column') {
+            document.getElementById('det-length').textContent = info.depth_m;
+            document.getElementById('det-thickness').textContent = info.width_m;
+            document.getElementById('det-height').textContent = info.height_m;
+        } else if (elementType === 'beam' || elementType === 'drop_beam') {
+            document.getElementById('det-length').textContent = info.depth_m;
+            document.getElementById('det-thickness').textContent = info.width_m;
+            document.getElementById('det-height').textContent = info.length_m;
+        }
+
+        document.getElementById('det-ag').textContent = info.Ag_m2 ||
+            (info.width_m * info.thickness_m).toFixed(4);
 
         // Sección 2: Material Properties
-        document.getElementById('det-fc').textContent = pier_info.fc_MPa;
-        document.getElementById('det-fy').textContent = pier_info.fy_MPa;
-        document.getElementById('det-lambda').textContent = pier_info.lambda || '1.0';
+        document.getElementById('det-fc').textContent = info.fc_MPa;
+        document.getElementById('det-fy').textContent = info.fy_MPa;
+        document.getElementById('det-lambda').textContent = info.lambda || '1.0';
 
-        // Sección 4: Reinforcement
-        document.getElementById('det-reinf-desc').textContent = reinforcement.description;
-        document.getElementById('det-as-vertical').textContent = reinforcement.As_vertical_mm2;
-        document.getElementById('det-as-edge').textContent = reinforcement.As_edge_mm2;
-        document.getElementById('det-as-total').textContent = reinforcement.As_flexure_total_mm2;
-
-        const rhoVEl = document.getElementById('det-rho-actual');
-        const rhoVValue = reinforcement.rho_vertical?.toFixed(5) || '—';
-        if (reinforcement.rho_v_ok === false) {
-            rhoVEl.innerHTML = `<span class="warning-text">${rhoVValue}</span>`;
-        } else {
-            rhoVEl.textContent = rhoVValue;
-        }
-
-        const warningsContainer = document.getElementById('det-reinf-warnings');
-        if (warningsContainer) {
-            if (reinforcement.warnings && reinforcement.warnings.length > 0) {
-                warningsContainer.innerHTML = reinforcement.warnings.map(w =>
-                    `<div class="warning-message">${w}</div>`
-                ).join('');
-                warningsContainer.style.display = 'block';
-            } else {
-                warningsContainer.innerHTML = '';
-                warningsContainer.style.display = 'none';
-            }
-        }
+        // Sección 4: Reinforcement (adaptado según tipo)
+        this._updateReinforcementSection(reinf, elementType);
 
         // Sección 5: Flexural Design
         this._renderDesignTable('det-flexure-body', flexure_design, row => `
@@ -321,7 +378,6 @@ class WallsModule {
             if (phiVElement) {
                 phiVElement.textContent = `(φv = ${phi_v.toFixed(2)})`;
             }
-            // Sincronizar con Design Code Parameters
             if (phiVParamElement) {
                 phiVParamElement.textContent = phi_v.toFixed(2);
             }
@@ -340,32 +396,100 @@ class WallsModule {
             </tr>
         `);
 
-        // Sección 7: Boundary Element Check
-        this._renderDesignTable('det-boundary-body', boundary_check, row => `
-            <tr>
-                <td>${row.location}</td>
-                <td class="combo-cell">${row.combo}</td>
-                <td>${row.Pu_tonf}</td>
-                <td>${row.Mu_tonf_m}</td>
-                <td>${row.sigma_comp_MPa}</td>
-                <td>${row.sigma_limit_MPa}</td>
-                <td>${row.c_mm}</td>
-                <td class="${row.required === 'Yes' ? 'status-fail' : 'status-ok'}">${row.required}</td>
-            </tr>
-        `);
-
-        // Sección 8: Pure Capacities
-        if (slenderness && slenderness.is_slender) {
-            document.getElementById('det-phi-pn').innerHTML =
-                `<span class="strikethrough">${capacities.phi_Pn_max_tonf}</span>` +
-                ` → ${capacities.phi_Pn_reduced_tonf}`;
-        } else {
-            document.getElementById('det-phi-pn').textContent = capacities.phi_Pn_max_tonf;
+        // Sección 7: Boundary Element Check (solo si hay datos)
+        if (boundary_check) {
+            this._renderDesignTable('det-boundary-body', boundary_check, row => `
+                <tr>
+                    <td>${row.location}</td>
+                    <td class="combo-cell">${row.combo}</td>
+                    <td>${row.Pu_tonf}</td>
+                    <td>${row.Mu_tonf_m}</td>
+                    <td>${row.sigma_comp_MPa}</td>
+                    <td>${row.sigma_limit_MPa}</td>
+                    <td>${row.c_mm}</td>
+                    <td class="${row.required === 'Yes' ? 'status-fail' : 'status-ok'}">${row.required}</td>
+                </tr>
+            `);
         }
-        document.getElementById('det-phi-mn3').textContent = capacities.phi_Mn3_tonf_m;
-        document.getElementById('det-phi-mn2').textContent = capacities.phi_Mn2_tonf_m;
-        document.getElementById('det-phi-vn2').textContent = capacities.phi_Vn2_tonf;
-        document.getElementById('det-phi-vn3').textContent = capacities.phi_Vn3_tonf;
+
+        // Sección 8: Pure Capacities (ocultar si no hay datos)
+        const capacitiesSection = document.getElementById('pure-capacities-section');
+        if (capacities) {
+            if (capacitiesSection) capacitiesSection.style.display = '';
+
+            if (slenderness && slenderness.is_slender) {
+                document.getElementById('det-phi-pn').innerHTML =
+                    `<span class="strikethrough">${capacities.phi_Pn_max_tonf}</span>` +
+                    ` → ${capacities.phi_Pn_reduced_tonf || capacities.phi_Pn_max_tonf}`;
+            } else {
+                document.getElementById('det-phi-pn').textContent = capacities.phi_Pn_max_tonf;
+            }
+            document.getElementById('det-phi-mn3').textContent = capacities.phi_Mn3_tonf_m;
+            document.getElementById('det-phi-mn2').textContent = capacities.phi_Mn2_tonf_m;
+            document.getElementById('det-phi-vn2').textContent = capacities.phi_Vn2_tonf;
+            document.getElementById('det-phi-vn3').textContent = capacities.phi_Vn3_tonf;
+        } else {
+            // Ocultar sección de capacidades para beams sin carga axial alta
+            if (capacitiesSection) capacitiesSection.style.display = 'none';
+        }
+
+        // Sección 3: Slenderness (ocultar si no hay datos)
+        const slendernessSection = document.getElementById('slenderness-section');
+        if (slenderness) {
+            if (slendernessSection) slendernessSection.style.display = '';
+            // Los datos de slenderness se actualizan en otro lugar si existen
+        } else {
+            if (slendernessSection) slendernessSection.style.display = 'none';
+        }
+    }
+
+    /**
+     * Actualiza la sección de refuerzo según el tipo de elemento.
+     */
+    _updateReinforcementSection(reinf, elementType) {
+        document.getElementById('det-reinf-desc').textContent = reinf.description || '';
+
+        // Adaptar según tipo de refuerzo
+        if (reinf.type === 'mesh_edge') {
+            // Pier o drop_beam: malla + borde
+            document.getElementById('det-as-vertical').textContent = reinf.As_vertical_mm2 || '—';
+            document.getElementById('det-as-edge').textContent = reinf.As_edge_mm2 || '—';
+            document.getElementById('det-as-total').textContent = reinf.As_flexure_total_mm2 || '—';
+
+            const rhoVEl = document.getElementById('det-rho-actual');
+            const rhoVValue = reinf.rho_vertical?.toFixed(5) || '—';
+            if (reinf.rho_v_ok === false) {
+                rhoVEl.innerHTML = `<span class="warning-text">${rhoVValue}</span>`;
+            } else {
+                rhoVEl.textContent = rhoVValue;
+            }
+        } else if (reinf.type === 'bars_stirrups') {
+            // Columna: barras longitudinales
+            document.getElementById('det-as-vertical').textContent = reinf.As_long_mm2 || '—';
+            document.getElementById('det-as-edge').textContent = '—';
+            document.getElementById('det-as-total').textContent = reinf.As_long_mm2 || '—';
+            document.getElementById('det-rho-actual').textContent = reinf.rho_long?.toFixed(5) || '—';
+        } else if (reinf.type === 'bars_top_bottom') {
+            // Viga: barras top/bottom
+            document.getElementById('det-as-vertical').textContent = reinf.As_top_mm2 || '—';
+            document.getElementById('det-as-edge').textContent = reinf.As_bottom_mm2 || '—';
+            document.getElementById('det-as-total').textContent = reinf.As_total_mm2 || '—';
+            document.getElementById('det-rho-actual').textContent = '—';  // Vigas no muestran cuantía igual
+        }
+
+        // Warnings (solo para piers)
+        const warningsContainer = document.getElementById('det-reinf-warnings');
+        if (warningsContainer) {
+            if (reinf.warnings && reinf.warnings.length > 0) {
+                warningsContainer.innerHTML = reinf.warnings.map(w =>
+                    `<div class="warning-message">${w}</div>`
+                ).join('');
+                warningsContainer.style.display = 'block';
+            } else {
+                warningsContainer.innerHTML = '';
+                warningsContainer.style.display = 'none';
+            }
+        }
     }
 
     closePierDetailsModal() {

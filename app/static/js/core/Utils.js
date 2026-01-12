@@ -207,9 +207,10 @@ function getDimensionsDisplay(result) {
         return result.dimensions_display;
     }
     // Fallback: formatear localmente desde geometry
+    // Orden consistente: width (largo) × thickness (espesor)
     const g = result?.geometry;
     if (g) {
-        return formatSectionDimensions(g.thickness_m, g.width_m, 'mm');
+        return formatSectionDimensions(g.width_m, g.thickness_m, 'mm');
     }
     return '-';
 }

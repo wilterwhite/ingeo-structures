@@ -465,8 +465,8 @@ class SlabService:
         results = self.verify_all_slabs(slabs, slab_forces)
 
         total = len(results)
-        ok_count = sum(1 for r in results.values() if r['overall_status'] == 'OK')
-        fail_count = total - ok_count
+        ok = sum(1 for r in results.values() if r['overall_status'] == 'OK')
+        fail = total - ok
 
         # Encontrar losa critica
         min_sf = float('inf')
@@ -482,10 +482,10 @@ class SlabService:
                     critical_slab = slab_key
 
         return {
-            'total_slabs': total,
-            'ok_count': ok_count,
-            'fail_count': fail_count,
-            'pass_rate': round(ok_count / total * 100, 1) if total > 0 else 100,
+            'total': total,
+            'ok': ok,
+            'fail': fail,
+            'pass_rate': round(ok / total * 100, 1) if total > 0 else 100,
             'min_sf': _format_sf(min_sf) if min_sf != float('inf') else None,
             'critical_slab': critical_slab
         }
