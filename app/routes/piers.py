@@ -110,6 +110,87 @@ def upload_excel():
         }), 500
 
 
+@bp.route('/upload-stream', methods=['POST'])
+def upload_stream():
+    """
+    Sube y parsea un archivo Excel de ETABS con progreso en tiempo real (SSE).
+
+    Request:
+        multipart/form-data con campos:
+        - 'file': archivo Excel (requerido)
+        - 'hn_ft': altura del edificio en pies (opcional)
+
+    Response:
+        Stream SSE con eventos:
+        - progress: {type: 'progress', phase, current, total, element}
+        - complete: {type: 'complete', result: {success, session_id, summary}}
+        - error: {type: 'error', message}
+    """
+    if 'file' not in request.files:
+        return jsonify({
+            'success': False,
+            'error': 'No se proporcionó archivo. Use el campo "file".'
+        }), 400
+
+    file = request.files['file']
+
+    if not file.filename:
+        return jsonify({
+            'success': False,
+            'error': 'Archivo vacío'
+        }), 400
+
+    if not file.filename.lower().endswith('.xlsx'):
+        return jsonify({
+            'success': False,
+            'error': 'El archivo debe ser un Excel (.xlsx)'
+        }), 400
+
+    try:
+        logger.info(f"[Upload-Stream] Recibiendo archivo: {file.filename}")
+        file_content = file.read()
+        logger.info(f"[Upload-Stream] Tamaño: {len(file_content) / 1024:.1f} KB")
+
+        # Obtener hn_ft opcional (altura del edificio en pies)
+        hn_ft = None
+        hn_ft_str = request.form.get('hn_ft')
+        if hn_ft_str:
+            try:
+                hn_ft = float(hn_ft_str)
+            except ValueError:
+                pass
+
+        session_id = str(uuid.uuid4())
+        logger.info(f"[Upload-Stream] Iniciando parseo... session_id={session_id[:8]}")
+
+        service = get_analysis_service()
+
+        def generate():
+            try:
+                for event in service.parse_excel_with_progress(file_content, session_id, hn_ft=hn_ft):
+                    yield f"data: {json.dumps(event)}\n\n"
+            except Exception as e:
+                logger.exception(f"[Upload-Stream] ERROR: {str(e)}")
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+        return Response(
+            generate(),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no'
+            }
+        )
+
+    except Exception as e:
+        logger.exception(f"[Upload-Stream] ERROR: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Error al procesar el archivo: {str(e)}'
+        }), 500
+
+
 @bp.route('/analyze', methods=['POST'])
 @handle_errors
 @require_session
@@ -599,6 +680,120 @@ def update_beam_reinforcement(session_id: str, data: dict, parsed_data, beam_key
         'success': True,
         'beam_key': beam_key
     })
+
+
+# =============================================================================
+# E2K Section Cuts Generator
+# =============================================================================
+
+@bp.route('/process-e2k', methods=['POST'])
+def process_e2k():
+    """
+    Procesa un archivo E2K de ETABS y genera Section Cuts para todos los grupos.
+
+    Request:
+        multipart/form-data con campos:
+        - 'file': archivo E2K (requerido)
+
+    Returns:
+        El archivo E2K modificado con los Section Cuts generados.
+    """
+    from io import BytesIO
+    import re
+
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No se proporcionó archivo'}), 400
+
+    file = request.files['file']
+    if not file.filename:
+        return jsonify({'success': False, 'error': 'Nombre de archivo vacío'}), 400
+
+    if not file.filename.lower().endswith('.e2k'):
+        return jsonify({'success': False, 'error': 'El archivo debe ser .e2k'}), 400
+
+    try:
+        # Leer contenido del archivo
+        content = file.read()
+        try:
+            text = content.decode('utf-8')
+        except UnicodeDecodeError:
+            text = content.decode('latin-1')
+
+        lines = text.splitlines()
+
+        # Extraer grupos (líneas de definición sin POINT ni AREA)
+        group_pattern = r'^\s*GROUP\s+"([^"]+)"\s*$'
+        groups = set()
+        for line in lines:
+            match = re.match(group_pattern, line)
+            if match:
+                groups.add(match.group(1))
+        groups = sorted(groups)
+
+        # Extraer section cuts existentes
+        scut_pattern = r'SECTIONCUT\s+"([^"]+)"'
+        existing_scuts = set()
+        for line in lines:
+            match = re.search(scut_pattern, line)
+            if match:
+                existing_scuts.add(match.group(1))
+
+        # Generar nuevos section cuts
+        new_scuts = []
+        for group_name in groups:
+            scut_name = f"SCut-{group_name}"
+            if scut_name not in existing_scuts:
+                scut_line = f'  SECTIONCUT "{scut_name}"  DEFINEDBY "Group"  GROUP "{group_name}"  CUTFOR "Analysis"  ROTABOUTZ 0 ROTABOUTYY 0 ROTABOUTXXX 0'
+                new_scuts.append(scut_line)
+
+        if not new_scuts:
+            return jsonify({
+                'success': False,
+                'error': 'No hay nuevos section cuts para generar. Todos los grupos ya tienen section cuts.'
+            }), 400
+
+        # Insertar section cuts en el archivo
+        output = []
+        section_cuts_found = False
+
+        for line in lines:
+            if line.strip() == '$ SECTION CUTS':
+                section_cuts_found = True
+                output.append(line)
+                for scut in new_scuts:
+                    output.append(scut)
+                continue
+
+            if not section_cuts_found and line.strip() == '$ DIMENSION LINES':
+                output.append('')
+                output.append('$ SECTION CUTS')
+                for scut in new_scuts:
+                    output.append(scut)
+                output.append('')
+
+            output.append(line)
+
+        # Generar archivo de respuesta
+        output_content = '\n'.join(output)
+        output_bytes = output_content.encode('utf-8')
+
+        # Nombre del archivo de salida
+        original_name = file.filename.rsplit('.', 1)[0]
+        output_filename = f"{original_name}_with_scuts.e2k"
+
+        return Response(
+            output_bytes,
+            mimetype='application/octet-stream',
+            headers={
+                'Content-Disposition': f'attachment; filename="{output_filename}"',
+                'X-Section-Cuts-Generated': str(len(new_scuts)),
+                'X-Total-Groups': str(len(groups))
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error procesando E2K: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # =============================================================================

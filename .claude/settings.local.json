@@ -114,7 +114,8 @@
       "Bash(del \"C:\\Users\\willi\\Github\\ingeo-structures\\nul\")",
       "Bash(ls -la \"C:\\Users\\willi\\Github\\ingeo-structures\\app\\services\\analysis\"\" | grep \".py \")",
       "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && grep \"\"^class \"\" {}')",
-      "Bash(python -m flask:*)"
+      "Bash(python -m flask:*)",
+      "Bash(python scripts/e2k_section_cuts_generator.py:*)"
     ]
   }
 }

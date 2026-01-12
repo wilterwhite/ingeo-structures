@@ -73,6 +73,70 @@ class SessionManager:
             'summary': summary
         }
 
+    def create_session_with_progress(
+        self,
+        file_content: bytes,
+        session_id: str,
+        hn_ft: Optional[float] = None
+    ):
+        """
+        Crea una nueva sesión parseando el archivo Excel con progreso.
+
+        Generador que emite eventos de progreso durante el parsing.
+
+        Args:
+            file_content: Contenido binario del Excel
+            session_id: ID de sesión único
+            hn_ft: Altura del edificio en pies (opcional)
+
+        Yields:
+            dict: Eventos de progreso o resultado final
+        """
+        parsed_data = None
+
+        # Usar el parser con progreso
+        for event in self._excel_parser.parse_excel_with_progress(file_content):
+            if event['type'] == 'complete':
+                parsed_data = event['result']
+            else:
+                yield event
+
+        if parsed_data is None:
+            yield {'type': 'error', 'message': 'Error durante el parsing'}
+            return
+
+        # Calcular continuidad de muros y hwcs para cada pier
+        yield {'type': 'progress', 'phase': 'continuity', 'current': 1, 'total': 1, 'element': 'Calculando continuidad de muros'}
+        if parsed_data.piers and parsed_data.stories:
+            continuity_info = self._continuity_service.analyze_continuity(
+                piers=parsed_data.piers,
+                stories=parsed_data.stories,
+                hn_ft=hn_ft
+            )
+            parsed_data.continuity_info = continuity_info
+            parsed_data.building_info = self._continuity_service.get_building_info()
+
+        self._cache[session_id] = parsed_data
+        summary = self._excel_parser.get_summary(parsed_data)
+
+        # Agregar info del edificio al resumen
+        if parsed_data.building_info:
+            summary['building'] = {
+                'n_stories': parsed_data.building_info.n_stories,
+                'hn_ft': round(parsed_data.building_info.hn_ft, 1),
+                'hn_m': round(parsed_data.building_info.hn_m, 2),
+                'total_height_mm': round(parsed_data.building_info.total_height_mm, 0)
+            }
+
+        yield {
+            'type': 'complete',
+            'result': {
+                'success': True,
+                'session_id': session_id,
+                'summary': summary
+            }
+        }
+
     def get_session(self, session_id: str) -> Optional[ParsedData]:
         """Obtiene los datos de una sesión."""
         return self._cache.get(session_id)

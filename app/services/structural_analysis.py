@@ -195,6 +195,10 @@ class StructuralAnalysisService:
         """Parsea Excel de ETABS y crea una sesión."""
         return self._session_manager.create_session(file_content, session_id, hn_ft=hn_ft)
 
+    def parse_excel_with_progress(self, file_content: bytes, session_id: str, hn_ft: Optional[float] = None):
+        """Parsea Excel de ETABS con progreso SSE."""
+        yield from self._session_manager.create_session_with_progress(file_content, session_id, hn_ft=hn_ft)
+
     def clear_session(self, session_id: str) -> bool:
         """Limpia una sesión del cache."""
         return self._session_manager.clear_session(session_id)

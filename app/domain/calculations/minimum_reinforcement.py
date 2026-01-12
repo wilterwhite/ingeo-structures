@@ -127,8 +127,11 @@ class MinimumReinforcementCalculator:
         # As mínimo por metro
         As_min_per_m = rho_min * thickness * 1000  # mm²/m
 
-        # Espaciamiento exacto
-        spacing_exact = n_meshes * bar_area * 1000 / As_min_per_m
+        # Espaciamiento exacto (proteger división por cero)
+        if As_min_per_m > 0:
+            spacing_exact = n_meshes * bar_area * 1000 / As_min_per_m
+        else:
+            spacing_exact = cls.MAX_SPACING
 
         # Redondear hacia abajo a múltiplo de 5mm
         spacing = int(spacing_exact // cls.SPACING_ROUND_MULTIPLE) * cls.SPACING_ROUND_MULTIPLE
@@ -147,6 +150,8 @@ class MinimumReinforcementCalculator:
         thickness: float,
     ) -> float:
         """Calcula la cuantía de refuerzo provista."""
+        if spacing <= 0 or thickness <= 0:
+            return 0.0
         As_per_m = n_meshes * bar_area * 1000 / spacing
         return As_per_m / (thickness * 1000)
 

@@ -484,7 +484,7 @@ class SeismicBeamService:
         Delega cálculos de Vc y Vs a funciones centralizadas en domain/shear/.
         """
         # Calcular Ve por capacidad (Mpr1 + Mpr2)/ln
-        if Mpr_left > 0 or Mpr_right > 0:
+        if (Mpr_left > 0 or Mpr_right > 0) and ln > 0:
             # Mpr en tonf-m, ln en mm -> Ve en tonf
             Ve = (Mpr_left + Mpr_right) * 1000 / ln
         else:

@@ -69,6 +69,14 @@ class Pier(MeshReinforcementMixin):
 
     def __post_init__(self):
         """Calcula áreas de barra según diámetros y aplica armadura mínima si no se especificó."""
+        # Validar geometría (debe ser positiva para evitar divisiones por cero)
+        if self.width <= 0:
+            raise ValueError(f"Pier {self.label}: width debe ser > 0, recibido {self.width}")
+        if self.thickness <= 0:
+            raise ValueError(f"Pier {self.label}: thickness debe ser > 0, recibido {self.thickness}")
+        if self.height <= 0:
+            raise ValueError(f"Pier {self.label}: height debe ser > 0, recibido {self.height}")
+
         self._bar_area_v = get_bar_area(self.diameter_v, 50.3)
         self._bar_area_h = get_bar_area(self.diameter_h, 50.3)
         self._bar_area_edge = get_bar_area(self.diameter_edge, 78.5)

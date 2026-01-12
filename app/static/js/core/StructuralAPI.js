@@ -60,6 +60,63 @@ class StructuralAPI {
     }
 
     /**
+     * Sube un archivo Excel con progreso en tiempo real (SSE).
+     * @param {File} file - Archivo Excel
+     * @param {Function} onProgress - Callback para progreso (current, total, element)
+     * @returns {Promise<Object>} Resultado del upload
+     */
+    uploadWithProgress(file, onProgress) {
+        return new Promise((resolve, reject) => {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch(`${this.baseUrl}/upload-stream`, {
+                method: 'POST',
+                body: formData
+            }).then(response => {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                const processChunk = ({ done, value }) => {
+                    if (value) {
+                        buffer += decoder.decode(value, { stream: !done });
+                    }
+
+                    // Procesar líneas completas
+                    const lines = buffer.split('\n');
+                    buffer = done ? '' : lines.pop();
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const event = JSON.parse(line.slice(6));
+                                if (event.type === 'progress') {
+                                    onProgress(event.current, event.total, event.element);
+                                } else if (event.type === 'complete') {
+                                    resolve(event.result);
+                                    return;
+                                } else if (event.type === 'error') {
+                                    reject(new Error(event.message));
+                                    return;
+                                }
+                            } catch (e) {
+                                console.error('Error parsing SSE:', e);
+                            }
+                        }
+                    }
+
+                    if (!done) {
+                        reader.read().then(processChunk);
+                    }
+                };
+
+                reader.read().then(processChunk);
+            }).catch(reject);
+        });
+    }
+
+    /**
      * Limpia una sesión.
      * @param {string} sessionId - ID de sesión
      * @returns {Promise<Object>}
@@ -123,13 +180,13 @@ class StructuralAPI {
             let buffer = '';
 
             const processChunk = ({ done, value }) => {
-                if (done) return;
-
-                buffer += decoder.decode(value, { stream: true });
+                if (value) {
+                    buffer += decoder.decode(value, { stream: !done });
+                }
 
                 // Procesar líneas completas
                 const lines = buffer.split('\n');
-                buffer = lines.pop();
+                buffer = done ? '' : lines.pop();
 
                 for (const line of lines) {
                     if (line.startsWith('data: ')) {
@@ -139,8 +196,10 @@ class StructuralAPI {
                                 onProgress(event.current, event.total, event.pier);
                             } else if (event.type === 'complete') {
                                 onComplete(event.result);
+                                return;
                             } else if (event.type === 'error') {
                                 onError(new Error(event.message));
+                                return;
                             }
                         } catch (e) {
                             console.error('Error parsing SSE:', e);
@@ -148,7 +207,9 @@ class StructuralAPI {
                     }
                 }
 
-                reader.read().then(processChunk);
+                if (!done) {
+                    reader.read().then(processChunk);
+                }
             };
 
             reader.read().then(processChunk);

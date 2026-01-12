@@ -92,7 +92,15 @@ class Beam:
     _bar_area_stirrup: float = field(default=78.5, repr=False)
 
     def __post_init__(self):
-        """Calcula areas de barra segun diametros."""
+        """Calcula areas de barra segun diametros y valida geometría."""
+        # Validar geometría (debe ser positiva para evitar divisiones por cero)
+        if self.depth <= 0:
+            raise ValueError(f"Beam {self.label}: depth debe ser > 0, recibido {self.depth}")
+        if self.width <= 0:
+            raise ValueError(f"Beam {self.label}: width debe ser > 0, recibido {self.width}")
+        if self.length <= 0:
+            raise ValueError(f"Beam {self.label}: length debe ser > 0, recibido {self.length}")
+
         self._bar_area_stirrup = get_bar_area(self.stirrup_diameter, 78.5)
 
     # =========================================================================

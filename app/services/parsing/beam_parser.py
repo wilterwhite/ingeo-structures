@@ -17,7 +17,7 @@ from ...domain.entities.beam_forces import BeamForces
 from ...domain.entities.load_combination import LoadCombination
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
 from .material_mapper import parse_material_to_fc
-from .table_extractor import normalize_columns
+from .table_extractor import normalize_columns, extract_units_from_df
 
 
 class BeamParser:
@@ -105,16 +105,23 @@ class BeamParser:
 
         df = normalize_columns(df)
 
+        # Extraer factores de conversión de unidades de la primera fila
+        units = extract_units_from_df(df)
+        logger.info(f"Frame sections: Unidades detectadas - depth: {units.get('depth', 1.0)}, width: {units.get('width', 1.0)}")
+
+        # Saltar la fila de unidades (primera fila del DataFrame normalizado)
+        df = df.iloc[1:]
+
         for _, row in df.iterrows():
             name = str(row.get('name', ''))
 
             if not name or name == 'nan':
                 continue
 
-            # Geometria (m -> mm)
+            # Geometria - aplicar factor de conversión según unidades del Excel
             try:
-                depth = float(row.get('depth', 0)) * 1000  # altura
-                width = float(row.get('width', 0)) * 1000  # ancho
+                depth = float(row.get('depth', 0)) * units.get('depth', 1.0)  # altura
+                width = float(row.get('width', 0)) * units.get('width', 1.0)  # ancho
             except (ValueError, TypeError) as e:
                 logger.warning("Sección '%s' con geometría inválida, omitiendo: %s", name, e)
                 continue
@@ -152,16 +159,25 @@ class BeamParser:
 
         df = normalize_columns(df)
 
+        # Extraer factores de conversión de unidades de la primera fila
+        units = extract_units_from_df(df)
+        # El diámetro puede estar en 'diameter' o 't3'
+        diameter_factor = units.get('diameter', units.get('t3', 1.0))
+        logger.info(f"Circular sections: Unidades detectadas - diameter: {diameter_factor}")
+
+        # Saltar la fila de unidades (primera fila del DataFrame normalizado)
+        df = df.iloc[1:]
+
         for _, row in df.iterrows():
             name = str(row.get('name', ''))
 
             if not name or name == 'nan':
                 continue
 
-            # Geometria circular (m -> mm)
+            # Geometria circular - aplicar factor de conversión según unidades del Excel
             # La columna puede ser 'diameter' o 't3' según la versión de ETABS
             try:
-                diameter = float(row.get('diameter', 0) or row.get('t3', 0)) * 1000
+                diameter = float(row.get('diameter', 0) or row.get('t3', 0)) * diameter_factor
             except (ValueError, TypeError) as e:
                 logger.warning("Sección circular '%s' con diámetro inválido, omitiendo: %s", name, e)
                 continue
@@ -365,6 +381,14 @@ class BeamParser:
             # Shape de la sección (default: rectangular)
             beam_shape = section.get('shape', BeamShape.RECTANGULAR)
 
+            # Validar geometría antes de crear Beam
+            if length <= 0 or section['depth'] <= 0 or section['width'] <= 0:
+                logger.warning(
+                    f"Beam {beam_label}@{story}: geometría inválida "
+                    f"(length={length}, depth={section['depth']}, width={section['width']})"
+                )
+                continue
+
             beams[beam_key] = Beam(
                 label=beam_label,
                 story=story,
@@ -378,6 +402,7 @@ class BeamParser:
                 section_name=section_name
             )
 
+        logger.info(f"Frame beams: {len(beams)} importadas OK")
         return beams, beam_forces, stories
 
     def _parse_spandrels(
@@ -398,6 +423,16 @@ class BeamParser:
         if props_df is not None:
             props_df = normalize_columns(props_df)
 
+            # Extraer factores de conversión de unidades de la primera fila
+            units = extract_units_from_df(props_df)
+            logger.info(
+                f"Spandrels: Unidades detectadas - length: {units.get('length', 1.0)}, "
+                f"depth: {units.get('depth left', 1.0)}, thickness: {units.get('thickness left', 1.0)}"
+            )
+
+            # Saltar la fila de unidades (primera fila del DataFrame normalizado)
+            props_df = props_df.iloc[1:]
+
             for _, row in props_df.iterrows():
                 story = str(row.get('story', ''))
                 spandrel_label = str(row.get('spandrel', ''))
@@ -407,14 +442,14 @@ class BeamParser:
 
                 spandrel_key = f"{story}_{spandrel_label}"
 
-                # Geometria (m -> mm)
-                length = float(row.get('length', 0)) * 1000
-                depth_left = float(row.get('depth left', 0)) * 1000
-                depth_right = float(row.get('depth right', 0)) * 1000
+                # Geometria - aplicar factor de conversión según unidades del Excel
+                length = float(row.get('length', 0)) * units.get('length', 1.0)
+                depth_left = float(row.get('depth left', 0)) * units.get('depth left', 1.0)
+                depth_right = float(row.get('depth right', 0)) * units.get('depth right', 1.0)
                 depth = (depth_left + depth_right) / 2
 
-                thickness_left = float(row.get('thickness left', 0)) * 1000
-                thickness_right = float(row.get('thickness right', 0)) * 1000
+                thickness_left = float(row.get('thickness left', 0)) * units.get('thickness left', 1.0)
+                thickness_right = float(row.get('thickness right', 0)) * units.get('thickness right', 1.0)
                 width = (thickness_left + thickness_right) / 2
 
                 # Material
@@ -473,12 +508,22 @@ class BeamParser:
                     continue
 
         # 3. Crear vigas spandrel
+        skipped_invalid = 0
         for spandrel_key in set(spandrel_props.keys()) | set(beam_forces.keys()):
             if spandrel_key not in spandrel_props:
                 continue
 
             props = spandrel_props[spandrel_key]
             story, spandrel_label = spandrel_key.split('_', 1)
+
+            # Validar geometría antes de crear Beam
+            if props['length'] <= 0 or props['depth'] <= 0 or props['width'] <= 0:
+                logger.warning(
+                    f"Spandrel {spandrel_label}@{story}: geometría inválida "
+                    f"(length={props['length']}, depth={props['depth']}, width={props['width']})"
+                )
+                skipped_invalid += 1
+                continue
 
             if spandrel_key in beam_forces:
                 beam_forces[spandrel_key].length = props['length']
@@ -497,6 +542,7 @@ class BeamParser:
             if story not in stories:
                 stories.append(story)
 
+        logger.info(f"Spandrels: {len(beams)} importadas OK, {skipped_invalid} con geometría inválida")
         return beams, beam_forces, stories
 
     def _clean_step_type(self, value) -> str:

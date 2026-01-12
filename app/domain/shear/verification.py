@@ -149,6 +149,8 @@ class ShearVerificationService:
             return max(0.0, alpha_c_tension)
 
         # Caso normal: usar Tabla 18.10.4.1 basada en hw/lw
+        if lw <= 0:
+            return ALPHA_C_SLENDER  # Asumir muro esbelto si lw=0
         ratio = hw / lw
 
         if hw_wall_total is not None and hw_wall_total > 0:

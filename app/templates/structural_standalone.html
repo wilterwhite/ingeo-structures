@@ -45,16 +45,17 @@
                 <div class="card-body">
                     <div class="upload-area" id="upload-area">
                         <div class="icon">📄</div>
-                        <p>Arrastra tu archivo Excel aquí o haz clic para seleccionar</p>
-                        <p class="hint">Tablas ETABS requeridas:</p>
+                        <p>Arrastra tu archivo aquí o haz clic para seleccionar</p>
+                        <p class="hint"><strong>Excel (.xlsx)</strong>: Análisis estructural | <strong>E2K (.e2k)</strong>: Generar Section Cuts</p>
                         <img src="{{ url_for('structural_static', filename='img/Tablas_Etabs.png') }}?v=3"
                              alt="Tablas ETABS soportadas"
                              class="etabs-tables-img">
-                        <input type="file" id="file-input" accept=".xlsx">
+                        <input type="file" id="file-input" accept=".xlsx,.e2k">
                     </div>
                     <div class="loading" id="upload-loading">
                         <div class="spinner"></div>
-                        <p>Procesando archivo...</p>
+                        <p id="upload-status">Procesando archivo...</p>
+                        <p id="upload-detail" class="upload-detail"></p>
                     </div>
                 </div>
             </div>

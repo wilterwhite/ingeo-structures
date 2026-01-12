@@ -69,7 +69,8 @@ class ReinforcementConfig:
 
         Fórmula: n_meshes × (área_barra / espaciamiento) × 1000
         """
-        return self.n_meshes * (self.bar_area_v / self.spacing_v) * 1000
+        spacing = self.spacing_v or 200  # Default 200mm si es 0
+        return self.n_meshes * (self.bar_area_v / spacing) * 1000
 
     @property
     def As_horizontal_per_m(self) -> float:
@@ -78,7 +79,8 @@ class ReinforcementConfig:
 
         Fórmula: n_meshes × (área_barra / espaciamiento) × 1000
         """
-        return self.n_meshes * (self.bar_area_h / self.spacing_h) * 1000
+        spacing = self.spacing_h or 200  # Default 200mm si es 0
+        return self.n_meshes * (self.bar_area_h / spacing) * 1000
 
     def get_As_vertical_total(self, wall_length_mm: float) -> float:
         """
@@ -114,7 +116,8 @@ class ReinforcementConfig:
         Returns:
             Cuantía ρ = As / (b × 1000)
         """
-        return self.As_vertical_per_m / (thickness_mm * 1000)
+        thickness = thickness_mm or 1  # Evitar división por cero
+        return self.As_vertical_per_m / (thickness * 1000)
 
     def get_rho_horizontal(self, thickness_mm: float) -> float:
         """
@@ -126,7 +129,8 @@ class ReinforcementConfig:
         Returns:
             Cuantía ρ = As / (b × 1000)
         """
-        return self.As_horizontal_per_m / (thickness_mm * 1000)
+        thickness = thickness_mm or 1  # Evitar división por cero
+        return self.As_horizontal_per_m / (thickness * 1000)
 
     def to_dict(self) -> dict:
         """Convierte a diccionario para serialización."""

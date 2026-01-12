@@ -610,6 +610,13 @@ body {
     color: var(--text-muted);
 }
 
+.loading .upload-detail {
+    font-size: 0.85em;
+    margin-top: 8px;
+    color: var(--text-muted);
+    opacity: 0.8;
+}
+
 /* ==========================================================================
    SUMMARY PLOT
    ========================================================================== */

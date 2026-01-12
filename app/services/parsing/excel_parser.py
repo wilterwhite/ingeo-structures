@@ -14,9 +14,12 @@ Tablas soportadas:
 - Vigas: Frame Section Property Definitions - Concrete Rectangular, Element Forces - Beams
 - Spandrels: Spandrel Section Properties, Spandrel Forces
 """
+import logging
 from io import BytesIO
 from typing import Dict, List, Any
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 from ...domain.entities import Pier, LoadCombination, PierForces, ParsedData
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
@@ -24,7 +27,8 @@ from .material_mapper import parse_material_to_fc
 from .table_extractor import (
     normalize_columns,
     find_table_in_sheet,
-    find_table_by_sheet_name
+    find_table_by_sheet_name,
+    extract_units_from_df,
 )
 from .column_parser import ColumnParser
 from .beam_parser import BeamParser
@@ -291,25 +295,40 @@ class EtabsExcelParser:
         stories: List[str] = []
 
         if df is None:
+            logger.info("Piers: No se encontró tabla Pier Section Properties")
             return piers, stories
 
         df = normalize_columns(df)
+
+        # Extraer factores de conversión de unidades de la primera fila
+        units = extract_units_from_df(df)
+        logger.info(f"Piers: Unidades detectadas - width: {units.get('width bottom', 1.0)}, cg: {units.get('cg bottom z', 1.0)}")
+
+        # Saltar la fila de unidades (primera fila del DataFrame normalizado)
+        df = df.iloc[1:]
+
+        # Contadores para logging
+        total_rows = len(df)
+        skipped_empty = 0
+        skipped_invalid_geometry = 0
+        imported_ok = 0
 
         for _, row in df.iterrows():
             story = str(row.get('story', ''))
             pier_label = str(row.get('pier', ''))
 
             if not pier_label or pier_label == 'nan':
+                skipped_empty += 1
                 continue
 
-            # Geometría (m -> mm)
-            width = self._get_average(row, 'width bottom', 'width top') * 1000
-            thickness = self._get_average(row, 'thickness bottom', 'thickness top') * 1000
+            # Geometría - aplicar factor de conversión según unidades del Excel
+            width = self._get_average(row, 'width bottom', 'width top') * units.get('width bottom', 1.0)
+            thickness = self._get_average(row, 'thickness bottom', 'thickness top') * units.get('thickness bottom', 1.0)
 
-            # Altura
-            cg_bottom = float(row.get('cg bottom z', 0))
-            cg_top = float(row.get('cg top z', cg_bottom + 3))
-            height = (cg_top - cg_bottom) * 1000
+            # Altura - CG viene en la unidad especificada en el Excel
+            cg_bottom = float(row.get('cg bottom z', 0)) * units.get('cg bottom z', 1.0)
+            cg_top = float(row.get('cg top z', cg_bottom + 3000)) * units.get('cg top z', 1.0)
+            height = cg_top - cg_bottom
 
             # Material -> f'c
             material_name = str(row.get('material', '4000Psi'))
@@ -317,6 +336,15 @@ class EtabsExcelParser:
 
             # Ángulo del eje
             axis_angle = float(row.get('axisangle', row.get('axis angle', 0)))
+
+            # Validar geometría antes de crear Pier (evitar divisiones por cero)
+            if width <= 0 or thickness <= 0 or height <= 0:
+                skipped_invalid_geometry += 1
+                logger.warning(
+                    f"Pier {pier_label}@{story}: geometría inválida "
+                    f"(width={width}, thickness={thickness}, height={height})"
+                )
+                continue
 
             # Crear Pier
             pier_key = f"{story}_{pier_label}"
@@ -330,9 +358,17 @@ class EtabsExcelParser:
                 fy=FY_DEFAULT_MPA,
                 axis_angle=axis_angle
             )
+            imported_ok += 1
 
             if story not in stories:
                 stories.append(story)
+
+        # Log resumen
+        logger.info(
+            f"Piers: {imported_ok} importados OK, "
+            f"{skipped_invalid_geometry} con geometría inválida, "
+            f"{skipped_empty} filas vacías (de {total_rows} filas)"
+        )
 
         return piers, stories
 
@@ -391,6 +427,176 @@ class EtabsExcelParser:
         """Limpia el step_type de valores nan."""
         step_type = str(value) if value else ''
         return '' if step_type == 'nan' else step_type
+
+    def parse_excel_with_progress(self, file_content: bytes):
+        """
+        Parsea el archivo Excel de ETABS con eventos de progreso.
+
+        Generador que emite eventos de progreso durante el parsing.
+
+        Args:
+            file_content: Contenido binario del archivo Excel
+
+        Yields:
+            dict: Eventos de progreso con type='progress', current, total, element
+                  o type='complete' con result al finalizar
+        """
+        excel_file = pd.ExcelFile(BytesIO(file_content))
+        total_sheets = len(excel_file.sheet_names)
+
+        # Fase 1: Leer hojas (progreso 0-50%)
+        raw_data: Dict[str, pd.DataFrame] = {}
+        materials: Dict[str, float] = {}
+
+        # DataFrames para cada tabla
+        wall_props_df = None
+        pier_props_df = None
+        pier_forces_df = None
+        frame_section_df = None
+        frame_circular_df = None
+        frame_assigns_df = None
+        column_forces_df = None
+        beam_forces_df = None
+        spandrel_props_df = None
+        spandrel_forces_df = None
+        section_cut_df = None
+
+        # Buscar tablas en todas las hojas con progreso
+        for i, sheet_name in enumerate(excel_file.sheet_names):
+            # Emitir progreso de lectura de hojas
+            yield {
+                'type': 'progress',
+                'phase': 'reading',
+                'current': i + 1,
+                'total': total_sheets,
+                'element': f'Leyendo hoja: {sheet_name}'
+            }
+
+            df = pd.read_excel(excel_file, sheet_name=sheet_name, header=None)
+            raw_data[sheet_name] = df
+
+            # Piers
+            if wall_props_df is None:
+                wall_props_df = find_table_in_sheet(df, "Wall Property Definitions")
+            if pier_props_df is None:
+                pier_props_df = find_table_in_sheet(df, "Pier Section Properties")
+            if pier_forces_df is None:
+                pier_forces_df = find_table_in_sheet(df, "Pier Forces")
+
+            # Frame sections
+            if frame_section_df is None:
+                frame_section_df = find_table_in_sheet(
+                    df, "Frame Section Property Definitions - Concrete Rectangular"
+                )
+            if frame_circular_df is None:
+                frame_circular_df = find_table_in_sheet(
+                    df, "Frame Section Property Definitions - Concrete Circle"
+                )
+            if frame_assigns_df is None:
+                frame_assigns_df = find_table_in_sheet(
+                    df, "Frame Assignments - Section Properties"
+                )
+
+            # Columnas y Vigas
+            if column_forces_df is None:
+                column_forces_df = find_table_in_sheet(df, "Element Forces - Columns")
+            if beam_forces_df is None:
+                beam_forces_df = find_table_in_sheet(df, "Element Forces - Beams")
+
+            # Spandrels
+            if spandrel_props_df is None:
+                spandrel_props_df = find_table_in_sheet(df, "Spandrel Section Properties")
+            if spandrel_forces_df is None:
+                spandrel_forces_df = find_table_in_sheet(df, "Spandrel Forces")
+
+            # Losas
+            if section_cut_df is None:
+                section_cut_df = find_table_in_sheet(df, "Section Cut Forces - Analysis")
+
+        # Fallback: buscar por nombre de hoja
+        if wall_props_df is None:
+            wall_props_df = find_table_by_sheet_name(excel_file, ['wall', 'prop'])
+        if pier_props_df is None:
+            pier_props_df = find_table_by_sheet_name(excel_file, ['pier', 'section'])
+        if pier_forces_df is None:
+            pier_forces_df = find_table_by_sheet_name(excel_file, ['pier', 'force'])
+
+        # Fase 2: Procesar tablas (progreso 50-100%)
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 1, 'total': 7, 'element': 'Procesando materiales'}
+        if wall_props_df is not None:
+            materials = self._parse_materials(wall_props_df)
+        if frame_section_df is not None:
+            frame_materials = self._parse_frame_materials(frame_section_df)
+            materials.update(frame_materials)
+
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 2, 'total': 7, 'element': 'Procesando muros'}
+        piers, pier_stories = self._parse_piers(pier_props_df, materials)
+        pier_forces = self._parse_forces(pier_forces_df)
+
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 3, 'total': 7, 'element': 'Procesando columnas'}
+        columns = {}
+        column_forces = {}
+        column_stories = []
+        if column_forces_df is not None:
+            columns, column_forces, column_stories = self.column_parser.parse_columns(
+                frame_section_df, column_forces_df, materials
+            )
+
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 4, 'total': 7, 'element': 'Procesando vigas'}
+        beams = {}
+        beam_forces = {}
+        beam_stories = []
+        if beam_forces_df is not None or spandrel_forces_df is not None:
+            beams, beam_forces, beam_stories = self.beam_parser.parse_beams(
+                frame_section_df, frame_assigns_df, beam_forces_df,
+                spandrel_props_df, spandrel_forces_df,
+                materials, frame_circular_df
+            )
+
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 5, 'total': 7, 'element': 'Procesando losas'}
+        slabs = {}
+        slab_forces = {}
+        slab_stories = []
+        if section_cut_df is not None:
+            slabs, slab_forces, slab_stories = self.slab_parser.parse_slabs(
+                section_cut_df, materials
+            )
+
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 6, 'total': 7, 'element': 'Procesando vigas capitel'}
+        drop_beams = {}
+        drop_beam_forces = {}
+        drop_beam_stories = []
+        if section_cut_df is not None:
+            drop_beams, drop_beam_forces, drop_beam_stories = self.drop_beam_parser.parse_drop_beams(
+                section_cut_df, materials
+            )
+
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 7, 'total': 7, 'element': 'Finalizando'}
+
+        # Combinar stories
+        all_stories = pier_stories.copy()
+        for s in column_stories + beam_stories + slab_stories + drop_beam_stories:
+            if s not in all_stories:
+                all_stories.append(s)
+
+        # Emitir resultado final
+        result = ParsedData(
+            piers=piers,
+            pier_forces=pier_forces,
+            columns=columns,
+            column_forces=column_forces,
+            beams=beams,
+            beam_forces=beam_forces,
+            slabs=slabs,
+            slab_forces=slab_forces,
+            drop_beams=drop_beams,
+            drop_beam_forces=drop_beam_forces,
+            materials=materials,
+            stories=all_stories,
+            raw_data=raw_data
+        )
+
+        yield {'type': 'complete', 'result': result}
 
     def get_summary(self, data: ParsedData) -> Dict[str, Any]:
         """Genera un resumen de los datos parseados."""

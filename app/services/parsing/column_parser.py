@@ -14,7 +14,10 @@ from ...domain.entities.column_forces import ColumnForces
 from ...domain.entities.load_combination import LoadCombination
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
 from .material_mapper import parse_material_to_fc
-from .table_extractor import normalize_columns
+from .table_extractor import normalize_columns, extract_units_from_df
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ColumnParser:
@@ -70,6 +73,13 @@ class ColumnParser:
 
         df = normalize_columns(df)
 
+        # Extraer factores de conversión de unidades de la primera fila
+        units = extract_units_from_df(df)
+        logger.info(f"Column sections: Unidades detectadas - depth: {units.get('depth', 1.0)}, width: {units.get('width', 1.0)}")
+
+        # Saltar la fila de unidades (primera fila del DataFrame normalizado)
+        df = df.iloc[1:]
+
         for _, row in df.iterrows():
             name = str(row.get('name', ''))
             design_type = str(row.get('design type', '')).lower()
@@ -81,9 +91,9 @@ class ColumnParser:
             if not name or name == 'nan':
                 continue
 
-            # Geometria (m -> mm)
-            depth = float(row.get('depth', 0)) * 1000  # eje 2
-            width = float(row.get('width', 0)) * 1000  # eje 3
+            # Geometria - aplicar factor de conversión según unidades del Excel
+            depth = float(row.get('depth', 0)) * units.get('depth', 1.0)  # eje 2
+            width = float(row.get('width', 0)) * units.get('width', 1.0)  # eje 3
 
             # Material
             material_name = str(row.get('material', '4000Psi'))

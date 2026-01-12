@@ -139,7 +139,10 @@ def handle_errors(f: Callable) -> Callable:
                 'error': f'Campo requerido faltante: {e}'
             }), 400
         except Exception as e:
-            logger.exception(f"Error en {f.__name__}: {str(e)}")
+            import traceback
+            tb = traceback.format_exc()
+            logger.error(f"Error en {f.__name__}: {str(e)}\n{tb}")
+            print(f"\n[ERROR] {f.__name__}: {str(e)}\n{tb}", flush=True)  # Debug
             return jsonify({
                 'success': False,
                 'error': f'Error interno: {str(e)}'

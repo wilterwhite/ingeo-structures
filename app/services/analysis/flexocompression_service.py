@@ -395,8 +395,8 @@ class FlexocompressionService:
         else:
             Mpr_neg, Mpr_pos = self.calculate_Mpr(beam)
 
-        # Luz libre en metros
-        ln_m = beam.ln_calculated / 1000
+        # Luz libre en metros (mínimo 1mm para evitar división por cero)
+        ln_m = max(beam.ln_calculated, 1) / 1000
 
         # Cortante sismico (ambos extremos desarrollan Mpr)
         Ve_seismic = (abs(Mpr_neg) + abs(Mpr_pos)) / ln_m

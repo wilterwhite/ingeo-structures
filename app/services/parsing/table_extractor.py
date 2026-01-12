@@ -5,9 +5,72 @@ Extracción de tablas desde archivos Excel de ETABS.
 ETABS exporta múltiples tablas en una sola hoja de Excel, cada una
 marcada con "TABLE: NombreTabla". Este módulo contiene la lógica
 para encontrar y extraer tablas específicas.
+
+Las tablas de ETABS tienen esta estructura:
+- Fila 0: "TABLE: NombreTabla"
+- Fila 1: Headers (nombres de columnas)
+- Fila 2: Unidades (mm, m, tonf, etc.)
+- Fila 3+: Datos
 """
-from typing import Optional, List
+from typing import Optional, List, Dict, Tuple
 import pandas as pd
+
+
+# =============================================================================
+# Factores de Conversión de Unidades a mm
+# =============================================================================
+
+UNIT_FACTORS_TO_MM: Dict[str, float] = {
+    'mm': 1.0,
+    'm': 1000.0,
+    'cm': 10.0,
+    'in': 25.4,
+    'ft': 304.8,
+}
+
+
+def get_unit_factor(unit_str) -> float:
+    """
+    Retorna el factor para convertir una unidad de longitud a mm.
+
+    Args:
+        unit_str: String con la unidad (ej: 'mm', 'm', 'cm')
+
+    Returns:
+        Factor de conversión a mm. Si la unidad no es reconocida, retorna 1.0
+    """
+    if unit_str is None or pd.isna(unit_str):
+        return 1.0
+    unit = str(unit_str).lower().strip()
+    return UNIT_FACTORS_TO_MM.get(unit, 1.0)
+
+
+def extract_units_from_df(df: pd.DataFrame) -> Dict[str, float]:
+    """
+    Extrae los factores de conversión de unidades de un DataFrame de ETABS.
+
+    ETABS pone las unidades en la primera fila de datos (después de headers).
+    Esta función lee esa fila y retorna un dict con los factores de conversión.
+
+    Args:
+        df: DataFrame ya normalizado con headers
+
+    Returns:
+        Dict[column_name -> factor_to_mm]
+        Ejemplo: {'width bottom': 1.0, 'cg bottom z': 1000.0}
+    """
+    units = {}
+    if df is None or len(df) == 0:
+        return units
+
+    # La primera fila del DataFrame normalizado debería tener las unidades
+    # (porque find_table_in_sheet ya extrajo headers)
+    first_row = df.iloc[0]
+    for col in df.columns:
+        unit_value = first_row.get(col)
+        units[str(col).lower()] = get_unit_factor(unit_value)
+
+    return units
 
 
 # =============================================================================

@@ -30,17 +30,26 @@ class DropBeamParser:
     El nombre del corte contiene la geometría de la sección.
     """
 
-    # Patrón regex para extraer datos del nombre del corte
-    # Formato: "Scut Losa S02-29x150 eje CL - Eje C3"
-    # o variantes como: "Scut Losa S02-29x150 eje CL - C3"
-    SECTION_CUT_PATTERN = re.compile(
-        r'Scut\s+Losa\s+'           # Prefijo fijo
+    # Patrones regex para extraer datos del nombre del corte
+    # Formato 1: "Scut Losa S02-29x150 eje CL - Eje C3" (formato antiguo)
+    # Formato 2: "SCut-Losa S01-29x100 Borde losa-2" (formato del script e2k)
+    SECTION_CUT_PATTERN_OLD = re.compile(
+        r'Scut\s+Losa\s+'           # Prefijo con espacio
         r'(\w+)-'                    # Story (S02, etc.)
         r'(\d+)x(\d+)\s+'           # Espesor x Ancho en cm
         r'eje\s+(\w+)\s*'           # Eje de la losa (CL, etc.)
         r'-\s*'                      # Separador
         r'(?:Eje\s+)?'              # "Eje " opcional
         r'(\w+)',                    # Ubicación (C3, etc.)
+        re.IGNORECASE
+    )
+
+    # Formato nuevo: "SCut-Losa S01-29x100 Borde losa-2"
+    SECTION_CUT_PATTERN_NEW = re.compile(
+        r'SCut-Losa\s+'             # Prefijo con guión
+        r'(\w+)-'                    # Story (S01, etc.)
+        r'(\d+)x(\d+)\s+'           # Espesor x Ancho en cm
+        r'(.+)',                     # Resto es la ubicación (Borde losa-2, etc.)
         re.IGNORECASE
     )
 
@@ -127,7 +136,9 @@ class DropBeamParser:
         """
         Extrae datos del nombre del corte de sección.
 
-        Formato esperado: "Scut Losa S02-29x150 eje CL - Eje C3"
+        Formatos soportados:
+        - "Scut Losa S02-29x150 eje CL - Eje C3" (formato antiguo)
+        - "SCut-Losa S01-29x100 Borde losa-2" (formato del script e2k)
 
         Returns:
             SlabSectionCut o None si no es un corte válido
@@ -135,24 +146,39 @@ class DropBeamParser:
         if not name or 'nan' in name.lower():
             return None
 
-        # Verificar si es un corte de losa
-        if 'scut losa' not in name.lower():
+        # Verificar si es un corte de losa (con espacio o guión)
+        name_lower = name.lower()
+        if 'scut losa' not in name_lower and 'scut-losa' not in name_lower:
             return None
 
-        match = self.SECTION_CUT_PATTERN.match(name.strip())
-        if not match:
-            return None
+        # Intentar formato antiguo primero
+        match = self.SECTION_CUT_PATTERN_OLD.match(name.strip())
+        if match:
+            story, thickness_cm, width_cm, axis_slab, location = match.groups()
+            return SlabSectionCut(
+                name=name,
+                story=story.upper(),
+                thickness_mm=float(thickness_cm) * 10,  # cm -> mm
+                width_mm=float(width_cm) * 10,          # cm -> mm
+                axis_slab=axis_slab.upper(),
+                location=location.upper()
+            )
 
-        story, thickness_cm, width_cm, axis_slab, location = match.groups()
+        # Intentar formato nuevo (del script e2k)
+        match = self.SECTION_CUT_PATTERN_NEW.match(name.strip())
+        if match:
+            story, thickness_cm, width_cm, location = match.groups()
+            # En formato nuevo, no hay eje explícito, usamos la ubicación completa
+            return SlabSectionCut(
+                name=name,
+                story=story.upper(),
+                thickness_mm=float(thickness_cm) * 10,  # cm -> mm
+                width_mm=float(width_cm) * 10,          # cm -> mm
+                axis_slab='',  # No hay eje en formato nuevo
+                location=location.strip()
+            )
 
-        return SlabSectionCut(
-            name=name,
-            story=story.upper(),
-            thickness_mm=float(thickness_cm) * 10,  # cm -> mm
-            width_mm=float(width_cm) * 10,          # cm -> mm
-            axis_slab=axis_slab.upper(),
-            location=location.upper()
-        )
+        return None
 
     def _parse_combination(self, row: pd.Series) -> Optional[LoadCombination]:
         """
