@@ -98,13 +98,6 @@ class RecalcButton {
     }
 
     /**
-     * Verifica si hay cambios pendientes.
-     */
-    hasPending() {
-        return this.pendingItems.size > 0;
-    }
-
-    /**
      * Destruye el botón del DOM.
      */
     destroy() {

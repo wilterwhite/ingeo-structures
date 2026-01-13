@@ -403,6 +403,3 @@ class ElementEditManager {
         }
     }
 }
-
-// Alias para compatibilidad con código existente
-const PierEditManager = ElementEditManager;

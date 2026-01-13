@@ -41,12 +41,3 @@ function setupModalClose(modal, closeCallback) {
         document.removeEventListener('keydown', escapeHandler);
     };
 }
-
-/**
- * Verifica si un modal está abierto.
- * @param {HTMLElement} modal - Elemento del modal
- * @returns {boolean} true si está abierto
- */
-function isModalOpen(modal) {
-    return modal?.classList.contains('active') || false;
-}
