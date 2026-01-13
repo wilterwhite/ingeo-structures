@@ -17,17 +17,6 @@ from .force_extractor import ForceExtractor, ForceEnvelope
 from .geometry_normalizer import GeometryNormalizer, ColumnGeometry, BeamGeometry, WallGeometry
 from .verification_config import VerificationConfig, get_config
 from .element_details_service import ElementDetailsService
-from .verification_result import (
-    FlexureResult,
-    BidirectionalShearResult,
-    ShearResult,  # Alias de BidirectionalShearResult para compatibilidad
-    SlendernessResult,
-    WallChecks,
-    WallClassification,
-    BoundaryResult,
-    EndZonesResult,
-    MinReinforcementResult,
-)
 
 __all__ = [
     # Servicios principales
@@ -54,14 +43,4 @@ __all__ = [
     # Configuración
     'VerificationConfig',
     'get_config',
-    # Resultados
-    'FlexureResult',
-    'BidirectionalShearResult',
-    'ShearResult',  # Alias
-    'SlendernessResult',
-    'WallChecks',
-    'WallClassification',
-    'BoundaryResult',
-    'EndZonesResult',
-    'MinReinforcementResult',
 ]
