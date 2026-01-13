@@ -80,20 +80,21 @@
     table-layout: fixed;
 }
 
-/* Columnas: Elemento | Story | Geometría | Enfierradura | Borde | V.Izq | V.Der | D/C Flex | Cap.Flex | D/C Corte | Cap.Corte | Propuesta | Acciones */
+/* Columnas: Elemento | Story | Cat. | Geometría | Enfierradura | Borde | V.Izq | V.Der | D/C Flex | Flexocompresión | D/C Corte | Corte | Propuesta | Acciones */
 .results-table th:nth-child(1), .results-table td:nth-child(1) { width: 70px; }   /* Elemento */
 .results-table th:nth-child(2), .results-table td:nth-child(2) { width: 55px; }   /* Story */
-.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 70px; }   /* Geometría */
-.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 110px; }  /* Enfierradura */
-.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 75px; }   /* Borde */
-.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 60px; }   /* V.Izq */
-.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 60px; }   /* V.Der */
-.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 55px; }   /* D/C Flex */
-.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 95px; }   /* Cap. Flexión */
-.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 55px; } /* D/C Corte */
-.results-table th:nth-child(11), .results-table td:nth-child(11) { width: 140px; } /* Cap. Corte */
-.results-table th:nth-child(12), .results-table td:nth-child(12) { width: 70px; }  /* Propuesta */
-.results-table th:nth-child(13), .results-table td:nth-child(13) { width: 55px; }  /* Acciones */
+.results-table th:nth-child(3), .results-table td:nth-child(3) { width: 55px; }   /* Cat. Sísmica */
+.results-table th:nth-child(4), .results-table td:nth-child(4) { width: 70px; }   /* Geometría */
+.results-table th:nth-child(5), .results-table td:nth-child(5) { width: 110px; }  /* Enfierradura */
+.results-table th:nth-child(6), .results-table td:nth-child(6) { width: 75px; }   /* Borde */
+.results-table th:nth-child(7), .results-table td:nth-child(7) { width: 60px; }   /* V.Izq */
+.results-table th:nth-child(8), .results-table td:nth-child(8) { width: 60px; }   /* V.Der */
+.results-table th:nth-child(9), .results-table td:nth-child(9) { width: 55px; }   /* D/C Flex */
+.results-table th:nth-child(10), .results-table td:nth-child(10) { width: 110px; } /* Flexocompresión */
+.results-table th:nth-child(11), .results-table td:nth-child(11) { width: 55px; } /* D/C Corte */
+.results-table th:nth-child(12), .results-table td:nth-child(12) { width: 140px; } /* Corte */
+.results-table th:nth-child(13), .results-table td:nth-child(13) { width: 70px; }  /* Propuesta */
+.results-table th:nth-child(14), .results-table td:nth-child(14) { width: 55px; }  /* Acciones */
 
 /* ==========================================================================
    COLUMN FILTERS - Headers con filtros tipo Excel
@@ -420,11 +421,51 @@
     border-color: #f59e0b;
 }
 
-.rho-warn-icon {
+.rho-warn-icon,
+.geo-warn-icon {
     color: #d97706;
     font-size: 0.8rem;
     margin-left: 4px;
     cursor: help;
+}
+
+/* Advertencia geometría (elementos de borde) */
+.geometry-cell.geo-warning {
+    background: #fef3c7;
+}
+
+.geometry-cell.geo-warning .geom-dims {
+    color: #92400e;
+    font-weight: 600;
+}
+
+/* Error cuantía máxima excedida */
+.malla-row.rho-error,
+.borde-row.rho-error {
+    background: #fee2e2;
+    border-radius: 3px;
+    padding: 2px 4px;
+    margin: 1px -4px;
+}
+
+.malla-row.rho-error select,
+.borde-row.rho-error select {
+    border-color: #ef4444;
+}
+
+.rho-error-icon {
+    color: #dc2626;
+}
+
+/* Campos modificados respecto al default */
+select.field-modified {
+    background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+    border-color: #3b82f6;
+    font-weight: 600;
+}
+
+select.field-modified:focus {
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
 }
 
 /* Viga - Selector simple */
@@ -964,6 +1005,27 @@
     content: "⏳";
     margin-right: 4px;
     font-size: 10px;
+}
+
+/* Resaltado de elementos recién recalculados */
+.pier-row.just-recalculated,
+#beams-table tr.just-recalculated,
+#drop-beams-table tr.just-recalculated {
+    animation: highlight-fade 5s ease-out;
+}
+
+.pier-row.just-recalculated td:first-child::before,
+#beams-table tr.just-recalculated td:first-child::before,
+#drop-beams-table tr.just-recalculated td:first-child::before {
+    content: "✓ ";
+    color: var(--success-color, #4caf50);
+    font-weight: bold;
+}
+
+@keyframes highlight-fade {
+    0% { background-color: rgba(76, 175, 80, 0.25); }
+    70% { background-color: rgba(76, 175, 80, 0.15); }
+    100% { background-color: transparent; }
 }
 
 /* ==========================================================================

@@ -15,10 +15,8 @@ Esto es apropiado para Chile donde casi todo es sismico.
 WALL_STIFFNESS_FACTOR = 0.35  # Muros fisurados
 
 # Otros factores de rigidez (Tabla 6.6.3.1.1(a))
-WALL_UNCRACKED_STIFFNESS_FACTOR = 0.70  # Muros no fisurados
 COLUMN_STIFFNESS_FACTOR = 0.70          # Columnas
 BEAM_STIFFNESS_FACTOR = 0.35            # Vigas
-FLAT_SLAB_STIFFNESS_FACTOR = 0.25       # Losas planas
 
 # =============================================================================
 # MOMENTO MINIMO M2,min - ACI 318-25 Seccion 6.6.4.5.4

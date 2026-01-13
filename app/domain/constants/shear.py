@@ -235,8 +235,7 @@ BOUNDARY_DRIFT_CAPACITY_MIN = 0.015  # delta_c/hwcs minimo
 
 # Requisitos dimensionales de elementos de borde (S18.10.6.4)
 BOUNDARY_MIN_WIDTH_RATIO = 1/16  # b >= hu/16
-BOUNDARY_MIN_WIDTH_INCHES = 12   # b >= 12" cuando c/lw >= 3/8
-BOUNDARY_C_LW_THRESHOLD = 3/8    # Umbral para ancho minimo de 12"
+BOUNDARY_C_LW_THRESHOLD = 3/8    # Umbral para ancho minimo
 
 # Espaciamiento maximo de refuerzo transversal (Tabla 18.10.6.5(b))
 # Segun grado del acero y ubicacion

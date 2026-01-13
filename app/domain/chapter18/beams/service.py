@@ -22,11 +22,8 @@ from ...constants.shear import PHI_SHEAR_SEISMIC
 from ...constants.units import N_TO_TONF, TONF_TO_N
 from ...shear.concrete_shear import calculate_Vc_beam, check_Vc_zero_condition
 from ...shear.steel_shear import calculate_Vs_beam_column
-from ...constants.chapter18 import (
-    MIN_WIDTH_BEAM_MM as MIN_WIDTH_SPECIAL_MM,
-    FIRST_HOOP_MAX_MM,
-    HX_MAX_MM,
-)
+from ...constants.chapter18 import FIRST_HOOP_MAX_MM, HX_MAX_MM
+from ...constants.geometry import BEAM_MIN_WIDTH_MM, BEAM_MIN_WIDTH_RATIO
 from .results import (
     SeismicBeamResult,
     BeamDimensionalLimitsResult,
@@ -271,7 +268,7 @@ class SeismicBeamService:
         ln_ok = ln >= ln_min
 
         # (b) bw >= max(0.3h, 10")
-        bw_min = max(0.3 * h, MIN_WIDTH_SPECIAL_MM)
+        bw_min = max(BEAM_MIN_WIDTH_RATIO * h, BEAM_MIN_WIDTH_MM)
         bw_ok = bw >= bw_min
 
         # (c) Proyección <= min(c2, 0.75*c1)

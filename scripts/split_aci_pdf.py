@@ -35,29 +35,6 @@ def extract_bookmarks(reader: PdfReader) -> List[Dict]:
     """
     bookmarks = []
 
-    def process_outline(outline, level=0):
-        """Procesa recursivamente el outline del PDF."""
-        if isinstance(outline, list):
-            for item in outline:
-                process_outline(item, level)
-        else:
-            # Es un bookmark individual
-            try:
-                title = outline.title
-                # Obtener número de página
-                if outline.page is not None:
-                    page_num = reader.get_destination_page_number(outline)
-                else:
-                    page_num = None
-
-                bookmarks.append({
-                    'title': title,
-                    'page': page_num,
-                    'level': level
-                })
-            except Exception as e:
-                print(f"  Warning: Could not process bookmark: {e}")
-
     def traverse_outline(outline_items, level=0):
         """Traversa el outline completo."""
         for item in outline_items:

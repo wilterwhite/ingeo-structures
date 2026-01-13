@@ -10,7 +10,7 @@ Orquesta:
 """
 from typing import Optional
 
-from ...constants.materials import SteelGrade
+from ...constants.materials import SteelGrade, calculate_beta1
 from ..results import (
     BoundaryElementMethod,
     DisplacementCheckResult,
@@ -68,6 +68,53 @@ class BoundaryElementService:
     ) -> StressCheckResult:
         """Verifica por método de esfuerzos."""
         return check_stress_method(sigma_max, fc)
+
+    # =========================================================================
+    # CÁLCULO DE PROFUNDIDAD DEL EJE NEUTRO
+    # =========================================================================
+
+    def calculate_neutral_axis_depth(
+        self,
+        lw: float,
+        tw: float,
+        fc: float,
+        Pu: float,
+        As: float = 0,
+        fy: float = 420
+    ) -> float:
+        """
+        Calcula profundidad del eje neutro usando equilibrio de fuerzas.
+
+        Fórmula según ACI 318-25:
+        0.85×fc×β₁×c×tw = As×fy + Pu
+
+        Resolviendo para c:
+        c = (As×fy + Pu) / (0.85×fc×β₁×tw)
+
+        Args:
+            lw: Longitud del muro (mm)
+            tw: Espesor del muro (mm)
+            fc: f'c del hormigón (MPa)
+            Pu: Carga axial última (N, positivo = compresión)
+            As: Área de acero en tracción (mm²)
+            fy: fy del refuerzo longitudinal (MPa)
+
+        Returns:
+            Profundidad del eje neutro c (mm), limitado a [0, lw]
+        """
+        beta1 = calculate_beta1(fc)
+
+        # Numerador: fuerza total (acero + carga axial)
+        numerator = As * fy + Pu
+
+        # Denominador: capacidad del bloque de compresión
+        denominator = 0.85 * fc * beta1 * tw
+
+        if denominator <= 0:
+            return lw / 2  # Fallback: mitad de la longitud
+
+        c = numerator / denominator
+        return max(0, min(c, lw))  # Limitar a [0, lw]
 
     # =========================================================================
     # DIMENSIONES DEL ELEMENTO DE BORDE (18.10.6.4)
@@ -231,6 +278,12 @@ class BoundaryElementService:
                 dimensions = self.calculate_dimensions(
                     c, lw, Mu, Vu, hu
                 )
+
+                # Verificar ancho propuesto (mismo check que método desplazamiento)
+                if b < dimensions.width_required:
+                    warnings.append(
+                        f"Ancho propuesto {b:.0f}mm < {dimensions.width_required:.0f}mm requerido"
+                    )
 
         # Si requiere elemento de borde especial, calcular refuerzo
         if requires_special and Ag > 0 and Ach > 0:

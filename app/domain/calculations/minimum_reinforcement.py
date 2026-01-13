@@ -46,12 +46,13 @@ class MinimumReinforcementCalculator:
     # Diámetro por defecto para armadura mínima (mm)
     DEFAULT_DIAMETER = 8
 
+    # Espaciamientos disponibles en el frontend (ordenados)
+    # El cálculo redondea hacia abajo al valor disponible más cercano
+    AVAILABLE_SPACINGS = [100, 125, 150, 175, 200, 250, 300]
+
     # Límites de espaciamiento (mm)
     MIN_SPACING = 100
     MAX_SPACING = 300
-
-    # Múltiplo para redondeo de espaciamiento (mm)
-    SPACING_ROUND_MULTIPLE = 5
 
     @classmethod
     def calculate_for_pier(
@@ -122,7 +123,8 @@ class MinimumReinforcementCalculator:
         Calcula espaciamiento para cumplir ρ ≥ ρmin.
 
         Fórmula: s = n_meshes × As_barra × 1000 / (ρmin × t × 1000)
-        Redondea hacia abajo a múltiplo de 5mm para asegurar ρ ≥ ρmin.
+        Redondea hacia abajo al espaciamiento disponible más cercano
+        para asegurar ρ ≥ ρmin y que el valor esté en el dropdown.
         """
         # As mínimo por metro
         As_min_per_m = rho_min * thickness * 1000  # mm²/m
@@ -133,11 +135,14 @@ class MinimumReinforcementCalculator:
         else:
             spacing_exact = cls.MAX_SPACING
 
-        # Redondear hacia abajo a múltiplo de 5mm
-        spacing = int(spacing_exact // cls.SPACING_ROUND_MULTIPLE) * cls.SPACING_ROUND_MULTIPLE
-
-        # Limitar a rango típico
-        spacing = max(cls.MIN_SPACING, min(cls.MAX_SPACING, spacing))
+        # Redondear hacia abajo al espaciamiento disponible más cercano
+        # (conservador: siempre cumple ρ ≥ ρmin)
+        spacing = cls.MIN_SPACING  # fallback
+        for s in cls.AVAILABLE_SPACINGS:
+            if s <= spacing_exact:
+                spacing = s
+            else:
+                break
 
         return spacing
 
@@ -154,6 +159,53 @@ class MinimumReinforcementCalculator:
             return 0.0
         As_per_m = n_meshes * bar_area * 1000 / spacing
         return As_per_m / (thickness * 1000)
+
+    # Combinaciones de borde ordenadas por área creciente
+    EDGE_COMBINATIONS = [
+        (2, 10),   # 2φ10 = 157 mm²
+        (2, 12),   # 2φ12 = 226 mm²
+        (4, 10),   # 4φ10 = 314 mm²
+        (2, 16),   # 2φ16 = 402 mm²
+        (4, 12),   # 4φ12 = 452 mm²
+        (4, 16),   # 4φ16 = 804 mm²
+    ]
+
+    @classmethod
+    def calculate_edge_reinforcement(
+        cls,
+        thickness: float,
+        cover: float = 25.0,
+        rho_min: float = RHO_MIN,
+    ) -> Tuple[int, int]:
+        """
+        Calcula enfierradura de borde mínima para cumplir ρmin.
+
+        La zona de borde se define como cover + 50mm (espacio típico para barras).
+        Se busca la combinación mínima de (n_barras, diámetro) que cumple:
+            As_provisto >= ρmin × ancho_borde × espesor
+
+        Args:
+            thickness: Espesor del muro (mm)
+            cover: Recubrimiento (mm)
+            rho_min: Cuantía mínima (0.0025)
+
+        Returns:
+            Tuple (n_edge_bars, diameter_edge)
+        """
+        # Ancho de zona de borde aproximado
+        edge_zone_width = cover + 50  # ~75mm típico
+
+        # As mínimo en zona de borde
+        As_min = rho_min * edge_zone_width * thickness
+
+        # Probar combinaciones hasta encontrar la mínima que cumple
+        for n_bars, diameter in cls.EDGE_COMBINATIONS:
+            As_provided = n_bars * get_bar_area(diameter)
+            if As_provided >= As_min:
+                return n_bars, diameter
+
+        # Fallback: última combinación (la más grande)
+        return cls.EDGE_COMBINATIONS[-1]
 
     @classmethod
     def verify_minimum(

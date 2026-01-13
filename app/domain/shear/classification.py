@@ -18,6 +18,7 @@ from ..constants.shear import (
     WALL_PIER_ALTERNATE_LIMIT,
 )
 from ..constants.units import MIN_COLUMN_DIMENSION_MM
+from ..constants.geometry import COLUMN_MIN_ASPECT_RATIO
 
 
 class ElementType(Enum):
@@ -90,8 +91,41 @@ class WallClassificationService:
         lw_tw = lw / tw if tw > 0 else 0
         hw_lw = hw / lw if lw > 0 else 0
 
-        # Primero verificar si es columna (lw/tw < 4)
+        # Primero verificar si GEOMÉTRICAMENTE sería columna (lw/tw < 4)
         if lw_tw < ASPECT_RATIO_WALL_LIMIT:
+            # Verificar si cumple §18.7.2.1(b) para ser columna de pórtico especial
+            # b = dimensión menor (tw), h = dimensión mayor (lw)
+            aspect_ratio = tw / lw if lw > 0 else 0
+
+            if aspect_ratio < COLUMN_MIN_ASPECT_RATIO:
+                # No cumple §18.7.2.1(b) → reclasificar como MURO
+                # Determinar si es WALL o WALL_SQUAT según hw/lw
+                if hw_lw >= WALL_PIER_HW_LW_LIMIT:
+                    return WallClassification(
+                        element_type=ElementType.WALL,
+                        lw=lw, tw=tw, hw=hw,
+                        lw_tw=lw_tw, hw_lw=hw_lw,
+                        aci_section="18.10.4",
+                        design_method="wall",
+                        special_requirements=(
+                            f"Reclasificado: lw/tw={lw_tw:.1f}<4 pero b/h={aspect_ratio:.2f}<0.4. "
+                            f"No cumple S18.7.2.1(b) para columna especial -> disenar como muro S18.10"
+                        )
+                    )
+                else:
+                    return WallClassification(
+                        element_type=ElementType.WALL_SQUAT,
+                        lw=lw, tw=tw, hw=hw,
+                        lw_tw=lw_tw, hw_lw=hw_lw,
+                        aci_section="18.10.4",
+                        design_method="wall",
+                        special_requirements=(
+                            f"Reclasificado: lw/tw={lw_tw:.1f}<4 pero b/h={aspect_ratio:.2f}<0.4. "
+                            f"No cumple S18.7.2.1(b) -> muro rechoncho S18.10"
+                        )
+                    )
+
+            # Sí cumple b/h >= 0.4 → es columna de pórtico especial
             return WallClassification(
                 element_type=ElementType.COLUMN,
                 lw=lw, tw=tw, hw=hw,

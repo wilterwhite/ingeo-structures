@@ -670,24 +670,34 @@ class SeismicWallService:
         spacing_max = 0
 
         if requires_special:
-            # Calcular c (profundidad eje neutro) aproximado
-            # Simplificado: c = lw × (0.5 + sigma_axial / (2 × 0.85 × f'c))
-            c = lw * (0.5 + sigma_axial / (2 * 0.85 * fc)) if fc > 0 else lw / 2
-            c = min(c, lw)  # No mayor que lw
+            # Calcular c (profundidad eje neutro) usando fórmula correcta con β₁
+            c = self._boundary_service.calculate_neutral_axis_depth(
+                lw=lw, tw=tw, fc=fc, Pu=Pu_N
+            )
 
-            # Extensión horizontal: max(c - 0.1×lw, c/2)
-            length_horizontal = max(c - 0.1 * lw, c / 2)
+            # Usar calculate_dimensions() del servicio para dimensiones requeridas
+            # Vu aproximado desde Mu/hw para extensión vertical
+            Vu_approx = abs(Mu) / (hw / 1000) if hw > 0 else 0
+            dimensions = self._boundary_service.calculate_dimensions(
+                c=c, lw=lw, Mu=abs(Mu), Vu=Vu_approx, hu=hw
+            )
 
-            # Extensión vertical
-            if hwcs > 0 and lw > 0:
-                vertical_extension = max(lw, abs(Mu) * 1000 / (3 * abs(Pu))) if Pu > 0 else lw
-            else:
-                vertical_extension = lw
+            length_horizontal = dimensions.length_horizontal
+            vertical_extension = dimensions.vertical_extension
 
             warnings.append(
                 f"Se requieren elementos de borde: σ_max={sigma_max:.1f}MPa >= "
                 f"0.2×f'c={stress_result.limit_require:.1f}MPa"
             )
+
+            # Verificar ancho usando width_required de dimensions
+            # (ya incluye check de 305mm si c/lw >= 3/8)
+            if tw < dimensions.width_required:
+                c_lw_ratio = c / lw if lw > 0 else 0
+                warnings.append(
+                    f"Espesor {tw:.0f}mm < {dimensions.width_required:.0f}mm requerido "
+                    f"para elemento de borde (c/lw={c_lw_ratio:.2f}, ACI §18.10.6.4)"
+                )
 
             # Calcular confinamiento requerido
             Ach = length_horizontal * tw * 0.85  # Aproximado

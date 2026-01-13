@@ -289,6 +289,9 @@ class UploadManager {
         page.beamResults = data.beam_results || [];
         page.dropBeamResults = data.drop_beam_results || [];
 
+        // Limpiar cache de filteredResults para asegurar datos frescos
+        page.resultsTable.filteredResults = [];
+
         // Renderizar resultados
         page.resultsTable.populateFilters();
         page.resultsTable.render(data);

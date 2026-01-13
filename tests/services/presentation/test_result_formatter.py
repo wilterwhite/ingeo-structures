@@ -17,6 +17,91 @@ from app.domain.entities import Column, Beam, Pier, DropBeam
 
 
 # =============================================================================
+# Helper functions para crear Mocks bien configurados
+# =============================================================================
+
+def create_shear_mock(
+    dcr: float = 0.5,
+    phi_Vn: float = 500000,
+    Ve: float = 250000,
+    Vu: float = 200000,
+    Vc: float = 200000,
+    Vs: float = 300000
+) -> Mock:
+    """
+    Crea un Mock de shear result con valores numéricos.
+
+    Evita el error 'Mock doesn't define __round__' al usar round()
+    sobre atributos del Mock.
+
+    Nota: capacity_V2 se setea a None para evitar que hasattr() retorne True
+    y el código intente acceder a sh.capacity_V2.Vc (que sería un Mock).
+    """
+    shear = Mock()
+    shear.dcr = dcr
+    shear.phi_Vn = phi_Vn
+    shear.phi_Vn_V2 = phi_Vn
+    shear.Ve = Ve
+    shear.Vu = Vu
+    shear.Vu_V2 = Vu
+    shear.Vc = Vc
+    shear.Vs = Vs
+    shear.phi_v = 0.75
+    shear.status = 'OK' if dcr <= 1.0 else 'NO OK'
+    # Evitar que hasattr(sh, 'capacity_V2') retorne True
+    shear.capacity_V2 = None
+    return shear
+
+
+def create_domain_result_mock(
+    shear: Mock = None,
+    flexure: Mock = None,
+    include_boundary: bool = False,
+    include_dimensional: bool = False,
+    include_reinforcement: bool = False
+) -> Mock:
+    """
+    Crea un Mock de domain_result con atributos None explícitos.
+
+    Esto evita que getattr() retorne un Mock cuando debería retornar None,
+    lo que causa errores al iterar sobre 'warnings' o usar round().
+    """
+    domain_result = Mock()
+    domain_result.shear = shear
+    domain_result.flexure = flexure
+    domain_result.boundary = None
+    domain_result.dimensional_limits = None
+    domain_result.beam_dimensional = None
+    domain_result.classification = None
+    domain_result.reinforcement = None
+
+    if include_boundary:
+        boundary = Mock()
+        boundary.warnings = []
+        domain_result.boundary = boundary
+
+    if include_dimensional:
+        dim = Mock()
+        dim.min_dimension_ok = True
+        dim.aspect_ratio_ok = True
+        dim.min_dimension = 400
+        dim.min_dimension_required = 300
+        dim.aspect_ratio = 0.8
+        domain_result.dimensional_limits = dim
+
+    if include_reinforcement:
+        rf = Mock()
+        rf.rho_l_ok = True
+        rf.rho_t_ok = True
+        rf.spacing_ok = True
+        rf.rho_l_min = 0.0025
+        rf.spacing_max = 450
+        domain_result.reinforcement = rf
+
+    return domain_result
+
+
+# =============================================================================
 # Fixtures
 # =============================================================================
 
@@ -109,11 +194,8 @@ def sample_drop_beam():
 @pytest.fixture
 def column_orchestration_result():
     """OrchestrationResult para columna."""
-    domain_result = Mock()
-    domain_result.shear = Mock()
-    domain_result.shear.dcr = 0.65
-    domain_result.shear.phi_Vn_V2 = 500000
-    domain_result.shear.Ve = 350000
+    shear = create_shear_mock(dcr=0.65, phi_Vn=500000, Ve=350000, Vu=320000)
+    domain_result = create_domain_result_mock(shear=shear)
 
     return OrchestrationResult(
         element_type=ElementType.COLUMN_SEISMIC,
@@ -130,9 +212,8 @@ def column_orchestration_result():
 @pytest.fixture
 def beam_orchestration_result():
     """OrchestrationResult para viga."""
-    domain_result = Mock()
-    domain_result.shear = Mock()
-    domain_result.shear.dcr = 0.55
+    shear = create_shear_mock(dcr=0.55, phi_Vn=400000, Ve=220000, Vu=200000)
+    domain_result = create_domain_result_mock(shear=shear)
 
     return OrchestrationResult(
         element_type=ElementType.BEAM,
@@ -149,15 +230,15 @@ def beam_orchestration_result():
 @pytest.fixture
 def wall_orchestration_result():
     """OrchestrationResult para muro."""
-    domain_result = Mock()
-    domain_result.flexure = Mock()
-    domain_result.flexure.sf = 1.5
-    domain_result.flexure.status = 'OK'
-    domain_result.shear = Mock()
-    domain_result.shear.dcr = 0.70
-    domain_result.shear.status = 'OK'
-    domain_result.classification = None
-    domain_result.boundary = None
+    shear = create_shear_mock(dcr=0.70, phi_Vn=600000, Ve=420000, Vu=400000)
+    flexure = Mock()
+    flexure.sf = 1.5
+    flexure.status = 'OK'
+    domain_result = create_domain_result_mock(
+        shear=shear,
+        flexure=flexure,
+        include_reinforcement=True
+    )
 
     return OrchestrationResult(
         element_type=ElementType.WALL_SQUAT,
@@ -174,11 +255,11 @@ def wall_orchestration_result():
 @pytest.fixture
 def drop_beam_orchestration_result():
     """OrchestrationResult para viga capitel."""
-    domain_result = Mock()
-    domain_result.flexure = Mock()
-    domain_result.flexure.sf = 1.8
-    domain_result.shear = Mock()
-    domain_result.shear.dcr = 0.50
+    shear = create_shear_mock(dcr=0.50, phi_Vn=350000, Ve=175000, Vu=160000)
+    flexure = Mock()
+    flexure.sf = 1.8
+    flexure.status = 'OK'
+    domain_result = create_domain_result_mock(shear=shear, flexure=flexure)
 
     return OrchestrationResult(
         element_type=ElementType.DROP_BEAM,
@@ -291,9 +372,7 @@ class TestFormatColumn:
 
     def test_format_column_failed(self, sample_column):
         """Formatea columna que falla."""
-        domain_result = Mock()
-        domain_result.shear = None  # Evitar problemas con Mock recursivo
-        domain_result.flexure = None
+        domain_result = create_domain_result_mock(shear=None, flexure=None)
         result = OrchestrationResult(
             element_type=ElementType.COLUMN_SEISMIC,
             design_behavior=DesignBehavior.SEISMIC_COLUMN,
@@ -528,9 +607,7 @@ class TestEdgeCases:
 
     def test_result_with_warnings(self, sample_column):
         """Formatea resultado con warnings."""
-        domain_result = Mock()
-        domain_result.shear = None  # Evitar problemas con Mock recursivo
-        domain_result.flexure = None
+        domain_result = create_domain_result_mock(shear=None, flexure=None)
         result = OrchestrationResult(
             element_type=ElementType.COLUMN_SEISMIC,
             design_behavior=DesignBehavior.SEISMIC_COLUMN,

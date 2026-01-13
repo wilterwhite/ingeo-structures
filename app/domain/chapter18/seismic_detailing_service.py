@@ -24,7 +24,6 @@ from ..constants.chapter18 import (
     HX_MAX_MM as HX_MAX_BEAM_MM,
     HX_MAX_MM as HX_MAX_COLUMN_MM,
     MIN_WIDTH_BEAM_MM,
-    MIN_COLUMN_DIM_MM,
 )
 
 

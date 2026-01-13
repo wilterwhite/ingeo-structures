@@ -61,9 +61,7 @@ Uso desde ElementOrchestrator:
     # - service_used: Servicio utilizado ('beam', 'column', 'wall')
     # - domain_result: Resultado del servicio de dominio
 
-Re-exports desde chapter11:
-- WallLimitsService: Límites de espesor (§11.3, §11.7)
-- SlenderWallService: Método alternativo para muros esbeltos (§11.8)
+Nota: WallLimitsService y SlenderWallService están en domain/chapter11/.
 """
 # Infraestructura común
 from .common import SeismicCategory
@@ -161,18 +159,8 @@ from .results import (
     ReinforcementType,
     ConfinementOption,
 )
-# Re-export from domain/chapter11/ for backward compatibility
-from ..chapter11 import (
-    WallLimitsService,
-    WallLimitsResult,
-    WallType,
-    WallCastType,
-    ThicknessCheckResult,
-    SpacingCheckResult,
-    DoubleCurtainCheckResult,
-    SlenderWallService,
-    SlenderWallResult,
-)
+# Nota: WallLimitsService, SlenderWallService y sus resultados
+# están en domain/chapter11/ - importar desde ahí directamente
 
 __all__ = [
     # Infraestructura común
@@ -251,17 +239,6 @@ __all__ = [
     'WallGeometryCheck',
     'CouplingBeamGeometryCheck',
     'LevelComplianceResult',
-    # limits
-    'WallLimitsService',
-    'WallLimitsResult',
-    'WallType',
-    'WallCastType',
-    'ThicknessCheckResult',
-    'SpacingCheckResult',
-    'DoubleCurtainCheckResult',
-    # design_methods (§11.8 muros esbeltos)
-    'SlenderWallService',
-    'SlenderWallResult',
     # walls (§18.10 - servicio unificado)
     'SeismicWallService',
     'SeismicWallResult',

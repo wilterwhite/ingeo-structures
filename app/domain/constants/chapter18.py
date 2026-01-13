@@ -20,7 +20,7 @@ MIN_WIDTH_BEAM_RATIO = 0.3      # bw >= 0.3h (§18.6.2.1(a))
 MIN_DEPTH_BEAM_MM = 254         # Práctica común
 
 # Columnas especiales §18.7.2.1
-MIN_COLUMN_DIM_MM = 305         # 12" = 305mm (§18.7.2.1(a))
+# NOTA: MIN_COLUMN_DIM_MM movido a geometry.py como COLUMN_MIN_DIMENSION_MM
 MIN_COLUMN_RATIO = 0.4          # b >= 0.4h (§18.7.2.1(b))
 
 
@@ -81,7 +81,6 @@ __all__ = [
     'MIN_WIDTH_BEAM_MM',
     'MIN_WIDTH_BEAM_RATIO',
     'MIN_DEPTH_BEAM_MM',
-    'MIN_COLUMN_DIM_MM',
     'MIN_COLUMN_RATIO',
     # Zona de confinamiento
     'LO_MIN_MM',

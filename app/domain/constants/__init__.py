@@ -76,7 +76,6 @@ from .shear import (
     BOUNDARY_DRIFT_MIN,
     BOUNDARY_DRIFT_CAPACITY_MIN,
     BOUNDARY_MIN_WIDTH_RATIO,
-    BOUNDARY_MIN_WIDTH_INCHES,
     BOUNDARY_C_LW_THRESHOLD,
     BOUNDARY_SPACING,
     # Fricción por cortante
@@ -89,7 +88,7 @@ from .shear import (
     SHEAR_FRICTION_FY_LIMIT_MPa,
     PHI_SHEAR_FRICTION,
 )
-from .seismic import SeismicDesignCategory, WallCategory, SDC_REQUIREMENTS
+from .seismic import SeismicDesignCategory
 from .materials import (
     SteelGrade,
     LAMBDA_NORMAL,
@@ -117,10 +116,8 @@ from .materials import (
 )
 from .stiffness import (
     WALL_STIFFNESS_FACTOR,
-    WALL_UNCRACKED_STIFFNESS_FACTOR,
     COLUMN_STIFFNESS_FACTOR,
     BEAM_STIFFNESS_FACTOR,
-    FLAT_SLAB_STIFFNESS_FACTOR,
     M2_MIN_ECCENTRICITY_BASE,
     M2_MIN_ECCENTRICITY_FACTOR,
     SECOND_ORDER_LIMIT,
@@ -144,7 +141,6 @@ from .reinforcement import (
 from .chapter18 import (
     # Dimensiones mínimas
     MIN_WIDTH_BEAM_MM,
-    MIN_COLUMN_DIM_MM,
     # Zona de confinamiento
     LO_MIN_MM,
     LO_MIN_RATIO,
@@ -156,4 +152,18 @@ from .chapter18 import (
     FIRST_HOOP_MAX_MM,
     # Materiales
     FC_LIMIT_HIGH_AXIAL_MPA,
+)
+from .geometry import (
+    # Columnas
+    COLUMN_MIN_DIMENSION_MM,
+    COLUMN_MIN_ASPECT_RATIO,
+    # Vigas
+    BEAM_MIN_WIDTH_RATIO,
+    BEAM_MIN_WIDTH_MM,
+    # Boundary Elements
+    BE_WIDTH_TO_HU_RATIO,
+    BE_MIN_WIDTH_SPECIAL_MM,
+    BE_C_LW_THRESHOLD,
+    # Clasificación
+    WALL_COLUMN_ASPECT_THRESHOLD,
 )

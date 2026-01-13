@@ -226,7 +226,8 @@ class ElementEditManager {
     static UPDATE_SCHEMAS = {
         pier: {
             n_meshes: 2, diameter_v: 8, diameter_h: 8, spacing_v: 200, spacing_h: 200,
-            n_edge_bars: 2, diameter_edge: 12, stirrup_diameter: 10, stirrup_spacing: 150
+            n_edge_bars: 2, diameter_edge: 12, stirrup_diameter: 10, stirrup_spacing: 150,
+            seismic_category: null  // null = usar categoría global
         },
         column: {
             n_bars_depth: 3, n_bars_width: 3, diameter_long: 20,
@@ -328,42 +329,42 @@ class ElementEditManager {
         // Actualizar resultados de piers/columns en page
         if (data.results) {
             this.table.page.results = data.results;
+            // Limpiar cache de filteredResults para forzar re-filtrado
+            this.table.filteredResults = [];
         }
 
-        // Actualizar piersData con los cambios de armadura aplicados
+        // Actualizar piersData con la armadura que viene del servidor (reinforcement en results)
         pierKeys.forEach(key => {
-            const changes = this.localChanges.get(key);
-            if (changes?.reinforcement) {
-                const pier = this.table.piersData?.find(p => p.key === key);
-                if (pier) {
-                    Object.assign(pier, changes.reinforcement);
-                }
+            const result = data.results?.find(r => r.key === key);
+            const pier = this.table.piersData?.find(p => p.key === key);
+            if (pier && result?.reinforcement) {
+                // Actualizar con los valores del servidor (ya recalculados)
+                Object.assign(pier, result.reinforcement);
             }
             delete this.table.combinationsCache[key];
             this._unmarkRowPending(key, 'pier');
         });
 
-        // Actualizar columnsData
+        // Actualizar columnsData con armadura del servidor
         columnKeys.forEach(key => {
-            const changes = this.localChanges.get(key);
-            if (changes?.reinforcement) {
-                const column = this.table.page.columnsData?.find(c => c.key === key);
-                if (column) {
-                    Object.assign(column, changes.reinforcement);
-                }
+            const result = data.results?.find(r => r.key === key);
+            const column = this.table.page.columnsData?.find(c => c.key === key);
+            if (column && result?.reinforcement) {
+                Object.assign(column, result.reinforcement);
             }
             delete this.table.combinationsCache[key];
             this._unmarkRowPending(key, 'column');
         });
 
         // Re-renderizar tabla de piers/columns si hubo cambios
+        // Usar ColumnFilters.applyFilters() para mantener filtros y ordenamiento
         if (pierKeys.length > 0 || columnKeys.length > 0) {
-            const filtered = this.table.getFilteredResults();
-            this.table.renderTable(filtered);
-            const stats = this.table.calculateStats();
-            stats.pass_rate = stats.rate;  // Compatibilidad
-            this.table.updateStatistics(stats);
+            this.table.columnFilters.applyFilters();
             this.table.updateSummaryPlot();
+
+            // Resaltar elementos recién recalculados y hacer scroll
+            this._highlightRecalculatedElements(pierKeys, 'pier');
+            this._highlightRecalculatedElements(columnKeys, 'column');
         }
 
         // Actualizar beamResults y re-renderizar
@@ -388,6 +389,33 @@ class ElementEditManager {
         elementKeys.forEach(key => {
             this.localChanges.delete(key);
             this.recalcButton.removePending(key);
+        });
+    }
+
+    /**
+     * Resalta los elementos recién recalculados con animación y scroll.
+     * @param {string[]} keys - Keys de los elementos recalculados
+     * @param {string} elementType - Tipo: 'pier', 'column', 'beam', 'drop_beam'
+     */
+    _highlightRecalculatedElements(keys, elementType) {
+        if (!keys || keys.length === 0) return;
+
+        keys.forEach((key, index) => {
+            const selector = this._getRowSelector(key, elementType);
+            const row = document.querySelector(selector);
+            if (row) {
+                row.classList.add('just-recalculated');
+
+                // Scroll suave al primer elemento recalculado
+                if (index === 0) {
+                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+
+                // Quitar el resaltado después de 5 segundos
+                setTimeout(() => {
+                    row.classList.remove('just-recalculated');
+                }, 5000);
+            }
         });
     }
 

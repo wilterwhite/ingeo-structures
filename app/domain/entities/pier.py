@@ -62,6 +62,10 @@ class Pier(MeshReinforcementMixin):
     # True = diseño sismico especial (§18.7.6/§18.10.4), False = no sismico (§22.5/§11.5)
     is_seismic: bool = True
 
+    # Categoria sismica individual del pier (opcional, si None usa la categoria global de la sesion)
+    # Valores: 'SPECIAL', 'INTERMEDIATE', 'ORDINARY', 'NON_SFRS'
+    seismic_category: Optional[str] = None
+
     # Áreas de barra precalculadas (se calculan en __post_init__)
     _bar_area_v: float = field(default=50.3, repr=False)  # φ8 por defecto
     _bar_area_h: float = field(default=50.3, repr=False)
@@ -90,10 +94,10 @@ class Pier(MeshReinforcementMixin):
         Aplica armadura mínima según ACI 318-25.
 
         Delega el cálculo al MinimumReinforcementCalculator del dominio.
+        Incluye tanto malla distribuida como enfierradura de borde.
         """
+        # Malla distribuida
         config = MinimumReinforcementCalculator.calculate_for_pier(self.thickness)
-
-        # Aplicar configuración calculada
         self.n_meshes = config.n_meshes
         self.diameter_v = config.diameter
         self.diameter_h = config.diameter
@@ -101,6 +105,15 @@ class Pier(MeshReinforcementMixin):
         self.spacing_h = config.spacing
         self._bar_area_v = config.bar_area
         self._bar_area_h = config.bar_area
+
+        # Enfierradura de borde mínima
+        n_edge, diam_edge = MinimumReinforcementCalculator.calculate_edge_reinforcement(
+            thickness=self.thickness,
+            cover=self.cover,
+        )
+        self.n_edge_bars = n_edge
+        self.diameter_edge = diam_edge
+        self._bar_area_edge = get_bar_area(diam_edge)
 
     # =========================================================================
     # Implementación de métodos abstractos del MeshReinforcementMixin
@@ -306,7 +319,8 @@ class Pier(MeshReinforcementMixin):
         n_stirrup_legs: Optional[int] = None,
         fy: Optional[float] = None,
         cover: Optional[float] = None,
-        thickness: Optional[float] = None
+        thickness: Optional[float] = None,
+        seismic_category: Optional[str] = None
     ):
         """
         Actualiza la configuración de armadura y/o geometría.
@@ -325,6 +339,7 @@ class Pier(MeshReinforcementMixin):
             fy: Límite de fluencia (MPa)
             cover: Recubrimiento (mm)
             thickness: Espesor del muro (mm) - para propuestas de diseño
+            seismic_category: Categoría sísmica individual ('SPECIAL', 'INTERMEDIATE', 'ORDINARY', 'NON_SFRS')
         """
         if n_meshes is not None:
             self.n_meshes = n_meshes
@@ -355,6 +370,8 @@ class Pier(MeshReinforcementMixin):
             self.cover = cover
         if thickness is not None:
             self.thickness = thickness
+        if seismic_category is not None:
+            self.seismic_category = seismic_category
 
     # =========================================================================
     # Métodos para Protocol FlexuralElement

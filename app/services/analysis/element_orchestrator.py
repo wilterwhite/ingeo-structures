@@ -26,6 +26,8 @@ from ...domain.chapter18 import (
     SeismicBeamService,
     SeismicWallService,
     SeismicCategory,
+    NonSfrsService,
+    NonSfrsResult,
 )
 from ...domain.flexure import FlexureChecker
 from ...domain.shear.combined import calculate_combined_dcr
@@ -148,6 +150,7 @@ class ElementOrchestrator:
         wall_service: Optional[SeismicWallService] = None,
         flexo_service: Optional[FlexocompressionService] = None,
         shear_service: Optional[ShearService] = None,
+        non_sfrs_service: Optional[NonSfrsService] = None,
     ):
         """
         Inicializa el orquestador con servicios de dominio.
@@ -162,6 +165,7 @@ class ElementOrchestrator:
         self._wall_service = wall_service or SeismicWallService()
         self._flexo_service = flexo_service or FlexocompressionService()
         self._shear_service = shear_service or ShearService()
+        self._non_sfrs_service = non_sfrs_service or NonSfrsService()
 
     def verify(
         self,
@@ -189,14 +193,28 @@ class ElementOrchestrator:
         Returns:
             OrchestrationResult con resultado del servicio de dominio
         """
+        # 0. Priorizar categoría sísmica individual del elemento sobre la global
+        #    Aplica a: Pier, Column, Beam, DropBeam
+        if hasattr(element, 'seismic_category') and element.seismic_category:
+            try:
+                category = SeismicCategory[element.seismic_category]
+            except KeyError:
+                pass  # Mantener categoría global si valor inválido
+
         # 1. Clasificar elemento
         element_type = self._classifier.classify(element)
 
-        # 2. Resolver comportamiento de diseño
+        # 2. Verificar si es NON_SFRS - usar servicio especializado
+        if category == SeismicCategory.NON_SFRS:
+            return self._verify_as_non_sfrs(
+                element, forces, element_type, lambda_factor
+            )
+
+        # 3. Resolver comportamiento de diseño
         is_seismic = getattr(element, 'is_seismic', True)
         design_behavior = self._resolver.resolve(element_type, element, forces, is_seismic)
 
-        # 3. Delegar según service_type del comportamiento
+        # 4. Delegar según service_type del comportamiento
         # Esto garantiza consistencia: el comportamiento define qué servicio usar
         service_type = design_behavior.service_type
 
@@ -394,6 +412,62 @@ class ElementOrchestrator:
             dcr_max=round(dcr, 3),
             critical_check='flexure' if not is_ok else '',
             warnings=[],
+        )
+
+    def _verify_as_non_sfrs(
+        self,
+        element: Union['Beam', 'Column', 'Pier', 'DropBeam'],
+        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces']],
+        element_type: ElementType,
+        lambda_factor: float,
+    ) -> OrchestrationResult:
+        """
+        Verifica elemento como Non-SFRS según §18.14.
+
+        Los elementos Non-SFRS no forman parte del sistema resistente a fuerzas
+        sísmicas pero deben verificarse para compatibilidad de deriva en SDC D, E, F.
+
+        Por ahora implementación simplificada:
+        - Retorna OK (asume que el elemento puede acomodar la deriva)
+        - Agrega warning indicando que la verificación de deriva no está implementada
+        - El DCR se calcula solo para flexión (mismo cálculo que elementos sísmicos)
+
+        TODO: Integrar con análisis de deriva cuando esté disponible (δu, hsx).
+        """
+        from .design_behavior import DesignBehavior
+
+        # Calcular datos de flexión para DCR (igual que elementos normales)
+        flexure_data = self._flexo_service.check_flexure(element, forces, moment_axis='M3')
+        dcr = flexure_data.get('dcr', 0) if flexure_data else 0
+
+        # Crear resultado Non-SFRS simplificado
+        non_sfrs_result = NonSfrsResult(
+            element_type='wall_pier',
+            drift_compatibility=None,  # No calculada
+            slab_column_shear=None,
+            is_ok=True,  # Asumir OK por ahora
+            warnings=['Non-SFRS §18.14: Verificación de deriva no implementada'],
+        )
+
+        # Crear comportamiento de diseño para Non-SFRS
+        design_behavior = DesignBehavior(
+            name='NON_SFRS',
+            aci_section='§18.14',
+            service_type='non_sfrs',
+            requires_pm_diagram=True,
+            requires_seismic_checks=False,
+        )
+
+        return OrchestrationResult(
+            element_type=element_type,
+            design_behavior=design_behavior,
+            service_used='non_sfrs',
+            domain_result=non_sfrs_result,
+            is_ok=dcr <= 1.0,  # Verificación de flexión sigue aplicando
+            dcr_max=round(dcr, 3),
+            critical_check='flexure' if dcr > 1.0 else '',
+            warnings=non_sfrs_result.warnings,
+            flexure_data=flexure_data,
         )
 
     # =========================================================================

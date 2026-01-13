@@ -14,7 +14,6 @@ import math
 from app.domain.flexure.slenderness import SlendernessService, SlendernessResult
 from app.domain.constants.stiffness import (
     WALL_STIFFNESS_FACTOR,
-    WALL_UNCRACKED_STIFFNESS_FACTOR,
     COLUMN_STIFFNESS_FACTOR,
     CM_BASE,
     CM_FACTOR,
@@ -50,10 +49,6 @@ class TestConstantesRigidez:
     def test_factor_muros_agrietados(self):
         """Muros agrietados usan 0.35*Ig."""
         assert WALL_STIFFNESS_FACTOR == 0.35
-
-    def test_factor_muros_no_agrietados(self):
-        """Muros no agrietados usan 0.70*Ig."""
-        assert WALL_UNCRACKED_STIFFNESS_FACTOR == 0.70
 
     def test_factor_columnas(self):
         """Columnas usan 0.70*Ig."""

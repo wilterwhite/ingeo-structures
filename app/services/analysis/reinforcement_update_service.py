@@ -62,6 +62,7 @@ class ReinforcementUpdateService:
                 stirrup_spacing=update.get('stirrup_spacing'),
                 fy=update.get('fy'),
                 cover=update.get('cover'),
+                seismic_category=update.get('seismic_category'),
             )
             count += 1
 

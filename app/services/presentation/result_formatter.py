@@ -12,8 +12,9 @@ Métodos principales:
 import math
 from typing import Dict, Any, Union, TYPE_CHECKING
 
-from ...domain.constants.phi_chapter21 import get_dcr_status
+from ...domain.constants.phi_chapter21 import get_dcr_status, RHO_MAX
 from ...domain.constants.reinforcement import RHO_MIN, MAX_SPACING_SEISMIC_MM
+from ...domain.constants.geometry import COLUMN_MIN_DIMENSION_MM
 
 if TYPE_CHECKING:
     from ..analysis.element_orchestrator import OrchestrationResult
@@ -187,13 +188,17 @@ class ResultFormatter:
         result: 'OrchestrationResult',
         geometry: Dict[str, Any],
         reinforcement: Dict[str, Any],
-        pm_plot: str = None
+        pm_plot: str = None,
+        seismic_category: str = None
     ) -> Dict[str, Any]:
         """
         Construye la estructura base común para todos los tipos de elementos.
 
         Esta función centraliza la lógica común de formateo, reduciendo
         duplicación en los métodos especializados.
+
+        Args:
+            seismic_category: Categoría sísmica del elemento ('SPECIAL', 'INTERMEDIATE', 'ORDINARY', 'NON_SFRS')
         """
         overall_status = 'OK' if result.is_ok else 'NO OK'
         dcr = result.dcr_max
@@ -278,7 +283,9 @@ class ResultFormatter:
             'aci_section': result.design_behavior.aci_section,
             'dcr_max': result.dcr_max,
             'critical_check': result.critical_check,
-            'warnings': result.warnings
+            'warnings': result.warnings,
+            # Categoría sísmica individual del elemento (null = usar global)
+            'seismic_category': seismic_category
         }
 
     @staticmethod
@@ -287,24 +294,78 @@ class ResultFormatter:
         Extrae geometría y refuerzo base de un Pier.
 
         Centraliza la lógica común para _format_wall/column/flexure_orchestration.
+        Detecta campos modificados comparando contra el MÍNIMO CALCULADO para
+        cada pier (no contra constantes hardcodeadas).
 
         Returns:
             (geometry, reinforcement) dicts
         """
+        from ...domain.calculations.minimum_reinforcement import MinimumReinforcementCalculator
+
         geometry = {
             'width_mm': pier.width,
+            'width_m': pier.width / 1000,
             'thickness_mm': pier.thickness,
+            'thickness_m': pier.thickness / 1000,
             'height_mm': pier.height,
             'fc': pier.fc,
             'fy': pier.fy
         }
+
+        # Verificar cuantía máxima (4% según ACI 318-25 §18.10.2.1)
+        rho_v_exceeds_max = pier.rho_vertical > RHO_MAX
+
+        # Calcular enfierradura mínima para ESTE pier (según espesor y cover)
+        min_config = MinimumReinforcementCalculator.calculate_for_pier(pier.thickness)
+        min_n_edge, min_diam_edge = MinimumReinforcementCalculator.calculate_edge_reinforcement(
+            pier.thickness, pier.cover
+        )
+
+        # Detectar campos modificados respecto al MÍNIMO CALCULADO
+        modified_fields = []
+        if pier.n_meshes != min_config.n_meshes:
+            modified_fields.append('n_meshes')
+        if pier.diameter_v != min_config.diameter:
+            modified_fields.append('diameter_v')
+        if pier.spacing_v != min_config.spacing:
+            modified_fields.append('spacing_v')
+        if pier.diameter_h != min_config.diameter:
+            modified_fields.append('diameter_h')
+        if pier.spacing_h != min_config.spacing:
+            modified_fields.append('spacing_h')
+        if pier.n_edge_bars != min_n_edge:
+            modified_fields.append('n_edge_bars')
+        if pier.diameter_edge != min_diam_edge:
+            modified_fields.append('diameter_edge')
+        # Estribos: no hay mínimo calculado, mantener check simple contra valores típicos
+        if pier.stirrup_diameter != 10:
+            modified_fields.append('stirrup_diameter')
+        if pier.stirrup_spacing != 150:
+            modified_fields.append('stirrup_spacing')
+
         reinforcement = {
+            # Valores calculados
             'As_vertical_mm2': pier.As_vertical,
             'As_horizontal_mm2': pier.As_horizontal,
             'As_vertical_per_m': round(pier.As_vertical_per_m, 1),
             'As_horizontal_per_m': round(pier.As_horizontal, 1),
             'rho_vertical': round(pier.rho_vertical, 5),
-            'rho_horizontal': round(pier.rho_horizontal, 5)
+            'rho_horizontal': round(pier.rho_horizontal, 5),
+            # Valores de configuración (para que el frontend pueda actualizar dropdowns)
+            'n_meshes': pier.n_meshes,
+            'diameter_v': pier.diameter_v,
+            'spacing_v': pier.spacing_v,
+            'diameter_h': pier.diameter_h,
+            'spacing_h': pier.spacing_h,
+            'n_edge_bars': pier.n_edge_bars,
+            'diameter_edge': pier.diameter_edge,
+            'stirrup_diameter': pier.stirrup_diameter,
+            'stirrup_spacing': pier.stirrup_spacing,
+            # Validaciones adicionales
+            'rho_v_exceeds_max': rho_v_exceeds_max,
+            'rho_max': RHO_MAX,
+            # Campos modificados respecto al default
+            'modified_fields': modified_fields,
         }
         return geometry, reinforcement
 
@@ -414,6 +475,76 @@ class ResultFormatter:
         return flexure_data
 
     # =========================================================================
+    # Extracción centralizada de geometry_warnings
+    # =========================================================================
+
+    @staticmethod
+    def _extract_geometry_warnings(
+        domain_result,
+        element_type: str = 'pier'
+    ) -> list:
+        """
+        Extrae geometry_warnings de cualquier tipo de resultado de dominio.
+
+        Centraliza la lógica de extracción de advertencias geométricas que
+        deben mostrarse en la celda de Geometría del frontend.
+
+        Args:
+            domain_result: Resultado del dominio (SeismicColumnResult, etc.)
+            element_type: Tipo de elemento ('pier', 'column', 'beam', 'drop_beam')
+
+        Returns:
+            Lista de strings con advertencias de geometría
+        """
+        warnings = []
+
+        # Columnas sísmicas: dimensional_limits con min_dimension_ok (§18.7.2.1)
+        # Nota: Vigas también usan dimensional_limits pero con bw_ok/ln_ok, no min_dimension_ok
+        if hasattr(domain_result, 'dimensional_limits') and domain_result.dimensional_limits:
+            dim = domain_result.dimensional_limits
+            # Solo procesar si es resultado de columna (tiene min_dimension_ok)
+            if hasattr(dim, 'min_dimension_ok') and not dim.min_dimension_ok:
+                min_required = getattr(dim, 'min_dimension_required', COLUMN_MIN_DIMENSION_MM)
+                warnings.append(
+                    f"Espesor {dim.min_dimension:.0f}mm < {min_required:.0f}mm "
+                    f"mínimo (ACI §18.7.2.1)"
+                )
+            if hasattr(dim, 'aspect_ratio_ok') and not dim.aspect_ratio_ok:
+                warnings.append(
+                    f"Relación b/h={dim.aspect_ratio:.2f} < 0.4 mínimo (ACI §18.7.2.1)"
+                )
+            # Vigas: dimensional_limits con bw_ok/ln_ok (§18.6.2)
+            if hasattr(dim, 'bw_ok') and not dim.bw_ok:
+                warnings.append(
+                    f"Ancho bw={dim.bw:.0f}mm < {dim.bw_min:.0f}mm "
+                    f"mínimo (ACI §18.6.2.1)"
+                )
+            if hasattr(dim, 'ln_ok') and not dim.ln_ok:
+                warnings.append(
+                    f"Luz ln={dim.ln:.0f}mm < 4d={dim.ln_min:.0f}mm "
+                    f"mínimo (ACI §18.6.2.1)"
+                )
+
+        # Muros: boundary element warnings (§18.10.6.4)
+        if hasattr(domain_result, 'boundary') and domain_result.boundary:
+            be = domain_result.boundary
+            # Filtrar solo warnings relacionados con espesor/geometría
+            for w in getattr(be, 'warnings', []):
+                if any(kw in w for kw in ['Espesor', 'espesor', '305', '300', 'ancho']):
+                    warnings.append(w)
+
+        # Vigas: dimensional_limits (§18.6.2)
+        if hasattr(domain_result, 'beam_dimensional') and domain_result.beam_dimensional:
+            bd = domain_result.beam_dimensional
+            if hasattr(bd, 'min_width_ok') and not bd.min_width_ok:
+                warnings.append(
+                    f"Ancho {bd.width:.0f}mm < {bd.min_width_required:.0f}mm "
+                    f"mínimo (ACI §18.6.2)"
+                )
+
+        return warnings
+
+    # =========================================================================
     # Formateo de resultados de ElementOrchestrator (arquitectura unificada)
     # =========================================================================
 
@@ -483,7 +614,8 @@ class ResultFormatter:
             result=result,
             geometry=geometry,
             reinforcement=reinforcement,
-            pm_plot=pm_plot
+            pm_plot=pm_plot,
+            seismic_category=getattr(pier, 'seismic_category', None)
         )
 
         # Agregar campos específicos de pier
@@ -513,13 +645,19 @@ class ResultFormatter:
         # Elementos de borde
         if hasattr(domain_result, 'boundary') and domain_result.boundary:
             be = domain_result.boundary
+            # Usar helper centralizado para geometry_warnings
+            geometry_warnings = ResultFormatter._extract_geometry_warnings(
+                domain_result, 'pier'
+            )
             formatted['boundary_element'] = {
                 'required': be.requires_special,
-                'method': 'stress' if be.requires_special else 'N/A',
-                'sigma_max': 0,
-                'sigma_limit': 0,
-                'length_mm': 0,
-                'status': 'OK' if be.is_ok else 'CHECK'
+                'method': be.method_used if be.requires_special else 'N/A',
+                'sigma_max': be.stress_check.get('sigma_max', 0) if be.stress_check else 0,
+                'sigma_limit': be.stress_check.get('limit', 0) if be.stress_check else 0,
+                'length_mm': be.length_horizontal,
+                'status': 'OK' if be.is_ok else 'CHECK',
+                'warnings': be.warnings,
+                'geometry_warnings': geometry_warnings,
             }
 
         # Cuantías mínimas
@@ -573,7 +711,8 @@ class ResultFormatter:
             result=result,
             geometry=geometry,
             reinforcement=reinforcement,
-            pm_plot=pm_plot
+            pm_plot=pm_plot,
+            seismic_category=getattr(pier, 'seismic_category', None)
         )
 
         # Agregar campos específicos de pier
@@ -640,6 +779,20 @@ class ResultFormatter:
             'transverse': transverse,
         }
 
+        # Usar helper centralizado para geometry_warnings
+        geometry_warnings = ResultFormatter._extract_geometry_warnings(
+            domain_result, 'column'
+        )
+
+        # Agregar boundary_element con geometry_warnings para que el frontend lo muestre
+        formatted['boundary_element'] = {
+            'required': False,
+            'method': 'N/A',
+            'status': 'OK' if not geometry_warnings else 'CHECK',
+            'warnings': [],
+            'geometry_warnings': geometry_warnings,
+        }
+
         # Continuidad del muro
         formatted['wall_continuity'] = ResultFormatter._format_wall_continuity(
             pier, continuity_info
@@ -681,7 +834,8 @@ class ResultFormatter:
             result=result,
             geometry=geometry,
             reinforcement=reinforcement,
-            pm_plot=pm_plot
+            pm_plot=pm_plot,
+            seismic_category=getattr(pier, 'seismic_category', None)
         )
 
         # Agregar campos específicos de pier
@@ -698,6 +852,18 @@ class ResultFormatter:
         formatted['shear']['dcr'] = 0
         formatted['shear']['dcr_2'] = 0
         formatted['shear']['dcr_combined'] = 0
+
+        # Usar helper centralizado para geometry_warnings
+        geometry_warnings = ResultFormatter._extract_geometry_warnings(
+            domain_result, 'pier'
+        )
+        formatted['boundary_element'] = {
+            'required': False,
+            'method': 'N/A',
+            'status': 'OK' if not geometry_warnings else 'CHECK',
+            'warnings': [],
+            'geometry_warnings': geometry_warnings,
+        }
 
         # Continuidad del muro
         formatted['wall_continuity'] = ResultFormatter._format_wall_continuity(
@@ -789,7 +955,8 @@ class ResultFormatter:
             result=result,
             geometry=geometry,
             reinforcement=reinforcement,
-            pm_plot=pm_plot
+            pm_plot=pm_plot,
+            seismic_category=getattr(column, 'seismic_category', None)
         )
 
         # Extraer datos de flexión y cortante
@@ -799,6 +966,18 @@ class ResultFormatter:
         formatted['shear'] = ResultFormatter._extract_shear_from_domain(
             domain_result, result.dcr_max, 'column'
         )
+
+        # Usar helper centralizado para geometry_warnings
+        geometry_warnings = ResultFormatter._extract_geometry_warnings(
+            domain_result, 'column'
+        )
+        formatted['boundary_element'] = {
+            'required': False,
+            'method': 'N/A',
+            'status': 'OK' if not geometry_warnings else 'CHECK',
+            'warnings': [],
+            'geometry_warnings': geometry_warnings,
+        }
 
         return formatted
 
@@ -838,7 +1017,8 @@ class ResultFormatter:
             result=result,
             geometry=geometry,
             reinforcement=reinforcement,
-            pm_plot=None
+            pm_plot=None,
+            seismic_category=getattr(beam, 'seismic_category', None)
         )
 
         # Extraer datos de flexión y cortante del domain_result
@@ -848,6 +1028,18 @@ class ResultFormatter:
         formatted['shear'] = ResultFormatter._extract_shear_from_domain(
             domain_result, result.dcr_max, 'beam'
         )
+
+        # Usar helper centralizado para geometry_warnings
+        geometry_warnings = ResultFormatter._extract_geometry_warnings(
+            domain_result, 'beam'
+        )
+        formatted['boundary_element'] = {
+            'required': False,
+            'method': 'N/A',
+            'status': 'OK' if not geometry_warnings else 'CHECK',
+            'warnings': [],
+            'geometry_warnings': geometry_warnings,
+        }
 
         return formatted
 
@@ -886,7 +1078,8 @@ class ResultFormatter:
             result=result,
             geometry=geometry,
             reinforcement=reinforcement,
-            pm_plot=pm_plot
+            pm_plot=pm_plot,
+            seismic_category=getattr(drop_beam, 'seismic_category', None)
         )
 
         # Extraer datos de flexión y cortante
@@ -896,6 +1089,18 @@ class ResultFormatter:
         formatted['shear'] = ResultFormatter._extract_shear_from_domain(
             domain_result, result.dcr_max, 'wall'
         )
+
+        # Usar helper centralizado para geometry_warnings
+        geometry_warnings = ResultFormatter._extract_geometry_warnings(
+            domain_result, 'drop_beam'
+        )
+        formatted['boundary_element'] = {
+            'required': False,
+            'method': 'N/A',
+            'status': 'OK' if not geometry_warnings else 'CHECK',
+            'warnings': [],
+            'geometry_warnings': geometry_warnings,
+        }
 
         return formatted
 

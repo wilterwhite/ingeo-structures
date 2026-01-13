@@ -47,9 +47,6 @@ class InteractionDiagramService:
     EPSILON_CU = 0.003      # Deformación última del hormigón
     ES = 200000             # Módulo de elasticidad del acero (MPa)
 
-    def __init__(self):
-        pass
-
     def calculate_beta1(self, fc: float) -> float:
         """
         Calcula β1 según ACI 318-25 §22.2.2.4.3.

@@ -56,6 +56,7 @@ class RowFactory {
 
         row.appendChild(SharedCells.createInfoCell(result, 'pier'));
         row.appendChild(SharedCells.createStoryCell(result));
+        row.appendChild(PierCells.createSeismicCategoryCell(result, pierKey));
         row.appendChild(PierCells.createGeometryCell(result));
         row.appendChild(PierCells.createMallaCell(pier, pierKey, result));
         row.appendChild(PierCells.createBordeCell(pier, pierKey, result));
@@ -138,7 +139,8 @@ class RowFactory {
             n_edge_bars: ['.borde-cell .edit-n-edge', 2],
             diameter_edge: ['.borde-cell .edit-edge', 12],
             stirrup_diameter: ['.borde-cell .edit-stirrup-d', 10],
-            stirrup_spacing: ['.borde-cell .edit-stirrup-s', 150]
+            stirrup_spacing: ['.borde-cell .edit-stirrup-s', 150],
+            seismic_category: ['.seismic-category-cell .edit-seismic-category', '']
         },
         column: {
             n_bars_depth: ['.longitudinal-cell .edit-n-bars', 3],
@@ -181,7 +183,17 @@ class RowFactory {
 
         const result = {};
         for (const [field, [selector, defaultVal]] of Object.entries(config)) {
-            result[field] = parseInt(row.querySelector(selector)?.value) || defaultVal;
+            const element = row.querySelector(selector);
+            if (!element) continue;
+
+            // seismic_category es string, el resto son números
+            if (field === 'seismic_category') {
+                const value = element.value;
+                // Solo enviar si tiene valor (no vacío = usar global)
+                result[field] = value || null;
+            } else {
+                result[field] = parseInt(element.value) || defaultVal;
+            }
         }
         return result;
     }
@@ -208,7 +220,7 @@ class RowFactory {
         // Configuración de selectores para event listeners
         // Nota: los selectores deben coincidir con los definidos en BeamCells.js
         const selectorsByType = {
-            pier: ['.malla-cell select', '.borde-cell select'],
+            pier: ['.malla-cell select', '.borde-cell select', '.seismic-category-cell select'],
             column: ['.longitudinal-cell select', '.stirrups-cell select'],
             beam: ['select[class^="edit-beam-"]'],  // Todos los selects de beam
             drop_beam: ['.malla-v-cell select', '.malla-h-cell select', '.borde-cell select']

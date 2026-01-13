@@ -9,6 +9,7 @@ Incluye:
 """
 import math
 
+from ...constants.geometry import BE_MIN_WIDTH_SPECIAL_MM, BE_C_LW_THRESHOLD
 from ..results import BoundaryElementDimensions
 
 
@@ -53,13 +54,15 @@ def calculate_dimensions(
     # (b) Ancho mínimo básico
     width_min = hu / 16
 
-    # (c) Para c/lw >= 3/8: b >= 305 mm
-    if lw > 0 and (c / lw) >= 0.375:
-        width_min = max(width_min, 305.0)
+    # (c) Para c/lw >= 3/8: b >= 305 mm (BE_MIN_WIDTH_SPECIAL_MM)
+    if lw > 0 and (c / lw) >= BE_C_LW_THRESHOLD:
+        width_min = max(width_min, BE_MIN_WIDTH_SPECIAL_MM)
 
     # Ancho requerido por método de desplazamiento (18.10.6.2(b)(ii))
+    # El ancho requerido siempre debe ser >= width_min (que ya incluye el 305mm si c/lw >= 3/8)
     if delta_u > 0 and c > 0 and lw > 0:
-        width_required = math.sqrt(c * lw) / 40
+        width_displacement = math.sqrt(c * lw) / 40
+        width_required = max(width_displacement, width_min)
     else:
         width_required = width_min
 

@@ -43,10 +43,7 @@ from .chapter18 import (
     BoundaryElementResult,
 )
 
-from .constants import (
-    SeismicDesignCategory,
-    WallCategory,
-)
+from .constants import SeismicDesignCategory
 
 __all__ = [
     # Entities
@@ -74,5 +71,4 @@ __all__ = [
     'BoundaryElementResult',
     # Constants
     'SeismicDesignCategory',
-    'WallCategory',
 ]

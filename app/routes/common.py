@@ -591,7 +591,7 @@ def get_constants():
         # Opciones de diámetros por uso
         'diameters': {
             'malla': [6, 8, 10, 12, 16],
-            'borde': [12, 16, 18, 20, 22, 25, 28, 32],
+            'borde': [8, 10, 12, 16, 18, 20, 22, 25, 28, 32],
             'estribos': [8, 10, 12],
             'longitudinal': [16, 18, 20, 22, 25, 28, 32],
             'vigas': [12, 16, 18, 20, 22, 25],

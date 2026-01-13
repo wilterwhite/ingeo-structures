@@ -18,7 +18,7 @@ class ResultsTable extends FilterableTable {
         // Managers especializados
         this.combinationsManager = new CombinationsManager(this);
         this.couplingBeamManager = new CouplingBeamManager(this);
-        this.editManager = new PierEditManager(this);
+        this.editManager = new ElementEditManager(this);
 
         // Filtros de columna tipo Excel
         this.columnFilters = new ColumnFilters(this);
@@ -67,7 +67,7 @@ class ResultsTable extends FilterableTable {
      * Los filtros de columna se manejan en ColumnFilters.
      */
     populateFilters() {
-        // Ya no se usan filtros de toolbar, ColumnFilters se inicializa en render()
+        // Método vacío mantenido por compatibilidad - llamado desde UploadManager
     }
 
     /**

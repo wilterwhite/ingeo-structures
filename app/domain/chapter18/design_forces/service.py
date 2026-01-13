@@ -10,7 +10,7 @@ import math
 from typing import Optional
 
 from ...constants.shear import OMEGA_0_DEFAULT
-from ...constants.seismic import SeismicDesignCategory, WallCategory
+from ...constants.seismic import SeismicDesignCategory
 from ...constants.units import N_TO_TONF
 from ...constants.reinforcement import is_rho_v_ge_rho_h_required
 from ..results import (
@@ -244,36 +244,6 @@ class ShearAmplificationService:
             warnings=warnings,
             aci_reference="ACI 318-25 §18.10.2"
         )
-
-    # =========================================================================
-    # Clasificación de Muros
-    # =========================================================================
-
-    def determine_wall_category(
-        self,
-        sdc: SeismicDesignCategory,
-        is_sfrs: bool = True,
-        is_precast: bool = False
-    ) -> WallCategory:
-        """
-        Determina la categoría del muro basado en SDC.
-
-        Args:
-            sdc: Categoría de Diseño Sísmico
-            is_sfrs: Si es parte del sistema resistente a fuerzas sísmicas
-            is_precast: Si es muro prefabricado
-
-        Returns:
-            WallCategory (ORDINARY, INTERMEDIATE, SPECIAL)
-        """
-        if sdc in (SeismicDesignCategory.A, SeismicDesignCategory.B):
-            return WallCategory.ORDINARY
-
-        if sdc == SeismicDesignCategory.C:
-            return WallCategory.INTERMEDIATE if is_precast else WallCategory.ORDINARY
-
-        # SDC D, E, F
-        return WallCategory.SPECIAL if is_sfrs else WallCategory.ORDINARY
 
 
 # =============================================================================
