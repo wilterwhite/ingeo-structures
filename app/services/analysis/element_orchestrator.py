@@ -397,21 +397,22 @@ class ElementOrchestrator:
     ) -> OrchestrationResult:
         """Delega verificación a FlexocompressionService."""
         # Calcular capacidad usando flexocompression service
-        result = self._flexo_service.check_flexure(element, forces, moment_axis)
+        flexure_data = self._flexo_service.check_flexure(element, forces, moment_axis)
 
         # DCR viene directamente del servicio (centralizado)
-        dcr = result.get('dcr', 0) if result else 0
+        dcr = flexure_data.get('dcr', 0) if flexure_data else 0
         is_ok = dcr <= 1.0
 
         return OrchestrationResult(
             element_type=element_type,
             design_behavior=design_behavior,
             service_used='flexure',
-            domain_result=result,
+            domain_result=flexure_data,
             is_ok=is_ok,
             dcr_max=round(dcr, 3),
             critical_check='flexure' if not is_ok else '',
             warnings=[],
+            flexure_data=flexure_data,
         )
 
     def _verify_as_non_sfrs(

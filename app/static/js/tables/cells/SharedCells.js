@@ -84,6 +84,7 @@ const SharedCells = {
      */
     createFlexureCapCell(result) {
         const exceedsAxial = result.flexure?.exceeds_axial || false;
+        const exceedsTension = result.flexure?.exceeds_tension || false;
         const Pu = result.flexure?.Pu || 0;
         const Mu = result.flexure?.Mu || 0;
         const phiMnPu = result.flexure?.phi_Mn_at_Pu || 0;
@@ -94,6 +95,10 @@ const SharedCells = {
         if (exceedsAxial) {
             td.title = `Pu=${Pu}t > φPn_max=${result.flexure.phi_Pn_max}t`;
             td.innerHTML = `<span class="capacity-main axial-exceeded">⚠️ Pu>φPn</span>`;
+        } else if (exceedsTension) {
+            const phiPtMin = result.flexure?.phi_Pt_min || 0;
+            td.title = `Pu=${Pu}t < φPt_min=${phiPtMin}t (excede capacidad de tracción)`;
+            td.innerHTML = `Pu=${Pu}t, Mu=${Mu}t-m<br><span class="tension-exceeded">⚠️ Pu&lt;φPt</span>`;
         } else {
             const phiMn0 = result.flexure?.phi_Mn_0 || 0;
             td.title = `φMn₀=${phiMn0}t-m (P=0)`;

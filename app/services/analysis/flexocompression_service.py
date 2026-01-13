@@ -163,11 +163,14 @@ class FlexocompressionService:
             phi_Pn_max = result.phi_Pn_max
             has_tension = result.has_tension
             tension_combos = result.tension_combos
+            exceeds_tension = result.exceeds_tension_capacity
+            phi_Pt_min = result.phi_Pt_min
         else:
             sf, status, critical = float('inf'), "OK", "N/A"
             phi_Mn_0, phi_Mn_at_Pu, critical_Pu, critical_Mu = 0.0, 0.0, 0.0, 0.0
             exceeds_axial, phi_Pn_max = False, 0.0
             has_tension, tension_combos = False, 0
+            exceeds_tension, phi_Pt_min = False, 0.0
 
         # DCR centralizado: se calcula UNA VEZ aquí
         # DCR = 1/SF = Mu/φMn (demand/capacity)
@@ -188,7 +191,9 @@ class FlexocompressionService:
             'exceeds_axial_capacity': exceeds_axial,
             'phi_Pn_max': phi_Pn_max,
             'has_tension': has_tension,
-            'tension_combos': tension_combos
+            'tension_combos': tension_combos,
+            'exceeds_tension': exceeds_tension,
+            'phi_Pt_min': round(phi_Pt_min, 2)
         }
 
     # =========================================================================
@@ -253,25 +258,6 @@ class FlexocompressionService:
     # =========================================================================
     # Interpolacion en Curva
     # =========================================================================
-
-    def get_phi_Mn_at_Pu(
-        self,
-        interaction_points: List[InteractionPoint],
-        Pu: float
-    ) -> float:
-        """
-        Interpola phi_Mn en la curva de interaccion para un Pu dado.
-
-        Delega a FlexureChecker.get_phi_Mn_at_P() para evitar duplicación.
-
-        Args:
-            interaction_points: Lista de puntos de interaccion
-            Pu: Carga axial (tonf)
-
-        Returns:
-            Capacidad phi_Mn interpolada (tonf-m)
-        """
-        return FlexureChecker.get_phi_Mn_at_P(interaction_points, Pu)
 
     def get_c_at_point(
         self,

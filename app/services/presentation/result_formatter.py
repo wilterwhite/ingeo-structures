@@ -203,47 +203,11 @@ class ResultFormatter:
         overall_status = 'OK' if result.is_ok else 'NO OK'
         dcr = result.dcr_max
 
-        # Datos de flexure base
-        flexure_data = {
-            'sf': 1.0 / dcr if dcr > 0 else 100.0,
-            'dcr': dcr,
-            'status': overall_status,
-            'critical_combo': 'envelope',
-            'phi_Mn_at_Pu': 0,
-            'Mu': 0,
-            'phi_Mn_0': 0,
-            'Pu': 0,
-            'phi_Pn_max': 0,
-            'exceeds_axial': False,
-            'has_tension': False
-        }
-
-        # Datos de shear base
-        shear_data = {
-            'sf': 1.0 / dcr if dcr > 0 else 100.0,
-            'dcr': dcr,
-            'dcr_class': get_dcr_css_class(dcr),
-            'status': overall_status,
-            'critical_combo': 'envelope',
-            'dcr_2': dcr,
-            'dcr_3': 0,
-            'dcr_combined': dcr,
-            'phi_Vn_2': 0,
-            'phi_Vn_3': 0,
-            'Vu_2': 0,
-            'Vu_3': 0,
-            'Vc': 0,
-            'Vs': 0,
-            'formula_type': element_type
-        }
-
-        # Datos de slenderness base
-        slenderness_data = {
-            'lambda': 0,
-            'is_slender': False,
-            'delta_ns': 1.0,
-            'magnification_pct': 0.0
-        }
+        # Datos base mínimos - normalmente sobrescritos por _extract_*_from_*()
+        # Solo mantener campos esenciales para fallback
+        flexure_data = {'sf': 0, 'dcr': dcr, 'status': overall_status}
+        shear_data = {'sf': 0, 'dcr': dcr, 'status': overall_status, 'formula_type': element_type}
+        slenderness_data = {'lambda': 0, 'is_slender': False, 'delta_ns': 1.0}
 
         return {
             'element_type': element_type,
@@ -463,6 +427,8 @@ class ResultFormatter:
                 'Pu': round(flex.get('Pu', 0), 2),
                 'phi_Pn_max': round(flex.get('phi_Pn_max', 0), 2),
                 'exceeds_axial': flex.get('exceeds_axial_capacity', False),
+                'exceeds_tension': flex.get('exceeds_tension', False),
+                'phi_Pt_min': round(flex.get('phi_Pt_min', 0), 2),
                 'has_tension': flex.get('has_tension', False),
                 'tension_combos': flex.get('tension_combos', 0),
                 'critical_combo': flex.get('critical_combo', 'envelope'),
@@ -559,50 +525,36 @@ class ResultFormatter:
         """
         Formatea resultado de OrchestrationResult al formato UI.
 
-        Este método soporta la nueva arquitectura donde ElementOrchestrator
-        clasifica automáticamente los elementos y delega al servicio apropiado.
+        Método unificado que soporta wall, column, y flexure según service_used.
         """
         service_used = result.service_used
-
-        # Delegar según servicio usado
-        if service_used == 'wall':
-            return ResultFormatter._format_wall_orchestration(
-                pier, result, key, continuity_info, pm_plot
-            )
-        elif service_used == 'column':
-            return ResultFormatter._format_column_orchestration(
-                pier, result, key, continuity_info, pm_plot
-            )
-        else:
-            return ResultFormatter._format_flexure_orchestration(
-                pier, result, key, continuity_info, pm_plot
-            )
-
-    @staticmethod
-    def _format_wall_orchestration(
-        pier: 'Pier',
-        result: 'OrchestrationResult',
-        key: str,
-        continuity_info: 'WallContinuityInfo' = None,
-        pm_plot: str = None
-    ) -> Dict[str, Any]:
-        """Formatea resultado de pier verificado como muro (§18.10)."""
         domain_result = result.domain_result
 
         # Extraer geometría y refuerzo usando helper
         geometry, reinforcement = ResultFormatter._extract_pier_geometry_reinforcement(pier)
 
-        # Agregar flags de validación desde domain_result.reinforcement (§18.10.2.1)
-        if hasattr(domain_result, 'reinforcement') and domain_result.reinforcement:
+        # Configurar refuerzo según tipo de servicio
+        if service_used == 'wall' and hasattr(domain_result, 'reinforcement') and domain_result.reinforcement:
             rf = domain_result.reinforcement
             reinforcement.update({
                 'rho_v_ok': rf.rho_l_ok,
                 'rho_h_ok': rf.rho_t_ok,
-                'rho_mesh_v_ok': rf.rho_l_ok,  # Para compatibilidad con frontend
+                'rho_mesh_v_ok': rf.rho_l_ok,
                 'spacing_v_ok': rf.spacing_ok,
                 'spacing_h_ok': rf.spacing_ok,
                 'rho_min': rf.rho_l_min,
                 'max_spacing': rf.spacing_max
+            })
+        else:
+            # Columnas y flexure usan valores por defecto
+            reinforcement.update({
+                'rho_v_ok': True,
+                'rho_h_ok': True,
+                'rho_mesh_v_ok': True,
+                'spacing_v_ok': True,
+                'spacing_h_ok': True,
+                'rho_min': RHO_MIN,
+                'max_spacing': MAX_SPACING_SEISMIC_MM
             })
 
         # Construir resultado base
@@ -618,10 +570,38 @@ class ResultFormatter:
             seismic_category=getattr(pier, 'seismic_category', None)
         )
 
-        # Agregar campos específicos de pier
+        # Campos comunes de pier
         formatted['grilla'] = pier.grilla
         formatted['axis'] = pier.eje
 
+        # Extraer datos de flexión
+        formatted['flexure'] = ResultFormatter._extract_flexure_from_result(
+            result, result.dcr_max
+        )
+
+        # Configurar según tipo de servicio
+        if service_used == 'wall':
+            ResultFormatter._format_wall_specific(formatted, pier, result, domain_result)
+        elif service_used == 'column':
+            ResultFormatter._format_column_specific(formatted, pier, result, domain_result)
+        else:
+            ResultFormatter._format_flexure_specific(formatted, domain_result)
+
+        # Continuidad del muro (común a todos)
+        formatted['wall_continuity'] = ResultFormatter._format_wall_continuity(
+            pier, continuity_info
+        )
+
+        return formatted
+
+    @staticmethod
+    def _format_wall_specific(
+        formatted: Dict,
+        pier: 'Pier',
+        result: 'OrchestrationResult',
+        domain_result
+    ) -> None:
+        """Agrega campos específicos de muro (§18.10) al resultado formateado."""
         # Clasificación
         if hasattr(domain_result, 'classification') and domain_result.classification:
             cls = domain_result.classification
@@ -634,10 +614,7 @@ class ResultFormatter:
                 'aci_section': result.design_behavior.aci_section
             }
 
-        # Extraer datos de flexión y cortante
-        formatted['flexure'] = ResultFormatter._extract_flexure_from_result(
-            result, result.dcr_max
-        )
+        # Cortante tipo muro
         formatted['shear'] = ResultFormatter._extract_shear_from_domain(
             domain_result, result.dcr_max, 'wall'
         )
@@ -645,7 +622,6 @@ class ResultFormatter:
         # Elementos de borde
         if hasattr(domain_result, 'boundary') and domain_result.boundary:
             be = domain_result.boundary
-            # Usar helper centralizado para geometry_warnings
             geometry_warnings = ResultFormatter._extract_geometry_warnings(
                 domain_result, 'pier'
             )
@@ -669,56 +645,14 @@ class ResultFormatter:
                 'is_ok': rf.is_ok
             }
 
-        # Continuidad del muro
-        formatted['wall_continuity'] = ResultFormatter._format_wall_continuity(
-            pier, continuity_info
-        )
-
-        return formatted
-
     @staticmethod
-    def _format_column_orchestration(
+    def _format_column_specific(
+        formatted: Dict,
         pier: 'Pier',
         result: 'OrchestrationResult',
-        key: str,
-        continuity_info: 'WallContinuityInfo' = None,
-        pm_plot: str = None
-    ) -> Dict[str, Any]:
-        """Formatea resultado de pier verificado como columna (§18.7)."""
-        domain_result = result.domain_result
-
-        # Extraer geometría y refuerzo usando helper
-        geometry, reinforcement = ResultFormatter._extract_pier_geometry_reinforcement(pier)
-
-        # Para columnas §18.7, agregar constantes de refuerzo para el frontend
-        # (las columnas tienen requisitos diferentes a muros)
-        reinforcement.update({
-            'rho_v_ok': True,  # Columnas no usan mismo check de muro
-            'rho_h_ok': True,
-            'rho_mesh_v_ok': True,
-            'spacing_v_ok': True,
-            'spacing_h_ok': True,
-            'rho_min': RHO_MIN,  # domain/constants/reinforcement.py
-            'max_spacing': MAX_SPACING_SEISMIC_MM
-        })
-
-        # Construir resultado base
-        formatted = ResultFormatter._build_base_result(
-            element_type='pier',
-            key=key,
-            label=pier.label,
-            story=pier.story,
-            result=result,
-            geometry=geometry,
-            reinforcement=reinforcement,
-            pm_plot=pm_plot,
-            seismic_category=getattr(pier, 'seismic_category', None)
-        )
-
-        # Agregar campos específicos de pier
-        formatted['grilla'] = pier.grilla
-        formatted['axis'] = pier.eje
-
+        domain_result
+    ) -> None:
+        """Agrega campos específicos de columna (§18.7) al resultado formateado."""
         # Clasificación como pier-columna
         formatted['classification'] = {
             'type': 'wall_pier_column',
@@ -729,15 +663,12 @@ class ResultFormatter:
             'aci_section': '§18.7'
         }
 
-        # Extraer datos de flexión y cortante
-        formatted['flexure'] = ResultFormatter._extract_flexure_from_result(
-            result, result.dcr_max
-        )
+        # Cortante tipo columna
         formatted['shear'] = ResultFormatter._extract_shear_from_domain(
             domain_result, result.dcr_max, 'column'
         )
 
-        # Verificaciones dimensionales
+        # Verificaciones sísmicas de columna
         dimensional = None
         if hasattr(domain_result, 'dimensional_limits') and domain_result.dimensional_limits:
             dim = domain_result.dimensional_limits
@@ -749,7 +680,6 @@ class ResultFormatter:
                 'is_ok': dim.is_ok
             }
 
-        # Refuerzo longitudinal
         longitudinal = None
         if hasattr(domain_result, 'longitudinal') and domain_result.longitudinal:
             long = domain_result.longitudinal
@@ -759,7 +689,6 @@ class ResultFormatter:
                 'is_ok': long.is_ok
             }
 
-        # Refuerzo transversal
         transverse = None
         if hasattr(domain_result, 'transverse') and domain_result.transverse:
             trans = domain_result.transverse
@@ -779,12 +708,10 @@ class ResultFormatter:
             'transverse': transverse,
         }
 
-        # Usar helper centralizado para geometry_warnings
+        # Boundary element placeholder con geometry_warnings
         geometry_warnings = ResultFormatter._extract_geometry_warnings(
             domain_result, 'column'
         )
-
-        # Agregar boundary_element con geometry_warnings para que el frontend lo muestre
         formatted['boundary_element'] = {
             'required': False,
             'method': 'N/A',
@@ -793,67 +720,17 @@ class ResultFormatter:
             'geometry_warnings': geometry_warnings,
         }
 
-        # Continuidad del muro
-        formatted['wall_continuity'] = ResultFormatter._format_wall_continuity(
-            pier, continuity_info
-        )
-
-        return formatted
-
     @staticmethod
-    def _format_flexure_orchestration(
-        pier: 'Pier',
-        result: 'OrchestrationResult',
-        key: str,
-        continuity_info: 'WallContinuityInfo' = None,
-        pm_plot: str = None
-    ) -> Dict[str, Any]:
-        """Formatea resultado de pier verificado por flexocompresión."""
-        domain_result = result.domain_result
-
-        # Extraer geometría y refuerzo usando helper
-        geometry, reinforcement = ResultFormatter._extract_pier_geometry_reinforcement(pier)
-
-        # Para verificación por flexocompresión, agregar valores por defecto
-        reinforcement.update({
-            'rho_v_ok': True,
-            'rho_h_ok': True,
-            'rho_mesh_v_ok': True,
-            'spacing_v_ok': True,
-            'spacing_h_ok': True,
-            'rho_min': RHO_MIN,  # domain/constants/reinforcement.py
-            'max_spacing': MAX_SPACING_SEISMIC_MM
-        })
-
-        # Construir resultado base
-        formatted = ResultFormatter._build_base_result(
-            element_type='pier',
-            key=key,
-            label=pier.label,
-            story=pier.story,
-            result=result,
-            geometry=geometry,
-            reinforcement=reinforcement,
-            pm_plot=pm_plot,
-            seismic_category=getattr(pier, 'seismic_category', None)
-        )
-
-        # Agregar campos específicos de pier
-        formatted['grilla'] = pier.grilla
-        formatted['axis'] = pier.eje
-
-        # Actualizar flexure con sf del domain_result si existe
-        if isinstance(domain_result, dict) and 'sf' in domain_result:
-            formatted['flexure']['sf'] = domain_result['sf']
-
-        # Shear básico para flexure (sin datos detallados)
+    def _format_flexure_specific(formatted: Dict, domain_result) -> None:
+        """Agrega campos específicos de verificación por flexocompresión."""
+        # Shear básico (sin datos detallados)
         formatted['shear']['formula_type'] = 'flexure'
         formatted['shear']['status'] = 'N/A'
         formatted['shear']['dcr'] = 0
         formatted['shear']['dcr_2'] = 0
         formatted['shear']['dcr_combined'] = 0
 
-        # Usar helper centralizado para geometry_warnings
+        # Boundary element placeholder
         geometry_warnings = ResultFormatter._extract_geometry_warnings(
             domain_result, 'pier'
         )
@@ -864,13 +741,6 @@ class ResultFormatter:
             'warnings': [],
             'geometry_warnings': geometry_warnings,
         }
-
-        # Continuidad del muro
-        formatted['wall_continuity'] = ResultFormatter._format_wall_continuity(
-            pier, continuity_info
-        )
-
-        return formatted
 
     # =========================================================================
     # Método unificado para cualquier elemento (nueva arquitectura)

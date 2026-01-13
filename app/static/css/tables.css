@@ -567,6 +567,11 @@ select.field-modified:focus {
     color: #dc2626;
     font-weight: 600;
 }
+.capacity-main.tension-exceeded,
+.tension-exceeded {
+    color: #b45309;  /* Naranja oscuro (mismo que tension-warning) */
+    font-weight: 600;
+}
 
 /* ==========================================================================
    TAGS & BADGES (SHARED PATTERN)

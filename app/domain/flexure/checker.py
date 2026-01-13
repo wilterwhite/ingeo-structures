@@ -7,6 +7,14 @@ import math
 from dataclasses import dataclass
 from typing import List, Tuple, TYPE_CHECKING
 
+from ..constants.tolerances import (
+    ZERO_TOLERANCE,
+    PARALLEL_TOLERANCE,
+    SEGMENT_PARAM_TOLERANCE,
+    INSIDE_SF_THRESHOLD,
+    AXIAL_CAPACITY_TOLERANCE,
+)
+
 if TYPE_CHECKING:
     from .interaction_diagram import InteractionPoint
 
@@ -18,26 +26,30 @@ class FlexureCheckResult:
 
     NOMENCLATURA DE φMn:
     - phi_Mn_0: Capacidad a P=0 (flexión pura). Usado para referencia/comparación.
-    - phi_Mn_at_Pu: Capacidad "efectiva" al Pu crítico, calculada vía ray-casting.
-      Esta es la capacidad que da el SF calculado: phi_Mn_at_Pu = Mu × SF.
-      NO es interpolación horizontal en la curva P-M.
+    - phi_Mn_at_Pu: Capacidad de momento interpolada en la curva P-M al nivel de Pu crítico.
+      Se obtiene via get_phi_Mn_at_P(points, critical_Pu), NO es Mu × SF.
+
+    SAFETY FACTOR (SF):
+    - Calculado via ray-casting desde origen hacia punto de demanda (Pu, Mu).
+    - SF = distancia_hasta_curva / distancia_demanda
 
     DCR (Demand/Capacity Ratio):
-    - Calculado como DCR = 1/SF = Mu/phi_Mn_at_Pu
-    - Consistente con el método ray-casting usado para calcular SF
+    - DCR = 1/SF (inverso del factor de seguridad)
+    - status = "OK" si SF >= 1.0, "NO OK" si SF < 1.0
     """
     safety_factor: float      # Factor de seguridad mínimo (via ray-casting)
     status: str               # "OK" o "NO OK"
     critical_combo: str       # Combinación crítica
     phi_Mn_0: float          # Capacidad de momento a P=0 (tonf-m) - flexión pura
-    phi_Mn_at_Pu: float      # Capacidad "efectiva" al Pu crítico (tonf-m) = Mu × SF
+    phi_Mn_at_Pu: float      # Capacidad de momento al Pu crítico (tonf-m) - interpolada
     critical_Pu: float       # Carga axial crítica (tonf)
     critical_Mu: float       # Momento crítico (tonf-m)
-    is_inside: bool          # Si el punto crítico está dentro de la curva
     exceeds_axial_capacity: bool = False  # Si Pu > φPn,max
     phi_Pn_max: float = 0.0  # Capacidad axial máxima (tonf)
     has_tension: bool = False  # Si alguna combinación tiene Pu < 0 (tracción)
     tension_combos: int = 0    # Número de combinaciones con tracción
+    exceeds_tension_capacity: bool = False  # Si Pu < φPt,min (más tracción que capacidad)
+    phi_Pt_min: float = 0.0  # Capacidad de tracción mínima (tonf, negativo)
 
 
 class FlexureChecker:
@@ -76,7 +88,7 @@ class FlexureChecker:
         # Distancia del origen al punto de demanda
         d_demand = math.sqrt(Pu**2 + Mu**2)
 
-        if d_demand < 1e-6:
+        if d_demand < ZERO_TOLERANCE:
             return float('inf'), True
 
         # Obtener la curva de capacidad como lista de puntos (Mn, Pn)
@@ -99,20 +111,20 @@ class FlexureChecker:
 
             det = dir_M * (-dP) - dir_P * (-dM)
 
-            if abs(det) < 1e-10:
+            if abs(det) < PARALLEL_TOLERANCE:
                 continue
 
             t = (M1 * (-dP) - P1 * (-dM)) / det
             s = (dir_M * P1 - dir_P * M1) / det
 
-            if t > 0 and -0.001 <= s <= 1.001:
+            if t > 0 and -SEGMENT_PARAM_TOLERANCE <= s <= 1 + SEGMENT_PARAM_TOLERANCE:
                 if best_t is None or t < best_t:
                     best_t = t
 
         if best_t is not None:
             d_capacity = best_t
             sf = d_capacity / d_demand
-            is_inside = sf >= 0.999
+            is_inside = sf >= INSIDE_SF_THRESHOLD
             return sf, is_inside
 
         # Si no se encontro interseccion, usar point-in-polygon como verificacion
@@ -160,7 +172,7 @@ class FlexureChecker:
             xj, yj = polygon[j]
 
             if ((yi > y) != (yj > y)) and \
-               (x < (xj - xi) * (y - yi) / (yj - yi + 1e-10) + xi):
+               (x < (xj - xi) * (y - yi) / (yj - yi + PARALLEL_TOLERANCE) + xi):
                 inside = not inside
             j = i
 
@@ -170,46 +182,15 @@ class FlexureChecker:
     def get_phi_Mn_at_P0(points: List['InteractionPoint']) -> float:
         """
         Obtiene la capacidad de momento φMn a P=0 (flexión pura).
+        Delegado a get_phi_Mn_at_P(points, 0).
 
         Args:
             points: Puntos del diagrama de interacción
 
         Returns:
-            φMn en tonf-m a P≈0
+            φMn en tonf-m a P=0
         """
-        # Buscar el punto con φPn más cercano a 0
-        best_point = None
-        min_abs_P = float('inf')
-
-        for p in points:
-            abs_P = abs(p.phi_Pn)
-            if abs_P < min_abs_P:
-                min_abs_P = abs_P
-                best_point = p
-
-        if best_point is not None and min_abs_P < 5.0:
-            return best_point.phi_Mn
-
-        # Interpolar entre los dos puntos más cercanos a P=0
-        pos_point = None
-        neg_point = None
-
-        for p in points:
-            if p.phi_Pn >= 0:
-                if pos_point is None or p.phi_Pn < pos_point.phi_Pn:
-                    pos_point = p
-            else:
-                if neg_point is None or p.phi_Pn > neg_point.phi_Pn:
-                    neg_point = p
-
-        if pos_point is not None and neg_point is not None:
-            P1, M1 = neg_point.phi_Pn, neg_point.phi_Mn
-            P2, M2 = pos_point.phi_Pn, pos_point.phi_Mn
-            if abs(P2 - P1) > 1e-6:
-                phi_Mn_0 = M1 + (M2 - M1) * (0 - P1) / (P2 - P1)
-                return phi_Mn_0
-
-        return best_point.phi_Mn if best_point else 0.0
+        return FlexureChecker.get_phi_Mn_at_P(points, 0.0)
 
     @staticmethod
     def get_phi_Mn_at_P(points: List['InteractionPoint'], Pu: float) -> float:
@@ -242,7 +223,7 @@ class FlexureChecker:
         M1, P1 = point_below
         M2, P2 = point_above
 
-        if abs(P2 - P1) < 1e-6:
+        if abs(P2 - P1) < ZERO_TOLERANCE:
             return M1
 
         # Interpolar linealmente
@@ -268,7 +249,6 @@ class FlexureChecker:
         critical_combo = ""
         critical_Pu = 0.0
         critical_Mu = 0.0
-        critical_is_inside = True
         tension_count = 0
 
         for Pu, Mu, combo_name in demand_points:
@@ -276,30 +256,28 @@ class FlexureChecker:
             if Pu < 0:
                 tension_count += 1
 
-            sf, is_inside = FlexureChecker.calculate_safety_factor(points, Pu, Mu)
+            sf, _ = FlexureChecker.calculate_safety_factor(points, Pu, Mu)
             if sf < min_sf:
                 min_sf = sf
                 critical_combo = combo_name
                 critical_Pu = Pu
                 critical_Mu = abs(Mu)
-                critical_is_inside = is_inside
 
         status = "OK" if min_sf >= 1.0 else "NO OK"
         phi_Mn_0 = FlexureChecker.get_phi_Mn_at_P0(points)
 
-        # φMn_at_Pu calculado consistente con ray-casting:
-        # Si SF = d_capacity / d_demand, y el rayo escala proporcionalmente,
-        # entonces φMn en la curva = Mu × SF
-        # Esto es el φMn "efectivo" que da el SF calculado
-        if min_sf < float('inf') and min_sf > 0 and critical_Mu > 0:
-            phi_Mn_at_Pu = critical_Mu * min_sf
-        else:
-            # Fallback a interpolación horizontal si no hay demanda
-            phi_Mn_at_Pu = FlexureChecker.get_phi_Mn_at_P(points, critical_Pu)
+        # φMn_at_Pu es la capacidad de momento en la curva P-M al nivel Pu critico.
+        # Siempre usar interpolacion horizontal para obtener la capacidad real,
+        # NO calcular como Mu × SF (eso da un valor escalado incorrecto).
+        phi_Mn_at_Pu = FlexureChecker.get_phi_Mn_at_P(points, critical_Pu)
 
-        # Detectar si Pu excede la capacidad axial máxima
+        # Detectar si Pu excede la capacidad axial máxima (compresión)
         phi_Pn_max = max(p.phi_Pn for p in points) if points else 0.0
-        exceeds_axial = critical_Pu > phi_Pn_max * 1.001  # 0.1% tolerancia
+        exceeds_axial = critical_Pu > phi_Pn_max * AXIAL_CAPACITY_TOLERANCE
+
+        # Detectar si Pu excede la capacidad de tracción mínima
+        phi_Pt_min = min(p.phi_Pn for p in points) if points else 0.0
+        exceeds_tension = critical_Pu < phi_Pt_min * AXIAL_CAPACITY_TOLERANCE
 
         return FlexureCheckResult(
             safety_factor=min_sf,
@@ -309,9 +287,10 @@ class FlexureChecker:
             phi_Mn_at_Pu=phi_Mn_at_Pu,
             critical_Pu=critical_Pu,
             critical_Mu=critical_Mu,
-            is_inside=critical_is_inside,
             exceeds_axial_capacity=exceeds_axial,
             phi_Pn_max=phi_Pn_max,
             has_tension=tension_count > 0,
-            tension_combos=tension_count
+            tension_combos=tension_count,
+            exceeds_tension_capacity=exceeds_tension,
+            phi_Pt_min=phi_Pt_min
         )

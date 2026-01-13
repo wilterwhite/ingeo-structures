@@ -589,7 +589,7 @@ class ElementDetailsService:
             phi_Mn_at_Pu = Mu * sf
         else:
             # Fallback para casos sin demanda
-            phi_Mn_at_Pu = self._flexo_service.get_phi_Mn_at_Pu(interaction_points, Pu)
+            phi_Mn_at_Pu = FlexureChecker.get_phi_Mn_at_P(interaction_points, Pu)
 
         # Calcular c (también con Pu convertido)
         c_mm = self._calculate_neutral_axis_depth(pier, Pu, Mu)
