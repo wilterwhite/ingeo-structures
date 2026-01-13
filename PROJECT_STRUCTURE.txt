@@ -1,6 +1,6 @@
 ======================================================================
   INGEO STRUCTURES - Estructura del Proyecto
-  Generado: 2026-01-12 23:15:21
+  Generado: 2026-01-13 11:14:38
 ======================================================================
 
 ingeo-structures/
@@ -9,12 +9,14 @@ ingeo-structures/
 ├── README.md                           ( 515 líneas)  # Documentación del proyecto
 ├── requirements.txt                    (  16 líneas)  # Dependencias Python del proyecto
 ├── run.py                              ( 102 líneas)  # Punto de entrada de la aplicación
+├── VERIFICACION_PFELA51.md             ( 192 líneas)
+├── verify_flexure_PFel_A5_1.py         ( 359 líneas)
 └── app/
     ├── domain/
     │   ├── calculations/
     │   │   ├── confinement.py                      (  98 líneas)
     │   │   ├── coupling_beam_capacity.py           ( 111 líneas)
-    │   │   ├── minimum_reinforcement.py            ( 189 líneas)
+    │   │   ├── minimum_reinforcement.py            ( 241 líneas)
     │   │   ├── steel_layer_calculator.py           ( 206 líneas)  # Cálculo de capas de acero para P-M
     │   │   ├── wall_boundary_zone.py               ( 133 líneas)
     │   │   └── wall_continuity.py                  ( 205 líneas)  # Cálculo de altura efectiva hwcs
@@ -24,18 +26,18 @@ ingeo-structures/
     │   │   └── reinforcement.py                    ( 370 líneas)
     │   ├── chapter18/
     │   │   ├── results.py                          ( 392 líneas)
-    │   │   ├── seismic_detailing_service.py        ( 455 líneas)
+    │   │   ├── seismic_detailing_service.py        ( 454 líneas)
     │   │   ├── beams/
     │   │   │   ├── results.py                          ( 187 líneas)
-    │   │   │   └── service.py                          ( 601 líneas)
+    │   │   │   └── service.py                          ( 598 líneas)
     │   │   ├── boundary_elements/
     │   │   │   ├── confinement.py                      ( 157 líneas)
-    │   │   │   ├── dimensions.py                       (  84 líneas)
+    │   │   │   ├── dimensions.py                       (  87 líneas)
     │   │   │   ├── displacement.py                     ( 131 líneas)
-    │   │   │   ├── service.py                          ( 269 líneas)
+    │   │   │   ├── service.py                          ( 322 líneas)
     │   │   │   └── stress.py                           (  86 líneas)
     │   │   ├── columns/
-    │   │   │   ├── dimensional.py                      (  55 líneas)
+    │   │   │   ├── dimensional.py                      (  56 líneas)
     │   │   │   ├── flexural_strength.py                (  72 líneas)
     │   │   │   ├── longitudinal.py                     (  70 líneas)
     │   │   │   ├── results.py                          ( 212 líneas)
@@ -69,7 +71,7 @@ ingeo-structures/
     │   │   │   └── transverse.py                       (  83 líneas)
     │   │   └── walls/
     │   │       ├── results.py                          ( 142 líneas)
-    │   │       └── service.py                          ( 765 líneas)
+    │   │       └── service.py                          ( 775 líneas)
     │   ├── chapter22/
     │   │   └── flexural_capacity.py                ( 165 líneas)
     │   ├── chapter7/
@@ -81,14 +83,16 @@ ingeo-structures/
     │   │       ├── critical_section.py                 ( 127 líneas)
     │   │       └── vc_calculation.py                   ( 180 líneas)
     │   ├── constants/
-    │   │   ├── chapter18.py                        ( 104 líneas)
+    │   │   ├── chapter18.py                        ( 103 líneas)
+    │   │   ├── geometry.py                         ( 111 líneas)
     │   │   ├── materials.py                        ( 247 líneas)  # Constantes de materiales (barras, hormigón)
     │   │   ├── phi_chapter21.py                    ( 159 líneas)
     │   │   ├── reinforcement.py                    (  91 líneas)
     │   │   ├── seismic.py                          (  15 líneas)
     │   │   ├── shear.py                            ( 319 líneas)
     │   │   ├── stiffness.py                        (  65 líneas)
-    │   │   └── units.py                            ( 115 líneas)  # Factores de conversión de unidades
+    │   │   ├── tolerances.py                       (  36 líneas)
+    │   │   └── units.py                            ( 116 líneas)  # Factores de conversión de unidades
     │   ├── entities/
     │   │   ├── beam.py                             ( 303 líneas)
     │   │   ├── beam_forces.py                      (  66 líneas)
@@ -101,7 +105,7 @@ ingeo-structures/
     │   │   ├── forces_mixin.py                     ( 114 líneas)
     │   │   ├── load_combination.py                 (  50 líneas)
     │   │   ├── parsed_data.py                      ( 116 líneas)
-    │   │   ├── pier.py                             ( 389 líneas)  # Entidad Pier: muro de hormigón armado
+    │   │   ├── pier.py                             ( 398 líneas)  # Entidad Pier: muro de hormigón armado
     │   │   ├── pier_forces.py                      (  57 líneas)
     │   │   ├── protocols.py                        (  71 líneas)
     │   │   ├── reinforcement_mixin.py              ( 170 líneas)
@@ -109,9 +113,12 @@ ingeo-structures/
     │   │   ├── slab_forces.py                      ( 162 líneas)
     │   │   └── value_objects.py                    ( 131 líneas)
     │   ├── flexure/
-    │   │   ├── checker.py                          ( 317 líneas)
+    │   │   ├── checker.py                          ( 296 líneas)
     │   │   ├── interaction_diagram.py              ( 322 líneas)
     │   │   └── slenderness.py                      ( 582 líneas)
+    │   ├── geometry/
+    │   │   ├── results.py                          (  49 líneas)
+    │   │   └── service.py                          ( 265 líneas)
     │   ├── proposals/
     │   │   ├── design_generator.py                 ( 300 líneas)
     │   │   ├── failure_analysis.py                 (  69 líneas)
@@ -124,7 +131,7 @@ ingeo-structures/
     │   │       ├── shear.py                            ( 152 líneas)
     │   │       └── thickness.py                        ( 274 líneas)
     │   └── shear/
-    │       ├── classification.py                   ( 188 líneas)
+    │       ├── classification.py                   ( 222 líneas)
     │       ├── combined.py                         (  39 líneas)
     │       ├── concrete_shear.py                   ( 200 líneas)
     │       ├── results.py                          ( 120 líneas)
@@ -136,19 +143,19 @@ ingeo-structures/
     │   ├── columns.py                          ( 104 líneas)
     │   ├── common.py                           ( 618 líneas)
     │   ├── drop_beams.py                       ( 206 líneas)
-    │   ├── piers.py                            ( 802 líneas)
+    │   ├── piers.py                            ( 782 líneas)
     │   └── slabs.py                            ( 204 líneas)
     ├── services/
     │   ├── factory.py                          (  70 líneas)
-    │   ├── structural_analysis.py              (1047 líneas)  # Servicio principal de análisis estructural
+    │   ├── structural_analysis.py              ( 977 líneas)  # Servicio principal de análisis estructural
     │   ├── analysis/
     │   │   ├── design_behavior.py                  ( 196 líneas)
     │   │   ├── design_behavior_resolver.py         ( 222 líneas)
     │   │   ├── element_analysis_service.py         (  79 líneas)
     │   │   ├── element_classifier.py               ( 220 líneas)
     │   │   ├── element_details_service.py          (1442 líneas)
-    │   │   ├── element_orchestrator.py             ( 661 líneas)
-    │   │   ├── flexocompression_service.py         ( 464 líneas)
+    │   │   ├── element_orchestrator.py             ( 662 líneas)
+    │   │   ├── flexocompression_service.py         ( 450 líneas)
     │   │   ├── force_extractor.py                  ( 250 líneas)
     │   │   ├── geometry_normalizer.py              ( 472 líneas)
     │   │   ├── proposal_service.py                 ( 173 líneas)  # Generación de propuestas de diseño
@@ -156,7 +163,7 @@ ingeo-structures/
     │   │   ├── reinforcement_update_service.py     ( 383 líneas)
     │   │   ├── shear_service.py                    ( 512 líneas)  # Verificación de corte según ACI 318
     │   │   ├── slab_service.py                     ( 490 líneas)
-    │   │   ├── statistics_service.py               (  63 líneas)
+    │   │   ├── statistics_service.py               (  51 líneas)
     │   │   └── verification_config.py              ( 195 líneas)
     │   ├── parsing/
     │   │   ├── beam_parser.py                      ( 551 líneas)
@@ -171,34 +178,34 @@ ingeo-structures/
     │   │   ├── slab_parser.py                      ( 229 líneas)
     │   │   └── table_extractor.py                  ( 211 líneas)
     │   ├── presentation/
-    │   │   ├── plot_generator.py                   ( 797 líneas)
-    │   │   └── result_formatter.py                 (1045 líneas)
+    │   │   ├── plot_generator.py                   ( 685 líneas)
+    │   │   └── result_formatter.py                 (1108 líneas)
     │   └── report/
     │       ├── pdf_generator.py                    ( 729 líneas)
     │       └── report_config.py                    ( 109 líneas)
     ├── static/
     │   ├── css/
-    │   │   ├── base.css                            ( 675 líneas)
+    │   │   ├── base.css                            ( 630 líneas)
     │   │   ├── modals.css                          ( 829 líneas)  # Estilos de ventanas modales
     │   │   ├── structural.css                      (   7 líneas)  # Estilos principales de la aplicación
-    │   │   ├── tables.css                          (1082 líneas)  # Estilos de tablas de piers y resultados
+    │   │   ├── tables.css                          (1149 líneas)  # Estilos de tablas de piers y resultados
     │   │   └── variables.css                       (  26 líneas)
     │   ├── img/
     │   │   └── Tablas_Etabs.png                    (binario)
     │   └── js/
-    │       ├── StructuralPage.js                   ( 470 líneas)  # Controlador principal de la página
+    │       ├── StructuralPage.js                   ( 469 líneas)  # Controlador principal de la página
     │       ├── core/
     │       │   ├── Constants.js                        ( 207 líneas)
-    │       │   ├── StructuralAPI.js                    ( 472 líneas)  # API client para comunicación con backend
+    │       │   ├── StructuralAPI.js                    ( 456 líneas)  # API client para comunicación con backend
     │       │   └── Utils.js                            ( 171 líneas)
     │       ├── editing/
-    │       │   ├── ElementEditManager.js               ( 405 líneas)
+    │       │   ├── ElementEditManager.js               ( 433 líneas)
     │       │   └── RecalcButton.js                     ( 110 líneas)
     │       ├── filters/
     │       │   └── ColumnFilters.js                    ( 620 líneas)
     │       ├── managers/
     │       │   ├── MaterialsManager.js                 ( 145 líneas)
-    │       │   └── UploadManager.js                    ( 345 líneas)
+    │       │   └── UploadManager.js                    ( 348 líneas)
     │       ├── modals/
     │       │   ├── ModalUtils.js                       (  43 líneas)
     │       │   ├── PlotModal.js                        ( 219 líneas)  # Modal para diagrama P-M interactivo
@@ -210,28 +217,28 @@ ingeo-structures/
     │           ├── CombinationsManager.js              ( 278 líneas)
     │           ├── CouplingBeamManager.js              ( 177 líneas)
     │           ├── FilterableTable.js                  ( 121 líneas)
-    │           ├── ResultsTable.js                     ( 435 líneas)  # Renderizado de tabla de resultados
+    │           ├── ResultsTable.js                     ( 402 líneas)  # Renderizado de tabla de resultados
     │           ├── RowFactory.js                       ( 270 líneas)
     │           └── cells/
     │               ├── BeamCells.js                        ( 221 líneas)
     │               ├── ColumnCells.js                      (  94 líneas)
-    │               ├── PierCells.js                        ( 203 líneas)
-    │               └── SharedCells.js                      ( 248 líneas)
+    │               ├── PierCells.js                        ( 245 líneas)
+    │               └── SharedCells.js                      ( 253 líneas)
     └── templates/
-        └── structural_standalone.html          ( 937 líneas)  # Template HTML principal
+        └── structural_standalone.html          ( 934 líneas)  # Template HTML principal
 
 ======================================================================
   RESUMEN
 ======================================================================
-  Total de archivos: 170
-  Total de líneas de código: 45,578
+  Total de archivos: 176
+  Total de líneas de código: 46,610
 
   Líneas por tipo de archivo:
-    .py        35,000 líneas ( 76.8%)
-    .js         6,222 líneas ( 13.7%)
-    .css        2,619 líneas (  5.7%)
-    .html         937 líneas (  2.1%)
-    .md           515 líneas (  1.1%)
-    .txt          253 líneas (  0.6%)
+    .py        35,793 líneas ( 76.8%)
+    .js         6,250 líneas ( 13.4%)
+    .css        2,641 líneas (  5.7%)
+    .html         934 líneas (  2.0%)
+    .md           707 líneas (  1.5%)
+    .txt          253 líneas (  0.5%)
     other          32 líneas (  0.1%)
 ======================================================================

@@ -618,51 +618,6 @@ body {
 }
 
 /* ==========================================================================
-   SUMMARY PLOT
-   ========================================================================== */
-
-.summary-plot {
-    text-align: center;
-    margin: 20px 0;
-    min-height: 200px;
-    position: relative;
-}
-
-.summary-plot img {
-    max-width: 100%;
-    height: auto;
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow);
-    transition: opacity 0.3s;
-}
-
-.summary-plot.loading img {
-    opacity: 0.5;
-}
-
-.summary-plot.loading::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 40px;
-    height: 40px;
-    margin: -20px 0 0 -20px;
-    border: 3px solid var(--border-color);
-    border-top-color: var(--primary-color);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-.summary-plot .no-data {
-    padding: 40px 20px;
-    color: var(--text-muted);
-    font-style: italic;
-    background: var(--bg-color);
-    border-radius: var(--border-radius);
-}
-
-/* ==========================================================================
    RESPONSIVE
    ========================================================================== */
 

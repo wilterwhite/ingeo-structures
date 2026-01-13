@@ -7,7 +7,6 @@ que espera el frontend.
 
 Métodos principales:
 - format_any_element: Formatea cualquier elemento (Pier, Column, Beam, DropBeam)
-- format_slab_result: Formatea resultados de losas (servicio separado)
 """
 import math
 from typing import Dict, Any, Union, TYPE_CHECKING
@@ -144,35 +143,6 @@ class ResultFormatter:
             'is_continuous': False,
             'is_base': True,
             'stories_list': [pier.story]
-        }
-
-    # =========================================================================
-    # Formateo de losas (servicio separado)
-    # =========================================================================
-
-    @staticmethod
-    def format_slab_result(
-        slab: Any,
-        slab_result: Dict[str, Any],
-        punching_result: Dict[str, Any],
-        key: str
-    ) -> Dict[str, Any]:
-        """
-        Convierte resultado de losa al formato para la tabla de losas.
-        """
-        return {
-            'slab_key': key,
-            'label': slab.label,
-            'story': slab.story,
-            'slab_type': slab.slab_type.value if hasattr(slab.slab_type, 'value') else str(slab.slab_type),
-            'thickness': slab.thickness,
-            'width': slab.width,
-            'thickness_check': slab_result.get('thickness_check', {}),
-            'flexure': slab_result.get('flexure', {}),
-            'shear': slab_result.get('shear_one_way', {}),
-            'reinforcement': slab_result.get('reinforcement', {}),
-            'punching': punching_result,
-            'overall_status': slab_result.get('overall_status', 'N/A')
         }
 
     # =========================================================================

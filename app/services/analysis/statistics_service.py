@@ -49,15 +49,3 @@ class StatisticsService:
             'fail': fail,
             'pass_rate': round(ok / total * 100, 1) if total > 0 else 100.0
         }
-
-    def generate_summary_from_dict(self, summary_data: List[Dict[str, Any]]) -> str:
-        """
-        Genera el gráfico resumen desde datos en formato dict.
-
-        Args:
-            summary_data: Lista de dicts con pier_label, flexure_sf, shear_sf
-
-        Returns:
-            Gráfico en base64
-        """
-        return self._plot_generator.generate_summary_chart(summary_data)

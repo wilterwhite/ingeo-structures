@@ -16,7 +16,7 @@ from ...domain.entities.drop_beam import DropBeam
 
 logger = logging.getLogger(__name__)
 from ...domain.entities.drop_beam_forces import DropBeamForces
-from ...domain.entities.slab_forces import SlabSectionCut
+from ...domain.entities.section_cut import SectionCutInfo
 from ...domain.entities.load_combination import LoadCombination
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
 from .table_extractor import normalize_columns
@@ -93,7 +93,7 @@ class DropBeamParser:
             if section_cut is None:
                 continue
 
-            drop_beam_key = section_cut.slab_key  # Usamos slab_key para consistencia
+            drop_beam_key = section_cut.element_key
 
             # Crear DropBeamForces si no existe
             if drop_beam_key not in drop_beam_forces:
@@ -132,7 +132,7 @@ class DropBeamParser:
 
         return drop_beams, drop_beam_forces, stories
 
-    def _parse_section_cut_name(self, name: str) -> Optional[SlabSectionCut]:
+    def _parse_section_cut_name(self, name: str) -> Optional[SectionCutInfo]:
         """
         Extrae datos del nombre del corte de sección.
 
@@ -141,7 +141,7 @@ class DropBeamParser:
         - "SCut-Losa S01-29x100 Borde losa-2" (formato del script e2k)
 
         Returns:
-            SlabSectionCut o None si no es un corte válido
+            SectionCutInfo o None si no es un corte válido
         """
         if not name or 'nan' in name.lower():
             return None
@@ -155,7 +155,7 @@ class DropBeamParser:
         match = self.SECTION_CUT_PATTERN_OLD.match(name.strip())
         if match:
             story, thickness_cm, width_cm, axis_slab, location = match.groups()
-            return SlabSectionCut(
+            return SectionCutInfo(
                 name=name,
                 story=story.upper(),
                 thickness_mm=float(thickness_cm) * 10,  # cm -> mm
@@ -169,7 +169,7 @@ class DropBeamParser:
         if match:
             story, thickness_cm, width_cm, location = match.groups()
             # En formato nuevo, no hay eje explícito, usamos la ubicación completa
-            return SlabSectionCut(
+            return SectionCutInfo(
                 name=name,
                 story=story.upper(),
                 thickness_mm=float(thickness_cm) * 10,  # cm -> mm

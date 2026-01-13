@@ -96,7 +96,6 @@ class ResultsTable extends FilterableTable {
 
     render(data) {
         this.updateStatistics(data.statistics);
-        this.renderSummaryPlot(data.summary_plot);
         this.renderTable(data.results);
 
         // Inicializar filtros de columna después de renderizar
@@ -111,38 +110,6 @@ class ResultsTable extends FilterableTable {
         if (statOk) statOk.textContent = stats.ok ?? 0;
         if (statFail) statFail.textContent = stats.fail ?? 0;
         if (statRate) statRate.textContent = (stats.pass_rate ?? 0).toFixed(1) + '%';
-    }
-
-    renderSummaryPlot(plotBase64) {
-        const { summaryPlotContainer } = this.elements;
-        if (summaryPlotContainer && plotBase64) {
-            summaryPlotContainer.innerHTML = `<img src="data:image/png;base64,${plotBase64}" alt="Resumen">`;
-        }
-    }
-
-    async updateSummaryPlot() {
-        if (!this.sessionId) return;
-        try {
-            const { summaryPlotContainer } = this.elements;
-            if (summaryPlotContainer) summaryPlotContainer.classList.add('loading');
-
-            const data = await structuralAPI.getSummaryPlot({
-                session_id: this.sessionId,
-                story_filter: this.filters.story,
-                axis_filter: this.filters.axis
-            });
-
-            if (data.success && data.summary_plot) {
-                this.renderSummaryPlot(data.summary_plot);
-            } else if (data.count === 0 && summaryPlotContainer) {
-                summaryPlotContainer.innerHTML = '<p class="no-data">No hay datos para los filtros seleccionados</p>';
-            }
-        } catch (error) {
-            console.error('Error updating summary plot:', error);
-        } finally {
-            const { summaryPlotContainer } = this.elements;
-            if (summaryPlotContainer) summaryPlotContainer.classList.remove('loading');
-        }
     }
 
     // =========================================================================
@@ -281,7 +248,6 @@ class ResultsTable extends FilterableTable {
                 const filtered = this.getFilteredResults();
                 this.renderTable(filtered);
                 this.updateStats();  // Usar método heredado
-                this.updateSummaryPlot();
             }
         } catch (error) {
             console.error('Error guardando config de viga:', error);

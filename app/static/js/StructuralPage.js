@@ -96,7 +96,6 @@ class StructuralPage {
 
             // Resultados
             resultsTable: document.getElementById('results-table')?.querySelector('tbody'),
-            summaryPlotContainer: document.getElementById('summary-plot-container'),
             // Viga estándar
             stdBeamWidth: document.getElementById('std-beam-width'),
             stdBeamHeight: document.getElementById('std-beam-height'),

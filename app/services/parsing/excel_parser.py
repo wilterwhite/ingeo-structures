@@ -32,7 +32,6 @@ from .table_extractor import (
 )
 from .column_parser import ColumnParser
 from .beam_parser import BeamParser
-from .slab_parser import SlabParser
 from .drop_beam_parser import DropBeamParser
 
 
@@ -53,9 +52,6 @@ SUPPORTED_TABLES = {
         'Element Forces - Beams',
         'Spandrel Section Properties',
         'Spandrel Forces'
-    ],
-    'slabs': [
-        'Section Cut Forces - Analysis'
     ],
     'drop_beams': [
         'Section Cut Forces - Analysis'
@@ -80,7 +76,6 @@ class EtabsExcelParser:
     def __init__(self):
         self.column_parser = ColumnParser()
         self.beam_parser = BeamParser()
-        self.slab_parser = SlabParser()
         self.drop_beam_parser = DropBeamParser()
 
     def parse_excel(self, file_content: bytes) -> ParsedData:
@@ -115,7 +110,7 @@ class EtabsExcelParser:
         # Spandrels
         spandrel_props_df = None
         spandrel_forces_df = None
-        # Losas (Section Cuts)
+        # Vigas capitel (Section Cuts)
         section_cut_df = None
 
         # Buscar tablas en todas las hojas
@@ -166,7 +161,7 @@ class EtabsExcelParser:
             if spandrel_forces_df is None:
                 spandrel_forces_df = find_table_in_sheet(df, "Spandrel Forces")
 
-            # Losas (Section Cut Forces)
+            # Vigas capitel (Section Cut Forces)
             if section_cut_df is None:
                 section_cut_df = find_table_in_sheet(df, "Section Cut Forces - Analysis")
 
@@ -213,16 +208,7 @@ class EtabsExcelParser:
                 materials, frame_circular_df
             )
 
-        # Procesar losas
-        slabs = {}
-        slab_forces = {}
-        slab_stories = []
-        if section_cut_df is not None:
-            slabs, slab_forces, slab_stories = self.slab_parser.parse_slabs(
-                section_cut_df, materials
-            )
-
-        # Procesar vigas capitel (del mismo Section Cut Forces, pero como DropBeam)
+        # Procesar vigas capitel (Section Cut Forces)
         drop_beams = {}
         drop_beam_forces = {}
         drop_beam_stories = []
@@ -233,7 +219,7 @@ class EtabsExcelParser:
 
         # Combinar stories
         all_stories = pier_stories.copy()
-        for s in column_stories + beam_stories + slab_stories + drop_beam_stories:
+        for s in column_stories + beam_stories + drop_beam_stories:
             if s not in all_stories:
                 all_stories.append(s)
 
@@ -244,8 +230,6 @@ class EtabsExcelParser:
             column_forces=column_forces,
             beams=beams,
             beam_forces=beam_forces,
-            slabs=slabs,
-            slab_forces=slab_forces,
             drop_beams=drop_beams,
             drop_beam_forces=drop_beam_forces,
             materials=materials,
@@ -509,7 +493,7 @@ class EtabsExcelParser:
             if spandrel_forces_df is None:
                 spandrel_forces_df = find_table_in_sheet(df, "Spandrel Forces")
 
-            # Losas
+            # Vigas capitel
             if section_cut_df is None:
                 section_cut_df = find_table_in_sheet(df, "Section Cut Forces - Analysis")
 
@@ -522,18 +506,18 @@ class EtabsExcelParser:
             pier_forces_df = find_table_by_sheet_name(excel_file, ['pier', 'force'])
 
         # Fase 2: Procesar tablas (progreso 50-100%)
-        yield {'type': 'progress', 'phase': 'parsing', 'current': 1, 'total': 7, 'element': 'Procesando materiales'}
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 1, 'total': 6, 'element': 'Procesando materiales'}
         if wall_props_df is not None:
             materials = self._parse_materials(wall_props_df)
         if frame_section_df is not None:
             frame_materials = self._parse_frame_materials(frame_section_df)
             materials.update(frame_materials)
 
-        yield {'type': 'progress', 'phase': 'parsing', 'current': 2, 'total': 7, 'element': 'Procesando muros'}
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 2, 'total': 6, 'element': 'Procesando muros'}
         piers, pier_stories = self._parse_piers(pier_props_df, materials)
         pier_forces = self._parse_forces(pier_forces_df)
 
-        yield {'type': 'progress', 'phase': 'parsing', 'current': 3, 'total': 7, 'element': 'Procesando columnas'}
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 3, 'total': 6, 'element': 'Procesando columnas'}
         columns = {}
         column_forces = {}
         column_stories = []
@@ -542,7 +526,7 @@ class EtabsExcelParser:
                 frame_section_df, column_forces_df, materials
             )
 
-        yield {'type': 'progress', 'phase': 'parsing', 'current': 4, 'total': 7, 'element': 'Procesando vigas'}
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 4, 'total': 6, 'element': 'Procesando vigas'}
         beams = {}
         beam_forces = {}
         beam_stories = []
@@ -553,16 +537,7 @@ class EtabsExcelParser:
                 materials, frame_circular_df
             )
 
-        yield {'type': 'progress', 'phase': 'parsing', 'current': 5, 'total': 7, 'element': 'Procesando losas'}
-        slabs = {}
-        slab_forces = {}
-        slab_stories = []
-        if section_cut_df is not None:
-            slabs, slab_forces, slab_stories = self.slab_parser.parse_slabs(
-                section_cut_df, materials
-            )
-
-        yield {'type': 'progress', 'phase': 'parsing', 'current': 6, 'total': 7, 'element': 'Procesando vigas capitel'}
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 5, 'total': 6, 'element': 'Procesando vigas capitel'}
         drop_beams = {}
         drop_beam_forces = {}
         drop_beam_stories = []
@@ -571,11 +546,11 @@ class EtabsExcelParser:
                 section_cut_df, materials
             )
 
-        yield {'type': 'progress', 'phase': 'parsing', 'current': 7, 'total': 7, 'element': 'Finalizando'}
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 6, 'total': 6, 'element': 'Finalizando'}
 
         # Combinar stories
         all_stories = pier_stories.copy()
-        for s in column_stories + beam_stories + slab_stories + drop_beam_stories:
+        for s in column_stories + beam_stories + drop_beam_stories:
             if s not in all_stories:
                 all_stories.append(s)
 
@@ -587,8 +562,6 @@ class EtabsExcelParser:
             column_forces=column_forces,
             beams=beams,
             beam_forces=beam_forces,
-            slabs=slabs,
-            slab_forces=slab_forces,
             drop_beams=drop_beams,
             drop_beam_forces=drop_beam_forces,
             materials=materials,
@@ -614,7 +587,6 @@ class EtabsExcelParser:
             'total_piers': len(data.piers),
             'total_columns': len(data.columns) if data.columns else 0,
             'total_beams': len(data.beams) if data.beams else 0,
-            'total_slabs': len(data.slabs) if data.slabs else 0,
             'total_drop_beams': len(data.drop_beams) if data.drop_beams else 0,
             'total_stories': len(data.stories),
             'stories': data.stories,
@@ -709,32 +681,6 @@ class EtabsExcelParser:
                     'reinforcement_desc': beam.reinforcement_description
                 }
                 for key, beam in data.beams.items()
-            ]
-
-        # Agregar losas si existen
-        if data.slabs:
-            summary['slabs_list'] = [
-                {
-                    'key': key,
-                    'label': slab.label,
-                    'story': slab.story,
-                    'slab_type': slab.slab_type.value,
-                    'axis_slab': slab.axis_slab,
-                    'location': slab.location,
-                    'thickness_m': slab.thickness / 1000,
-                    'width_m': slab.width / 1000,
-                    'span_m': slab.span_length / 1000,
-                    'fc_MPa': slab.fc,
-                    'fy_MPa': slab.fy,
-                    'diameter_main': slab.diameter_main,
-                    'spacing_main': slab.spacing_main,
-                    'diameter_temp': slab.diameter_temp,
-                    'spacing_temp': slab.spacing_temp,
-                    'As_main_mm2_m': slab.As_main,
-                    'rho_main': slab.rho_main,
-                    'reinforcement_desc': slab.reinforcement_description
-                }
-                for key, slab in data.slabs.items()
             ]
 
         # Agregar vigas capitel si existen

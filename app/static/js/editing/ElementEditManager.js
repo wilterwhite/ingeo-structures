@@ -360,7 +360,6 @@ class ElementEditManager {
         // Usar ColumnFilters.applyFilters() para mantener filtros y ordenamiento
         if (pierKeys.length > 0 || columnKeys.length > 0) {
             this.table.columnFilters.applyFilters();
-            this.table.updateSummaryPlot();
 
             // Resaltar elementos recién recalculados y hacer scroll
             this._highlightRecalculatedElements(pierKeys, 'pier');

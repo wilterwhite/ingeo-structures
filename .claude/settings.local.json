@@ -126,7 +126,9 @@
       "Bash(python scriptsgenerate_project_tree.py:*)",
       "Bash(ls \"C:\\Users\\willi\\Github\\ingeo-structures\\tests\\domain\\calculations\"\" 2>&1 || echo \"Directory not found \")",
       "Bash(git stash:*)",
-      "WebFetch(domain:www.concrete.org)"
+      "WebFetch(domain:www.concrete.org)",
+      "Bash(del test_classification_pfela51.py)",
+      "Bash(del temp_*.py)"
     ]
   }
 }

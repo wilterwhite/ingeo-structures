@@ -28,8 +28,6 @@ from .analysis.proposal_service import ProposalService
 from .analysis.reinforcement_update_service import ReinforcementUpdateService
 from .analysis.element_details_service import ElementDetailsService
 from .analysis.element_orchestrator import ElementOrchestrator
-from .analysis.slab_service import SlabService
-from .analysis.punching_service import PunchingService
 from ..domain.entities import Pier, PierForces
 from ..domain.flexure import InteractionDiagramService, SlendernessService, FlexureChecker
 from ..domain.chapter18 import SeismicCategory
@@ -43,7 +41,7 @@ class StructuralAnalysisService:
     - Piers (muros)
     - Columns (columnas)
     - Beams (vigas)
-    - Slabs (losas)
+    - DropBeams (vigas capitel)
 
     Responsabilidades:
     - Orquestar el flujo de análisis
@@ -62,9 +60,7 @@ class StructuralAnalysisService:
         plot_generator: Optional[PlotGenerator] = None,
         proposal_service: Optional[ProposalService] = None,
         details_formatter: Optional[ElementDetailsService] = None,
-        element_orchestrator: Optional[ElementOrchestrator] = None,
-        slab_service: Optional[SlabService] = None,
-        punching_service: Optional[PunchingService] = None
+        element_orchestrator: Optional[ElementOrchestrator] = None
     ):
         """
         Inicializa el servicio de análisis.
@@ -80,8 +76,6 @@ class StructuralAnalysisService:
             proposal_service: Servicio de propuestas de diseño (opcional)
             details_formatter: Formateador de detalles de piers (opcional)
             element_orchestrator: Orquestador unificado de elementos (opcional)
-            slab_service: Servicio de losas (opcional)
-            punching_service: Servicio de punzonamiento (opcional)
 
         Nota: Los servicios se crean por defecto si no se pasan.
               Pasar None explícito permite inyectar mocks para testing.
@@ -93,8 +87,6 @@ class StructuralAnalysisService:
         self._slenderness_service = slenderness_service or SlendernessService()
         self._interaction_service = interaction_service or InteractionDiagramService()
         self._plot_generator = plot_generator or PlotGenerator()
-        self._slab_service = slab_service or SlabService()
-        self._punching_service = punching_service or PunchingService()
 
         # Orquestador unificado de elementos: clasifica y delega al servicio apropiado
         # Verifica todos los elementos: Pier, Column, Beam, DropBeam
@@ -343,22 +335,11 @@ class StructuralAnalysisService:
             element, result, key, continuity_info=continuity_info
         )
 
-    def _analyze_slab(self, key: str, slab, slab_forces) -> Dict[str, Any]:
-        """
-        Analiza una losa individual.
-
-        Las losas usan servicios especializados (no el orquestador genérico).
-        """
-        slab_result = self._slab_service.verify_slab(slab, slab_forces)
-        punching_result = self._punching_service.check_punching(slab, slab_forces)
-        return ResultFormatter.format_slab_result(slab, slab_result, punching_result, key)
-
     def _calculate_statistics(
         self,
         pier_results: List,
         column_results: List,
         beam_results: List,
-        slab_results: List,
         drop_beam_results: List
     ) -> Dict[str, Any]:
         """
@@ -381,9 +362,6 @@ class StructuralAnalysisService:
 
         if beam_results:
             statistics['beams'] = self._statistics_service.calculate_dict_statistics(beam_results)
-
-        if slab_results:
-            statistics['slabs'] = self._statistics_service.calculate_dict_statistics(slab_results)
 
         if drop_beam_results:
             statistics['drop_beams'] = self._statistics_service.calculate_dict_statistics(drop_beam_results)
@@ -457,15 +435,13 @@ class StructuralAnalysisService:
         piers = parsed_data.piers
         columns = parsed_data.columns or {}
         beams = parsed_data.beams or {}
-        slabs = parsed_data.slabs or {}
         drop_beams = parsed_data.drop_beams or {}
 
         total_piers = len(piers)
         total_columns = len(columns)
         total_beams = len(beams)
-        total_slabs = len(slabs)
         total_drop_beams = len(drop_beams)
-        total_elements = total_piers + total_columns + total_beams + total_slabs + total_drop_beams
+        total_elements = total_piers + total_columns + total_beams + total_drop_beams
 
         # Obtener hn_ft del edificio
         hn_ft = parsed_data.building_info.hn_ft if parsed_data.building_info else None
@@ -537,29 +513,14 @@ class StructuralAnalysisService:
             beam_results.append(formatted)
 
         # =====================================================================
-        # FASE 4: Analizar LOSAS (usando _analyze_slab)
-        # =====================================================================
-        slab_results = []
-        slab_forces_dict = parsed_data.slab_forces or {}
-        for i, (key, slab) in enumerate(slabs.items(), 1):
-            yield {
-                "type": "progress",
-                "current": total_piers + total_columns + total_beams + i,
-                "total": total_elements,
-                "pier": f"Losa: {slab.story} - {slab.label}"
-            }
-            formatted = self._analyze_slab(key, slab, slab_forces_dict.get(key))
-            slab_results.append(formatted)
-
-        # =====================================================================
-        # FASE 5: Analizar VIGAS CAPITEL (usando _analyze_element)
+        # FASE 4: Analizar VIGAS CAPITEL (usando _analyze_element)
         # =====================================================================
         drop_beam_results = []
         drop_beam_forces_dict = parsed_data.drop_beam_forces or {}
         for i, (key, drop_beam) in enumerate(drop_beams.items(), 1):
             yield {
                 "type": "progress",
-                "current": total_piers + total_columns + total_beams + total_slabs + i,
+                "current": total_piers + total_columns + total_beams + i,
                 "total": total_elements,
                 "pier": f"V. Capitel: {drop_beam.story} - {drop_beam.label}"
             }
@@ -571,7 +532,7 @@ class StructuralAnalysisService:
 
         # Calcular estadísticas
         statistics = self._calculate_statistics(
-            pier_results, column_results, beam_results, slab_results, drop_beam_results
+            pier_results, column_results, beam_results, drop_beam_results
         )
 
         # Unificar resultados
@@ -585,7 +546,6 @@ class StructuralAnalysisService:
                 'statistics': statistics,
                 'results': all_results,
                 'beam_results': beam_results,
-                'slab_results': slab_results,
                 'drop_beam_results': drop_beam_results,
                 'summary_plot': None
             }
@@ -744,76 +704,6 @@ class StructuralAnalysisService:
             'safety_factor': round(flexure_sf, 3) if flexure_sf < 100 else '>100',
             'status': flexure_status,
             'pm_plot': pm_plot
-        }
-
-    # =========================================================================
-    # Métodos Públicos - Gráficos Filtrados
-    # =========================================================================
-
-    def generate_filtered_summary_plot(
-        self,
-        session_id: str,
-        pier_keys: Optional[List[str]] = None,
-        story_filter: str = '',
-        axis_filter: str = ''
-    ) -> Dict[str, Any]:
-        """
-        Genera un gráfico resumen filtrado por pier_keys o filtros.
-
-        Args:
-            session_id: ID de sesión
-            pier_keys: Lista específica de pier keys a incluir
-            story_filter: Filtro por piso
-            axis_filter: Filtro por eje
-
-        Returns:
-            Dict con success y summary_plot en base64
-        """
-        error = self._validate_session(session_id)
-        if error:
-            return error
-
-        parsed_data = self._session_manager.get_session(session_id)
-
-        # Filtrar piers
-        filtered_piers = {}
-        for key, pier in parsed_data.piers.items():
-            # Si hay pier_keys, usar esos
-            if pier_keys is not None:
-                if key not in pier_keys:
-                    continue
-            else:
-                # Aplicar filtros
-                if story_filter and pier.story != story_filter:
-                    continue
-                if axis_filter and pier.eje != axis_filter:
-                    continue
-            filtered_piers[key] = pier
-
-        if not filtered_piers:
-            return {'success': True, 'summary_plot': None, 'count': 0}
-
-        # Analizar piers filtrados
-        results = self._analyze_piers_batch(
-            piers=filtered_piers,
-            parsed_data=parsed_data
-        )
-
-        # Convertir resultados a formato para gráfico resumen
-        summary_data = [
-            {
-                'pier_label': r.get('pier_label', ''),
-                'flexure_sf': r.get('flexure', {}).get('sf', 0),
-                'shear_sf': r.get('shear', {}).get('sf', 0)
-            }
-            for r in results
-        ]
-        summary_plot = self._statistics_service.generate_summary_from_dict(summary_data)
-
-        return {
-            'success': True,
-            'summary_plot': summary_plot,
-            'count': len(results)
         }
 
     # =========================================================================

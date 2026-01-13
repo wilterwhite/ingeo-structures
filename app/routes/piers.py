@@ -361,26 +361,6 @@ def analyze_combination(session_id: str, pier_key: str, data: dict):
 # Gráficos y Capacidades
 # =============================================================================
 
-@bp.route('/summary-plot', methods=['POST'])
-@handle_errors
-@require_session
-def get_summary_plot(session_id: str, data: dict):
-    """Genera el gráfico resumen filtrado."""
-    pier_keys = data.get('pier_keys')
-    story_filter = data.get('story_filter', '')
-    axis_filter = data.get('axis_filter', '')
-
-    service = get_analysis_service()
-    result = service.generate_filtered_summary_plot(
-        session_id=session_id,
-        pier_keys=pier_keys,
-        story_filter=story_filter,
-        axis_filter=axis_filter
-    )
-
-    return jsonify(result)
-
-
 @bp.route('/pier-capacities', methods=['POST'])
 @handle_errors
 @require_session_and_pier

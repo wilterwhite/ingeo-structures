@@ -550,44 +550,6 @@ class TestFormatDropBeam:
 
 
 # =============================================================================
-# Tests para format_slab_result
-# =============================================================================
-
-class TestFormatSlab:
-    """Tests para formateo de losas."""
-
-    def test_format_slab_basic(self):
-        """Formatea losa con campos básicos."""
-        slab = Mock()
-        slab.label = "L1"
-        slab.story = "Piso 1"
-        slab.slab_type = Mock()
-        slab.slab_type.value = "one_way"
-        slab.thickness = 150
-        slab.width = 1000
-
-        slab_result = {
-            'thickness_check': {'status': 'OK'},
-            'flexure': {'sf': 1.5},
-            'shear_one_way': {'sf': 2.0},
-            'reinforcement': {'rho': 0.004},
-            'overall_status': 'OK'
-        }
-        punching_result = {'status': 'N/A'}
-
-        formatted = ResultFormatter.format_slab_result(
-            slab, slab_result, punching_result, 'slab_1'
-        )
-
-        assert formatted['slab_key'] == 'slab_1'
-        assert formatted['label'] == 'L1'
-        assert formatted['story'] == 'Piso 1'
-        assert formatted['slab_type'] == 'one_way'
-        assert formatted['thickness'] == 150
-        assert formatted['overall_status'] == 'OK'
-
-
-# =============================================================================
 # Tests para casos borde
 # =============================================================================
 

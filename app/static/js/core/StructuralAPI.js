@@ -221,22 +221,6 @@ class StructuralAPI {
     }
 
     /**
-     * Obtiene el gráfico resumen filtrado.
-     * @param {Object} params - Parámetros de filtro
-     * @param {string} params.session_id - ID de sesión
-     * @param {string[]} [params.pier_keys] - Lista de pier keys a incluir
-     * @param {string} [params.story_filter] - Filtro por piso
-     * @param {string} [params.axis_filter] - Filtro por eje
-     * @returns {Promise<Object>} Gráfico en base64
-     */
-    async getSummaryPlot(params) {
-        return this.request('/summary-plot', {
-            method: 'POST',
-            body: JSON.stringify(params)
-        });
-    }
-
-    /**
      * Obtiene capacidades de cualquier tipo de elemento estructural.
      * Endpoint unificado para pier, column, beam y drop_beam.
      * @param {string} sessionId - ID de sesión
@@ -408,50 +392,6 @@ class StructuralAPI {
                 beam_key: beamKey,
                 reinforcement
             })
-        });
-    }
-
-    // =========================================================================
-    // Losas
-    // =========================================================================
-
-    /**
-     * Analiza todas las losas de la sesion.
-     * @param {string} sessionId - ID de sesion
-     * @returns {Promise<Object>} Resultados del analisis de losas
-     */
-    async analyzeSlabs(sessionId) {
-        return this.request('/analyze-slabs', {
-            method: 'POST',
-            body: JSON.stringify({ session_id: sessionId })
-        });
-    }
-
-    /**
-     * Obtiene las capacidades de una losa especifica.
-     * @param {string} sessionId - ID de sesion
-     * @param {string} slabKey - Clave de la losa
-     * @returns {Promise<Object>} Capacidades de la losa
-     */
-    async getSlabCapacities(sessionId, slabKey) {
-        return this.request('/slab-capacities', {
-            method: 'POST',
-            body: JSON.stringify({
-                session_id: sessionId,
-                slab_key: slabKey
-            })
-        });
-    }
-
-    /**
-     * Verifica punzonamiento para losas 2-Way.
-     * @param {string} sessionId - ID de sesion
-     * @returns {Promise<Object>} Resultados de punzonamiento
-     */
-    async analyzePunching(sessionId) {
-        return this.request('/analyze-punching', {
-            method: 'POST',
-            body: JSON.stringify({ session_id: sessionId })
         });
     }
 

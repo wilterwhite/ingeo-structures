@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 
 from .load_combination import LoadCombination
-from .slab_forces import SlabSectionCut
+from .section_cut import SectionCutInfo
 from .forces_mixin import ForcesCollectionMixin
 
 
@@ -25,12 +25,11 @@ class DropBeamForces(ForcesCollectionMixin):
     - get_combinations_with_angles()
     - get_max_shear()
 
-    Combina la información de Section Cut (de SlabForces) con los métodos
-    de análisis P-M (de PierForces).
+    Combina la información de Section Cut con los métodos de análisis P-M.
     """
     drop_beam_label: str
     story: str
-    section_cut: SlabSectionCut
+    section_cut: SectionCutInfo
     combinations: List[LoadCombination] = field(default_factory=list)
 
     def get_max_shear(self) -> Dict[str, float]:

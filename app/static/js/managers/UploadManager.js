@@ -141,7 +141,6 @@ class UploadManager {
         if (summary.total_piers > 0) counts.push(`${summary.total_piers} muros`);
         if (summary.total_columns > 0) counts.push(`${summary.total_columns} columnas`);
         if (summary.total_beams > 0) counts.push(`${summary.total_beams} vigas`);
-        if (summary.total_slabs > 0) counts.push(`${summary.total_slabs} losas`);
         if (summary.total_drop_beams > 0) counts.push(`${summary.total_drop_beams} vigas capitel`);
         this.updateUploadStatus('Archivo procesado', counts.join(', '));
 

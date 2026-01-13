@@ -218,11 +218,6 @@ def require_session_and_pier(f: Callable) -> Callable:
     return require_session_and_element('pier_key')(f)
 
 
-def require_session_and_slab(f: Callable) -> Callable:
-    """Alias de require_session_and_element('slab_key')."""
-    return require_session_and_element('slab_key')(f)
-
-
 def get_session_or_404(session_id: str):
     """
     Obtiene datos de sesión o retorna error 404.
@@ -334,7 +329,7 @@ def require_element_type(element_type: str) -> Callable:
     Debe usarse DESPUÉS de require_session_data.
 
     Args:
-        element_type: Tipo de elemento ('piers', 'columns', 'beams', 'slabs', 'drop_beams')
+        element_type: Tipo de elemento ('piers', 'columns', 'beams', 'drop_beams')
 
     Uso:
         @bp.route('/endpoint', methods=['POST'])
@@ -350,7 +345,6 @@ def require_element_type(element_type: str) -> Callable:
         'piers': ('has_piers', 'piers'),
         'columns': ('has_columns', 'columnas'),
         'beams': ('has_beams', 'vigas'),
-        'slabs': ('has_slabs', 'losas'),
         'drop_beams': ('has_drop_beams', 'vigas capitel'),
     }
 
