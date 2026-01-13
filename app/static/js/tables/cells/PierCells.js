@@ -132,6 +132,20 @@ const PierCells = {
     },
 
     /**
+     * Labels para modos de falla (inline para evitar dependencia externa).
+     */
+    _failureModeLabels: {
+        flexure: 'Flexión',
+        shear: 'Corte',
+        confinement: 'Confin.',
+        slenderness: 'Esbeltez',
+        combined: 'Combinado',
+        overdesigned: 'Sobred.',
+        column_min_thickness: 'Espesor',
+        none: '-'
+    },
+
+    /**
      * Celda de propuesta de diseño.
      */
     createProposalCell(result, pierKey) {
@@ -143,9 +157,10 @@ const PierCells = {
         td.dataset.pierKey = pierKey;
 
         if (hasProposal) {
+            const modeLabel = this._failureModeLabels[proposal.failure_mode] || proposal.failure_mode;
             td.innerHTML = `
                 <div class="proposal-info">
-                    <span class="proposal-mode proposal-mode-${proposal.failure_mode}">${getFailureModeLabel(proposal.failure_mode)}</span>
+                    <span class="proposal-mode proposal-mode-${proposal.failure_mode}">${modeLabel}</span>
                     <span class="proposal-desc">${proposal.description}</span>
                     <span class="proposal-sf ${proposal.success ? 'proposal-success' : 'proposal-fail'}">
                         SF: ${proposal.sf_original.toFixed(2)} → ${proposal.sf_proposed.toFixed(2)}

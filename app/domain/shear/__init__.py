@@ -22,16 +22,11 @@ from .shear_friction import (
     ShearFrictionDesignResult,
     SurfaceCondition,
 )
-from .combined import (
-    calculate_combined_dcr,
-    calculate_combined_sf,
-    calculate_combined_dcr_from_values,
-)
+from .combined import calculate_combined_dcr
 from .concrete_shear import (
     VcResult,
     calculate_Vc_beam,
     calculate_Vc_column,
-    calculate_Vc_wall,
     check_Vc_zero_condition,
 )
 from .steel_shear import (
@@ -61,13 +56,10 @@ __all__ = [
     'SurfaceCondition',
     # combined biaxial shear
     'calculate_combined_dcr',
-    'calculate_combined_sf',
-    'calculate_combined_dcr_from_values',
     # concrete shear (Vc) - centralized calculations
     'VcResult',
     'calculate_Vc_beam',
     'calculate_Vc_column',
-    'calculate_Vc_wall',
     'check_Vc_zero_condition',
     # steel shear (Vs) - centralized calculations
     'VsResult',

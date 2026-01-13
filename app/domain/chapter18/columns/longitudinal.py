@@ -68,32 +68,3 @@ def check_longitudinal_reinforcement(
     )
 
 
-def check_splice_location(
-    splice_location: float,
-    lu: float,
-) -> tuple[bool, str]:
-    """
-    Verifica ubicación de empalmes según §18.7.4.4.
-
-    Los empalmes de traslape solo se permiten en la mitad central
-    de la altura libre de la columna.
-
-    Args:
-        splice_location: Distancia desde la base al centro del empalme (mm)
-        lu: Altura libre de la columna (mm)
-
-    Returns:
-        Tuple (is_ok, message)
-    """
-    # Mitad central: entre 0.25*lu y 0.75*lu
-    lower_limit = 0.25 * lu
-    upper_limit = 0.75 * lu
-
-    is_ok = lower_limit <= splice_location <= upper_limit
-
-    if is_ok:
-        msg = f"Empalme en mitad central ({splice_location:.0f}mm dentro de [{lower_limit:.0f}, {upper_limit:.0f}]mm)"
-    else:
-        msg = f"Empalme fuera de mitad central ({splice_location:.0f}mm, debe estar entre {lower_limit:.0f} y {upper_limit:.0f}mm)"
-
-    return is_ok, msg

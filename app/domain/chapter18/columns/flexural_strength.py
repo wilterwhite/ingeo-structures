@@ -13,7 +13,6 @@ Referencias:
 - ACI 318-25 §18.7.3.2: Columna fuerte - viga débil
 - ACI 318-25 §18.7.3.3: Columnas que no satisfacen el requisito
 """
-from typing import Tuple
 from .results import StrongColumnResult
 
 # Constantes
@@ -71,33 +70,3 @@ def check_strong_column_weak_beam(
     )
 
 
-def check_exemption(
-    Pu: float,
-    Ag: float,
-    fc: float,
-    is_discontinuous_above: bool,
-) -> Tuple[bool, str]:
-    """
-    Verifica si aplica exención del requisito §18.7.3.1.
-
-    La columna está exenta si:
-    - Es discontinua arriba del nudo, Y
-    - Pu < Ag*f'c/10
-
-    Args:
-        Pu: Carga axial factorizada (N, positivo = compresión)
-        Ag: Área bruta (mm²)
-        fc: f'c del concreto (MPa)
-        is_discontinuous_above: True si columna es discontinua arriba
-
-    Returns:
-        Tuple (is_exempt, reason)
-    """
-    if not is_discontinuous_above:
-        return False, "Columna continua arriba del nudo"
-
-    threshold = Ag * fc / 10
-    if Pu < threshold:
-        return True, f"Pu={Pu/1000:.1f}kN < Ag*f'c/10={threshold/1000:.1f}kN (§18.7.3.1)"
-
-    return False, f"Pu={Pu/1000:.1f}kN >= Ag*f'c/10={threshold/1000:.1f}kN"

@@ -150,7 +150,6 @@ class UploadManager {
         this.page.piersData = summary.piers_list || [];
         this.page.columnsData = summary.columns_list || [];
         this.page.beamsData = summary.beams_list || [];
-        this.page.slabsData = summary.slabs_list || [];
         this.page.dropBeamsData = summary.drop_beams_list || [];
         this.page.uniqueGrillas = summary.grillas || [];
         this.page.uniqueStories = summary.stories || [];
@@ -288,14 +287,12 @@ class UploadManager {
         page.results = data.results;
         page.columnResults = data.column_results || [];
         page.beamResults = data.beam_results || [];
-        page.slabResults = data.slab_results || [];
         page.dropBeamResults = data.drop_beam_results || [];
 
         // Renderizar resultados
         page.resultsTable.populateFilters();
         page.resultsTable.render(data);
         page.beamsModule.renderBeamsTable();
-        page.slabsTable.renderTable(page.slabResults);
         page.renderDropBeamsTable();
         page.showSection('results');
     }

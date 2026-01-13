@@ -169,14 +169,6 @@ class CouplingBeamManager {
     }
 
     /**
-     * Establece asignaciones de vigas (para restaurar estado).
-     * @param {Object} assignments
-     */
-    setAssignments(assignments) {
-        this.pierBeamAssignments = { ...assignments };
-    }
-
-    /**
      * Limpia todas las asignaciones.
      */
     clearAssignments() {

@@ -19,12 +19,10 @@ class StructuralPage {
         this.piersData = [];
         this.columnsData = [];
         this.beamsData = [];
-        this.slabsData = [];
         this.dropBeamsData = [];
         this.results = [];
         this.columnResults = [];
         this.beamResults = [];
-        this.slabResults = [];
         this.dropBeamResults = [];
 
         // Filtros y metadatos
@@ -41,7 +39,6 @@ class StructuralPage {
         this.materialsManager = null;
         this.uploadManager = null;
         this.resultsTable = null;
-        this.slabsTable = null;
         this.plotModal = null;
         this.reportModal = null;
 
@@ -83,10 +80,6 @@ class StructuralPage {
             beamsPlaceholder: document.getElementById('beams-placeholder'),
             beamsResultsSection: document.getElementById('beams-results-section'),
 
-            // Slabs page
-            slabsPlaceholder: document.getElementById('slabs-placeholder'),
-            slabsResultsSection: document.getElementById('slabs-results-section'),
-
             // Vigas (Beams)
             beamsTableBody: document.getElementById('beams-table')?.querySelector('tbody'),
 
@@ -99,7 +92,6 @@ class StructuralPage {
             configPage: document.getElementById('config-page'),
             wallsPage: document.getElementById('walls-page'),
             beamsPage: document.getElementById('beams-page'),
-            slabsPage: document.getElementById('slabs-page'),
             dropBeamsPage: document.getElementById('drop-beams-page'),
 
             // Resultados
@@ -149,8 +141,6 @@ class StructuralPage {
 
         // Componentes de UI
         this.resultsTable = new ResultsTable(this);
-        this.slabsTable = new SlabsTable(this);
-        this.slabsTable.bindFilterEvents();
         this.plotModal = new PlotModal(this);
         this.plotModal.init();
         this.reportModal = new ReportModal(this);
@@ -224,7 +214,6 @@ class StructuralPage {
         this.elements.configPage?.classList.toggle('hidden', pageId !== 'config-page');
         this.elements.wallsPage?.classList.toggle('hidden', pageId !== 'walls-page');
         this.elements.beamsPage?.classList.toggle('hidden', pageId !== 'beams-page');
-        this.elements.slabsPage?.classList.toggle('hidden', pageId !== 'slabs-page');
         this.elements.dropBeamsPage?.classList.toggle('hidden', pageId !== 'drop-beams-page');
 
         this.currentPage = pageId;
@@ -246,10 +235,6 @@ class StructuralPage {
         // Beams page
         this.elements.beamsPlaceholder?.classList.toggle('hidden', section !== 'upload');
         this.elements.beamsResultsSection?.classList.toggle('hidden', section !== 'results');
-
-        // Slabs page
-        this.elements.slabsPlaceholder?.classList.toggle('hidden', section !== 'upload');
-        this.elements.slabsResultsSection?.classList.toggle('hidden', section !== 'results');
 
         // Drop Beams page
         this.elements.dropBeamsPlaceholder?.classList.toggle('hidden', section !== 'upload');
@@ -278,12 +263,10 @@ class StructuralPage {
         this.piersData = [];
         this.columnsData = [];
         this.beamsData = [];
-        this.slabsData = [];
         this.dropBeamsData = [];
         this.results = [];
         this.columnResults = [];
         this.beamResults = [];
-        this.slabResults = [];
         this.dropBeamResults = [];
         this.filters = { grilla: '', story: '', axis: '', status: '', elementType: '' };
         this.uniqueGrillas = [];
@@ -294,7 +277,6 @@ class StructuralPage {
         this.materialsManager.reset();
         this.resultsTable.reset();
         this.beamsModule.clearBeamsTable();
-        this.slabsTable.clear();
         this.clearDropBeamsTable();
     }
 

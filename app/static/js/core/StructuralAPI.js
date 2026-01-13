@@ -101,28 +101,6 @@ class StructuralAPI {
     // =========================================================================
 
     /**
-     * Sube un archivo Excel de ETABS.
-     * @param {File} file - Archivo Excel
-     * @returns {Promise<Object>} Respuesta con session_id y summary
-     */
-    async uploadFile(file) {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch(`${this.baseUrl}/upload`, {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
-        }
-
-        return response.json();
-    }
-
-    /**
      * Sube un archivo Excel con progreso en tiempo real (SSE).
      * @param {File} file - Archivo Excel
      * @param {Function} onProgress - Callback para progreso (current, total, element)
@@ -255,22 +233,6 @@ class StructuralAPI {
         return this.request('/summary-plot', {
             method: 'POST',
             body: JSON.stringify(params)
-        });
-    }
-
-    /**
-     * Obtiene las capacidades puras de un pier.
-     * @param {string} sessionId - ID de sesión
-     * @param {string} pierKey - Clave del pier (Story_Label)
-     * @returns {Promise<Object>} Información y capacidades del pier
-     */
-    async getPierCapacities(sessionId, pierKey) {
-        return this.request('/pier-capacities', {
-            method: 'POST',
-            body: JSON.stringify({
-                session_id: sessionId,
-                pier_key: pierKey
-            })
         });
     }
 

@@ -151,20 +151,6 @@ function getDcrDisplay(result) {
 }
 
 /**
- * Obtiene la clase CSS de DCR, preferiendo el valor del backend.
- * @param {Object} result - Resultado con dcr_class y dcr_max
- * @returns {string} Clase CSS ('fs-ok', 'fs-warn', 'fs-fail')
- */
-function getDcrClassFromResult(result) {
-    // Preferir la clase CSS del backend
-    if (result?.dcr_class) {
-        return result.dcr_class;
-    }
-    // Fallback: calcular localmente
-    return getDcrClass(result?.dcr_max);
-}
-
-/**
  * Obtiene las dimensiones formateadas, preferiendo el valor del backend.
  * @param {Object} result - Resultado con dimensions_display y geometry
  * @returns {string} Dimensiones formateadas

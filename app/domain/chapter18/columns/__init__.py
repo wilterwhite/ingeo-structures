@@ -27,8 +27,8 @@ from .results import (
 
 # Funciones de verificación individuales
 from .dimensional import check_dimensional_limits
-from .flexural_strength import check_strong_column_weak_beam, check_exemption
-from .longitudinal import check_longitudinal_reinforcement, check_splice_location
+from .flexural_strength import check_strong_column_weak_beam
+from .longitudinal import check_longitudinal_reinforcement
 from .transverse import (
     check_transverse_reinforcement,
     calculate_lo,
@@ -52,9 +52,7 @@ __all__ = [
     # Funciones de verificación
     "check_dimensional_limits",
     "check_strong_column_weak_beam",
-    "check_exemption",
     "check_longitudinal_reinforcement",
-    "check_splice_location",
     "check_transverse_reinforcement",
     "calculate_lo",
     "calculate_s_max",

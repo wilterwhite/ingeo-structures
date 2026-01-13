@@ -144,57 +144,6 @@ def calculate_Vc_column(
     )
 
 
-def calculate_Vc_wall(
-    Acv: float,
-    hw: float,
-    lw: float,
-    fc: float,
-    lambda_factor: float = 1.0,
-) -> VcResult:
-    """
-    Calcula Vc para muros estructurales según §18.10.4.1.
-
-    Vc = Acv × αc × λ × √f'c
-
-    Donde αc depende de hw/lw:
-    - αc = 3.0 si hw/lw ≤ 1.5 (muros bajos)
-    - αc = 2.0 si hw/lw ≥ 2.0 (muros esbeltos)
-    - Interpolación lineal entre 1.5 y 2.0
-
-    Args:
-        Acv: Área de corte (mm²), típicamente lw × tw
-        hw: Altura del muro (mm)
-        lw: Longitud del muro (mm)
-        fc: Resistencia del concreto (MPa)
-        lambda_factor: Factor para concreto liviano (default 1.0)
-
-    Returns:
-        VcResult con Vc en Newtons
-    """
-    fc_eff = min(fc, FC_EFF_SHEAR_MAX_MPA)
-
-    # Calcular αc según hw/lw (Tabla 18.10.4.1)
-    aspect_ratio = hw / lw if lw > 0 else float('inf')
-
-    if aspect_ratio <= 1.5:
-        alpha_c = 3.0
-    elif aspect_ratio >= 2.0:
-        alpha_c = 2.0
-    else:
-        # Interpolación lineal
-        alpha_c = 3.0 - (aspect_ratio - 1.5) * 2.0
-
-    Vc_N = Acv * alpha_c * lambda_factor * math.sqrt(fc_eff)
-
-    return VcResult(
-        Vc_N=Vc_N,
-        fc_eff=fc_eff,
-        lambda_factor=lambda_factor,
-        formula=f"Acv × {alpha_c:.2f} × {lambda_factor} × √{fc_eff:.1f}",
-        aci_reference="§18.10.4.1"
-    )
-
-
 def check_Vc_zero_condition(
     Ve: float,
     Vu: float,
@@ -247,6 +196,5 @@ __all__ = [
     'VcResult',
     'calculate_Vc_beam',
     'calculate_Vc_column',
-    'calculate_Vc_wall',
     'check_Vc_zero_condition',
 ]
