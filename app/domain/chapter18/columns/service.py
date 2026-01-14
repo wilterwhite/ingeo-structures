@@ -95,6 +95,7 @@ class SeismicColumnService:
         category: SeismicCategory = SeismicCategory.SPECIAL,
         steel_grade: int = 60,
         is_circular: bool = False,
+        is_unconfined: bool = False,
         lambda_factor: float = 1.0,
     ) -> SeismicColumnResult:
         """
@@ -131,6 +132,7 @@ class SeismicColumnService:
             category: Categoría sísmica (default SPECIAL)
             steel_grade: Grado del acero (60 u 80)
             is_circular: True si es columna circular
+            is_unconfined: True si es hormigón no confinado (1 barra centrada)
             lambda_factor: Factor para concreto liviano
 
         Returns:
@@ -183,9 +185,20 @@ class SeismicColumnService:
                     warnings.append(f"No cumple columna fuerte-viga débil V3 §18.7.3.2")
 
             # §18.7.4 - Refuerzo longitudinal
+            # Calcular ratio de esbeltez H/h para verificación de pedestal
+            h_min = min(b, h)
+            slenderness_ratio = lu / h_min if h_min > 0 else 0
+
             longitudinal = check_longitudinal_reinforcement(
-                Ast, Ag, n_bars, is_circular
+                Ast, Ag, n_bars, is_circular,
+                is_unconfined=is_unconfined,
+                slenderness_ratio=slenderness_ratio
             )
+
+            # Agregar warnings de hormigón no confinado
+            if longitudinal.warnings:
+                warnings.extend(longitudinal.warnings)
+
             if not longitudinal.is_ok:
                 if longitudinal.rho < longitudinal.rho_min:
                     dcr = longitudinal.rho_min / longitudinal.rho

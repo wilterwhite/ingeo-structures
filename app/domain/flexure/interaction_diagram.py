@@ -11,6 +11,7 @@ from ..calculations.steel_layer_calculator import SteelLayer, SteelLayerCalculat
 from ..constants.units import N_TO_TONF, NMM_TO_TONFM
 from ..constants.phi_chapter21 import (
     PHI_COMPRESSION,
+    PHI_COMPRESSION_UNCONFINED,
     PHI_TENSION,
     EPSILON_TY,
     EPSILON_T_LIMIT,
@@ -61,7 +62,11 @@ class InteractionDiagramService:
         """
         return _calculate_beta1(fc)
 
-    def calculate_phi(self, epsilon_t: float) -> float:
+    def calculate_phi(
+        self,
+        epsilon_t: float,
+        is_unconfined: bool = False
+    ) -> float:
         """
         Calcula el factor de reducción φ según la deformación del acero.
 
@@ -69,11 +74,12 @@ class InteractionDiagramService:
 
         Args:
             epsilon_t: Deformación del acero en tracción
+            is_unconfined: True si es hormigón no confinado (Cap. 14)
 
         Returns:
             φ: Factor de reducción
         """
-        return calculate_phi_flexure(epsilon_t)
+        return calculate_phi_flexure(epsilon_t, is_unconfined=is_unconfined)
 
     def generate_steel_layers(
         self,
@@ -118,7 +124,8 @@ class InteractionDiagramService:
         As_total: float,    # Área de acero total vertical (mm²) - para compatibilidad
         cover: float = 25,  # Recubrimiento (mm) - 2.5cm default
         n_points: int = 50, # Número de puntos en la curva
-        steel_layers: Optional[List[SteelLayer]] = None  # Capas de acero (opcional)
+        steel_layers: Optional[List[SteelLayer]] = None,  # Capas de acero (opcional)
+        is_unconfined: bool = False  # True para hormigón no confinado (Cap. 14)
     ) -> List[InteractionPoint]:
         """
         Genera los puntos del diagrama de interacción P-M.
@@ -135,6 +142,7 @@ class InteractionDiagramService:
             cover: Recubrimiento (mm)
             n_points: Número de puntos a generar
             steel_layers: Lista de capas de acero con posiciones reales
+            is_unconfined: True si es hormigón no confinado (Cap. 14, pedestales)
 
         Returns:
             Lista de InteractionPoint ordenados de compresión pura a tracción pura
@@ -167,7 +175,8 @@ class InteractionDiagramService:
         P0 = 0.85 * fc * (Ag - As_total_calc) + fy * As_total_calc
         P0_max = 0.80 * P0  # Límite ACI 318
 
-        phi_P0 = PHI_COMPRESSION
+        # φ para compresión pura: 0.60 para no confinado, 0.65 normal
+        phi_P0 = PHI_COMPRESSION_UNCONFINED if is_unconfined else PHI_COMPRESSION
         points.append(InteractionPoint(
             Pn=P0_max / N_TO_TONF,
             Mn=0,
@@ -272,7 +281,7 @@ class InteractionDiagramService:
             Mn = abs(Mc + Mn_steel)  # N-mm (siempre positivo)
 
             # Factor phi basado en deformación máxima del acero en tracción
-            phi = self.calculate_phi(epsilon_t_max)
+            phi = self.calculate_phi(epsilon_t_max, is_unconfined=is_unconfined)
 
             # Verificar límite de compresión
             if Pn > P0_max:
@@ -290,7 +299,8 @@ class InteractionDiagramService:
 
         # 3. Punto de tracción pura
         Pt = -As_total_calc * fy  # N (negativo)
-        phi_Pt = PHI_TENSION
+        # Para tracción pura, hormigón no confinado también usa φ = 0.60
+        phi_Pt = PHI_COMPRESSION_UNCONFINED if is_unconfined else PHI_TENSION
 
         points.append(InteractionPoint(
             Pn=Pt / N_TO_TONF,

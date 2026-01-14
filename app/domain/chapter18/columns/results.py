@@ -119,6 +119,7 @@ class LongitudinalReinforcementResult:
     Requisitos:
     - 0.01*Ag <= Ast <= 0.06*Ag
     - Mínimo 6 barras para hoops circulares
+    - Excepción: 1 barra centrada para hormigón no confinado (Cap. 14)
     """
     Ast: float                      # Área de refuerzo longitudinal (mm²)
     Ag: float                       # Área bruta (mm²)
@@ -130,10 +131,13 @@ class LongitudinalReinforcementResult:
     rho_max_ok: bool
 
     n_bars: int                     # Número de barras
-    n_bars_min: int                 # 6 para circular, 4 para rectangular
+    n_bars_min: int                 # 6 para circular, 4 para rectangular, 1 para no confinado
     n_bars_ok: bool
 
     is_ok: bool
+    is_unconfined: bool = False     # True si es hormigón no confinado (1 barra centrada)
+    slenderness_ratio: float = 0    # H/h para verificar límite de pedestal
+    warnings: List[str] = field(default_factory=list)
     aci_reference: str = "ACI 318-25 §18.7.4"
 
 

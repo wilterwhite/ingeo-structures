@@ -33,6 +33,7 @@ TABLA 21.2.1 - Factores de reducción phi:
 
 PHI_COMPRESSION = 0.65      # Sección controlada por compresión (sin espiral)
 PHI_COMPRESSION_SPIRAL = 0.75  # Sección controlada por compresión (con espiral)
+PHI_COMPRESSION_UNCONFINED = 0.60  # Hormigón no confinado (Cap. 14, pedestales)
 PHI_TENSION = 0.90          # Sección controlada por tracción
 
 # Deformaciones para cálculo de phi en zona de transición
@@ -98,7 +99,8 @@ WHITNEY_STRESS_FACTOR = 0.85   # 0.85×f'c para bloque rectangular equivalente
 
 def calculate_phi_flexure(
     epsilon_t: float,
-    is_spiral: bool = False
+    is_spiral: bool = False,
+    is_unconfined: bool = False
 ) -> float:
     """
     Calcula el factor de reducción φ según la deformación del acero (§21.2.2).
@@ -106,6 +108,7 @@ def calculate_phi_flexure(
     Args:
         epsilon_t: Deformación neta del acero en tracción (valor absoluto)
         is_spiral: True si el elemento tiene refuerzo en espiral
+        is_unconfined: True si es hormigón no confinado (Cap. 14, pedestales con 1 barra)
 
     Returns:
         φ: Factor de reducción de resistencia
@@ -114,7 +117,15 @@ def calculate_phi_flexure(
     - epsilon_t <= epsilon_ty: Compresión controlada (0.65 o 0.75)
     - epsilon_t >= epsilon_ty + 0.003: Tracción controlada (0.90)
     - Entre ambos: Interpolación lineal (zona de transición)
+
+    Capítulo 14 (hormigón no confinado):
+    - φ = 0.60 constante para todos los estados de deformación
     """
+    # Caso especial: hormigón no confinado (Cap. 14)
+    # Para pedestales/pilares con 1 barra centrada, φ = 0.60 siempre
+    if is_unconfined:
+        return PHI_COMPRESSION_UNCONFINED
+
     epsilon_t = abs(epsilon_t)
     phi_c = PHI_COMPRESSION_SPIRAL if is_spiral else PHI_COMPRESSION
 

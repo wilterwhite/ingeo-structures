@@ -99,7 +99,7 @@ const StructuralConstants = {
         this.options = {
             mesh_counts: [1, 2],
             edge_bar_counts: [2, 4, 6, 8, 10, 12],
-            column_bars_per_face: [2, 3, 4, 5, 6],
+            column_bars_per_face: [1, 2, 3, 4, 5, 6],
             beam_bar_counts: [2, 3, 4, 5, 6, 8],
             stirrup_legs: [2, 3, 4],
             covers: [20, 25, 30, 40, 50]

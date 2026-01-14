@@ -85,17 +85,45 @@ class Column:
         """
         Numero total de barras longitudinales.
 
-        Para seccion rectangular con barras en el perimetro:
-        - 4 esquinas siempre
-        - (n_bars_depth - 2) * 2 en las caras de profundidad
-        - (n_bars_width - 2) * 2 en las caras de ancho
+        Casos:
+        - 1x1: 1 barra centrada (hormigon no confinado, ACI Cap. 14)
+        - Normal: distribucion perimetral con 4 esquinas + barras intermedias
         """
+        # Caso especial: 1 fierro centrado (pedestal/pilar ICF pequeño)
+        if self.n_bars_depth == 1 and self.n_bars_width == 1:
+            return 1
+
+        # Caso normal: distribucion perimetral
         if self.n_bars_depth < 2 or self.n_bars_width < 2:
             return 4  # minimo 4 esquinas
         n_corners = 4
         n_sides_depth = max(0, self.n_bars_depth - 2) * 2
         n_sides_width = max(0, self.n_bars_width - 2) * 2
         return n_corners + n_sides_depth + n_sides_width
+
+    @property
+    def is_unconfined(self) -> bool:
+        """
+        True si la columna es de hormigon no confinado (sin estribos).
+
+        Columnas con 1 barra centrada se diseñan como pedestales
+        segun ACI 318-25 Capitulo 14 (hormigon simple/no confinado).
+        Usan phi = 0.60 en lugar de phi = 0.65.
+        """
+        return self.n_bars_depth == 1 and self.n_bars_width == 1
+
+    @property
+    def slenderness_ratio(self) -> float:
+        """
+        Razon de esbeltez H/h para verificacion de pedestal.
+
+        ACI 318-25 §14.3.3: Para pedestales, H <= 3*h donde h es
+        la menor dimension de la seccion.
+        """
+        h_min = min(self.depth, self.width)
+        if h_min == 0:
+            return float('inf')
+        return self.height / h_min
 
     @property
     def As_longitudinal(self) -> float:

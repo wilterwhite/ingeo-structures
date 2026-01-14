@@ -209,14 +209,36 @@ class ColumnParser:
             # Actualizar altura en forces
             forces.height = height
 
+            # Determinar armadura por defecto basada en dimensiones
+            depth = section['depth']
+            width = section['width']
+            min_dim = min(depth, width)
+
+            # Para pilares pequeños (<150mm), usar 1 barra centrada (hormigón no confinado)
+            if min_dim < 150:
+                n_bars_depth = 1
+                n_bars_width = 1
+                diameter_long = 12  # Barra pequeña para pilares chicos
+                stirrup_spacing = 0  # Sin estribos
+            else:
+                # Armadura convencional para columnas normales
+                n_bars_depth = 3
+                n_bars_width = 3
+                diameter_long = 20
+                stirrup_spacing = 150
+
             columns[column_key] = Column(
                 label=column_label,
                 story=story,
-                depth=section['depth'],
-                width=section['width'],
+                depth=depth,
+                width=width,
                 height=height,
                 fc=section['fc'],
-                fy=FY_DEFAULT_MPA
+                fy=FY_DEFAULT_MPA,
+                n_bars_depth=n_bars_depth,
+                n_bars_width=n_bars_width,
+                diameter_long=diameter_long,
+                stirrup_spacing=stirrup_spacing,
             )
 
         return columns, column_forces, stories

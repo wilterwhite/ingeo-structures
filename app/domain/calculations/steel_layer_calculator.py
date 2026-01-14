@@ -184,8 +184,18 @@ class SteelLayerCalculator:
         """
         layers = []
 
+        # Caso especial: 1 barra centrada (hormigón no confinado, ACI Cap. 14)
+        # Para pilares ICF pequeños con 1 fierro central
+        if n_layers == 1 and bars_per_layer == 1:
+            layers.append(SteelLayer(
+                position=dimension / 2,  # Barra centrada
+                area=bar_area
+            ))
+            return layers
+
         if n_layers < 2:
-            # Mínimo 2 capas (una en cada extremo)
+            # Caso inesperado (ej: n_layers=1, bars_per_layer>1)
+            # Retornar vacío, se manejará como error arriba
             return layers
 
         d_first = cover
