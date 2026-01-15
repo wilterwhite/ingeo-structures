@@ -19,10 +19,10 @@ import uuid
 
 from .parsing.session_manager import SessionManager
 from .presentation.plot_generator import PlotGenerator
-from .presentation.result_formatter import ResultFormatter, calculate_statistics
+from .presentation.result_formatter import ResultFormatter
+from .analysis.statistics_service import calculate_statistics
 from .analysis.flexocompression_service import FlexocompressionService
 from .analysis.shear_service import ShearService
-from .analysis.proposal_service import ProposalService
 from .analysis.reinforcement_update_service import ReinforcementUpdateService
 from .presentation.modal_data_service import ElementDetailsService
 from .analysis.element_orchestrator import ElementOrchestrator
@@ -55,7 +55,6 @@ class StructuralAnalysisService:
         slenderness_service: Optional[SlendernessService] = None,
         interaction_service: Optional[InteractionDiagramService] = None,
         plot_generator: Optional[PlotGenerator] = None,
-        proposal_service: Optional[ProposalService] = None,
         details_formatter: Optional[ElementDetailsService] = None,
         element_orchestrator: Optional[ElementOrchestrator] = None
     ):
@@ -69,7 +68,6 @@ class StructuralAnalysisService:
             slenderness_service: Servicio de esbeltez (opcional)
             interaction_service: Servicio de diagrama interaccion (opcional)
             plot_generator: Generador de graficos (opcional)
-            proposal_service: Servicio de propuestas de diseño (opcional)
             details_formatter: Formateador de detalles de piers (opcional)
             element_orchestrator: Orquestador unificado de elementos (opcional)
 
@@ -87,10 +85,6 @@ class StructuralAnalysisService:
         # Verifica todos los elementos: Pier, Column, Beam, DropBeam
         self._orchestrator = element_orchestrator or ElementOrchestrator()
 
-        # Servicios que dependen del orquestador
-        self._proposal_service = proposal_service or ProposalService(
-            orchestrator=self._orchestrator
-        )
         self._details_formatter = details_formatter or ElementDetailsService(
             session_manager=self._session_manager,
             orchestrator=self._orchestrator,
@@ -124,43 +118,6 @@ class StructuralAnalysisService:
         phi_Mn_0 = FlexureChecker.get_phi_Mn_at_P0(interaction_points)
 
         return steel_layers, interaction_points, phi_Mn_0
-
-    def _analyze_piers_batch(
-        self,
-        piers: Dict[str, VerticalElement],
-        parsed_data: Any
-    ) -> List[Dict[str, Any]]:
-        """
-        Analiza un lote de piers usando _analyze_element.
-
-        Clasifica automáticamente cada pier y lo verifica con el servicio
-        apropiado según ACI 318-25:
-        - §18.7 (SeismicColumnService) para piers tipo columna
-        - §18.10 (SeismicWallService) para muros esbeltos y rechonchos
-
-        Args:
-            piers: Diccionario de piers a analizar {key: Pier}
-            parsed_data: Datos parseados de la sesión
-
-        Returns:
-            Lista de dicts formateados para la UI
-        """
-        hn_ft = parsed_data.building_info.hn_ft if parsed_data.building_info else None
-
-        results = []
-        for key, pier in piers.items():
-            continuity_info = None
-            if parsed_data.continuity_info and key in parsed_data.continuity_info:
-                continuity_info = parsed_data.continuity_info[key]
-
-            formatted = self._analyze_element(
-                key, pier, parsed_data.vertical_forces.get(key),
-                continuity_info=continuity_info,
-                hn_ft=hn_ft
-            )
-            results.append(formatted)
-
-        return results
 
     # =========================================================================
     # Validación (delegada a SessionManager)
@@ -560,16 +517,6 @@ class StructuralAnalysisService:
             }
         }
 
-    def analyze_direct(
-        self,
-        file_content: bytes,
-        generate_plots: bool = True
-    ) -> Dict[str, Any]:
-        """Análisis directo sin sesión previa (para pruebas)."""
-        session_id = str(uuid.uuid4())
-        self.parse_excel(file_content, session_id)
-        return self.analyze(session_id, generate_plots=generate_plots)
-
     # =========================================================================
     # API Pública - Análisis por Combinación
     # =========================================================================
@@ -729,10 +676,6 @@ class StructuralAnalysisService:
         return self._details_formatter.get_section_diagram(
             session_id, pier_key, proposed_config
         )
-
-    def get_pier_capacities(self, session_id: str, pier_key: str) -> Dict[str, Any]:
-        """Calcula las capacidades puras del pier (sin interacción)."""
-        return self._details_formatter.get_pier_capacities(session_id, pier_key)
 
     def get_element_capacities(
         self,

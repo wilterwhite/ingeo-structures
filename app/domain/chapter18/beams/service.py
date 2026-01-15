@@ -20,7 +20,8 @@ from ..common import SeismicCategory
 from ..seismic_detailing_service import SeismicDetailingService
 from ...constants import DCR_MAX_FINITE
 from ...constants.shear import PHI_SHEAR_SEISMIC
-from ...constants.units import N_TO_TONF, TONF_TO_N
+from ...constants.units import N_TO_TONF, TONF_TO_N, NMM_TO_TONFM
+from ...constants.phi_chapter21 import ALPHA_OVERSTRENGTH, WHITNEY_STRESS_FACTOR
 from ...shear.concrete_shear import calculate_Vc_beam, check_Vc_zero_condition
 from ...shear.steel_shear import calculate_Vs_beam_column
 from ...constants.chapter18 import FIRST_HOOP_MAX_MM, HX_MAX_MM
@@ -597,3 +598,101 @@ class SeismicBeamService:
             seismic_shear_dominates=seismic_shear_dominates,
             low_axial=low_axial,
         )
+
+
+# =============================================================================
+# Funciones de Momento Probable (Mpr) - ACI 318-25 §18.6.5.1
+# =============================================================================
+
+def calculate_Mpr(
+    As_top: float,
+    As_bottom: float,
+    fc: float,
+    fy: float,
+    b: float,
+    d: float,
+    alpha: float = ALPHA_OVERSTRENGTH
+) -> tuple:
+    """
+    Calcula Mpr en ambos extremos de una viga según ACI 318-25 §18.6.5.1.
+
+    El momento probable Mpr se usa para calcular el cortante de diseño Ve
+    en vigas de pórticos especiales resistentes a momento.
+
+    Mpr = As * (alpha * fy) * (d - a/2)
+
+    donde:
+    - alpha = ALPHA_OVERSTRENGTH (1.25, considera sobreresistencia del acero)
+    - a = As * (alpha * fy) / (0.85 * f'c * b)
+
+    Args:
+        As_top: Área de acero superior (mm²)
+        As_bottom: Área de acero inferior (mm²)
+        fc: Resistencia del hormigón (MPa)
+        fy: Fluencia del acero (MPa)
+        b: Ancho de la viga (mm)
+        d: Peralte efectivo (mm)
+        alpha: Factor de amplificación del acero (default ALPHA_OVERSTRENGTH)
+
+    Returns:
+        Tuple (Mpr_negative, Mpr_positive) en tonf-m
+        - Mpr_negative: momento con refuerzo superior (momento negativo)
+        - Mpr_positive: momento con refuerzo inferior (momento positivo)
+    """
+    # Calcular Mpr para momento negativo (refuerzo superior en tensión)
+    fy_amp = alpha * fy
+    a_neg = (As_top * fy_amp) / (WHITNEY_STRESS_FACTOR * fc * b)
+    Mpr_neg = As_top * fy_amp * (d - a_neg / 2)  # N-mm
+
+    # Calcular Mpr para momento positivo (refuerzo inferior en tensión)
+    a_pos = (As_bottom * fy_amp) / (WHITNEY_STRESS_FACTOR * fc * b)
+    Mpr_pos = As_bottom * fy_amp * (d - a_pos / 2)  # N-mm
+
+    # Convertir N-mm a tonf-m
+    Mpr_neg_tonf = Mpr_neg / NMM_TO_TONFM
+    Mpr_pos_tonf = Mpr_pos / NMM_TO_TONFM
+
+    return (round(Mpr_neg_tonf, 2), round(Mpr_pos_tonf, 2))
+
+
+def calculate_Ve_beam(
+    Mpr_neg: float,
+    Mpr_pos: float,
+    ln_mm: float,
+    wu: float = 0.0
+) -> tuple:
+    """
+    Calcula el cortante de diseño Ve para vigas sísmicas según §18.6.5.1.
+
+    Ve = (Mpr_left + Mpr_right) / ln ± wu*ln/2
+
+    El cortante sísmico se calcula asumiendo que en ambos extremos
+    se desarrollan los momentos probables Mpr con curvatura opuesta.
+
+    Args:
+        Mpr_neg: Momento probable negativo (tonf-m)
+        Mpr_pos: Momento probable positivo (tonf-m)
+        ln_mm: Luz libre de la viga (mm)
+        wu: Carga distribuida factorizada (tonf/m) para gravedad.
+            Según §18.6.5.1: wu no debe incluir E
+
+    Returns:
+        Tuple (Ve_left, Ve_right, Ve_seismic) en tonf
+        - Ve_left: Cortante en extremo izquierdo
+        - Ve_right: Cortante en extremo derecho
+        - Ve_seismic: Componente sísmica (Mpr_left + Mpr_right) / ln
+    """
+    # Luz libre en metros (mínimo 1mm para evitar división por cero)
+    ln_m = max(ln_mm, 1) / 1000
+
+    # Cortante sísmico (ambos extremos desarrollan Mpr)
+    Ve_seismic = (abs(Mpr_neg) + abs(Mpr_pos)) / ln_m
+
+    # Cortante por gravedad
+    Vg = wu * ln_m / 2 if wu > 0 else 0
+
+    # Cortante total en cada extremo
+    Ve_left = Ve_seismic + Vg
+    Ve_right = Ve_seismic + Vg  # Igual para carga uniforme
+
+    return (round(Ve_left, 2), round(Ve_right, 2), round(Ve_seismic, 2))

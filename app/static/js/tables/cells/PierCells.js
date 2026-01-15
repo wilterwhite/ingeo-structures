@@ -47,31 +47,19 @@ const PierCells = {
         td.dataset.pierKey = pierKey;
 
         const reinf = result.reinforcement || {};
-        const rhoMeshVok = reinf.rho_mesh_v_ok !== false;
-        const rhoHok = reinf.rho_h_ok !== false;
-        const spacingVok = reinf.spacing_v_ok !== false;
-        const spacingHok = reinf.spacing_h_ok !== false;
         const modifiedFields = reinf.modified_fields || [];
 
-        // Obtener constantes de StructuralConstants (cargadas desde backend)
-        const rhoMin = reinf.rho_min || StructuralConstants.reinforcement?.rho_min || 0.0025;
-        const maxSpacing = reinf.max_spacing || StructuralConstants.reinforcement?.max_spacing_mm || 457;
+        // Usar warnings pre-calculados del backend
+        const vWarnings = reinf.warnings_v || [];
+        const hWarnings = reinf.warnings_h || [];
 
-        // Advertencias fila V
-        const vHasWarning = !rhoMeshVok || !spacingVok;
+        // Determinar si hay warnings
+        const vHasWarning = vWarnings.length > 0;
+        const hHasWarning = hWarnings.length > 0;
         const vWarningClass = vHasWarning ? 'rho-warning' : '';
-        let vWarnings = [];
-        if (!rhoMeshVok) vWarnings.push(`ρ_malla < ${rhoMin * 100}%`);
-        if (!spacingVok) vWarnings.push(`s > ${maxSpacing}mm`);
-        const vWarningTitle = vWarnings.length ? `${vWarnings.join(', ')} (§18.10.2.1)` : '';
-
-        // Advertencias fila H
-        const hHasWarning = !rhoHok || !spacingHok;
         const hWarningClass = hHasWarning ? 'rho-warning' : '';
-        let hWarnings = [];
-        if (!rhoHok) hWarnings.push(`ρ < ${rhoMin * 100}%`);
-        if (!spacingHok) hWarnings.push(`s > ${maxSpacing}mm`);
-        const hWarningTitle = hWarnings.length ? `${hWarnings.join(', ')} (§18.10.2.1)` : '';
+        const vWarningTitle = vHasWarning ? `${vWarnings.join(', ')} (§18.10.2.1)` : '';
+        const hWarningTitle = hHasWarning ? `${hWarnings.join(', ')} (§18.10.2.1)` : '';
 
         // Clases para campos modificados
         const meshesModified = modifiedFields.includes('n_meshes') ? 'field-modified' : '';

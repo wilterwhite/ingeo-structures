@@ -17,8 +17,6 @@ import logging
 from flask import Blueprint, request, jsonify, Response
 
 from ..services.report import PDFReportGenerator, ReportConfig
-from ..services.parsing.config_parser import parse_beam_config
-from ..services.analysis.reinforcement_update_service import ReinforcementUpdateService
 from .common import (
     get_analysis_service,
     get_json_data,
@@ -29,6 +27,10 @@ from .common import (
     require_element,
     get_session_or_404,
     validate_positive_numeric,
+    validate_upload_file,
+    parse_hn_ft,
+    error_response,
+    success_response,
 )
 
 # Blueprint para endpoints de piers
@@ -57,40 +59,17 @@ def upload_excel():
             "summary": {...}
         }
     """
-    if 'file' not in request.files:
-        return jsonify({
-            'success': False,
-            'error': 'No se proporcionó archivo. Use el campo "file".'
-        }), 400
-
-    file = request.files['file']
-
-    if not file.filename:
-        return jsonify({
-            'success': False,
-            'error': 'Archivo vacío'
-        }), 400
-
-    if not file.filename.lower().endswith('.xlsx'):
-        return jsonify({
-            'success': False,
-            'error': 'El archivo debe ser un Excel (.xlsx)'
-        }), 400
+    # Validar archivo
+    file, error = validate_upload_file(request, ['.xlsx'])
+    if error:
+        return error_response(error)
 
     try:
         logger.info(f"[Upload] Recibiendo archivo: {file.filename}")
         file_content = file.read()
         logger.info(f"[Upload] Tamaño: {len(file_content) / 1024:.1f} KB")
 
-        # Obtener hn_ft opcional (altura del edificio en pies)
-        hn_ft = None
-        hn_ft_str = request.form.get('hn_ft')
-        if hn_ft_str:
-            try:
-                hn_ft = float(hn_ft_str)
-            except ValueError:
-                pass
-
+        hn_ft = parse_hn_ft(request.form)
         session_id = str(uuid.uuid4())
         logger.info(f"[Upload] Iniciando parseo... session_id={session_id[:8]}")
 
@@ -104,10 +83,7 @@ def upload_excel():
 
     except Exception as e:
         logger.exception(f"[Upload] ERROR: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': f'Error al procesar el archivo: {str(e)}'
-        }), 500
+        return error_response(f'Error al procesar el archivo: {str(e)}', 500)
 
 
 @bp.route('/upload-stream', methods=['POST'])
@@ -126,40 +102,17 @@ def upload_stream():
         - complete: {type: 'complete', result: {success, session_id, summary}}
         - error: {type: 'error', message}
     """
-    if 'file' not in request.files:
-        return jsonify({
-            'success': False,
-            'error': 'No se proporcionó archivo. Use el campo "file".'
-        }), 400
-
-    file = request.files['file']
-
-    if not file.filename:
-        return jsonify({
-            'success': False,
-            'error': 'Archivo vacío'
-        }), 400
-
-    if not file.filename.lower().endswith('.xlsx'):
-        return jsonify({
-            'success': False,
-            'error': 'El archivo debe ser un Excel (.xlsx)'
-        }), 400
+    # Validar archivo
+    file, error = validate_upload_file(request, ['.xlsx'])
+    if error:
+        return error_response(error)
 
     try:
         logger.info(f"[Upload-Stream] Recibiendo archivo: {file.filename}")
         file_content = file.read()
         logger.info(f"[Upload-Stream] Tamaño: {len(file_content) / 1024:.1f} KB")
 
-        # Obtener hn_ft opcional (altura del edificio en pies)
-        hn_ft = None
-        hn_ft_str = request.form.get('hn_ft')
-        if hn_ft_str:
-            try:
-                hn_ft = float(hn_ft_str)
-            except ValueError:
-                pass
-
+        hn_ft = parse_hn_ft(request.form)
         session_id = str(uuid.uuid4())
         logger.info(f"[Upload-Stream] Iniciando parseo... session_id={session_id[:8]}")
 
@@ -281,52 +234,9 @@ def analyze_stream(session_id: str, data: dict):
     )
 
 
-@bp.route('/analyze-direct', methods=['POST'])
-@handle_errors
-def analyze_direct():
-    """
-    Análisis directo en un solo paso (sin sesión).
-    """
-    if 'file' not in request.files:
-        return jsonify({
-            'success': False,
-            'error': 'No se proporcionó archivo'
-        }), 400
-
-    file = request.files['file']
-
-    if not file.filename.lower().endswith('.xlsx'):
-        return jsonify({
-            'success': False,
-            'error': 'El archivo debe ser un Excel (.xlsx)'
-        }), 400
-
-    file_content = file.read()
-    generate_plots = request.form.get('generate_plots', 'true').lower() == 'true'
-
-    service = get_analysis_service()
-    result = service.analyze_direct(
-        file_content=file_content,
-        generate_plots=generate_plots
-    )
-
-    return jsonify(result)
-
-
 # =============================================================================
 # Sesiones y Combinaciones
 # =============================================================================
-
-@bp.route('/clear-session/<session_id>', methods=['DELETE'])
-def clear_session(session_id: str):
-    """Limpia una sesión del cache."""
-    service = get_analysis_service()
-    cleared = service.clear_session(session_id)
-
-    return jsonify({
-        'success': True,
-        'cleared': cleared
-    })
 
 
 @bp.route('/pier-combinations/<session_id>/<pier_key>', methods=['GET'])
@@ -726,15 +636,10 @@ def process_e2k():
     """
     from ..services.parsing.e2k_processor import E2KProcessor
 
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'error': 'No se proporcionó archivo'}), 400
-
-    file = request.files['file']
-    if not file.filename:
-        return jsonify({'success': False, 'error': 'Nombre de archivo vacío'}), 400
-
-    if not file.filename.lower().endswith('.e2k'):
-        return jsonify({'success': False, 'error': 'El archivo debe ser .e2k'}), 400
+    # Validar archivo
+    file, error = validate_upload_file(request, ['.e2k'])
+    if error:
+        return error_response(error)
 
     try:
         processor = E2KProcessor()
@@ -756,21 +661,7 @@ def process_e2k():
 
     except ValueError as e:
         # Error esperado (no hay section cuts nuevos)
-        return jsonify({'success': False, 'error': str(e)}), 400
+        return error_response(str(e))
     except Exception as e:
         logger.error(f"Error procesando E2K: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-# =============================================================================
-# Health Check
-# =============================================================================
-
-@bp.route('/health', methods=['GET'])
-def health_check():
-    """Health check del módulo."""
-    return jsonify({
-        'status': 'ok',
-        'module': 'structural',
-        'version': '1.0.0'
-    })
+        return error_response(str(e), 500)

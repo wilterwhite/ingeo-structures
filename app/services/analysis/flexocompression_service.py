@@ -25,9 +25,12 @@ from ...domain.constants.phi_chapter21 import (
     PHI_COMPRESSION,
     PN_MAX_FACTOR_TIED,
     ALPHA_OVERSTRENGTH,
-    WHITNEY_STRESS_FACTOR,
 )
-from ...domain.constants.units import N_TO_TONF, NMM_TO_TONFM
+from ...domain.constants.units import N_TO_TONF
+from ...domain.chapter18.beams.service import (
+    calculate_Mpr as _calculate_Mpr,
+    calculate_Ve_beam as _calculate_Ve_beam,
+)
 
 
 class FlexocompressionService:
@@ -322,49 +325,26 @@ class FlexocompressionService:
         alpha: float = ALPHA_OVERSTRENGTH
     ) -> Tuple[float, float]:
         """
-        Calcula Mpr en ambos extremos de una viga segun ACI 318-25 §18.6.5.1.
+        Calcula Mpr en ambos extremos de una viga según ACI 318-25 §18.6.5.1.
 
-        El momento probable Mpr se usa para calcular el cortante de diseno Ve
-        en vigas de porticos especiales resistentes a momento.
-
-        Mpr = As * (alpha * fy) * (d - a/2)
-
-        donde:
-        - alpha = ALPHA_OVERSTRENGTH (1.25, considera sobreresistencia del acero)
-        - a = As * (alpha * fy) / (0.85 * f'c * b)
+        Delega a domain/chapter18/beams/service.calculate_Mpr().
 
         Args:
             beam: Viga a analizar
-            alpha: Factor de amplificacion del acero (default ALPHA_OVERSTRENGTH)
+            alpha: Factor de amplificación del acero (default ALPHA_OVERSTRENGTH)
 
         Returns:
             Tuple (Mpr_negative, Mpr_positive) en tonf-m
-            - Mpr_negative: momento con refuerzo superior (momento negativo)
-            - Mpr_positive: momento con refuerzo inferior (momento positivo)
         """
-        fc = beam.fc  # MPa
-        fy = beam.fy  # MPa
-        b = beam.width  # mm
-        d = beam.d  # mm (peralte efectivo)
-
-        # Area de acero superior e inferior
-        As_top = beam.As_top  # mm2
-        As_bottom = beam.As_bottom  # mm2
-
-        # Calcular Mpr para momento negativo (refuerzo superior en tension)
-        fy_amp = alpha * fy
-        a_neg = (As_top * fy_amp) / (WHITNEY_STRESS_FACTOR * fc * b)
-        Mpr_neg = As_top * fy_amp * (d - a_neg / 2)  # N-mm
-
-        # Calcular Mpr para momento positivo (refuerzo inferior en tension)
-        a_pos = (As_bottom * fy_amp) / (WHITNEY_STRESS_FACTOR * fc * b)
-        Mpr_pos = As_bottom * fy_amp * (d - a_pos / 2)  # N-mm
-
-        # Convertir N-mm a tonf-m
-        Mpr_neg_tonf = Mpr_neg / NMM_TO_TONFM
-        Mpr_pos_tonf = Mpr_pos / NMM_TO_TONFM
-
-        return (round(Mpr_neg_tonf, 2), round(Mpr_pos_tonf, 2))
+        return _calculate_Mpr(
+            As_top=beam.As_top,
+            As_bottom=beam.As_bottom,
+            fc=beam.fc,
+            fy=beam.fy,
+            b=beam.width,
+            d=beam.d,
+            alpha=alpha
+        )
 
     def calculate_Ve_beam(
         self,
@@ -372,23 +352,16 @@ class FlexocompressionService:
         wu: float = 0.0
     ) -> Tuple[float, float, float]:
         """
-        Calcula el cortante de diseno Ve para vigas sismicas segun §18.6.5.1.
+        Calcula el cortante de diseño Ve para vigas sísmicas según §18.6.5.1.
 
-        Ve = (Mpr_left + Mpr_right) / ln ± wu*ln/2
-
-        El cortante sismico se calcula asumiendo que en ambos extremos
-        se desarrollan los momentos probables Mpr con curvatura opuesta.
+        Delega a domain/chapter18/beams/service.calculate_Ve_beam().
 
         Args:
             beam: Viga a analizar
             wu: Carga distribuida factorizada (tonf/m) para gravedad
-                Segun §18.6.5.1: wu no debe incluir E
 
         Returns:
             Tuple (Ve_left, Ve_right, Ve_seismic) en tonf
-            - Ve_left: Cortante en extremo izquierdo
-            - Ve_right: Cortante en extremo derecho
-            - Ve_seismic: Componente sismica (Mpr_left + Mpr_right) / ln
         """
         # Obtener o calcular Mpr
         if beam.Mpr_left is not None and beam.Mpr_right is not None:
@@ -397,20 +370,12 @@ class FlexocompressionService:
         else:
             Mpr_neg, Mpr_pos = self.calculate_Mpr(beam)
 
-        # Luz libre en metros (mínimo 1mm para evitar división por cero)
-        ln_m = max(beam.ln_calculated, 1) / 1000
-
-        # Cortante sismico (ambos extremos desarrollan Mpr)
-        Ve_seismic = (abs(Mpr_neg) + abs(Mpr_pos)) / ln_m
-
-        # Cortante por gravedad
-        Vg = wu * ln_m / 2 if wu > 0 else 0
-
-        # Cortante total en cada extremo
-        Ve_left = Ve_seismic + Vg
-        Ve_right = Ve_seismic + Vg  # Igual para carga uniforme
-
-        return (round(Ve_left, 2), round(Ve_right, 2), round(Ve_seismic, 2))
+        return _calculate_Ve_beam(
+            Mpr_neg=Mpr_neg,
+            Mpr_pos=Mpr_pos,
+            ln_mm=beam.ln_calculated,
+            wu=wu
+        )
 
     def calculate_Mn_column_at_Pu(
         self,

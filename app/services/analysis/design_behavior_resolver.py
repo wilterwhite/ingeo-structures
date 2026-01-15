@@ -12,12 +12,11 @@ por `isinstance()` en lugar de por clasificacion. Ahora:
 - Un Pier clasificado como WALL_PIER_COLUMN recibe verificaciones §18.7
 - Una Beam con carga axial significativa recibe verificaciones de flexocompresion
 """
-import math
 from typing import Optional, Union, TYPE_CHECKING
 
 from .design_behavior import DesignBehavior
 from .element_classifier import ElementType
-from ...domain.constants.units import TONF_TO_N
+from ...domain.chapter18.design_forces.service import has_significant_axial
 
 if TYPE_CHECKING:
     from ...domain.entities import HorizontalElement, VerticalElement
@@ -135,6 +134,8 @@ class DesignBehaviorResolver:
         """
         Verifica si Pu >= Ag*f'c/divisor.
 
+        Delega a domain/chapter18/design_forces/service.has_significant_axial().
+
         ACI 318-25 §18.6.4.6: cuando la carga axial factorizada excede
         Ag*f'c/10, se requieren verificaciones adicionales de confinamiento.
 
@@ -149,22 +150,11 @@ class DesignBehaviorResolver:
         if not forces:
             return False
 
-        # Calcular umbral en tonf
         Ag = getattr(element, 'Ag', 0)  # mm2
         fc = getattr(element, 'fc', 0)  # MPa
-
-        if Ag <= 0 or fc <= 0:
-            return False
-
-        # Umbral: Ag * f'c / divisor, convertido a tonf
-        # (mm² × MPa) = N → / TONF_TO_N → tonf
-        threshold_N = Ag * fc / divisor  # N
-        threshold_tonf = threshold_N / TONF_TO_N  # N → tonf
-
-        # Obtener Pu maximo de las fuerzas
         Pu_max = self._get_max_axial(forces)
 
-        return Pu_max >= threshold_tonf
+        return has_significant_axial(Ag, fc, Pu_max, divisor)
 
     def _get_max_axial(
         self,
@@ -196,27 +186,3 @@ class DesignBehaviorResolver:
                     Pu_max = P
 
         return Pu_max
-
-    def get_behavior_info(
-        self,
-        behavior: DesignBehavior,
-    ) -> dict:
-        """
-        Obtiene informacion sobre un comportamiento de diseno.
-
-        Args:
-            behavior: Comportamiento de diseno
-
-        Returns:
-            Dict con informacion del comportamiento
-        """
-        return {
-            'behavior': behavior.name,
-            'aci_section': behavior.aci_section,
-            'service_type': behavior.service_type,
-            'requires_pm_diagram': behavior.requires_pm_diagram,
-            'requires_seismic_checks': behavior.requires_seismic_checks,
-            'requires_column_checks': behavior.requires_column_checks,
-            'requires_wall_checks': behavior.requires_wall_checks,
-            'requires_confinement': behavior.requires_confinement,
-        }

@@ -13,9 +13,9 @@ Módulos:
 
 Nota: La amplificación de cortante sísmico (§18.10.3.3) está en chapter18/.
 """
-from .verification import ShearVerificationService, calculate_simple_shear_capacity
+from .verification import ShearVerificationService
 from .classification import WallClassificationService, WallClassification, ElementType
-from .results import ShearResult, CombinedShearResult, WallGroupShearResult, SimpleShearCapacity
+from .results import ShearResult, CombinedShearResult, WallGroupShearResult
 from .shear_friction import (
     ShearFrictionService,
     ShearFrictionResult,
@@ -39,12 +39,10 @@ from .steel_shear import (
 __all__ = [
     # verification
     'ShearVerificationService',
-    'calculate_simple_shear_capacity',
     # results
     'ShearResult',
     'CombinedShearResult',
     'WallGroupShearResult',
-    'SimpleShearCapacity',
     # classification
     'WallClassificationService',
     'WallClassification',

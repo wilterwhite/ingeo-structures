@@ -343,7 +343,10 @@ class ResultsTable extends FilterableTable {
         const pier = this.piersData.find(p => p.key === pierKey);
         if (!pier) return;
 
-        const config = this.parseProposalConfig(proposal);
+        // Usar proposed_config del backend (no parsear description)
+        const config = this.getProposedConfig(proposal);
+        if (!config) return;
+
         // Aplicar cambios usando el editManager
         const changes = {};
         if (config.n_edge_bars) changes.n_edge_bars = config.n_edge_bars;
@@ -351,24 +354,18 @@ class ResultsTable extends FilterableTable {
         if (config.n_meshes) changes.n_meshes = config.n_meshes;
         if (config.diameter_v) {
             changes.diameter_v = config.diameter_v;
-            changes.diameter_h = config.diameter_v;
+            changes.diameter_h = config.diameter_h || config.diameter_v;
         }
         if (config.spacing_v) {
             changes.spacing_v = config.spacing_v;
-            changes.spacing_h = config.spacing_v;
+            changes.spacing_h = config.spacing_h || config.spacing_v;
         }
+        if (config.thickness) changes.thickness = config.thickness;
+        if (config.stirrup_diameter) changes.stirrup_diameter = config.stirrup_diameter;
+        if (config.stirrup_spacing) changes.stirrup_spacing = config.stirrup_spacing;
+        if (config.n_stirrup_legs) changes.n_stirrup_legs = config.n_stirrup_legs;
 
         this.editManager.onReinforcementChange(pierKey, 'pier', changes);
-    }
-
-    parseProposalConfig(proposal) {
-        const config = {};
-        const desc = proposal.description || '';
-        const borderMatch = desc.match(/(\d+)φ(\d+)/);
-        if (borderMatch) { config.n_edge_bars = parseInt(borderMatch[1]); config.diameter_edge = parseInt(borderMatch[2]); }
-        const meshMatch = desc.match(/(\d)M\s*φ(\d+)@(\d+)/);
-        if (meshMatch) { config.n_meshes = parseInt(meshMatch[1]); config.diameter_v = parseInt(meshMatch[2]); config.spacing_v = parseInt(meshMatch[3]); }
-        return config;
     }
 
     reset() {

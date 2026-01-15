@@ -21,9 +21,6 @@ class CombinationsManager {
 
         // Cache de combinaciones por pier
         this.combinationsCache = {};
-
-        // Cache de plots
-        this.plotsCache = {};
     }
 
     // =========================================================================
@@ -273,6 +270,5 @@ class CombinationsManager {
     clear() {
         this.expandedPiers.clear();
         this.combinationsCache = {};
-        this.plotsCache = {};
     }
 }

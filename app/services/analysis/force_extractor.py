@@ -11,6 +11,9 @@ from typing import Dict, Optional, Tuple, Union, TYPE_CHECKING
 from dataclasses import dataclass
 
 from ...domain.constants.units import TONF_TO_N
+from ...domain.chapter18.design_forces.service import (
+    has_significant_axial as _has_significant_axial_domain,
+)
 
 if TYPE_CHECKING:
     from ...domain.entities import ElementForces
@@ -231,6 +234,8 @@ class ForceExtractor:
         """
         Verifica si la carga axial es significativa según ACI 318-25 §18.6.4.6.
 
+        Delega a domain/chapter18/design_forces/service.has_significant_axial().
+
         Args:
             forces: Objeto de fuerzas
             Ag: Área bruta de la sección (mm²)
@@ -240,15 +245,6 @@ class ForceExtractor:
         Returns:
             True si |Pu| >= Ag*f'c/divisor
         """
-        if Ag <= 0 or fc <= 0:
-            return False
-
         P_max, P_min = ForceExtractor.extract_critical_axial(forces)
         Pu_max = max(abs(P_max), abs(P_min))
-
-        # Umbral: Ag * f'c / divisor, convertido a tonf
-        # (mm² × MPa) = N → / TONF_TO_N → tonf
-        threshold_N = Ag * fc / divisor
-        threshold_tonf = threshold_N / TONF_TO_N
-
-        return Pu_max >= threshold_tonf
+        return _has_significant_axial_domain(Ag, fc, Pu_max, divisor)

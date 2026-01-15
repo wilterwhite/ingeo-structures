@@ -349,39 +349,3 @@ class TestDropBeamBehavior:
 
         assert behavior == DesignBehavior.DROP_BEAM
         assert behavior.requires_pm_diagram
-
-
-# ============================================================================
-# Tests: Behavior Info
-# ============================================================================
-
-class TestBehaviorInfo:
-    """Tests para get_behavior_info."""
-
-    def test_behavior_info_contains_all_properties(self):
-        """get_behavior_info retorna todas las propiedades."""
-        resolver = DesignBehaviorResolver()
-
-        info = resolver.get_behavior_info(DesignBehavior.SEISMIC_COLUMN)
-
-        assert 'behavior' in info
-        assert 'aci_section' in info
-        assert 'requires_pm_diagram' in info
-        assert 'requires_seismic_checks' in info
-        assert 'requires_column_checks' in info
-        assert 'requires_wall_checks' in info
-        assert 'requires_confinement' in info
-
-    def test_seismic_column_info(self):
-        """Info de SEISMIC_COLUMN es correcta."""
-        resolver = DesignBehaviorResolver()
-
-        info = resolver.get_behavior_info(DesignBehavior.SEISMIC_COLUMN)
-
-        assert info['behavior'] == 'SEISMIC_COLUMN'
-        assert info['aci_section'] == '§18.7'
-        assert info['requires_pm_diagram'] is True
-        assert info['requires_seismic_checks'] is True
-        assert info['requires_column_checks'] is True
-        assert info['requires_wall_checks'] is False
-        assert info['requires_confinement'] is True

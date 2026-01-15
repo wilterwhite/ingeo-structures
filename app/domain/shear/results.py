@@ -102,19 +102,3 @@ class WallGroupShearResult:
     Acv_total: float          # Area de corte total del grupo (mm2)
     fc: float                 # f'c usado para el calculo (MPa)
     n_segments: int           # Numero de segmentos en el grupo
-
-
-@dataclass
-class SimpleShearCapacity:
-    """
-    Capacidad de corte simple para vigas (una direccion).
-
-    Usado para calculo basico de Vc + Vs segun ACI 318-25 §22.5.
-    Unidades: tonf para fuerzas.
-    """
-    Vc: float       # Contribucion del concreto (tonf)
-    Vs: float       # Contribucion del acero (tonf)
-    Vs_max: float   # Limite de Vs (tonf)
-    phi_Vn: float   # Capacidad de diseno (tonf)
-    aci_reference: str = "ACI 318-25 §22.5"
-    phi_v: float = 0.75  # Factor phi usado (§21.2.4.1)

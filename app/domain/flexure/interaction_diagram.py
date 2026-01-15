@@ -17,7 +17,11 @@ from ..constants.phi_chapter21 import (
     EPSILON_T_LIMIT,
     calculate_phi_flexure,
 )
-from ..constants.materials import calculate_beta1 as _calculate_beta1
+from ..constants.materials import (
+    calculate_beta1 as _calculate_beta1,
+    EPSILON_CU,
+    ES_MPA,
+)
 
 
 @dataclass
@@ -43,10 +47,6 @@ class InteractionDiagramService:
 
     Unidades de salida: tonf y tonf-m (compatibles con ETABS)
     """
-
-    # Constantes de deformación
-    EPSILON_CU = 0.003      # Deformación última del hormigón
-    ES = 200000             # Módulo de elasticidad del acero (MPa)
 
     def calculate_beta1(self, fc: float) -> float:
         """
@@ -166,7 +166,7 @@ class InteractionDiagramService:
 
         # Propiedades del material
         beta1 = self.calculate_beta1(fc)
-        epsilon_y = fy / self.ES
+        epsilon_y = fy / ES_MPA
 
         points = []
 
@@ -188,7 +188,7 @@ class InteractionDiagramService:
         ))
 
         # 2. Generar valores de c para la curva
-        c_balanced = d * self.EPSILON_CU / (self.EPSILON_CU + epsilon_y)
+        c_balanced = d * EPSILON_CU / (EPSILON_CU + epsilon_y)
         c_values = []
 
         # Zona 1: Compresión alta (c > d)
@@ -247,10 +247,10 @@ class InteractionDiagramService:
                 # Deformación en esta capa
                 # εi = εcu × (di - c) / c
                 # Positivo = tracción, Negativo = compresión
-                epsilon_i = self.EPSILON_CU * (di - c) / c
+                epsilon_i = EPSILON_CU * (di - c) / c
 
                 # Esfuerzo (limitado por fy)
-                fs_i = min(abs(epsilon_i) * self.ES, fy)
+                fs_i = min(abs(epsilon_i) * ES_MPA, fy)
                 if epsilon_i < 0:
                     fs_i = -fs_i  # Compresión
 

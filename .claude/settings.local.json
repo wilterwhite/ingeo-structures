@@ -132,7 +132,9 @@
       "Bash(xargs ls:*)",
       "Bash(git log:*)",
       "Bash(taskkill:*)",
-      "Bash(python scripts/truncate_etabs_excel.py:*)"
+      "Bash(python scripts/truncate_etabs_excel.py:*)",
+      "Bash(python scripts\\generate_project_tree.py:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nRefactor: eliminar código muerto + fix bug propiedades duplicadas\n\n- Eliminar proposal_service.py (~170 líneas) - nunca instanciado\n- Eliminar endpoints muertos: /analyze-direct, /clear-session, /health\n- Eliminar decorador require_element_type() no usado\n- Eliminar calculate_simple_shear_capacity() y SimpleShearCapacity\n- Eliminar get_behavior_info() y calculate_dcr_statistics()\n- Eliminar plotsCache duplicado en CombinationsManager.js\n- Reemplazar constantes duplicadas en interaction_diagram.py\n- Fix: eliminar propiedades width/depth duplicadas en vertical_element.py\n  que causaban error 15x en cálculo de Pc (carga crítica pandeo)\n- Eliminar tests obsoletos de proposal_service y get_behavior_info\n\nTotal: ~1600 líneas eliminadas, 274 tests pasando\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
     ]
   }
 }

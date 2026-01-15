@@ -227,27 +227,6 @@ class VerticalElement:
         """Profundidad efectiva en direccion thickness (mm)."""
         return self.thickness - self.cover
 
-    # Alias para compatibilidad con código legacy (depth/width convention)
-    @property
-    def depth(self) -> float:
-        """Alias de length para compatibilidad (mm)."""
-        return self.length
-
-    @property
-    def width(self) -> float:
-        """Alias de thickness para compatibilidad (mm)."""
-        return self.thickness
-
-    @property
-    def d_depth(self) -> float:
-        """Alias de d_length para compatibilidad (mm)."""
-        return self.d_length
-
-    @property
-    def d_width(self) -> float:
-        """Alias de d_thickness para compatibilidad (mm)."""
-        return self.d_thickness
-
     @property
     def is_square(self) -> bool:
         """True si es cuadrado."""

@@ -250,3 +250,43 @@ class ShearAmplificationService:
 # Alias para compatibilidad
 # =============================================================================
 ShearAmplificationService.calculate_amplification_factors = ShearAmplificationService.calculate_factors
+
+
+# =============================================================================
+# Verificación de Carga Axial Significativa - ACI 318-25 §18.6.4.6
+# =============================================================================
+
+def has_significant_axial(
+    Ag: float,
+    fc: float,
+    Pu: float,
+    divisor: float = 10.0
+) -> bool:
+    """
+    Verifica si la carga axial es significativa según ACI 318-25 §18.6.4.6.
+
+    Cuando la carga axial factorizada excede Ag*f'c/10, se requieren
+    verificaciones adicionales de confinamiento.
+
+    Args:
+        Ag: Área bruta de la sección (mm²)
+        fc: Resistencia del concreto (MPa)
+        Pu: Carga axial máxima factorizada (tonf), valor absoluto
+        divisor: Divisor del umbral (default 10.0 para Ag*f'c/10)
+
+    Returns:
+        True si |Pu| >= Ag*f'c/divisor
+
+    Reference:
+        ACI 318-25 §18.6.4.6
+    """
+    if Ag <= 0 or fc <= 0:
+        return False
+
+    # Umbral: Ag * f'c / divisor, convertido a tonf
+    # (mm² × MPa) = N → / TONF_TO_N → tonf
+    TONF_TO_N = 9806.65  # 1 tonf = 9806.65 N
+    threshold_N = Ag * fc / divisor
+    threshold_tonf = threshold_N / TONF_TO_N
+
+    return abs(Pu) >= threshold_tonf

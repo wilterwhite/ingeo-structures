@@ -14,45 +14,18 @@ from typing import Dict, Any, Union, TYPE_CHECKING
 from ...domain.constants.phi_chapter21 import get_dcr_status, RHO_MAX
 from ...domain.constants.reinforcement import RHO_MIN, MAX_SPACING_SEISMIC_MM
 from ...domain.constants.geometry import COLUMN_MIN_DIMENSION_MM
+from ..analysis.statistics_service import calculate_statistics
+from .formatters import (
+    format_safety_factor,
+    get_status_css_class,
+    format_dimensions,
+    format_dcr_display,
+)
 
 if TYPE_CHECKING:
     from ..analysis.element_orchestrator import OrchestrationResult
     from ...domain.entities import HorizontalElement, VerticalElement
     from ...domain.calculations.wall_continuity import WallContinuityInfo
-
-
-def format_safety_factor(
-    value: float,
-    as_string: bool = True,
-    max_value: float = 100.0
-) -> Union[float, str]:
-    """
-    Formatea factor de seguridad para serialización JSON.
-
-    Args:
-        value: Factor de seguridad a formatear
-        as_string: Si True, retorna ">100" para valores grandes; si False, retorna 100.0
-        max_value: Valor máximo a mostrar (default 100.0)
-
-    Returns:
-        Factor formateado como string ">100" o float redondeado
-    """
-    if math.isinf(value) or value > max_value:
-        return f">{int(max_value)}" if as_string else max_value
-    return round(value, 2)
-
-
-def get_status_css_class(status: str) -> str:
-    """
-    Retorna la clase CSS según el estado del resultado.
-
-    Args:
-        status: Estado del elemento ('OK', 'FAIL', etc.)
-
-    Returns:
-        Clase CSS para aplicar al elemento
-    """
-    return 'status-ok' if status == 'OK' else 'status-fail'
 
 
 def get_dcr_css_class(dcr: float) -> str:
@@ -69,64 +42,6 @@ def get_dcr_css_class(dcr: float) -> str:
     """
     status = get_dcr_status(dcr)  # 'ok', 'warn', 'fail'
     return f'fs-{status}'
-
-
-def format_dimensions(width_mm: float, thickness_mm: float) -> str:
-    """
-    Formatea dimensiones en formato "espesor × ancho mm".
-
-    Args:
-        width_mm: Ancho en mm (lw para muros)
-        thickness_mm: Espesor en mm (tw para muros)
-
-    Returns:
-        String formateado, ej: "200 × 3000 mm"
-    """
-    return f"{int(thickness_mm)} × {int(width_mm)} mm"
-
-
-def format_dcr_display(dcr: float) -> str:
-    """
-    Formatea DCR para mostrar en UI.
-
-    Args:
-        dcr: Demand/Capacity ratio
-
-    Returns:
-        String formateado, ej: "0.85" o ">100"
-    """
-    if math.isinf(dcr) or dcr > 100:
-        return '>100'
-    return f"{dcr:.2f}"
-
-
-def calculate_statistics(
-    results: list,
-    status_key: str = 'overall_status'
-) -> Dict[str, Any]:
-    """
-    Calcula estadísticas de resultados de verificación.
-
-    Args:
-        results: Lista de dicts con clave status_key
-        status_key: Clave que contiene el estado ('OK'/'NO OK')
-
-    Returns:
-        Dict con total, ok, fail, pass_rate
-    """
-    if not results:
-        return {'total': 0, 'ok': 0, 'fail': 0, 'pass_rate': 100.0}
-
-    total = len(results)
-    ok = sum(1 for r in results if r.get(status_key) == 'OK')
-    fail = total - ok
-
-    return {
-        'total': total,
-        'ok': ok,
-        'fail': fail,
-        'pass_rate': round(ok / total * 100, 1) if total > 0 else 100.0
-    }
 
 
 class ResultFormatter:
@@ -537,26 +452,45 @@ class ResultFormatter:
         # Configurar refuerzo según tipo de servicio
         if service_used == 'wall' and hasattr(domain_result, 'reinforcement') and domain_result.reinforcement:
             rf = domain_result.reinforcement
-            reinforcement.update({
-                'rho_v_ok': rf.rho_l_ok,
-                'rho_h_ok': rf.rho_t_ok,
-                'rho_mesh_v_ok': rf.rho_l_ok,
-                'spacing_v_ok': rf.spacing_ok,
-                'spacing_h_ok': rf.spacing_ok,
-                'rho_min': rf.rho_l_min,
-                'max_spacing': rf.spacing_max
-            })
+            rho_min = rf.rho_l_min
+            max_spacing = rf.spacing_max
+            rho_v_ok = rf.rho_l_ok
+            rho_h_ok = rf.rho_t_ok
+            spacing_v_ok = rf.spacing_ok
+            spacing_h_ok = rf.spacing_ok
         else:
             # Columnas y flexure usan valores por defecto
-            reinforcement.update({
-                'rho_v_ok': True,
-                'rho_h_ok': True,
-                'rho_mesh_v_ok': True,
-                'spacing_v_ok': True,
-                'spacing_h_ok': True,
-                'rho_min': RHO_MIN,
-                'max_spacing': MAX_SPACING_SEISMIC_MM
-            })
+            rho_min = RHO_MIN
+            max_spacing = MAX_SPACING_SEISMIC_MM
+            rho_v_ok = True
+            rho_h_ok = True
+            spacing_v_ok = True
+            spacing_h_ok = True
+
+        # Pre-calcular warnings para el frontend (§18.10.2.1)
+        warnings_v = []
+        warnings_h = []
+        if not rho_v_ok:
+            warnings_v.append(f'ρ_malla < {rho_min * 100}%')
+        if not spacing_v_ok:
+            warnings_v.append(f's > {max_spacing}mm')
+        if not rho_h_ok:
+            warnings_h.append(f'ρ < {rho_min * 100}%')
+        if not spacing_h_ok:
+            warnings_h.append(f's > {max_spacing}mm')
+
+        reinforcement.update({
+            'rho_v_ok': rho_v_ok,
+            'rho_h_ok': rho_h_ok,
+            'rho_mesh_v_ok': rho_v_ok,
+            'spacing_v_ok': spacing_v_ok,
+            'spacing_h_ok': spacing_h_ok,
+            'rho_min': rho_min,
+            'max_spacing': max_spacing,
+            # Warnings pre-calculados
+            'warnings_v': warnings_v,
+            'warnings_h': warnings_h,
+        })
 
         # Determinar tipo de elemento: priorizar service_used, luego source
         if service_used == 'strut':

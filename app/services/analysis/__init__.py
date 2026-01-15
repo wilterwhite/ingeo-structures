@@ -7,7 +7,6 @@ de todos los elementos estructurales (Pier, Column, Beam, DropBeam).
 """
 from .flexocompression_service import FlexocompressionService
 from .shear_service import ShearService
-from .proposal_service import ProposalService
 from .element_orchestrator import ElementOrchestrator, OrchestrationResult
 from .element_classifier import ElementClassifier, ElementType
 from .design_behavior import DesignBehavior
@@ -20,7 +19,6 @@ __all__ = [
     # Servicios principales
     'FlexocompressionService',
     'ShearService',
-    'ProposalService',
     'ElementOrchestrator',
     'OrchestrationResult',
     # Clasificación y comportamiento de diseño

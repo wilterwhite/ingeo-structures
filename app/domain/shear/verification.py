@@ -41,54 +41,9 @@ from .results import (
     ShearResult,
     CombinedShearResult,
     WallGroupShearResult,
-    SimpleShearCapacity,
 )
 from .concrete_shear import calculate_Vc_beam
 from .steel_shear import calculate_Vs_beam_column
-
-
-def calculate_simple_shear_capacity(
-    bw: float,
-    d: float,
-    fc: float,
-    fy: float,
-    Av: float = 0.0,
-    s: float = 0.0
-) -> SimpleShearCapacity:
-    """
-    Calcula capacidad de corte simple para vigas segun ACI 318-25 §22.5.
-
-    Delega a funciones centralizadas en concrete_shear.py y steel_shear.py.
-
-    Args:
-        bw: Ancho del alma (mm)
-        d: Altura efectiva (mm)
-        fc: f'c del concreto (MPa)
-        fy: Fluencia del acero (MPa)
-        Av: Area de estribos (mm²)
-        s: Espaciamiento de estribos (mm)
-
-    Returns:
-        SimpleShearCapacity con valores en tonf
-    """
-    # Usar funciones centralizadas
-    vc_result = calculate_Vc_beam(bw, d, fc, LAMBDA_NORMAL)
-    vs_result = calculate_Vs_beam_column(Av, d, s, fy, bw, fc)
-
-    Vc_N = vc_result.Vc_N
-    Vs_N = vs_result.Vs_N
-    Vs_max_N = vs_result.Vs_max_N
-
-    # Capacidad de diseno
-    phi_Vn = PHI_SHEAR * (Vc_N + Vs_N) / N_TO_TONF
-
-    return SimpleShearCapacity(
-        Vc=Vc_N / N_TO_TONF,
-        Vs=Vs_N / N_TO_TONF,
-        Vs_max=Vs_max_N / N_TO_TONF,
-        phi_Vn=phi_Vn,
-        aci_reference="ACI 318-25 §22.5"
-    )
 
 
 class ShearVerificationService:

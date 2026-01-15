@@ -275,28 +275,6 @@ class ElementDetailsService:
         # Ni pier ni columna encontrado
         return {'success': False, 'error': f'Element not found: {element_key}'}
 
-    def get_pier_capacities(self, session_id: str, pier_key: str) -> Dict[str, Any]:
-        """
-        Calcula las capacidades del pier y datos de verificación estilo ETABS.
-
-        DEPRECATED: Usar get_element_capacities(session_id, pier_key, 'pier').
-        Este método se mantiene por compatibilidad de API.
-
-        Args:
-            session_id: ID de sesión
-            pier_key: Clave del pier (Story_Label)
-
-        Returns:
-            Diccionario con información completa del pier estilo ETABS
-        """
-        result = self.get_element_capacities(session_id, pier_key, 'pier')
-
-        # Adaptar formato para compatibilidad con API legacy
-        if result.get('success') and 'element_info' in result:
-            result['pier_info'] = result.pop('element_info')
-
-        return result
-
     def _calculate_neutral_axis_depth(
         self,
         pier,

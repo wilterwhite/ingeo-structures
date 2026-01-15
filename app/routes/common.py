@@ -16,7 +16,8 @@ from ..services.structural_analysis import StructuralAnalysisService
 from ..services.factory import ServiceFactory
 from ..services.analysis.element_orchestrator import ElementOrchestrator
 from ..services.presentation.modal_data_service import ElementDetailsService
-from ..services.presentation.result_formatter import ResultFormatter, calculate_statistics
+from ..services.presentation.result_formatter import ResultFormatter
+from ..services.analysis.statistics_service import calculate_statistics
 from ..domain.chapter18.common import SeismicCategory
 from ..domain.constants.materials import (
     BAR_AREAS,
@@ -299,51 +300,6 @@ def require_element(element_key_name: str, collection_name: str, element_type_la
     return decorator
 
 
-def require_element_type(element_type: str) -> Callable:
-    """
-    Decorador que valida que existan elementos del tipo especificado.
-
-    Debe usarse DESPUÉS de require_session_data.
-
-    Args:
-        element_type: Tipo de elemento ('piers', 'columns', 'beams', 'drop_beams')
-
-    Uso:
-        @bp.route('/endpoint', methods=['POST'])
-        @handle_errors
-        @require_session_data
-        @require_element_type('piers')
-        def endpoint(session_id: str, data: dict, parsed_data):
-            # Ya sabemos que parsed_data.has_piers es True
-            ...
-    """
-    # Mapeo de tipo a atributo has_* y mensaje
-    type_config = {
-        'piers': ('has_piers', 'piers'),
-        'columns': ('has_columns', 'columnas'),
-        'beams': ('has_beams', 'vigas'),
-        'drop_beams': ('has_drop_beams', 'vigas capitel'),
-    }
-
-    if element_type not in type_config:
-        raise ValueError(f"Tipo de elemento desconocido: {element_type}")
-
-    has_attr, label = type_config[element_type]
-
-    def decorator(f: Callable) -> Callable:
-        @wraps(f)
-        def decorated(*args, session_id: str, data: dict, parsed_data, **kwargs) -> Any:
-            if not getattr(parsed_data, has_attr, False):
-                return jsonify({
-                    'success': False,
-                    'error': f'No hay {label} en esta sesión. Asegúrese de cargar un archivo con {label}.'
-                }), 400
-
-            return f(*args, session_id=session_id, data=data, parsed_data=parsed_data, **kwargs)
-        return decorated
-    return decorator
-
-
 def validate_positive_numeric(data: dict, fields: dict) -> Tuple[dict, list]:
     """
     Valida que los campos numéricos del request sean positivos.
@@ -423,49 +379,108 @@ def parse_seismic_params(data: dict) -> Tuple[SeismicCategory, float]:
     return category, lambda_factor
 
 
-def analyze_elements_generic(
-    elements: dict,
-    forces_dict: dict,
-    orchestrator: ElementOrchestrator,
-    result_formatter,
-    category: SeismicCategory,
-    lambda_factor: float,
-) -> Tuple[list, dict]:
+# =============================================================================
+# Helpers de Upload y Response
+# =============================================================================
+
+def validate_upload_file(
+    req,
+    allowed_extensions: list = None,
+    field_name: str = 'file'
+) -> Tuple[Any, str]:
     """
-    Análisis genérico para cualquier tipo de elemento estructural.
+    Valida archivo subido en request.
 
     Args:
-        elements: Diccionario {element_key: element}
-        forces_dict: Diccionario {element_key: forces}
-        orchestrator: Instancia de ElementOrchestrator
-        result_formatter: (No usado, mantenido por compatibilidad)
-        category: Categoría sísmica
-        lambda_factor: Factor para concreto liviano
+        req: Flask request object
+        allowed_extensions: Lista de extensiones permitidas (ej: ['.xlsx', '.e2k'])
+        field_name: Nombre del campo en el form (default: 'file')
 
     Returns:
-        Tuple (results_list, statistics_dict)
+        Tuple (file_object, error_message)
+        - Si válido: (file, None)
+        - Si error: (None, mensaje_de_error)
+
+    Example:
+        file, error = validate_upload_file(request, ['.xlsx'])
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
     """
-    results = []
+    if allowed_extensions is None:
+        allowed_extensions = ['.xlsx']
 
-    for key, element in elements.items():
-        forces = forces_dict.get(key)
+    if field_name not in req.files:
+        return None, f'No se proporcionó archivo. Use el campo "{field_name}".'
 
-        # Verificar usando orquestador
-        orchestration_result = orchestrator.verify(
-            element=element,
-            forces=forces,
-            lambda_factor=lambda_factor,
-            category=category,
-        )
+    file = req.files[field_name]
 
-        # Formatear resultado para UI
-        formatted = ResultFormatter.format_any_element(
-            element, orchestration_result, key
-        )
-        results.append(formatted)
+    if not file.filename:
+        return None, 'Archivo vacío'
 
-    statistics = calculate_statistics(results)
-    return results, statistics
+    # Verificar extensión
+    filename_lower = file.filename.lower()
+    if not any(filename_lower.endswith(ext) for ext in allowed_extensions):
+        ext_list = ', '.join(allowed_extensions)
+        return None, f'El archivo debe tener extensión: {ext_list}'
+
+    return file, None
+
+
+def parse_hn_ft(form_data) -> float:
+    """
+    Extrae y convierte hn_ft (altura del edificio en pies) desde form data.
+
+    Args:
+        form_data: request.form o diccionario similar
+
+    Returns:
+        float si válido, None si no existe o inválido
+    """
+    hn_ft_str = form_data.get('hn_ft')
+    if hn_ft_str:
+        try:
+            return float(hn_ft_str)
+        except ValueError:
+            pass
+    return None
+
+
+def error_response(message: str, code: int = 400, details: dict = None):
+    """
+    Genera respuesta JSON de error estandarizada.
+
+    Args:
+        message: Mensaje de error principal
+        code: Código HTTP (default 400)
+        details: Diccionario con detalles adicionales (opcional)
+
+    Returns:
+        Tuple (Response, code) para retornar desde endpoint
+    """
+    response = {
+        'success': False,
+        'error': message
+    }
+    if details:
+        response.update(details)
+    return jsonify(response), code
+
+
+def success_response(data: dict = None, code: int = 200):
+    """
+    Genera respuesta JSON de éxito estandarizada.
+
+    Args:
+        data: Diccionario con datos a incluir (opcional)
+        code: Código HTTP (default 200)
+
+    Returns:
+        Tuple (Response, code) para retornar desde endpoint
+    """
+    response = {'success': True}
+    if data:
+        response.update(data)
+    return jsonify(response), code
 
 
 # =============================================================================

@@ -142,25 +142,6 @@ class StructuralAPI {
     }
 
     /**
-     * Análisis directo (upload + analyze en un paso).
-     * @param {File} file - Archivo Excel
-     * @param {boolean} generatePlots - Generar gráficos
-     * @returns {Promise<Object>}
-     */
-    async analyzeDirect(file, generatePlots = true) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('generate_plots', generatePlots);
-
-        const response = await fetch(`${this.baseUrl}/analyze-direct`, {
-            method: 'POST',
-            body: formData
-        });
-
-        return response.json();
-    }
-
-    /**
      * Análisis con progreso en tiempo real (SSE).
      * @param {Object} params - Parámetros del análisis
      * @param {Function} onProgress - Callback para progreso (current, total, pier)
