@@ -10,6 +10,7 @@ Orquesta:
 import math
 from typing import Optional, List
 
+from ...constants import DCR_MAX_FINITE
 from ...constants.materials import SteelGrade
 from ...constants.units import N_TO_TONF
 from ..results import (
@@ -259,7 +260,7 @@ class CouplingBeamService:
             )
 
         # Verificar demanda vs capacidad
-        dcr = Vu / phi_Vn if phi_Vn > 0 else float('inf')
+        dcr = Vu / phi_Vn if phi_Vn > 0 else DCR_MAX_FINITE
         is_ok = dcr <= 1.0
 
         if not is_ok:

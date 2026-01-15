@@ -9,8 +9,13 @@ Tablas requeridas:
 from typing import Dict, List, Tuple
 import pandas as pd
 
-from ...domain.entities.column import Column
-from ...domain.entities.column_forces import ColumnForces
+from ...domain.entities import (
+    VerticalElement,
+    VerticalElementSource,
+    DiscreteReinforcement,
+    ElementForces,
+    ElementForceType,
+)
 from ...domain.entities.load_combination import LoadCombination
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
 from .material_mapper import parse_material_to_fc
@@ -34,7 +39,7 @@ class ColumnParser:
         section_df: pd.DataFrame,
         forces_df: pd.DataFrame,
         materials: Dict[str, float]
-    ) -> Tuple[Dict[str, Column], Dict[str, ColumnForces], List[str]]:
+    ) -> Tuple[Dict[str, VerticalElement], Dict[str, ElementForces], List[str]]:
         """
         Parsea columnas y sus fuerzas.
 
@@ -45,6 +50,7 @@ class ColumnParser:
 
         Returns:
             Tupla (columns, column_forces, stories)
+            donde columns son VerticalElement con source=FRAME
         """
         # Parsear definiciones de secciones
         section_defs = self._parse_section_definitions(section_df, materials)
@@ -113,12 +119,12 @@ class ColumnParser:
         df: pd.DataFrame,
         section_defs: Dict[str, dict],
         materials: Dict[str, float]
-    ) -> Tuple[Dict[str, Column], Dict[str, ColumnForces], List[str]]:
+    ) -> Tuple[Dict[str, VerticalElement], Dict[str, ElementForces], List[str]]:
         """
-        Parsea las fuerzas de columnas y crea las entidades Column.
+        Parsea las fuerzas de columnas y crea las entidades VerticalElement.
         """
-        columns: Dict[str, Column] = {}
-        column_forces: Dict[str, ColumnForces] = {}
+        columns: Dict[str, VerticalElement] = {}
+        column_forces: Dict[str, ElementForces] = {}
         stories: List[str] = []
         column_heights: Dict[str, Tuple[float, float]] = {}  # min, max station
 
@@ -148,11 +154,12 @@ class ColumnParser:
                 min_s, max_s = column_heights[column_key]
                 column_heights[column_key] = (min(min_s, station), max(max_s, station))
 
-            # Crear ColumnForces si no existe
+            # Crear ElementForces si no existe
             if column_key not in column_forces:
-                column_forces[column_key] = ColumnForces(
-                    column_label=column_label,
+                column_forces[column_key] = ElementForces(
+                    label=column_label,
                     story=story,
+                    element_type=ElementForceType.COLUMN,
                     combinations=[]
                 )
 
@@ -216,28 +223,33 @@ class ColumnParser:
 
             # Para pilares pequeños (<150mm), usar 1 barra centrada (hormigón no confinado)
             if min_dim < 150:
-                n_bars_depth = 1
-                n_bars_width = 1
+                n_bars_length = 1
+                n_bars_thickness = 1
                 diameter_long = 12  # Barra pequeña para pilares chicos
                 stirrup_spacing = 0  # Sin estribos
             else:
                 # Armadura convencional para columnas normales
-                n_bars_depth = 3
-                n_bars_width = 3
+                n_bars_length = 3
+                n_bars_thickness = 3
                 diameter_long = 20
                 stirrup_spacing = 150
 
-            columns[column_key] = Column(
+            # Crear VerticalElement con source=FRAME (columna)
+            columns[column_key] = VerticalElement(
                 label=column_label,
                 story=story,
-                depth=depth,
-                width=width,
+                # length=depth (eje 2), thickness=width (eje 3)
+                length=depth,
+                thickness=width,
                 height=height,
                 fc=section['fc'],
                 fy=FY_DEFAULT_MPA,
-                n_bars_depth=n_bars_depth,
-                n_bars_width=n_bars_width,
-                diameter_long=diameter_long,
+                source=VerticalElementSource.FRAME,
+                discrete_reinforcement=DiscreteReinforcement(
+                    n_bars_length=n_bars_length,
+                    n_bars_thickness=n_bars_thickness,
+                    diameter=diameter_long,
+                ),
                 stirrup_spacing=stirrup_spacing,
             )
 

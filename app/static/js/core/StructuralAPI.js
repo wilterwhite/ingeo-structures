@@ -125,16 +125,6 @@ class StructuralAPI {
     }
 
     /**
-     * Limpia una sesión.
-     * @param {string} sessionId - ID de sesión
-     * @returns {Promise<Object>}
-     */
-    async clearSession(sessionId) {
-        return this.request(`/clear-session/${sessionId}`, {
-            method: 'DELETE'
-        });
-    }
-
     // =========================================================================
     // Análisis
     // =========================================================================
@@ -397,15 +387,6 @@ class StructuralAPI {
 
     // =========================================================================
     // Health Check
-    // =========================================================================
-
-    /**
-     * Verifica el estado del módulo.
-     * @returns {Promise<Object>}
-     */
-    async healthCheck() {
-        return this.request('/health');
-    }
 }
 
 // Instancia singleton

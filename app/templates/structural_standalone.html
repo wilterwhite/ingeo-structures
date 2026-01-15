@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INGEO Structures - ACI 318-25</title>
-    <link rel="stylesheet" href="{{ url_for('structural_static', filename='css/structural.css') }}?v=15">
+    <link rel="stylesheet" href="{{ url_for('structural_static', filename='css/structural.css') }}?v=18">
 </head>
 <body>
     <div class="container">
@@ -18,20 +18,28 @@
                     <span class="nav-icon">⚙</span>
                     <span class="nav-label">Config</span>
                 </button>
-                <button class="nav-tab" data-page="walls-page" title="Diseño de muros y columnas">
-                    <span class="nav-icon">🧱</span>
-                    <span class="nav-label">Muros/Cols</span>
+                <button class="nav-tab" data-page="walls-page" title="Elementos verticales: muros y columnas">
+                    <span class="nav-icon">🏛️</span>
+                    <span class="nav-label">Verticales</span>
                 </button>
-                <button class="nav-tab" data-page="beams-page" title="Diseño de vigas">
-                    <span class="nav-icon">📏</span>
-                    <span class="nav-label">Vigas</span>
-                </button>
-                <button class="nav-tab" data-page="drop-beams-page" title="Vigas capitel (losas diseñadas como vigas)">
-                    <span class="nav-icon">▭</span>
-                    <span class="nav-label">V. Capitel</span>
+                <button class="nav-tab" data-page="beams-page" title="Elementos horizontales: vigas y vigas capitel">
+                    <span class="nav-icon">━</span>
+                    <span class="nav-label">Horizontales</span>
                 </button>
             </nav>
             <div class="header-spacer"></div>
+            <div class="project-controls">
+                <span id="project-name" class="project-name-display no-project">Sin proyecto</span>
+                <span id="save-indicator" class="save-indicator" title="Estado de guardado" style="display: none;">
+                    <span class="indicator-dot"></span>
+                </span>
+                <button id="save-project-btn" class="btn-icon btn-save" title="Guardar proyecto" style="display: none;">
+                    <span class="icon">💾</span>
+                </button>
+                <button id="open-projects-btn" class="btn-icon" title="Abrir proyectos">
+                    <span class="icon">📁</span>
+                </button>
+            </div>
             <div class="header-subtitle">ACI 318-25</div>
         </header>
 
@@ -138,7 +146,7 @@
         </div>
 
         <!-- ================================================================
-             PAGE: MUROS Y COLUMNAS
+             PAGE: ELEMENTOS VERTICALES (Muros + Columnas)
              ================================================================ -->
         <div class="page-container hidden" id="walls-page">
 
@@ -153,7 +161,7 @@
 
         <!-- Results -->
         <div class="card hidden" id="results-section">
-            <div class="card-header">Muros y Columnas</div>
+            <div class="card-header">Elementos Verticales</div>
             <div class="card-body">
                 <!-- Stats + Filters -->
                 <div class="toolbar-bar">
@@ -247,7 +255,7 @@
         </div><!-- Fin PAGE: Muros y Columnas -->
 
         <!-- ================================================================
-             PAGE: VIGAS
+             PAGE: ELEMENTOS HORIZONTALES (Vigas + Vigas Capitel)
              ================================================================ -->
         <div class="page-container hidden" id="beams-page">
 
@@ -262,7 +270,7 @@
 
         <!-- Beams Results (estilo pier - flexocompresión) -->
         <div class="card hidden" id="beams-results-section">
-            <div class="card-header">Vigas</div>
+            <div class="card-header">Vigas Frame</div>
             <div class="card-body">
                 <!-- Stats + Filters -->
                 <div class="toolbar-bar">
@@ -312,23 +320,6 @@
                         </thead>
                         <tbody></tbody>
                     </table>
-                </div>
-            </div>
-        </div>
-
-        </div>
-
-        <!-- ================================================================
-             PAGE: VIGAS CAPITEL (Drop Beams)
-             ================================================================ -->
-        <div class="page-container hidden" id="drop-beams-page">
-
-        <!-- Placeholder when no data -->
-        <div class="card" id="drop-beams-placeholder">
-            <div class="card-body">
-                <div class="no-data-placeholder">
-                    <p class="no-data-msg">Carga un archivo de ETABS en la pestaña <strong>Config</strong> para comenzar.</p>
-                    <p class="hint">Las vigas capitel se extraen de la tabla "Section Cut Forces - Analysis"</p>
                 </div>
             </div>
         </div>
@@ -386,7 +377,7 @@
             </div>
         </div>
 
-        </div>
+        </div><!-- Fin PAGE: Elementos Horizontales -->
 
     </div><!-- Fin container -->
 
@@ -445,8 +436,12 @@
             </div>
             <div id="pier-details-body" class="pier-details-body">
 
-                <!-- Selector de Combinación -->
+                <!-- Selector de Ubicación + Combinación -->
                 <div class="combo-selector-section">
+                    <!-- Selector de ubicación (Station/Top/Bottom) - se llena dinámicamente -->
+                    <div id="location-selector-container" class="location-selector hidden">
+                        <!-- Botones o dropdown según tipo de elemento -->
+                    </div>
                     <label for="pier-combo-selector">Combinación de carga:</label>
                     <select id="pier-combo-selector">
                         <option value="-1">Cargando...</option>
@@ -823,6 +818,46 @@
         </div>
     </div>
 
+    <!-- Modal for Projects List -->
+    <div class="modal" id="projects-modal">
+        <button class="modal-close" onclick="structuralPage.projectManager?.closeProjectsModal()">x</button>
+        <div class="modal-content projects-modal-content">
+            <h3>Proyectos Guardados</h3>
+            <div id="projects-list" class="projects-list">
+                <!-- Populated by ProjectManager -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="structuralPage.projectManager?.closeProjectsModal()">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Save Project -->
+    <div class="modal" id="save-project-modal">
+        <button class="modal-close" onclick="structuralPage.projectManager?.closeSaveAsModal()">x</button>
+        <div class="modal-content save-project-content">
+            <h3>Guardar Proyecto Como</h3>
+            <div class="form-group">
+                <label for="new-project-name">Nombre del Proyecto:</label>
+                <input type="text" id="new-project-name" placeholder="Mi Proyecto" maxlength="100">
+            </div>
+            <div class="form-group">
+                <label for="new-project-description">Descripcion (opcional):</label>
+                <textarea id="new-project-description" rows="3" placeholder="Descripcion del proyecto..."></textarea>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-secondary" onclick="structuralPage.projectManager?.closeSaveAsModal()">
+                    Cancelar
+                </button>
+                <button class="btn btn-primary" onclick="structuralPage.projectManager?.saveAsNewProject()">
+                    Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal for Report Configuration -->
     <div class="modal" id="report-modal">
         <button class="modal-close">×</button>
@@ -919,11 +954,15 @@
     <!-- Modules -->
     <script src="{{ url_for('structural_static', filename='js/modules/WallsModule.js') }}?v=1"></script>
     <script src="{{ url_for('structural_static', filename='js/modules/BeamsModule.js') }}?v=1"></script>
+    <!-- Storage & API -->
+    <script src="{{ url_for('structural_static', filename='js/storage/ProjectStorage.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/core/ProjectAPI.js') }}?v=1"></script>
     <!-- Managers -->
     <script src="{{ url_for('structural_static', filename='js/managers/MaterialsManager.js') }}?v=1"></script>
-    <script src="{{ url_for('structural_static', filename='js/managers/UploadManager.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/managers/UploadManager.js') }}?v=5"></script>
+    <script src="{{ url_for('structural_static', filename='js/managers/ProjectManager.js') }}?v=7"></script>
     <!-- Main -->
-    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/StructuralPage.js') }}?v=4"></script>
     <script>
         // Inicializar la página cuando el DOM esté listo
         document.addEventListener('DOMContentLoaded', () => {

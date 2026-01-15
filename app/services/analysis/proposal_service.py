@@ -8,7 +8,7 @@ verificaciones, garantizando consistencia con el resto del sistema.
 """
 from typing import Dict, Any, Optional, Tuple, TYPE_CHECKING
 
-from ...domain.entities import Pier, PierForces
+from ...domain.entities import VerticalElement, ElementForces
 from ...domain.entities.design_proposal import DesignProposal
 from ...domain.chapter18.wall_piers import WallPierService
 from ...domain.proposals import DesignGenerator
@@ -51,7 +51,7 @@ class ProposalService:
             wall_pier_service=self._wall_pier_service
         )
 
-    def _verify_flexure(self, pier: Pier, pier_forces: Optional[PierForces]) -> float:
+    def _verify_flexure(self, pier: VerticalElement, pier_forces: Optional[ElementForces]) -> float:
         """
         Verifica flexión y retorna SF.
 
@@ -65,7 +65,7 @@ class ProposalService:
             sf = 100
         return min(sf, 100)  # Cap at 100
 
-    def _verify_shear(self, pier: Pier, pier_forces: Optional[PierForces]) -> float:
+    def _verify_shear(self, pier: VerticalElement, pier_forces: Optional[ElementForces]) -> float:
         """
         Verifica corte y retorna DCR.
 
@@ -85,8 +85,8 @@ class ProposalService:
 
     def generate_proposal(
         self,
-        pier: Pier,
-        pier_forces: Optional[PierForces],
+        pier: VerticalElement,
+        pier_forces: Optional[ElementForces],
         flexure_sf: float,
         shear_dcr: float,
         boundary_required: bool = False,
@@ -117,8 +117,8 @@ class ProposalService:
 
     def analyze_and_propose(
         self,
-        pier: Pier,
-        pier_forces: Optional[PierForces]
+        pier: VerticalElement,
+        pier_forces: Optional[ElementForces]
     ) -> Tuple[Dict[str, Any], Optional[DesignProposal]]:
         """
         Analiza un pier y genera propuesta si falla.

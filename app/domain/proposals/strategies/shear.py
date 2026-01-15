@@ -23,12 +23,12 @@ from ...constants.phi_chapter21 import RHO_MAX
 from .base import MAX_ITERATIONS, create_proposal
 
 if TYPE_CHECKING:
-    from ...entities import Pier, PierForces
+    from ...entities import VerticalElement, ElementForces
 
 
 def propose_for_shear(
-    pier: 'Pier',
-    pier_forces: Optional['PierForces'],
+    pier: 'VerticalElement',
+    pier_forces: Optional['ElementForces'],
     original_config: ReinforcementConfig,
     original_sf: float,
     original_dcr: float,

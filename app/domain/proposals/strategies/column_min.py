@@ -20,12 +20,12 @@ from ...constants.units import MIN_COLUMN_DIMENSION_MM
 from .base import TARGET_SF
 
 if TYPE_CHECKING:
-    from ...entities import Pier, PierForces
+    from ...entities import VerticalElement, ElementForces
 
 
 def propose_for_column_min_thickness(
-    pier: 'Pier',
-    pier_forces: Optional['PierForces'],
+    pier: 'VerticalElement',
+    pier_forces: Optional['ElementForces'],
     original_config: ReinforcementConfig,
     original_sf: float,
     original_dcr: float,

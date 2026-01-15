@@ -15,6 +15,9 @@ const SharedCells = {
         if (elementType === 'column') {
             typeLabel = 'COL';
             typeClass = 'type-column';
+        } else if (elementType === 'strut') {
+            typeLabel = 'STRUT';
+            typeClass = 'type-strut';
         } else if (elementType === 'drop_beam') {
             typeLabel = 'VCAP';
             typeClass = 'type-drop_beam';

@@ -12,9 +12,8 @@ de flexocompresion segun ACI 318-25 Capitulo 22.
 from typing import Dict, List, Any, Optional, Tuple, Union
 import math
 
-from ...domain.entities import Pier, Column, Beam, PierForces, ColumnForces
+from ...domain.entities import VerticalElement, HorizontalElement, ElementForces
 from ...domain.entities.protocols import FlexuralElement
-from ...domain.constants.materials import get_bar_area
 from ...domain.flexure import (
     InteractionDiagramService,
     SlendernessService,
@@ -113,7 +112,7 @@ class FlexocompressionService:
     def check_flexure(
         self,
         element: FlexuralElement,
-        forces: Optional[Union[PierForces, ColumnForces]],
+        forces: Optional[ElementForces],
         moment_axis: str = 'M3',
         direction: str = 'primary',
         angle_deg: float = 0,
@@ -150,6 +149,7 @@ class FlexocompressionService:
             )
 
         # Verificar - llamar directamente a FlexureChecker (evita nivel intermedio)
+        combo_results_list = []
         if demand_points:
             result = FlexureChecker.check_flexure(interaction_points, demand_points)
             sf = result.safety_factor
@@ -165,6 +165,21 @@ class FlexocompressionService:
             tension_combos = result.tension_combos
             exceeds_tension = result.exceeds_tension_capacity
             phi_Pt_min = result.phi_Pt_min
+            # Propagar resultados de TODAS las combinaciones
+            combo_results_list = [
+                {
+                    'name': c.combo_name,
+                    'location': c.combo_location,
+                    'Pu': round(c.Pu, 2),
+                    'Mu': round(c.Mu, 2),
+                    'sf': round(c.sf, 3),
+                    'dcr': round(c.dcr, 3),
+                    'phi_Mn_at_Pu': round(c.phi_Mn_at_Pu, 2),
+                    'is_tension': c.is_tension,
+                    'status': 'OK' if c.sf >= 1.0 else 'NO OK'
+                }
+                for c in result.combo_results
+            ]
         else:
             sf, status, critical = float('inf'), "OK", "N/A"
             phi_Mn_0, phi_Mn_at_Pu, critical_Pu, critical_Mu = 0.0, 0.0, 0.0, 0.0
@@ -193,7 +208,8 @@ class FlexocompressionService:
             'has_tension': has_tension,
             'tension_combos': tension_combos,
             'exceeds_tension': exceeds_tension,
-            'phi_Pt_min': round(phi_Pt_min, 2)
+            'phi_Pt_min': round(phi_Pt_min, 2),
+            'combo_results': combo_results_list  # Resultados de TODAS las combinaciones
         }
 
     # =========================================================================
@@ -302,7 +318,7 @@ class FlexocompressionService:
 
     def calculate_Mpr(
         self,
-        beam: Beam,
+        beam: 'HorizontalElement',
         alpha: float = ALPHA_OVERSTRENGTH
     ) -> Tuple[float, float]:
         """
@@ -352,7 +368,7 @@ class FlexocompressionService:
 
     def calculate_Ve_beam(
         self,
-        beam: Beam,
+        beam: 'HorizontalElement',
         wu: float = 0.0
     ) -> Tuple[float, float, float]:
         """
@@ -398,7 +414,7 @@ class FlexocompressionService:
 
     def calculate_Mn_column_at_Pu(
         self,
-        column: Column,
+        column: 'VerticalElement',
         Pu: float,
         direction: str = 'primary'
     ) -> float:
@@ -409,7 +425,7 @@ class FlexocompressionService:
         Debe usarse el Pu que resulte en el menor Mn.
 
         Args:
-            column: Columna a analizar
+            column: VerticalElement a analizar
             Pu: Carga axial (tonf)
             direction: 'primary' o 'secondary'
 

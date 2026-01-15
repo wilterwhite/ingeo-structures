@@ -1,15 +1,14 @@
-# app/structural/domain/calculations/steel_layer_calculator.py
+# app/domain/calculations/steel_layer_calculator.py
 """
-Calculador de capas de acero para secciones de hormigón armado.
-Unifica la lógica que antes estaba duplicada en pier.py e interaction_diagram.py.
+Calculador de capas de acero para secciones de hormigon armado.
+Unifica la logica para VerticalElement y HorizontalElement.
 """
 from dataclasses import dataclass
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..entities.pier import Pier
-    from ..entities.drop_beam import DropBeam
-    from ..entities.column import Column
+    from ..entities.vertical_element import VerticalElement
+    from ..entities.horizontal_element import HorizontalElement
 
 
 @dataclass
@@ -30,45 +29,89 @@ class SteelLayerCalculator:
     """
 
     @staticmethod
-    def calculate_from_pier(pier: 'Pier') -> List[SteelLayer]:
+    def calculate_from_vertical_element_mesh(element: 'VerticalElement') -> List[SteelLayer]:
         """
-        Genera las capas de acero a partir de un objeto Pier.
+        Genera capas de acero para VerticalElement con layout MESH.
 
         Args:
-            pier: Entidad Pier con la configuración de armadura
+            element: VerticalElement con mesh_reinforcement
 
         Returns:
-            Lista de SteelLayer ordenadas por posición
+            Lista de SteelLayer ordenadas por posicion
         """
+        if not element.mesh_reinforcement:
+            return []
+
+        mr = element.mesh_reinforcement
         return SteelLayerCalculator.calculate(
-            width=pier.width,
-            cover=pier.cover,
-            n_meshes=pier.n_meshes,
-            n_edge_bars=pier.n_edge_bars,
-            bar_area_edge=pier._bar_area_edge,
-            bar_area_v=pier._bar_area_v,
-            spacing_v=pier.spacing_v
+            width=element.length,
+            cover=element.cover,
+            n_meshes=mr.n_meshes,
+            n_edge_bars=mr.n_edge_bars,
+            bar_area_edge=mr._bar_area_edge,
+            bar_area_v=mr._bar_area_v,
+            spacing_v=mr.spacing_v
         )
 
     @staticmethod
-    def calculate_from_drop_beam(drop_beam: 'DropBeam') -> List[SteelLayer]:
+    def calculate_from_vertical_element_discrete(
+        element: 'VerticalElement',
+        direction: str = 'primary'
+    ) -> List[SteelLayer]:
         """
-        Genera las capas de acero a partir de un objeto DropBeam.
+        Genera capas de acero para VerticalElement con layout STIRRUPS.
 
         Args:
-            drop_beam: Entidad DropBeam con la configuración de armadura
+            element: VerticalElement con discrete_reinforcement
+            direction: 'primary' para length, 'secondary' para thickness
 
         Returns:
-            Lista de SteelLayer ordenadas por posición
+            Lista de SteelLayer ordenadas por posicion
         """
+        if not element.discrete_reinforcement:
+            return []
+
+        dr = element.discrete_reinforcement
+        if direction == 'primary':
+            return SteelLayerCalculator._calculate_column_layers(
+                dimension=element.length,
+                cover=element.cover,
+                n_layers=dr.n_bars_length,
+                bars_per_layer=dr.n_bars_thickness,
+                bar_area=dr._bar_area
+            )
+        else:
+            return SteelLayerCalculator._calculate_column_layers(
+                dimension=element.thickness,
+                cover=element.cover,
+                n_layers=dr.n_bars_thickness,
+                bars_per_layer=dr.n_bars_length,
+                bar_area=dr._bar_area
+            )
+
+    @staticmethod
+    def calculate_from_horizontal_element_drop(element: 'HorizontalElement') -> List[SteelLayer]:
+        """
+        Genera capas de acero para HorizontalElement tipo DROP_BEAM.
+
+        Args:
+            element: HorizontalElement con source=DROP_BEAM y mesh_reinforcement
+
+        Returns:
+            Lista de SteelLayer ordenadas por posicion
+        """
+        if not element.mesh_reinforcement:
+            return []
+
+        mr = element.mesh_reinforcement
         return SteelLayerCalculator.calculate(
-            width=drop_beam.thickness,  # thickness es la dimensión mayor (ancho tributario)
-            cover=drop_beam.cover,
-            n_meshes=drop_beam.n_meshes,
-            n_edge_bars=drop_beam.n_edge_bars,
-            bar_area_edge=drop_beam._bar_area_edge,
-            bar_area_v=drop_beam._bar_area_v,
-            spacing_v=drop_beam.spacing_v
+            width=element.depth,
+            cover=element.cover,
+            n_meshes=mr.n_meshes,
+            n_edge_bars=mr.n_edge_bars,
+            bar_area_edge=mr._bar_area_edge,
+            bar_area_v=mr._bar_area_v,
+            spacing_v=mr.spacing_v
         )
 
     @staticmethod
@@ -126,40 +169,6 @@ class SteelLayerCalculator:
 
         return layers
 
-    @staticmethod
-    def calculate_from_column(
-        column: 'Column',
-        direction: str = 'depth'
-    ) -> List[SteelLayer]:
-        """
-        Genera las capas de acero a partir de una columna rectangular.
-
-        Las columnas tienen barras distribuidas en el perímetro, diferente
-        a los muros que tienen malla + barras de borde.
-
-        Args:
-            column: Entidad Column con la configuración de armadura
-            direction: 'depth' para M3, 'width' para M2
-
-        Returns:
-            Lista de SteelLayer ordenadas por posición
-        """
-        if direction == 'depth':
-            return SteelLayerCalculator._calculate_column_layers(
-                dimension=column.depth,
-                cover=column.cover,
-                n_layers=column.n_bars_depth,
-                bars_per_layer=column.n_bars_width,
-                bar_area=column._bar_area_long
-            )
-        else:
-            return SteelLayerCalculator._calculate_column_layers(
-                dimension=column.width,
-                cover=column.cover,
-                n_layers=column.n_bars_width,
-                bars_per_layer=column.n_bars_depth,
-                bar_area=column._bar_area_long
-            )
 
     @staticmethod
     def _calculate_column_layers(

@@ -15,7 +15,7 @@ from ...domain.shear import WallClassificationService
 from ...domain.shear.classification import ElementType as DomainElementType
 
 if TYPE_CHECKING:
-    from ...domain.entities import Beam, Column, Pier, DropBeam
+    from ...domain.entities import VerticalElement, HorizontalElement
 
 
 class ElementType(Enum):
@@ -135,29 +135,30 @@ class ElementClassifier:
         Returns:
             ElementType correspondiente
         """
-        from ...domain.entities import Beam, Column, Pier, DropBeam
+        from ...domain.entities import VerticalElement, HorizontalElement
 
-        if isinstance(element, Beam):
+        # HorizontalElement: Vigas y vigas capitel
+        if isinstance(element, HorizontalElement):
+            if element.is_drop_beam:
+                return ElementType.DROP_BEAM
             return ElementType.BEAM
 
-        if isinstance(element, Column):
-            return self._classify_column(element)
-
-        if isinstance(element, DropBeam):
-            return ElementType.DROP_BEAM
-
-        if isinstance(element, Pier):
-            return self._classify_pier(element)
+        # VerticalElement: Columnas y piers
+        if isinstance(element, VerticalElement):
+            if element.is_frame_source:
+                return self._classify_column(element)
+            else:  # PIER source
+                return self._classify_pier(element)
 
         raise ValueError(f"Tipo de elemento no soportado: {type(element)}")
 
-    def _classify_column(self, column: 'Column') -> ElementType:
+    def _classify_column(self, column: 'VerticalElement') -> ElementType:
         """Clasifica una columna segun su flag sismico."""
         if hasattr(column, 'is_seismic') and column.is_seismic:
             return ElementType.COLUMN_SEISMIC
         return ElementType.COLUMN_NONSEISMIC
 
-    def _classify_pier(self, pier: 'Pier') -> ElementType:
+    def _classify_pier(self, pier: 'VerticalElement') -> ElementType:
         """
         Clasifica un pier usando WallClassificationService del dominio.
 
@@ -165,8 +166,9 @@ class ElementClassifier:
         el resultado al ElementType de services.
         """
         # Usar el servicio del dominio para clasificar
+        # length=lw, thickness=tw para pier
         classification = self._wall_classification.classify(
-            lw=pier.width,
+            lw=pier.length,
             tw=pier.thickness,
             hw=pier.height
         )
@@ -177,7 +179,7 @@ class ElementClassifier:
 
     def get_classification_info(
         self,
-        element: Union['Beam', 'Column', 'Pier', 'DropBeam']
+        element: Union['VerticalElement', 'HorizontalElement']
     ) -> dict:
         """
         Obtiene informacion detallada de la clasificacion.
@@ -188,7 +190,7 @@ class ElementClassifier:
         Returns:
             Dict con tipo, ratios geometricos y seccion ACI
         """
-        from ...domain.entities import Beam, Column, Pier, DropBeam
+        from ...domain.entities import VerticalElement, HorizontalElement
 
         element_type = self.classify(element)
 
@@ -198,10 +200,10 @@ class ElementClassifier:
             'is_seismic': element_type.is_seismic,
         }
 
-        if isinstance(element, Pier):
+        if isinstance(element, VerticalElement) and element.is_pier_source:
             # Usar WallClassificationService para obtener ratios ya calculados
             classification = self._wall_classification.classify(
-                lw=element.width,
+                lw=element.length,
                 tw=element.thickness,
                 hw=element.height
             )
@@ -209,10 +211,10 @@ class ElementClassifier:
             info['hw_lw'] = round(classification.hw_lw, 2)
             info['is_wall_pier'] = element_type.is_wall_pier
 
-        if isinstance(element, DropBeam):
+        if isinstance(element, HorizontalElement) and element.is_drop_beam:
             # Para vigas capitel, agregar info similar a pier
-            lw_tw = element.thickness / element.width if element.width > 0 else 0
-            hw_lw = element.length / element.thickness if element.thickness > 0 else 0
+            lw_tw = element.depth / element.width if element.width > 0 else 0
+            hw_lw = element.length / element.depth if element.depth > 0 else 0
             info['lw_tw'] = round(lw_tw, 2)
             info['hw_lw'] = round(hw_lw, 2)
             info['is_wall_pier'] = False

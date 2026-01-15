@@ -17,7 +17,7 @@ from ...entities.design_proposal import (
 from ...constants.materials import get_bar_area
 
 if TYPE_CHECKING:
-    from ...entities import Pier, PierForces
+    from ...entities import VerticalElement, ElementForces
 
 
 # Factor de seguridad objetivo (pequeño margen sobre 1.0)
@@ -51,21 +51,21 @@ def find_boundary_start_index(current_as: float, comparison: str = ">") -> int:
 class VerificationProtocol(Protocol):
     """Protocolo para funciones de verificación."""
 
-    def verify_flexure(self, pier: 'Pier', pier_forces: Optional['PierForces']) -> float:
+    def verify_flexure(self, pier: 'VerticalElement', pier_forces: Optional['ElementForces']) -> float:
         """Verifica flexión y retorna SF."""
         ...
 
-    def verify_shear(self, pier: 'Pier', pier_forces: Optional['PierForces']) -> float:
+    def verify_shear(self, pier: 'VerticalElement', pier_forces: Optional['ElementForces']) -> float:
         """Verifica corte y retorna DCR."""
         ...
 
-    def apply_config_to_pier(self, pier: 'Pier', config: ReinforcementConfig) -> 'Pier':
+    def apply_config_to_pier(self, pier: 'VerticalElement', config: ReinforcementConfig) -> 'VerticalElement':
         """Aplica configuración a pier (crea copia)."""
         ...
 
 
 def create_proposal(
-    pier: 'Pier',
+    pier: 'VerticalElement',
     failure_mode: FailureMode,
     proposal_type: ProposalType,
     original_config: ReinforcementConfig,

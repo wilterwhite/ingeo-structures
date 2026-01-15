@@ -16,6 +16,7 @@ Referencias:
 import math
 from typing import Optional
 
+from ...constants import DCR_MAX_FINITE
 from ...constants.materials import LAMBDA_NORMAL
 from ...constants.shear import PHI_SHEAR_SEISMIC
 from ...constants.units import N_TO_TONF
@@ -190,8 +191,8 @@ class SeismicColumnShearService:
         )
 
         # Calcular DCR
-        dcr_V2 = Vu_V2_design / cap_V2.phi_Vn if cap_V2.phi_Vn > 0 else float('inf')
-        dcr_V3 = Vu_V3_design / cap_V3.phi_Vn if cap_V3.phi_Vn > 0 else float('inf')
+        dcr_V2 = Vu_V2_design / cap_V2.phi_Vn if cap_V2.phi_Vn > 0 else DCR_MAX_FINITE
+        dcr_V3 = Vu_V3_design / cap_V3.phi_Vn if cap_V3.phi_Vn > 0 else DCR_MAX_FINITE
         dcr = math.sqrt(dcr_V2**2 + dcr_V3**2)
 
         return SeismicColumnShearResult(

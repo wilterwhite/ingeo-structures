@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from ...domain.constants.units import TONF_TO_N
 
 if TYPE_CHECKING:
-    from ...domain.entities import BeamForces, ColumnForces, PierForces, DropBeamForces
+    from ...domain.entities import ElementForces
 
 
 @dataclass
@@ -55,7 +55,7 @@ class ForceExtractor:
 
     @staticmethod
     def extract_envelope(
-        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces']]
+        forces: Optional['ElementForces']
     ) -> ForceEnvelope:
         """
         Extrae la envolvente de fuerzas críticas.
@@ -68,6 +68,10 @@ class ForceExtractor:
         """
         if forces is None:
             return ForceEnvelope()
+
+        # Si ya es un ForceEnvelope, devolverlo directamente
+        if isinstance(forces, ForceEnvelope):
+            return forces
 
         # Patrón 1: Usar get_envelope() si está disponible (preferido)
         if hasattr(forces, 'get_envelope'):
@@ -145,7 +149,7 @@ class ForceExtractor:
 
     @staticmethod
     def extract_critical_shear(
-        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces']],
+        forces: Optional['ElementForces'],
         axis: str = 'V2'
     ) -> float:
         """
@@ -165,7 +169,7 @@ class ForceExtractor:
 
     @staticmethod
     def extract_critical_moment(
-        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces']],
+        forces: Optional['ElementForces'],
         axis: str = 'M3'
     ) -> float:
         """
@@ -185,7 +189,7 @@ class ForceExtractor:
 
     @staticmethod
     def extract_critical_axial(
-        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces']]
+        forces: Optional['ElementForces']
     ) -> Tuple[float, float]:
         """
         Extrae carga axial crítica (compresión y tracción).
@@ -202,7 +206,7 @@ class ForceExtractor:
 
     @staticmethod
     def extract_combined_shear(
-        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces']]
+        forces: Optional['ElementForces']
     ) -> float:
         """
         Extrae cortante combinado SRSS (V2² + V3²)^0.5.
@@ -219,7 +223,7 @@ class ForceExtractor:
 
     @staticmethod
     def has_significant_axial(
-        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces']],
+        forces: Optional['ElementForces'],
         Ag: float,
         fc: float,
         divisor: float = 10.0

@@ -3,20 +3,28 @@
 Entidades de dominio para el analisis estructural.
 
 Soporta:
-- Piers (muros de hormigon armado)
-- Columnas de hormigon armado
-- Vigas de hormigon armado (frame y spandrels)
-- Vigas capitel (drop beams)
+- VerticalElement: columnas y piers unificados
+- HorizontalElement: vigas frame, spandrel y drop_beam unificadas
 """
-from .pier import Pier
+from .reinforcement import (
+    MeshReinforcement,
+    DiscreteReinforcement,
+    BeamReinforcement,
+)
+from .vertical_element import (
+    VerticalElement,
+    VerticalElementSource,
+    ReinforcementLayout,
+)
+from .horizontal_element import (
+    HorizontalElement,
+    HorizontalElementSource,
+    HorizontalElementShape,
+    HorizontalMeshReinforcement,
+    HorizontalDiscreteReinforcement,
+)
 from .load_combination import LoadCombination
-from .pier_forces import PierForces
-from .column import Column
-from .column_forces import ColumnForces
-from .beam import Beam, BeamSource, BeamShape
-from .beam_forces import BeamForces
-from .drop_beam import DropBeam
-from .drop_beam_forces import DropBeamForces
+from .element_forces import ElementForces, ElementForceType
 from .parsed_data import ParsedData
 from .design_proposal import (
     DesignProposal,
@@ -34,20 +42,23 @@ from .value_objects import (
 )
 
 __all__ = [
-    # Piers
-    'Pier',
-    'PierForces',
-    # Columnas
-    'Column',
-    'ColumnForces',
-    # Vigas
-    'Beam',
-    'BeamSource',
-    'BeamShape',
-    'BeamForces',
-    # Vigas Capitel
-    'DropBeam',
-    'DropBeamForces',
+    # Armadura (unificada)
+    'MeshReinforcement',
+    'DiscreteReinforcement',
+    'BeamReinforcement',
+    # Elementos Verticales
+    'VerticalElement',
+    'VerticalElementSource',
+    'ReinforcementLayout',
+    # Elementos Horizontales
+    'HorizontalElement',
+    'HorizontalElementSource',
+    'HorizontalElementShape',
+    'HorizontalMeshReinforcement',  # Alias de MeshReinforcement
+    'HorizontalDiscreteReinforcement',  # Alias de BeamReinforcement
+    # Fuerzas
+    'ElementForces',
+    'ElementForceType',
     # Comunes
     'LoadCombination',
     'ParsedData',

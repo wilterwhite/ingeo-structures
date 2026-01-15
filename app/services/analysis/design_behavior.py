@@ -96,6 +96,21 @@ class DesignBehavior(Enum):
     """
 
     # =========================================================================
+    # Strut - Capitulo 23
+    # =========================================================================
+    STRUT_UNCONFINED = auto()
+    """
+    Strut no confinado. ACI 318-25 Capitulo 23.
+    Aplica a elementos pequenos (<150mm) con 1 barra y sin estribos.
+    La barra se considera constructiva - no aporta capacidad.
+
+    Diagrama P-M simplificado:
+    - Traccion = 0 (hormigon no armado)
+    - Compresion = phi x Fns = 0.75 x 0.34 x fc' x Acs
+    - Flexion = Mcr = fr x S (momento de agrietamiento)
+    """
+
+    # =========================================================================
     # Propiedades de conveniencia
     # =========================================================================
 
@@ -110,6 +125,7 @@ class DesignBehavior(Enum):
             DesignBehavior.SEISMIC_WALL_PIER_ALT,
             DesignBehavior.DROP_BEAM,
             DesignBehavior.SEISMIC_BEAM_COLUMN,
+            DesignBehavior.STRUT_UNCONFINED,  # Diagrama P-M simplificado
         )
 
     @property
@@ -165,6 +181,7 @@ class DesignBehavior(Enum):
             DesignBehavior.SEISMIC_WALL_PIER_ALT: "§18.10.8.1",
             DesignBehavior.DROP_BEAM: "§18.10",
             DesignBehavior.SEISMIC_BEAM_COLUMN: "§18.6.4.6 + §18.7.5",
+            DesignBehavior.STRUT_UNCONFINED: "§23.4",
         }
         return sections.get(self, "")
 
@@ -192,5 +209,6 @@ class DesignBehavior(Enum):
             DesignBehavior.SEISMIC_WALL_PIER_ALT: "wall",
             DesignBehavior.DROP_BEAM: "wall",  # Viga capitel usa §18.10
             DesignBehavior.SEISMIC_BEAM_COLUMN: "column",  # Viga con axial usa §18.7.5
+            DesignBehavior.STRUT_UNCONFINED: "strut",  # Strut Cap. 23
         }
         return mapping.get(self, "flexure")

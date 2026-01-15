@@ -22,12 +22,12 @@ from ...constants.phi_chapter21 import RHO_MAX
 from .base import TARGET_SF, MAX_ITERATIONS, create_proposal, build_changes
 
 if TYPE_CHECKING:
-    from ...entities import Pier, PierForces
+    from ...entities import VerticalElement, ElementForces
 
 
 def propose_with_thickness(
-    pier: 'Pier',
-    pier_forces: Optional['PierForces'],
+    pier: 'VerticalElement',
+    pier_forces: Optional['ElementForces'],
     original_config: ReinforcementConfig,
     original_sf: float,
     original_dcr: float,
@@ -109,8 +109,8 @@ def propose_with_thickness(
 
 
 def propose_for_slenderness(
-    pier: 'Pier',
-    pier_forces: Optional['PierForces'],
+    pier: 'VerticalElement',
+    pier_forces: Optional['ElementForces'],
     original_config: ReinforcementConfig,
     original_sf: float,
     slenderness_reduction: float,
@@ -149,8 +149,8 @@ def propose_for_slenderness(
 
 
 def create_best_effort_proposal(
-    pier: 'Pier',
-    pier_forces: Optional['PierForces'],
+    pier: 'VerticalElement',
+    pier_forces: Optional['ElementForces'],
     failure_mode: FailureMode,
     original_config: ReinforcementConfig,
     original_sf: float,

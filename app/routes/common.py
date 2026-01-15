@@ -15,9 +15,8 @@ from flask import request, jsonify, Blueprint
 from ..services.structural_analysis import StructuralAnalysisService
 from ..services.factory import ServiceFactory
 from ..services.analysis.element_orchestrator import ElementOrchestrator
-from ..services.analysis.statistics_service import StatisticsService
-from ..services.analysis.element_details_service import ElementDetailsService
-from ..services.analysis.element_analysis_service import ElementAnalysisService
+from ..services.presentation.modal_data_service import ElementDetailsService
+from ..services.presentation.result_formatter import ResultFormatter, calculate_statistics
 from ..domain.chapter18.common import SeismicCategory
 from ..domain.constants.materials import (
     BAR_AREAS,
@@ -44,9 +43,7 @@ logger = logging.getLogger(__name__)
 # Instancias globales (singleton pattern con thread-safety)
 _analysis_service = None
 _orchestrator = None
-_statistics_service = None
 _element_details_service = None
-_element_analysis_service = None
 _singleton_lock = threading.Lock()
 
 
@@ -79,16 +76,6 @@ def get_orchestrator() -> ElementOrchestrator:
     return _orchestrator
 
 
-def get_statistics_service() -> StatisticsService:
-    """Obtiene o crea la instancia del servicio de estadísticas. Thread-safe."""
-    global _statistics_service
-    if _statistics_service is None:
-        with _singleton_lock:
-            if _statistics_service is None:
-                _statistics_service = StatisticsService()
-    return _statistics_service
-
-
 def get_element_details_service() -> ElementDetailsService:
     """Obtiene o crea la instancia del servicio de detalles de elementos. Thread-safe."""
     global _element_details_service
@@ -98,16 +85,6 @@ def get_element_details_service() -> ElementDetailsService:
                 session_manager = get_analysis_service()._session_manager
                 _element_details_service = ElementDetailsService(session_manager)
     return _element_details_service
-
-
-def get_element_analysis_service() -> ElementAnalysisService:
-    """Obtiene o crea la instancia del servicio de análisis de elementos. Thread-safe."""
-    global _element_analysis_service
-    if _element_analysis_service is None:
-        with _singleton_lock:
-            if _element_analysis_service is None:
-                _element_analysis_service = ElementAnalysisService()
-    return _element_analysis_service
 
 
 def get_json_data() -> dict:
@@ -421,52 +398,6 @@ def validate_positive_numeric(data: dict, fields: dict) -> Tuple[dict, list]:
     return validated, errors
 
 
-def require_positive_params(*field_specs):
-    """
-    Decorador que valida parámetros numéricos positivos en reinforcement.
-
-    Args:
-        *field_specs: Tuplas (field_name, type, required)
-                     type puede ser 'int' o 'float'
-
-    Uso:
-        @bp.route('/endpoint', methods=['POST'])
-        @handle_errors
-        @require_session
-        @require_positive_params(
-            ('diameter_v', 'int', False),
-            ('spacing_v', 'int', False),
-            ('cover', 'float', False)
-        )
-        def endpoint(session_id: str, data: dict, validated_reinforcement: dict):
-            ...
-    """
-    def decorator(f: Callable) -> Callable:
-        @wraps(f)
-        def decorated(*args, **kwargs) -> Any:
-            data = kwargs.get('data', {})
-            reinforcement = data.get('reinforcement', {})
-
-            # Construir dict de campos
-            fields = {name: (ftype, required) for name, ftype, required in field_specs}
-
-            # Validar
-            validated, errors = validate_positive_numeric(reinforcement, fields)
-
-            if errors:
-                return jsonify({
-                    'success': False,
-                    'error': 'Errores de validación',
-                    'validation_errors': errors
-                }), 400
-
-            # Pasar valores validados al endpoint
-            kwargs['validated_reinforcement'] = validated
-            return f(*args, **kwargs)
-        return decorated
-    return decorator
-
-
 def parse_seismic_params(data: dict) -> Tuple[SeismicCategory, float]:
     """
     Parsea parámetros sísmicos desde request data.
@@ -495,7 +426,7 @@ def parse_seismic_params(data: dict) -> Tuple[SeismicCategory, float]:
 def analyze_elements_generic(
     elements: dict,
     forces_dict: dict,
-    orchestrator,
+    orchestrator: ElementOrchestrator,
     result_formatter,
     category: SeismicCategory,
     lambda_factor: float,
@@ -503,24 +434,38 @@ def analyze_elements_generic(
     """
     Análisis genérico para cualquier tipo de elemento estructural.
 
-    NOTA: Esta función es un wrapper de compatibilidad que delega a
-    ElementAnalysisService. Los parámetros orchestrator y result_formatter
-    se mantienen por compatibilidad pero son ignorados (el servicio usa
-    sus propias instancias).
-
     Args:
         elements: Diccionario {element_key: element}
         forces_dict: Diccionario {element_key: forces}
-        orchestrator: (Ignorado) Instancia de ElementOrchestrator
-        result_formatter: (Ignorado) Clase ResultFormatter
+        orchestrator: Instancia de ElementOrchestrator
+        result_formatter: (No usado, mantenido por compatibilidad)
         category: Categoría sísmica
         lambda_factor: Factor para concreto liviano
 
     Returns:
         Tuple (results_list, statistics_dict)
     """
-    service = get_element_analysis_service()
-    return service.analyze_elements(elements, forces_dict, category, lambda_factor)
+    results = []
+
+    for key, element in elements.items():
+        forces = forces_dict.get(key)
+
+        # Verificar usando orquestador
+        orchestration_result = orchestrator.verify(
+            element=element,
+            forces=forces,
+            lambda_factor=lambda_factor,
+            category=category,
+        )
+
+        # Formatear resultado para UI
+        formatted = ResultFormatter.format_any_element(
+            element, orchestration_result, key
+        )
+        results.append(formatted)
+
+    statistics = calculate_statistics(results)
+    return results, statistics
 
 
 # =============================================================================

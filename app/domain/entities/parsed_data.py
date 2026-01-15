@@ -6,14 +6,9 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .pier import Pier
-    from .pier_forces import PierForces
-    from .column import Column
-    from .column_forces import ColumnForces
-    from .beam import Beam
-    from .beam_forces import BeamForces
-    from .drop_beam import DropBeam
-    from .drop_beam_forces import DropBeamForces
+    from .vertical_element import VerticalElement
+    from .horizontal_element import HorizontalElement
+    from .element_forces import ElementForces
     from .coupling_beam import CouplingBeamConfig, PierCouplingConfig
     from ..calculations.wall_continuity import WallContinuityInfo, BuildingInfo
 
@@ -24,37 +19,26 @@ class ParsedData:
     Datos parseados del Excel de ETABS.
 
     Contiene:
-    - piers: Diccionario de piers indexados por "Story_Label"
-    - pier_forces: Fuerzas por combinacion de carga
-    - columns: Diccionario de columnas indexadas por "Story_Label"
-    - column_forces: Fuerzas de columnas
-    - beams: Diccionario de vigas indexadas por "Story_Label"
-    - beam_forces: Fuerzas de vigas
+    - vertical_elements: Diccionario de elementos verticales (columnas/piers)
+    - horizontal_elements: Diccionario de elementos horizontales (vigas)
+    - vertical_forces: Fuerzas de elementos verticales (piers y columnas)
+    - horizontal_forces: Fuerzas de elementos horizontales (vigas y drop_beams)
     - materials: Mapeo de nombres de materiales a f'c
     - stories: Lista de pisos ordenados
     - raw_data: DataFrames originales para debugging
-    - continuity_info: Informacion de continuidad de muros (calculada)
-    - building_info: Informacion global del edificio (calculada)
-    - default_coupling_beam: Viga de acople generica por defecto
-    - pier_coupling_configs: Configuraciones de vigas por pier
     """
-    piers: Dict[str, 'Pier']
-    pier_forces: Dict[str, 'PierForces']
-    materials: Dict[str, float]
-    stories: List[str]
-    raw_data: Dict[str, Any]  # pd.DataFrame, Any para evitar dependencia de tipos
+    # Elementos unificados
+    vertical_elements: Dict[str, 'VerticalElement'] = field(default_factory=dict)
+    horizontal_elements: Dict[str, 'HorizontalElement'] = field(default_factory=dict)
 
-    # Columnas (nuevo)
-    columns: Dict[str, 'Column'] = field(default_factory=dict)
-    column_forces: Dict[str, 'ColumnForces'] = field(default_factory=dict)
+    # Fuerzas unificadas
+    vertical_forces: Dict[str, 'ElementForces'] = field(default_factory=dict)
+    horizontal_forces: Dict[str, 'ElementForces'] = field(default_factory=dict)
 
-    # Vigas (nuevo)
-    beams: Dict[str, 'Beam'] = field(default_factory=dict)
-    beam_forces: Dict[str, 'BeamForces'] = field(default_factory=dict)
-
-    # Vigas Capitel (losas diseñadas como vigas a flexocompresión)
-    drop_beams: Dict[str, 'DropBeam'] = field(default_factory=dict)
-    drop_beam_forces: Dict[str, 'DropBeamForces'] = field(default_factory=dict)
+    # Metadatos
+    materials: Dict[str, float] = field(default_factory=dict)
+    stories: List[str] = field(default_factory=list)
+    raw_data: Dict[str, Any] = field(default_factory=dict)
 
     # Datos calculados
     continuity_info: Optional[Dict[str, 'WallContinuityInfo']] = field(default=None)
@@ -62,29 +46,52 @@ class ParsedData:
     default_coupling_beam: Optional['CouplingBeamConfig'] = field(default=None)
     pier_coupling_configs: Dict[str, 'PierCouplingConfig'] = field(default_factory=dict)
 
-    # Cache de resultados de análisis (para evitar recálculos en modal)
-    # key: element_key (ej: "Cielo P1_PFel-A20-2"), value: formatted result dict
+    # Cache de resultados de analisis
     analysis_cache: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+
+    @property
+    def has_vertical_elements(self) -> bool:
+        """True si hay elementos verticales cargados."""
+        return len(self.vertical_elements) > 0
+
+    @property
+    def has_horizontal_elements(self) -> bool:
+        """True si hay elementos horizontales cargados."""
+        return len(self.horizontal_elements) > 0
 
     @property
     def has_piers(self) -> bool:
         """True si hay piers cargados."""
-        return len(self.piers) > 0
+        from .vertical_element import VerticalElementSource
+        return any(
+            e.source == VerticalElementSource.PIER
+            for e in self.vertical_elements.values()
+        )
 
     @property
     def has_columns(self) -> bool:
         """True si hay columnas cargadas."""
-        return len(self.columns) > 0
+        from .vertical_element import VerticalElementSource
+        return any(
+            e.source == VerticalElementSource.FRAME
+            for e in self.vertical_elements.values()
+        )
 
     @property
     def has_beams(self) -> bool:
-        """True si hay vigas cargadas."""
-        return len(self.beams) > 0
+        """True si hay vigas cargadas (FRAME o SPANDREL)."""
+        return any(
+            not e.is_drop_beam
+            for e in self.horizontal_elements.values()
+        )
 
     @property
     def has_drop_beams(self) -> bool:
         """True si hay vigas capitel cargadas."""
-        return len(self.drop_beams) > 0
+        return any(
+            e.is_drop_beam
+            for e in self.horizontal_elements.values()
+        )
 
     @property
     def element_types_loaded(self) -> List[str]:
@@ -99,3 +106,34 @@ class ParsedData:
         if self.has_drop_beams:
             types.append('drop_beams')
         return types
+
+    # Metodos de acceso por tipo
+    def get_piers(self) -> Dict[str, 'VerticalElement']:
+        """Retorna solo los elementos tipo PIER."""
+        from .vertical_element import VerticalElementSource
+        return {
+            k: v for k, v in self.vertical_elements.items()
+            if v.source == VerticalElementSource.PIER
+        }
+
+    def get_columns(self) -> Dict[str, 'VerticalElement']:
+        """Retorna solo los elementos tipo FRAME (columnas)."""
+        from .vertical_element import VerticalElementSource
+        return {
+            k: v for k, v in self.vertical_elements.items()
+            if v.source == VerticalElementSource.FRAME
+        }
+
+    def get_beams(self) -> Dict[str, 'HorizontalElement']:
+        """Retorna solo las vigas (no drop_beams)."""
+        return {
+            k: v for k, v in self.horizontal_elements.items()
+            if not v.is_drop_beam
+        }
+
+    def get_drop_beams(self) -> Dict[str, 'HorizontalElement']:
+        """Retorna solo las vigas capitel."""
+        return {
+            k: v for k, v in self.horizontal_elements.items()
+            if v.is_drop_beam
+        }

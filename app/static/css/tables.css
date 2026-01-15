@@ -508,6 +508,23 @@ select.field-modified:focus {
 .stirrups-cell .stirrup-row { gap: 2px; margin-bottom: 0; }
 .stirrups-cell select { padding: 1px 2px; font-size: 0.7rem; min-width: 45px; }
 
+/* STRUT - Estribos deshabilitados (no confinado) */
+.stirrups-cell.strut-disabled {
+    opacity: 0.6;
+    pointer-events: none;
+    background-color: #f8f8f8;
+}
+.stirrups-cell.strut-disabled .disabled-label {
+    color: #888;
+    font-style: italic;
+    font-size: 0.7rem;
+}
+.stirrups-cell.strut-disabled .disabled-note {
+    color: #aaa;
+    font-size: 0.6rem;
+    font-style: italic;
+}
+
 /* ==========================================================================
    GEOMETRY CELL
    ========================================================================== */
@@ -613,6 +630,7 @@ select.field-modified:focus {
 }
 .element-type-badge.type-pier { background: #dbeafe; color: #1e40af; }
 .element-type-badge.type-column { background: #d1fae5; color: #065f46; }
+.element-type-badge.type-strut { background: #fecaca; color: #991b1b; }  /* Struts pequeños - rojo claro */
 .element-type-badge.type-drop_beam { background: #e9d5ff; color: #7c3aed; }  /* Vigas capitel - morado */
 .element-type-badge.type-beam { background: #fef3c7; color: #92400e; }  /* Vigas frame - naranja */
 .element-type-badge.type-1way { background: #fce7f3; color: #9d174d; }

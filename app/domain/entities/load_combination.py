@@ -1,6 +1,8 @@
 # app/domain/entities/load_combination.py
 """
-Entidad LoadCombination: representa una combinación de carga para un pier.
+Entidad LoadCombination: representa una combinación de carga estructural.
+
+Usada por todos los tipos de elementos (piers, columnas, vigas, drop beams).
 """
 import math
 from dataclasses import dataclass
@@ -9,7 +11,7 @@ from dataclasses import dataclass
 @dataclass
 class LoadCombination:
     """
-    Combinación de carga para un pier.
+    Combinación de carga para cualquier elemento estructural.
 
     Unidades (compatibles con ETABS):
     - Fuerzas: tonf

@@ -30,6 +30,7 @@ from .phi_chapter21 import (
     # Umbrales DCR
     DCR_OK,
     DCR_WARN,
+    DCR_MAX_FINITE,
     get_dcr_status,
     # Factores de capacidad axial (§22.4.2.1)
     PN_MAX_FACTOR_TIED,

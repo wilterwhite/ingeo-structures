@@ -23,12 +23,12 @@ from ...constants.phi_chapter21 import RHO_MAX
 from .base import TARGET_SF, create_proposal, build_changes
 
 if TYPE_CHECKING:
-    from ...entities import Pier, PierForces
+    from ...entities import VerticalElement, ElementForces
 
 
 def find_solution_for_thickness(
-    pier: 'Pier',
-    pier_forces: Optional['PierForces'],
+    pier: 'VerticalElement',
+    pier_forces: Optional['ElementForces'],
     original_config: ReinforcementConfig,
     thickness: float,
     max_legs: int,
@@ -123,8 +123,8 @@ def _get_max_config_for_thickness(
 
 
 def propose_combined(
-    pier: 'Pier',
-    pier_forces: Optional['PierForces'],
+    pier: 'VerticalElement',
+    pier_forces: Optional['ElementForces'],
     original_config: ReinforcementConfig,
     original_sf: float,
     original_dcr: float,

@@ -16,8 +16,7 @@ from matplotlib.patches import Rectangle, Circle, FancyBboxPatch
 import numpy as np
 
 if TYPE_CHECKING:
-    from ...domain.entities import Pier
-    from ...domain.entities.column import Column
+    from ...domain.entities import VerticalElement
 
 
 class PlotGenerator:
@@ -194,7 +193,7 @@ class PlotGenerator:
 
     def generate_section_diagram(
         self,
-        pier: 'Pier',
+        pier: 'VerticalElement',
         figsize: Tuple[int, int] = (10, 8)
     ) -> str:
         """
@@ -216,7 +215,7 @@ class PlotGenerator:
         fig, ax = plt.subplots(figsize=figsize)
 
         # Dimensiones en mm
-        lw = pier.width       # Largo del muro
+        lw = pier.length      # Largo del muro
         tw = pier.thickness   # Espesor
         cover = pier.cover
 
@@ -497,7 +496,7 @@ class PlotGenerator:
 
     def generate_column_section_diagram(
         self,
-        column: 'Column',
+        column: 'VerticalElement',
         figsize: Tuple[int, int] = (8, 8)
     ) -> str:
         """

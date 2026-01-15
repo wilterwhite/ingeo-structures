@@ -4,8 +4,8 @@ Verificador de flexocompresión para secciones de hormigón armado.
 Extrae la lógica de verificación que antes estaba en interaction_diagram.py.
 """
 import math
-from dataclasses import dataclass
-from typing import List, Tuple, TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import List, Optional, Tuple, TYPE_CHECKING
 
 from ..constants.tolerances import (
     ZERO_TOLERANCE,
@@ -17,6 +17,23 @@ from ..constants.tolerances import (
 
 if TYPE_CHECKING:
     from .interaction_diagram import InteractionPoint
+
+
+@dataclass
+class ComboFlexureResult:
+    """
+    Resultado de flexocompresión para UNA combinación de carga.
+
+    Se cachea durante el análisis para evitar recálculos en el modal.
+    """
+    combo_name: str           # Nombre de la combinación
+    combo_location: str       # Ubicación (Top, Bottom, Middle)
+    Pu: float                 # Carga axial (tonf)
+    Mu: float                 # Momento (tonf-m)
+    sf: float                 # Factor de seguridad
+    dcr: float                # DCR = 1/SF
+    phi_Mn_at_Pu: float       # Capacidad de momento al Pu (tonf-m)
+    is_tension: bool = False  # Si Pu < 0
 
 
 @dataclass
@@ -50,6 +67,8 @@ class FlexureCheckResult:
     tension_combos: int = 0    # Número de combinaciones con tracción
     exceeds_tension_capacity: bool = False  # Si Pu < φPt,min (más tracción que capacidad)
     phi_Pt_min: float = 0.0  # Capacidad de tracción mínima (tonf, negativo)
+    # Resultados de TODAS las combinaciones (para cache del modal)
+    combo_results: List[ComboFlexureResult] = field(default_factory=list)
 
 
 class FlexureChecker:
@@ -250,6 +269,7 @@ class FlexureChecker:
         critical_Pu = 0.0
         critical_Mu = 0.0
         tension_count = 0
+        combo_results = []  # Cachear resultado de CADA combinación
 
         for Pu, Mu, combo_name in demand_points:
             # Contar combinaciones con tracción (Pu < 0)
@@ -257,6 +277,22 @@ class FlexureChecker:
                 tension_count += 1
 
             sf, _ = FlexureChecker.calculate_safety_factor(points, Pu, Mu)
+
+            # Cachear resultado de este combo (el análisis ya hace este trabajo)
+            phi_Mn_at_P = FlexureChecker.get_phi_Mn_at_P(points, Pu)
+            # Extraer location del combo_name: "D1 (Bottom)" → "Bottom"
+            location = combo_name.split('(')[1].rstrip(')') if '(' in combo_name else 'Middle'
+            combo_results.append(ComboFlexureResult(
+                combo_name=combo_name,
+                combo_location=location,
+                Pu=Pu,
+                Mu=abs(Mu),
+                sf=sf,
+                dcr=1.0 / sf if sf > 0 else 100.0,
+                phi_Mn_at_Pu=phi_Mn_at_P,
+                is_tension=(Pu < 0)
+            ))
+
             if sf < min_sf:
                 min_sf = sf
                 critical_combo = combo_name
@@ -292,5 +328,6 @@ class FlexureChecker:
             has_tension=tension_count > 0,
             tension_combos=tension_count,
             exceeds_tension_capacity=exceeds_tension,
-            phi_Pt_min=phi_Pt_min
+            phi_Pt_min=phi_Pt_min,
+            combo_results=combo_results  # Todos los resultados cacheados
         )

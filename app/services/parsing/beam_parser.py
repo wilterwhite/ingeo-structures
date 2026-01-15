@@ -10,14 +10,19 @@ from typing import Dict, List, Tuple
 import logging
 import pandas as pd
 
-from ...domain.entities.beam import Beam, BeamSource, BeamShape
-
-logger = logging.getLogger(__name__)
-from ...domain.entities.beam_forces import BeamForces
+from ...domain.entities import (
+    HorizontalElement,
+    HorizontalElementSource,
+    HorizontalElementShape,
+    ElementForces,
+    ElementForceType,
+)
 from ...domain.entities.load_combination import LoadCombination
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
 from .material_mapper import parse_material_to_fc
 from .table_extractor import normalize_columns, extract_units_from_df
+
+logger = logging.getLogger(__name__)
 
 
 class BeamParser:
@@ -38,7 +43,7 @@ class BeamParser:
         spandrel_forces_df: pd.DataFrame,
         materials: Dict[str, float],
         circular_section_df: pd.DataFrame = None
-    ) -> Tuple[Dict[str, Beam], Dict[str, BeamForces], List[str]]:
+    ) -> Tuple[Dict[str, HorizontalElement], Dict[str, ElementForces], List[str]]:
         """
         Parsea vigas de ambas fuentes (frame y spandrel).
 
@@ -53,9 +58,10 @@ class BeamParser:
 
         Returns:
             Tupla (beams, beam_forces, stories)
+            donde beams son HorizontalElement
         """
-        beams: Dict[str, Beam] = {}
-        beam_forces: Dict[str, BeamForces] = {}
+        beams: Dict[str, HorizontalElement] = {}
+        beam_forces: Dict[str, ElementForces] = {}
         stories: List[str] = []
 
         # 1. Parsear definiciones de secciones (rectangular y circular)
@@ -138,7 +144,7 @@ class BeamParser:
                 'width': width,
                 'fc': fc,
                 'material': material_name,
-                'shape': BeamShape.RECTANGULAR
+                'shape': HorizontalElementShape.RECTANGULAR
             }
 
         return sections
@@ -195,7 +201,7 @@ class BeamParser:
                 'width': diameter,
                 'fc': fc,
                 'material': material_name,
-                'shape': BeamShape.CIRCULAR
+                'shape': HorizontalElementShape.CIRCULAR
             }
 
         return sections
@@ -248,12 +254,12 @@ class BeamParser:
         section_assigns: Dict[str, str],
         concrete_beams: set,
         materials: Dict[str, float]
-    ) -> Tuple[Dict[str, Beam], Dict[str, BeamForces], List[str]]:
+    ) -> Tuple[Dict[str, HorizontalElement], Dict[str, ElementForces], List[str]]:
         """
         Parsea vigas tipo frame (solo hormigón).
         """
-        beams: Dict[str, Beam] = {}
-        beam_forces: Dict[str, BeamForces] = {}
+        beams: Dict[str, HorizontalElement] = {}
+        beam_forces: Dict[str, ElementForces] = {}
         stories: List[str] = []
         beam_lengths: Dict[str, Tuple[float, float]] = {}  # min, max station
         beam_sections: Dict[str, str] = {}  # beam_key -> section_name
@@ -296,11 +302,12 @@ class BeamParser:
                 min_s, max_s = beam_lengths[beam_key]
                 beam_lengths[beam_key] = (min(min_s, station), max(max_s, station))
 
-            # Crear BeamForces si no existe
+            # Crear ElementForces si no existe
             if beam_key not in beam_forces:
-                beam_forces[beam_key] = BeamForces(
-                    beam_label=beam_label,
+                beam_forces[beam_key] = ElementForces(
+                    label=beam_label,
                     story=story,
+                    element_type=ElementForceType.BEAM,
                     combinations=[]
                 )
 
@@ -363,7 +370,7 @@ class BeamParser:
                     'depth': 600,
                     'width': 300,
                     'fc': 28,
-                    'shape': BeamShape.RECTANGULAR
+                    'shape': HorizontalElementShape.RECTANGULAR
                 }
                 section_name = 'Default'
 
@@ -379,9 +386,9 @@ class BeamParser:
             forces.length = length
 
             # Shape de la sección (default: rectangular)
-            beam_shape = section.get('shape', BeamShape.RECTANGULAR)
+            beam_shape = section.get('shape', HorizontalElementShape.RECTANGULAR)
 
-            # Validar geometría antes de crear Beam
+            # Validar geometría antes de crear HorizontalElement
             if length <= 0 or section['depth'] <= 0 or section['width'] <= 0:
                 logger.warning(
                     f"Beam {beam_label}@{story}: geometría inválida "
@@ -389,7 +396,7 @@ class BeamParser:
                 )
                 continue
 
-            beams[beam_key] = Beam(
+            beams[beam_key] = HorizontalElement(
                 label=beam_label,
                 story=story,
                 length=length,
@@ -398,7 +405,7 @@ class BeamParser:
                 shape=beam_shape,
                 fc=section['fc'],
                 fy=FY_DEFAULT_MPA,
-                source=BeamSource.FRAME,
+                source=HorizontalElementSource.FRAME,
                 section_name=section_name
             )
 
@@ -410,12 +417,12 @@ class BeamParser:
         props_df: pd.DataFrame,
         forces_df: pd.DataFrame,
         materials: Dict[str, float]
-    ) -> Tuple[Dict[str, Beam], Dict[str, BeamForces], List[str]]:
+    ) -> Tuple[Dict[str, HorizontalElement], Dict[str, ElementForces], List[str]]:
         """
         Parsea spandrels (vigas de acople tipo shell).
         """
-        beams: Dict[str, Beam] = {}
-        beam_forces: Dict[str, BeamForces] = {}
+        beams: Dict[str, HorizontalElement] = {}
+        beam_forces: Dict[str, ElementForces] = {}
         stories: List[str] = []
         spandrel_props: Dict[str, dict] = {}
 
@@ -480,9 +487,10 @@ class BeamParser:
                 spandrel_key = f"{story}_{spandrel_label}"
 
                 if spandrel_key not in beam_forces:
-                    beam_forces[spandrel_key] = BeamForces(
-                        beam_label=spandrel_label,
+                    beam_forces[spandrel_key] = ElementForces(
+                        label=spandrel_label,
                         story=story,
+                        element_type=ElementForceType.BEAM,
                         combinations=[]
                     )
 
@@ -528,7 +536,7 @@ class BeamParser:
             if spandrel_key in beam_forces:
                 beam_forces[spandrel_key].length = props['length']
 
-            beams[spandrel_key] = Beam(
+            beams[spandrel_key] = HorizontalElement(
                 label=spandrel_label,
                 story=story,
                 length=props['length'],
@@ -536,7 +544,7 @@ class BeamParser:
                 width=props['width'],
                 fc=props['fc'],
                 fy=FY_DEFAULT_MPA,
-                source=BeamSource.SPANDREL
+                source=HorizontalElementSource.SPANDREL
             )
 
             if story not in stories:

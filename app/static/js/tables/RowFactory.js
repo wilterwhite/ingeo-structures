@@ -36,6 +36,8 @@ class RowFactory {
 
         if (elementType === 'column') {
             this._createColumnRow(row, result, elementKey, isExpanded);
+        } else if (elementType === 'strut') {
+            this._createStrutRow(row, result, elementKey, isExpanded);
         } else if (elementType === 'drop_beam') {
             this._createDropBeamRow(row, result, elementKey, isExpanded);
         } else if (elementType === 'beam') {
@@ -70,6 +72,30 @@ class RowFactory {
         row.appendChild(SharedCells.createActionsCell(result, pierKey, isExpanded));
 
         this.attachRowEventHandlers(row, pierKey, result, 'pier');
+    }
+
+    /**
+     * Fila para STRUTs (columnas pequeñas sin refuerzo confinado).
+     * Usa mismas celdas que columna pero con estribos deshabilitados.
+     * Si usuario cambia grilla de 1x1 a 2x2+, se recalcula como COLUMN.
+     */
+    _createStrutRow(row, result, strutKey, isExpanded) {
+        row.appendChild(SharedCells.createInfoCell(result, 'strut'));
+        row.appendChild(SharedCells.createStoryCell(result));
+        row.appendChild(SharedCells.createEmptyCell());  // Sin categoría sísmica
+        row.appendChild(ColumnCells.createGeometryCell(result));
+        row.appendChild(ColumnCells.createLongitudinalCell(result, strutKey));  // Armadura editable
+        row.appendChild(ColumnCells.createStirrupsCell(result, strutKey, true));  // Estribos disabled
+        row.appendChild(SharedCells.createEmptyCell());  // Sin viga izq
+        row.appendChild(SharedCells.createEmptyCell());  // Sin viga der
+        row.appendChild(SharedCells.createFlexureSfCell(result));
+        row.appendChild(SharedCells.createFlexureCapCell(result));
+        row.appendChild(SharedCells.createEmptyCell());  // Sin cortante (struts no verifican)
+        row.appendChild(SharedCells.createEmptyCell());  // Sin cap cortante
+        row.appendChild(SharedCells.createEmptyCell());  // Sin propuesta
+        row.appendChild(SharedCells.createActionsCell(result, strutKey, isExpanded));
+
+        this.attachRowEventHandlers(row, strutKey, result, 'strut');
     }
 
     _createColumnRow(row, result, colKey, isExpanded) {
@@ -149,6 +175,13 @@ class RowFactory {
             stirrup_diameter: ['.stirrups-cell .edit-stirrup-d', 10],
             stirrup_spacing: ['.stirrups-cell .edit-stirrup-s', 150]
         },
+        strut: {
+            // STRUT usa mismos selectores que column pero sin estribos (no confinado)
+            n_bars_depth: ['.longitudinal-cell .edit-n-bars', 1],
+            n_bars_width: ['.longitudinal-cell .edit-n-bars-w', 1],
+            diameter_long: ['.longitudinal-cell .edit-diam-long', 12]
+            // Sin stirrup_diameter/stirrup_spacing - STRUT no usa estribos
+        },
         beam: {
             n_bars_top: ['.edit-beam-n-top', 3],
             diameter_top: ['.edit-beam-diam-top', 16],
@@ -222,6 +255,7 @@ class RowFactory {
         const selectorsByType = {
             pier: ['.malla-cell select', '.borde-cell select', '.seismic-category-cell select'],
             column: ['.longitudinal-cell select', '.stirrups-cell select'],
+            strut: ['.longitudinal-cell select'],  // Solo armadura longitudinal (sin estribos)
             beam: ['select[class^="edit-beam-"]'],  // Todos los selects de beam
             drop_beam: ['.malla-v-cell select', '.malla-h-cell select', '.borde-cell select']
         };

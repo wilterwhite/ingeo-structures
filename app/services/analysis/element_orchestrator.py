@@ -33,8 +33,8 @@ from ...domain.flexure import FlexureChecker
 from ...domain.shear.combined import calculate_combined_dcr
 
 if TYPE_CHECKING:
-    from ...domain.entities import Beam, Column, Pier, DropBeam
-    from ...domain.entities import BeamForces, ColumnForces, PierForces, DropBeamForces
+    from ...domain.entities import HorizontalElement, VerticalElement
+    from ...domain.entities import ElementForces
     from ...domain.entities import LoadCombination
 
 
@@ -54,7 +54,8 @@ class OrchestrationResult:
     dcr_max: float
     critical_check: str
     warnings: list
-    flexure_data: Optional[Dict[str, Any]] = None  # Datos de flexión (Mu, phi_Mn, etc.)
+    flexure_data: Optional[Dict[str, Any]] = None  # Datos de flexión (Mu, phi_Mn, combo_results)
+    shear_data: Optional[Dict[str, Any]] = None    # Datos de cortante (combo_results de ShearService)
 
 
 @dataclass
@@ -169,8 +170,8 @@ class ElementOrchestrator:
 
     def verify(
         self,
-        element: Union['Beam', 'Column', 'Pier', 'DropBeam'],
-        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces']] = None,
+        element: Union['HorizontalElement', 'VerticalElement'],
+        forces: Optional['ElementForces'] = None,
         *,
         lambda_factor: float = 1.0,
         category: SeismicCategory = SeismicCategory.SPECIAL,
@@ -210,6 +211,13 @@ class ElementOrchestrator:
                 element, forces, element_type, lambda_factor
             )
 
+        # 2.5 Verificar si es columna pequeña (strut no confinado)
+        # Columnas < 15x15 cm con 1 barra se verifican según Cap. 23
+        if hasattr(element, 'is_small_strut') and element.is_small_strut:
+            return self._verify_as_strut(
+                element, forces, element_type, category
+            )
+
         # 3. Resolver comportamiento de diseño
         is_seismic = getattr(element, 'is_seismic', True)
         design_behavior = self._resolver.resolve(element_type, element, forces, is_seismic)
@@ -247,8 +255,8 @@ class ElementOrchestrator:
 
     def _verify_as_column(
         self,
-        element: Union['Column', 'Pier'],
-        forces: Optional[Union['ColumnForces', 'PierForces']],
+        element: 'VerticalElement',
+        forces: Optional['ElementForces'],
         element_type: ElementType,
         design_behavior: DesignBehavior,
         lambda_factor: float,
@@ -270,8 +278,13 @@ class ElementOrchestrator:
             lambda_factor=lambda_factor,
         )
 
-        # Calcular datos de flexión usando FlexocompressionService
+        # Calcular datos de flexión usando FlexocompressionService (incluye combo_results)
         flexure_data = self._flexo_service.check_flexure(element, forces, moment_axis='M3')
+
+        # Calcular datos de cortante usando ShearService (incluye combo_results)
+        shear_data = self._shear_service.check_shear(
+            element, forces, lambda_factor=lambda_factor, seismic_category=category
+        )
 
         return OrchestrationResult(
             element_type=element_type,
@@ -283,12 +296,13 @@ class ElementOrchestrator:
             critical_check=result.critical_check,
             warnings=result.warnings,
             flexure_data=flexure_data,
+            shear_data=shear_data,
         )
 
     def _verify_as_wall(
         self,
-        element: Union['Pier', 'DropBeam'],
-        forces: Optional[Union['PierForces', 'DropBeamForces']],
+        element: Union['VerticalElement', 'HorizontalElement'],
+        forces: Optional['ElementForces'],
         element_type: ElementType,
         design_behavior: DesignBehavior,
         lambda_factor: float,
@@ -297,8 +311,6 @@ class ElementOrchestrator:
         hn_ft: Optional[float],
     ) -> OrchestrationResult:
         """Delega verificación a SeismicWallService (§18.10)."""
-        from ...domain.entities import DropBeam
-
         # Usar ForceExtractor para normalizar fuerzas
         envelope = ForceExtractor.extract_envelope(forces)
         Vu = envelope.V2_max
@@ -306,7 +318,8 @@ class ElementOrchestrator:
         Pu = envelope.P_max
 
         # Llamar servicio según tipo
-        if isinstance(element, DropBeam):
+        from ...domain.entities import HorizontalElement
+        if isinstance(element, HorizontalElement) and element.is_drop_beam:
             result = self._wall_service.verify_drop_beam(
                 drop_beam=element,
                 Vu=Vu, Mu=Mu, Pu=Pu,
@@ -322,8 +335,13 @@ class ElementOrchestrator:
                 category=category,
             )
 
-        # Calcular datos de flexión usando FlexocompressionService
+        # Calcular datos de flexión usando FlexocompressionService (incluye combo_results)
         flexure_data = self._flexo_service.check_flexure(element, forces, moment_axis='M3')
+
+        # Calcular datos de cortante usando ShearService (incluye combo_results)
+        shear_data = self._shear_service.check_shear(
+            element, forces, lambda_factor=lambda_factor, seismic_category=category
+        )
 
         return OrchestrationResult(
             element_type=element_type,
@@ -335,12 +353,13 @@ class ElementOrchestrator:
             critical_check=result.critical_check,
             warnings=result.warnings,
             flexure_data=flexure_data,
+            shear_data=shear_data,
         )
 
     def _verify_as_beam(
         self,
-        element: 'Beam',
-        forces: Optional['BeamForces'],
+        element: 'HorizontalElement',
+        forces: Optional['ElementForces'],
         element_type: ElementType,
         design_behavior: DesignBehavior,
         lambda_factor: float,
@@ -389,8 +408,8 @@ class ElementOrchestrator:
 
     def _verify_flexure(
         self,
-        element: Union['Beam', 'Column', 'Pier'],
-        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces']],
+        element: Union['HorizontalElement', 'VerticalElement'],
+        forces: Optional['ElementForces'],
         element_type: ElementType,
         design_behavior: DesignBehavior,
         moment_axis: str,
@@ -417,8 +436,8 @@ class ElementOrchestrator:
 
     def _verify_as_non_sfrs(
         self,
-        element: Union['Beam', 'Column', 'Pier', 'DropBeam'],
-        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces']],
+        element: Union['HorizontalElement', 'VerticalElement'],
+        forces: Optional['ElementForces'],
         element_type: ElementType,
         lambda_factor: float,
     ) -> OrchestrationResult:
@@ -471,21 +490,170 @@ class ElementOrchestrator:
             flexure_data=flexure_data,
         )
 
+    def _verify_as_strut(
+        self,
+        element: Union['VerticalElement', 'HorizontalElement'],
+        forces: Optional['ElementForces'],
+        element_type: ElementType,
+        category: SeismicCategory,
+    ) -> OrchestrationResult:
+        """
+        Verifica elemento pequeño como strut no confinado según ACI 318-25 Cap. 23.
+
+        Elementos con ambas dimensiones < 150mm se tratan como struts sin
+        refuerzo de compresion. La barra se considera constructiva.
+
+        Diagrama P-M simplificado:
+        - Tracción = 0 (hormigón no armado)
+        - Compresión = φ×Fns = 0.75 × 0.34 × fc' × Acs
+        - Flexión = Mcr = fr × S (momento de agrietamiento)
+        - Curva lineal entre compresión y flexión
+
+        Args:
+            element: Elemento pequeño (is_small_strut = True)
+            forces: Fuerzas del elemento
+            element_type: Tipo de elemento clasificado
+            category: Categoría sísmica
+
+        Returns:
+            OrchestrationResult con verificación de strut
+        """
+        from .design_behavior import DesignBehavior
+        from ...domain.chapter23 import StrutCapacityService
+
+        # Obtener envolvente de fuerzas
+        envelope = ForceExtractor.extract_envelope(forces)
+        # Para strut: usar el valor crítico (compresión o tracción)
+        # Nota: ETABS usa P<0=compresión, P>0=tracción
+        # ForceExtractor ya convierte: P_max=compresión (positivo), P_min=tracción (negativo)
+        # Si hay tracción (P_min < 0 después de conversión), es crítico
+        Pu = envelope.P_min if envelope.P_min < 0 else envelope.P_max
+        Mu = abs(envelope.M3_max)  # M3_max ya es el máximo absoluto
+
+        # Contar combinaciones con tracción
+        # ETABS: P > 0 = tracción (al igual que get_critical_pm_points usa -combo.P)
+        tension_combos = 0
+        if hasattr(forces, 'combinations') and forces.combinations:
+            tension_combos = sum(1 for c in forces.combinations if getattr(c, 'P', 0) > 0)
+        has_tension = tension_combos > 0
+
+        # Determinar SDC para warnings
+        sdc = category.name if hasattr(category, 'name') else 'C'
+
+        # Obtener dimensiones según tipo de elemento
+        if hasattr(element, 'depth'):
+            # Column o Beam
+            b = element.width
+            h = element.depth
+        elif hasattr(element, 'thickness'):
+            # Pier
+            b = element.thickness
+            h = element.width
+        else:
+            # Fallback: sección cuadrada
+            import math
+            b = h = math.sqrt(element.Ag)
+
+        # Verificar como strut con diagrama P-M
+        strut_service = StrutCapacityService()
+        strut_result = strut_service.verify_strut(
+            Acs=element.Ag,
+            fc=element.fc,
+            Pu=Pu,
+            Mu=Mu,
+            b=b,
+            h=h,
+            sdc=sdc,
+        )
+
+        # =====================================================================
+        # GENERAR combo_results PARA TODAS LAS COMBINACIONES
+        # Esto garantiza que el modal pueda leer datos por combo sin recalcular
+        # =====================================================================
+        combo_results = []
+        if hasattr(forces, 'combinations') and forces.combinations:
+            for combo in forces.combinations:
+                # ETABS: P>0=tracción, P<0=compresión
+                # Internamente: P>0=compresión
+                combo_Pu = -combo.P
+                combo_Mu = max(abs(combo.M2), abs(combo.M3))
+
+                # Verificar este combo con el strut service
+                combo_strut = strut_service.verify_strut(
+                    Acs=element.Ag,
+                    fc=element.fc,
+                    Pu=combo_Pu,
+                    Mu=combo_Mu,
+                    b=b,
+                    h=h,
+                    sdc=sdc,
+                )
+
+                combo_results.append({
+                    'name': f"{combo.name} ({combo.location})",
+                    'location': combo.location,
+                    'Pu': round(combo_Pu, 2),
+                    'Mu': round(combo_Mu, 4),
+                    'dcr': round(combo_strut.dcr, 3),
+                    'sf': round(1.0 / combo_strut.dcr, 2) if combo_strut.dcr > 0 else 100.0,
+                    'phi_Mn_at_Pu': round(combo_strut.phi_Mcr, 4),
+                    'is_tension': combo.P > 0,  # ETABS: P>0 = tracción
+                    'status': 'OK' if combo_strut.is_ok else 'NO OK',
+                })
+
+        # Usar comportamiento de diseño del enum
+        design_behavior = DesignBehavior.STRUT_UNCONFINED
+
+        # El elemento falla si hay tracción O si DCR > 1.0
+        # Ya no forzamos DCR=100 para tracción - mostramos el valor real
+        is_ok = not has_tension and strut_result.dcr <= 1.0
+
+        # Preparar flexure_data para el diagrama
+        flexure_data = {
+            'phi_Pn_max': strut_result.phi_Fns,
+            'phi_Mn_max': strut_result.phi_Mcr,
+            'Pu': strut_result.Pu,
+            'Mu': strut_result.Mu,
+            'dcr': strut_result.dcr,  # DCR real de la envolvente
+            'dcr_P': strut_result.dcr_P,
+            'dcr_M': strut_result.dcr_M,
+            'diagram_points': strut_result.diagram_points,
+            'is_strut': True,
+            'critical_combo': 'Envolvente',
+            # Info de tracción para UI (truenito ⚡)
+            'has_tension': has_tension,
+            'tension_combos': tension_combos,
+            # combo_results para modal sin recálculos
+            'combo_results': combo_results,
+        }
+
+        return OrchestrationResult(
+            element_type=element_type,
+            design_behavior=design_behavior,
+            service_used='strut',
+            domain_result=strut_result,
+            is_ok=is_ok,
+            dcr_max=strut_result.dcr,  # DCR real de la envolvente
+            critical_check='strut_flexocompression' if not is_ok else '',
+            warnings=strut_result.warnings,
+            flexure_data=flexure_data,
+        )
+
     # =========================================================================
     # MÉTODOS DE CONVENIENCIA
     # =========================================================================
 
     def classify(
         self,
-        element: Union['Beam', 'Column', 'Pier', 'DropBeam'],
+        element: Union['HorizontalElement', 'VerticalElement'],
     ) -> ElementType:
         """Clasifica un elemento. Alias para acceso directo."""
         return self._classifier.classify(element)
 
     def resolve_behavior(
         self,
-        element: Union['Beam', 'Column', 'Pier', 'DropBeam'],
-        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces']] = None,
+        element: Union['HorizontalElement', 'VerticalElement'],
+        forces: Optional['ElementForces'] = None,
     ) -> DesignBehavior:
         """Resuelve el comportamiento de diseño. Alias para acceso directo."""
         element_type = self._classifier.classify(element)
@@ -494,8 +662,8 @@ class ElementOrchestrator:
 
     def get_verification_info(
         self,
-        element: Union['Beam', 'Column', 'Pier', 'DropBeam'],
-        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces']] = None,
+        element: Union['HorizontalElement', 'VerticalElement'],
+        forces: Optional['ElementForces'] = None,
     ) -> Dict[str, Any]:
         """
         Obtiene información sobre cómo se verificaría un elemento.
@@ -530,7 +698,7 @@ class ElementOrchestrator:
 
     def verify_combination(
         self,
-        element: Union['Beam', 'Column', 'Pier', 'DropBeam'],
+        element: Union['HorizontalElement', 'VerticalElement'],
         combination: 'LoadCombination',
         index: int = 0,
         *,
@@ -622,8 +790,8 @@ class ElementOrchestrator:
 
     def verify_all_combinations(
         self,
-        element: Union['Beam', 'Column', 'Pier', 'DropBeam'],
-        forces: Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces'],
+        element: Union['HorizontalElement', 'VerticalElement'],
+        forces: 'ElementForces',
         *,
         lambda_factor: float = 1.0,
         apply_slenderness: bool = True,

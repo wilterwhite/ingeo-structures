@@ -12,14 +12,19 @@ import logging
 from typing import Dict, List, Tuple, Optional
 import pandas as pd
 
-from ...domain.entities.drop_beam import DropBeam
-
-logger = logging.getLogger(__name__)
-from ...domain.entities.drop_beam_forces import DropBeamForces
+from ...domain.entities import (
+    HorizontalElement,
+    HorizontalElementSource,
+    HorizontalMeshReinforcement,
+    ElementForces,
+    ElementForceType,
+)
 from ...domain.entities.section_cut import SectionCutInfo
 from ...domain.entities.load_combination import LoadCombination
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
 from .table_extractor import normalize_columns
+
+logger = logging.getLogger(__name__)
 
 
 class DropBeamParser:
@@ -28,6 +33,8 @@ class DropBeamParser:
 
     Extrae vigas capitel desde Section Cut Forces - Analysis.
     El nombre del corte contiene la geometría de la sección.
+
+    Nota: Crea instancias de HorizontalElement con source=DROP_BEAM.
     """
 
     # Patrones regex para extraer datos del nombre del corte
@@ -62,7 +69,7 @@ class DropBeamParser:
         self,
         section_cut_df: pd.DataFrame,
         materials: Dict[str, float]
-    ) -> Tuple[Dict[str, DropBeam], Dict[str, DropBeamForces], List[str]]:
+    ) -> Tuple[Dict[str, HorizontalElement], Dict[str, ElementForces], List[str]]:
         """
         Parsea vigas capitel desde Section Cut Forces - Analysis.
 
@@ -72,9 +79,10 @@ class DropBeamParser:
 
         Returns:
             Tupla (drop_beams, drop_beam_forces, stories)
+            drop_beams contiene HorizontalElement con source=DROP_BEAM
         """
-        drop_beams: Dict[str, DropBeam] = {}
-        drop_beam_forces: Dict[str, DropBeamForces] = {}
+        drop_beams: Dict[str, HorizontalElement] = {}
+        drop_beam_forces: Dict[str, ElementForces] = {}
         stories: List[str] = []
 
         if section_cut_df is None or section_cut_df.empty:
@@ -95,11 +103,12 @@ class DropBeamParser:
 
             drop_beam_key = section_cut.element_key
 
-            # Crear DropBeamForces si no existe
+            # Crear ElementForces si no existe
             if drop_beam_key not in drop_beam_forces:
-                drop_beam_forces[drop_beam_key] = DropBeamForces(
-                    drop_beam_label=section_cut.display_name,
+                drop_beam_forces[drop_beam_key] = ElementForces(
+                    label=section_cut.display_name,
                     story=section_cut.story,
+                    element_type=ElementForceType.DROP_BEAM,
                     section_cut=section_cut,
                     combinations=[]
                 )
@@ -113,21 +122,38 @@ class DropBeamParser:
             if section_cut.story not in stories:
                 stories.append(section_cut.story)
 
-        # Crear entidades DropBeam
+        # Crear entidades HorizontalElement con source=DROP_BEAM
         for key, forces in drop_beam_forces.items():
             sc = forces.section_cut
             label = f"{sc.axis_slab} - {sc.location}"
 
-            drop_beams[key] = DropBeam(
+            # Crear HorizontalMeshReinforcement con valores por defecto
+            mesh_reinforcement = HorizontalMeshReinforcement(
+                n_meshes=2,
+                diameter_v=12,
+                spacing_v=200,
+                diameter_h=10,
+                spacing_h=200,
+                n_edge_bars=4,
+                diameter_edge=16,
+            )
+
+            drop_beams[key] = HorizontalElement(
                 label=label,
                 story=sc.story,
-                width=sc.thickness_mm,      # Espesor de losa = width de viga capitel
-                thickness=sc.width_mm,      # Ancho tributario = thickness de viga capitel
+                # Para DROP_BEAM:
+                # - depth = thickness (espesor de losa, dimensión menor)
+                # - width = width (ancho tributario, dimensión mayor)
                 length=self._default_length,
+                depth=sc.thickness_mm,   # Espesor de losa
+                width=sc.width_mm,       # Ancho tributario
+                fc=self._default_fc,
+                fy=FY_DEFAULT_MPA,
+                source=HorizontalElementSource.DROP_BEAM,
+                mesh_reinforcement=mesh_reinforcement,
+                cover=25.0,  # Cover típico para losas
                 axis_slab=sc.axis_slab,
                 location=sc.location,
-                fc=self._default_fc,
-                fy=FY_DEFAULT_MPA
             )
 
         return drop_beams, drop_beam_forces, stories

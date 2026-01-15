@@ -361,16 +361,6 @@ def analyze_combination(session_id: str, pier_key: str, data: dict):
 # Gráficos y Capacidades
 # =============================================================================
 
-@bp.route('/pier-capacities', methods=['POST'])
-@handle_errors
-@require_session_and_pier
-def get_pier_capacities(session_id: str, pier_key: str, data: dict):
-    """Obtiene las capacidades puras de un pier (sin interacción)."""
-    service = get_analysis_service()
-    result = service.get_pier_capacities(session_id, pier_key)
-    return jsonify(result)
-
-
 @bp.route('/combination-details', methods=['POST'])
 @handle_errors
 @require_session_and_pier
@@ -423,15 +413,19 @@ def get_element_capacities(session_id: str, data: dict):
             'error': 'element_key es requerido'
         }), 400
 
-    valid_types = ('pier', 'column', 'beam', 'drop_beam')
+    valid_types = ('pier', 'column', 'beam', 'drop_beam', 'strut')
     if element_type not in valid_types:
         return jsonify({
             'success': False,
             'error': f'element_type debe ser uno de: {", ".join(valid_types)}'
         }), 400
 
+    # STRUT es internamente un Column verificado sin confinamiento
+    # Usar 'column' para obtener capacidades
+    effective_type = 'column' if element_type == 'strut' else element_type
+
     service = get_analysis_service()
-    result = service.get_element_capacities(session_id, element_key, element_type)
+    result = service.get_element_capacities(session_id, element_key, effective_type)
 
     return jsonify(result)
 
@@ -558,7 +552,7 @@ def generate_report(session_id: str, data: dict):
     config = ReportConfig.from_dict(data)
 
     # Validar configuración
-    total_piers = len(parsed_data.piers)
+    total_piers = len(parsed_data.vertical_elements)
     validation_errors = config.validate(total_piers)
     if validation_errors:
         return jsonify({
@@ -595,7 +589,7 @@ def generate_report(session_id: str, data: dict):
     generator = PDFReportGenerator()
     pdf_bytes = generator.generate_report(
         results=results,
-        piers=parsed_data.piers,
+        piers=parsed_data.vertical_elements,
         config=config,
         statistics=statistics
     )

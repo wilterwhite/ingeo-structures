@@ -28,7 +28,7 @@ from .strategies.thickness import (
 from .strategies.column_min import propose_for_column_min_thickness
 
 if TYPE_CHECKING:
-    from ..entities import Pier, PierForces
+    from ..entities import VerticalElement, ElementForces
     from ..chapter18.wall_piers import WallPierService
 
 
@@ -70,7 +70,7 @@ class DesignGenerator:
     # CLASIFICACIÓN Y UTILIDADES
     # =========================================================================
 
-    def _classify_pier(self, pier: 'Pier') -> tuple:
+    def _classify_pier(self, pier: 'VerticalElement') -> tuple:
         """
         Clasifica el pier según Tabla R18.10.1 y verifica espesor mínimo.
 
@@ -86,7 +86,7 @@ class DesignGenerator:
         needs_300mm = is_column and not classification.column_min_thickness_ok
         return classification, is_column, needs_300mm
 
-    def _get_min_thickness_for_pier(self, pier: 'Pier') -> float:
+    def _get_min_thickness_for_pier(self, pier: 'VerticalElement') -> float:
         """
         Obtiene el espesor mínimo para un pier según su clasificación.
 
@@ -101,7 +101,7 @@ class DesignGenerator:
             return MIN_COLUMN_DIMENSION_MM
         return pier.thickness
 
-    def _pier_to_config(self, pier: 'Pier') -> ReinforcementConfig:
+    def _pier_to_config(self, pier: 'VerticalElement') -> ReinforcementConfig:
         """Convierte pier a configuración de armadura."""
         return ReinforcementConfig(
             n_edge_bars=pier.n_edge_bars,
@@ -113,11 +113,11 @@ class DesignGenerator:
             spacing_h=pier.spacing_h,
             stirrup_diameter=pier.stirrup_diameter,
             stirrup_spacing=pier.stirrup_spacing,
-            n_stirrup_legs=pier.n_stirrup_legs,
+            n_stirrup_legs=pier.n_shear_legs,
             thickness=pier.thickness
         )
 
-    def _apply_config_to_pier(self, pier: 'Pier', config: ReinforcementConfig) -> 'Pier':
+    def _apply_config_to_pier(self, pier: 'VerticalElement', config: ReinforcementConfig) -> 'VerticalElement':
         """Aplica una configuración a un pier (crea copia modificada)."""
         new_pier = deepcopy(pier)
         new_pier.update_reinforcement(
@@ -130,7 +130,7 @@ class DesignGenerator:
             spacing_h=config.spacing_h,
             stirrup_diameter=config.stirrup_diameter,
             stirrup_spacing=config.stirrup_spacing,
-            n_stirrup_legs=config.n_stirrup_legs
+            n_shear_legs=config.n_stirrup_legs
         )
         if config.thickness and config.thickness != pier.thickness:
             new_pier.thickness = config.thickness
@@ -142,8 +142,8 @@ class DesignGenerator:
 
     def generate_proposal(
         self,
-        pier: 'Pier',
-        pier_forces: Optional['PierForces'],
+        pier: 'VerticalElement',
+        pier_forces: Optional['ElementForces'],
         flexure_sf: float,
         shear_dcr: float,
         boundary_required: bool = False,
@@ -194,8 +194,8 @@ class DesignGenerator:
     def _dispatch_to_strategy(
         self,
         failure_mode: FailureMode,
-        pier: 'Pier',
-        pier_forces: Optional['PierForces'],
+        pier: 'VerticalElement',
+        pier_forces: Optional['ElementForces'],
         original_config: ReinforcementConfig,
         flexure_sf: float,
         shear_dcr: float,
@@ -247,8 +247,8 @@ class DesignGenerator:
 
     def _propose_with_thickness_wrapper(
         self,
-        pier: 'Pier',
-        pier_forces: Optional['PierForces'],
+        pier: 'VerticalElement',
+        pier_forces: Optional['ElementForces'],
         original_config: ReinforcementConfig,
         original_sf: float,
         original_dcr: float,
@@ -263,8 +263,8 @@ class DesignGenerator:
 
     def _create_best_effort_wrapper(
         self,
-        pier: 'Pier',
-        pier_forces: Optional['PierForces'],
+        pier: 'VerticalElement',
+        pier_forces: Optional['ElementForces'],
         failure_mode: FailureMode,
         original_config: ReinforcementConfig,
         original_sf: float,

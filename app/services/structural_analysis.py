@@ -6,7 +6,6 @@ Orquesta el parsing, calculo y generacion de resultados para todos los elementos
 Este servicio actua como orquestador, delegando a servicios especializados:
 - FlexocompressionService: analisis de flexocompresion
 - ShearService: verificacion de corte
-- StatisticsService: estadisticas y graficos resumen
 - ElementOrchestrator: verificacion unificada de elementos (Pier, Column, Beam, DropBeam)
 
 Referencias ACI 318-25:
@@ -20,15 +19,14 @@ import uuid
 
 from .parsing.session_manager import SessionManager
 from .presentation.plot_generator import PlotGenerator
-from .presentation.result_formatter import ResultFormatter
+from .presentation.result_formatter import ResultFormatter, calculate_statistics
 from .analysis.flexocompression_service import FlexocompressionService
 from .analysis.shear_service import ShearService
-from .analysis.statistics_service import StatisticsService
 from .analysis.proposal_service import ProposalService
 from .analysis.reinforcement_update_service import ReinforcementUpdateService
-from .analysis.element_details_service import ElementDetailsService
+from .presentation.modal_data_service import ElementDetailsService
 from .analysis.element_orchestrator import ElementOrchestrator
-from ..domain.entities import Pier, PierForces
+from ..domain.entities import VerticalElement, ElementForces
 from ..domain.flexure import InteractionDiagramService, SlendernessService, FlexureChecker
 from ..domain.chapter18 import SeismicCategory
 
@@ -54,7 +52,6 @@ class StructuralAnalysisService:
         session_manager: Optional[SessionManager] = None,
         flexocompression_service: Optional[FlexocompressionService] = None,
         shear_service: Optional[ShearService] = None,
-        statistics_service: Optional[StatisticsService] = None,
         slenderness_service: Optional[SlendernessService] = None,
         interaction_service: Optional[InteractionDiagramService] = None,
         plot_generator: Optional[PlotGenerator] = None,
@@ -69,7 +66,6 @@ class StructuralAnalysisService:
             session_manager: Gestor de sesiones (opcional)
             flexocompression_service: Servicio de flexocompresión (opcional)
             shear_service: Servicio de corte (opcional)
-            statistics_service: Servicio de estadisticas (opcional)
             slenderness_service: Servicio de esbeltez (opcional)
             interaction_service: Servicio de diagrama interaccion (opcional)
             plot_generator: Generador de graficos (opcional)
@@ -83,7 +79,6 @@ class StructuralAnalysisService:
         self._session_manager = session_manager or SessionManager()
         self._flexo_service = flexocompression_service or FlexocompressionService()
         self._shear_service = shear_service or ShearService()
-        self._statistics_service = statistics_service or StatisticsService()
         self._slenderness_service = slenderness_service or SlendernessService()
         self._interaction_service = interaction_service or InteractionDiagramService()
         self._plot_generator = plot_generator or PlotGenerator()
@@ -111,7 +106,7 @@ class StructuralAnalysisService:
 
     def _generate_interaction_data(
         self,
-        pier: Pier,
+        pier: VerticalElement,
         apply_slenderness: bool = False
     ) -> tuple:
         """
@@ -132,7 +127,7 @@ class StructuralAnalysisService:
 
     def _analyze_piers_batch(
         self,
-        piers: Dict[str, Pier],
+        piers: Dict[str, VerticalElement],
         parsed_data: Any
     ) -> List[Dict[str, Any]]:
         """
@@ -159,7 +154,7 @@ class StructuralAnalysisService:
                 continuity_info = parsed_data.continuity_info[key]
 
             formatted = self._analyze_element(
-                key, pier, parsed_data.pier_forces.get(key),
+                key, pier, parsed_data.vertical_forces.get(key),
                 continuity_info=continuity_info,
                 hn_ft=hn_ft
             )
@@ -358,13 +353,13 @@ class StructuralAnalysisService:
         }
 
         if column_results:
-            statistics['columns'] = self._statistics_service.calculate_dict_statistics(column_results)
+            statistics['columns'] = calculate_statistics(column_results)
 
         if beam_results:
-            statistics['beams'] = self._statistics_service.calculate_dict_statistics(beam_results)
+            statistics['beams'] = calculate_statistics(beam_results)
 
         if drop_beam_results:
-            statistics['drop_beams'] = self._statistics_service.calculate_dict_statistics(drop_beam_results)
+            statistics['drop_beams'] = calculate_statistics(drop_beam_results)
 
         return statistics
 
@@ -431,11 +426,19 @@ class StructuralAnalysisService:
         # Limpiar cache de análisis previo (se recalculará todo)
         self._session_manager.clear_analysis_cache(session_id)
 
-        # Contar elementos para barra de progreso
-        piers = parsed_data.piers
-        columns = parsed_data.columns or {}
-        beams = parsed_data.beams or {}
-        drop_beams = parsed_data.drop_beams or {}
+        # Separar elementos por tipo usando la nueva arquitectura unificada
+        from ..domain.entities import VerticalElementSource, HorizontalElementSource
+
+        vertical_elements = parsed_data.vertical_elements or {}
+        horizontal_elements = parsed_data.horizontal_elements or {}
+
+        # Separar verticales por source
+        piers = {k: v for k, v in vertical_elements.items() if v.source == VerticalElementSource.PIER}
+        columns = {k: v for k, v in vertical_elements.items() if v.source == VerticalElementSource.FRAME}
+
+        # Separar horizontales por source
+        beams = {k: v for k, v in horizontal_elements.items() if v.source != HorizontalElementSource.DROP_BEAM}
+        drop_beams = {k: v for k, v in horizontal_elements.items() if v.source == HorizontalElementSource.DROP_BEAM}
 
         total_piers = len(piers)
         total_columns = len(columns)
@@ -450,6 +453,9 @@ class StructuralAnalysisService:
         # FASE 1: Analizar PIERS (usando _analyze_element)
         # =====================================================================
         pier_results = []
+        vertical_forces = parsed_data.vertical_forces or {}
+        horizontal_forces = parsed_data.horizontal_forces or {}
+
         for i, (key, pier) in enumerate(piers.items(), 1):
             yield {
                 "type": "progress",
@@ -462,7 +468,7 @@ class StructuralAnalysisService:
                 continuity_info = parsed_data.continuity_info[key]
 
             formatted = self._analyze_element(
-                key, pier, parsed_data.pier_forces.get(key),
+                key, pier, vertical_forces.get(key),
                 materials_config=materials_config,
                 continuity_info=continuity_info,
                 hn_ft=hn_ft,
@@ -477,7 +483,6 @@ class StructuralAnalysisService:
         # FASE 2: Analizar COLUMNAS (usando _analyze_element)
         # =====================================================================
         column_results = []
-        column_forces_dict = parsed_data.column_forces or {}
         for i, (key, column) in enumerate(columns.items(), 1):
             yield {
                 "type": "progress",
@@ -486,7 +491,7 @@ class StructuralAnalysisService:
                 "pier": f"Columna: {column.story} - {column.label}"
             }
             formatted = self._analyze_element(
-                key, column, column_forces_dict.get(key),
+                key, column, vertical_forces.get(key),
                 seismic_category=category_enum
             )
             column_results.append(formatted)
@@ -498,7 +503,6 @@ class StructuralAnalysisService:
         # FASE 3: Analizar VIGAS (usando _analyze_element)
         # =====================================================================
         beam_results = []
-        beam_forces_dict = parsed_data.beam_forces or {}
         for i, (key, beam) in enumerate(beams.items(), 1):
             yield {
                 "type": "progress",
@@ -507,16 +511,18 @@ class StructuralAnalysisService:
                 "pier": f"Viga: {beam.story} - {beam.label}"
             }
             formatted = self._analyze_element(
-                key, beam, beam_forces_dict.get(key),
+                key, beam, horizontal_forces.get(key),
                 seismic_category=category_enum
             )
             beam_results.append(formatted)
+
+            # Guardar en cache para que el modal no recalcule
+            self._session_manager.store_analysis_result(session_id, key, formatted)
 
         # =====================================================================
         # FASE 4: Analizar VIGAS CAPITEL (usando _analyze_element)
         # =====================================================================
         drop_beam_results = []
-        drop_beam_forces_dict = parsed_data.drop_beam_forces or {}
         for i, (key, drop_beam) in enumerate(drop_beams.items(), 1):
             yield {
                 "type": "progress",
@@ -525,10 +531,13 @@ class StructuralAnalysisService:
                 "pier": f"V. Capitel: {drop_beam.story} - {drop_beam.label}"
             }
             formatted = self._analyze_element(
-                key, drop_beam, drop_beam_forces_dict.get(key),
+                key, drop_beam, horizontal_forces.get(key),
                 seismic_category=category_enum
             )
             drop_beam_results.append(formatted)
+
+            # Guardar en cache para que el modal no recalcule
+            self._session_manager.store_analysis_result(session_id, key, formatted)
 
         # Calcular estadísticas
         statistics = self._calculate_statistics(
@@ -868,8 +877,8 @@ class StructuralAnalysisService:
             return error
 
         parsed_data = self._session_manager.get_session(session_id)
-        pier = parsed_data.piers.get(pier_key)
-        pier_forces = parsed_data.pier_forces.get(pier_key)
+        pier = parsed_data.vertical_elements.get(pier_key)
+        pier_forces = parsed_data.vertical_forces.get(pier_key)
 
         # Obtener hwcs y hn_ft
         hwcs = None
@@ -922,7 +931,7 @@ class StructuralAnalysisService:
                 'error': f'Sesión no encontrada: {session_id}'
             }
 
-        drop_beam = parsed_data.drop_beams.get(drop_beam_key)
+        drop_beam = parsed_data.horizontal_elements.get(drop_beam_key)
         if not drop_beam:
             return {
                 'success': False,

@@ -18,6 +18,7 @@ from typing import List
 
 from ..common import SeismicCategory
 from ..seismic_detailing_service import SeismicDetailingService
+from ...constants import DCR_MAX_FINITE
 from ...constants.shear import PHI_SHEAR_SEISMIC
 from ...constants.units import N_TO_TONF, TONF_TO_N
 from ...shear.concrete_shear import calculate_Vc_beam, check_Vc_zero_condition
@@ -580,7 +581,7 @@ class SeismicBeamService:
         phi_Vn_tonf = phi_Vn / TONF_TO_N
 
         # DCR
-        dcr = Vu_design / phi_Vn_tonf if phi_Vn_tonf > 0 else float('inf')
+        dcr = Vu_design / phi_Vn_tonf if phi_Vn_tonf > 0 else DCR_MAX_FINITE
         is_ok = dcr <= 1.0
 
         return BeamShearResult(

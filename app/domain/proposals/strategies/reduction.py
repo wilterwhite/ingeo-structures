@@ -22,12 +22,12 @@ from ...constants.reinforcement import RHO_MIN
 from .base import TARGET_SF, build_reduction_changes, find_boundary_start_index
 
 if TYPE_CHECKING:
-    from ...entities import Pier, PierForces
+    from ...entities import VerticalElement, ElementForces
 
 
 def propose_for_reduction(
-    pier: 'Pier',
-    pier_forces: Optional['PierForces'],
+    pier: 'VerticalElement',
+    pier_forces: Optional['ElementForces'],
     original_config: ReinforcementConfig,
     original_sf: float,
     original_dcr: float,

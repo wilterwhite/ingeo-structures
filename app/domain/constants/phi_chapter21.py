@@ -150,6 +150,9 @@ DCR_OK = 0.67           # DCR <= 0.67 significa SF >= 1.5 (conservador)
 DCR_WARN = 1.0          # DCR <= 1.0 significa SF >= 1.0 (límite)
 # DCR > 1.0 significa que la capacidad es insuficiente
 
+# Limite maximo de DCR para evitar valores infinitos (no serializables a JSON)
+DCR_MAX_FINITE = 100.0  # DCR > 100 se considera "capacidad nula"
+
 
 def get_dcr_status(dcr: float) -> str:
     """

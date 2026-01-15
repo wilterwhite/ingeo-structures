@@ -54,17 +54,20 @@ class ElementEditManager {
 
         try {
             // Separar por tipo de elemento
-            const { pierKeys, columnKeys, beamKeys, dropBeamKeys } = this._separateElementTypes(pendingKeys);
+            const { pierKeys, columnKeys, strutKeys, beamKeys, dropBeamKeys } = this._separateElementTypes(pendingKeys);
 
             const pierUpdates = this._buildPierUpdates(pierKeys);
             const columnUpdates = this._buildColumnUpdates(columnKeys);
+            // STRUTs se envían como column_updates (backend los procesa igual)
+            // Si usuario cambió grilla de 1x1 a 2x2+, se recalculará como COLUMN
+            const strutUpdates = this._buildStrutUpdates(strutKeys);
             const beamUpdates = this._buildBeamUpdates(beamKeys);
             const dropBeamUpdates = this._buildDropBeamUpdates(dropBeamKeys);
 
             const data = await structuralAPI.analyze({
                 session_id: this.table.sessionId,
                 pier_updates: pierUpdates,
-                column_updates: columnUpdates,
+                column_updates: [...columnUpdates, ...strutUpdates],  // Combinar columnas y struts
                 beam_updates: beamUpdates,
                 drop_beam_updates: dropBeamUpdates,
                 generate_plots: true,
@@ -74,7 +77,7 @@ class ElementEditManager {
 
             if (data.success) {
                 // Éxito: aplicar resultados y limpiar
-                this._applyResults(data, pierKeys, columnKeys, beamKeys, dropBeamKeys);
+                this._applyResults(data, pierKeys, columnKeys, strutKeys, beamKeys, dropBeamKeys);
                 this._clearPendingChanges(pendingKeys);
             } else {
                 this._showError('Error en el análisis: ' + (data.error || 'Error desconocido'));
@@ -129,6 +132,7 @@ class ElementEditManager {
         const result = {
             pierKeys: [],
             columnKeys: [],
+            strutKeys: [],
             beamKeys: [],
             dropBeamKeys: []
         };
@@ -143,6 +147,9 @@ class ElementEditManager {
                     break;
                 case 'column':
                     result.columnKeys.push(key);
+                    break;
+                case 'strut':
+                    result.strutKeys.push(key);
                     break;
                 case 'beam':
                     result.beamKeys.push(key);
@@ -189,6 +196,7 @@ class ElementEditManager {
         switch (elementType) {
             case 'pier':
             case 'column':
+            case 'strut':
                 return `tr[data-pier-key="${elementKey}"]`;
             case 'beam':
                 return `tr[data-beam-key="${elementKey}"]`;
@@ -233,6 +241,12 @@ class ElementEditManager {
             n_bars_depth: 3, n_bars_width: 3, diameter_long: 20,
             stirrup_diameter: 10, stirrup_spacing: 150
         },
+        strut: {
+            // STRUT: grilla 1x1 por defecto (no confinado), sin estribos
+            // Si usuario cambia a 2x2+, se recalcula como COLUMN
+            n_bars_depth: 1, n_bars_width: 1, diameter_long: 12
+            // Sin stirrup_diameter/stirrup_spacing - STRUT no usa estribos
+        },
         beam: {
             n_bars_top: 3, diameter_top: 16, n_bars_bottom: 3, diameter_bottom: 16,
             n_stirrup_legs: 2, stirrup_diameter: 10, stirrup_spacing: 150
@@ -250,6 +264,7 @@ class ElementEditManager {
         switch (elementType) {
             case 'pier': return this.table.piersData;
             case 'column': return this.table.page.columnsData;
+            case 'strut': return this.table.page.columnsData;  // STRUTs están en columnsData
             case 'beam': return this.table.page.beamResults;
             case 'drop_beam': return this.table.page.dropBeamResults;
             default: return null;
@@ -318,6 +333,14 @@ class ElementEditManager {
         return this._buildElementUpdates(dropBeamKeys, 'drop_beam');
     }
 
+    /**
+     * Construye strut_updates (se envían como column_updates).
+     * Si usuario cambió grilla de 1x1 a 2x2+, el backend lo recalculará como COLUMN.
+     */
+    _buildStrutUpdates(strutKeys) {
+        return this._buildElementUpdates(strutKeys, 'strut');
+    }
+
     // =========================================================================
     // Métodos Privados - Apply Results
     // =========================================================================
@@ -325,7 +348,7 @@ class ElementEditManager {
     /**
      * Aplica los resultados del servidor a la UI.
      */
-    _applyResults(data, pierKeys, columnKeys, beamKeys, dropBeamKeys) {
+    _applyResults(data, pierKeys, columnKeys, strutKeys, beamKeys, dropBeamKeys) {
         // Actualizar resultados de piers/columns en page
         if (data.results) {
             this.table.page.results = data.results;
@@ -356,14 +379,32 @@ class ElementEditManager {
             this._unmarkRowPending(key, 'column');
         });
 
-        // Re-renderizar tabla de piers/columns si hubo cambios
+        // Actualizar STRUTs (también en columnsData)
+        // Si el STRUT ahora es COLUMN (usuario cambió grilla), el resultado tendrá element_type='column'
+        strutKeys.forEach(key => {
+            const result = data.results?.find(r => r.key === key);
+            const strut = this.table.page.columnsData?.find(c => c.key === key);
+            if (strut && result?.reinforcement) {
+                Object.assign(strut, result.reinforcement);
+            }
+            delete this.table.combinationsCache[key];
+            // Usar el element_type del resultado (puede ser 'strut' o 'column')
+            this._unmarkRowPending(key, result?.element_type || 'strut');
+        });
+
+        // Re-renderizar tabla de piers/columns/struts si hubo cambios
         // Usar ColumnFilters.applyFilters() para mantener filtros y ordenamiento
-        if (pierKeys.length > 0 || columnKeys.length > 0) {
+        if (pierKeys.length > 0 || columnKeys.length > 0 || strutKeys.length > 0) {
             this.table.columnFilters.applyFilters();
 
             // Resaltar elementos recién recalculados y hacer scroll
             this._highlightRecalculatedElements(pierKeys, 'pier');
             this._highlightRecalculatedElements(columnKeys, 'column');
+            // Para struts que se convirtieron en columns, el highlight se hará con el tipo correcto
+            strutKeys.forEach(key => {
+                const result = data.results?.find(r => r.key === key);
+                this._highlightRecalculatedElements([key], result?.element_type || 'strut');
+            });
         }
 
         // Actualizar beamResults y re-renderizar

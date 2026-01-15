@@ -378,6 +378,17 @@ body {
     font-size: 0.85rem;
 }
 
+.btn-danger {
+    background: #dc3545;
+    color: white;
+    border: 1px solid #dc3545;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #c82333;
+    border-color: #bd2130;
+}
+
 .action-bar {
     display: flex;
     gap: 12px;
@@ -627,4 +638,176 @@ body {
     .filters-bar { flex-direction: column; align-items: flex-start; }
     .plane-indicator { margin-left: 0; }
     .config-controls { flex-direction: column; align-items: flex-start; }
+}
+
+/* ==========================================================================
+   PROJECT CONTROLS (Header)
+   ========================================================================== */
+
+.project-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 16px;
+}
+
+.project-name-display {
+    font-size: 0.9rem;
+    color: var(--text-color);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.project-name-display.no-project {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-style: italic;
+}
+
+.save-indicator {
+    display: inline-flex;
+    align-items: center;
+}
+
+.save-indicator .indicator-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success-color, #10b981);
+    transition: background 0.3s;
+}
+
+.save-indicator.unsaved .indicator-dot {
+    background: var(--warning-color, #f59e0b);
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-icon:hover {
+    background: rgba(37, 99, 235, 0.1);
+}
+
+.btn-icon .icon {
+    font-size: 1.1rem;
+}
+
+/* ==========================================================================
+   PROJECTS MODAL
+   ========================================================================== */
+
+.projects-modal-content {
+    min-width: 400px;
+    max-width: 500px;
+}
+
+.projects-list {
+    max-height: 400px;
+    overflow-y: auto;
+    margin: 16px 0;
+}
+
+.project-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    margin-bottom: 8px;
+    transition: all 0.2s;
+}
+
+.project-item:hover {
+    border-color: var(--primary-color);
+    background: rgba(37, 99, 235, 0.03);
+}
+
+.project-item.active {
+    border-color: var(--primary-color);
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.project-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+.project-name {
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.project-meta {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.project-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.projects-list .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+}
+
+.projects-list .empty-state .hint {
+    font-size: 0.85rem;
+    margin-top: 8px;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* ==========================================================================
+   SAVE PROJECT MODAL
+   ========================================================================== */
+
+.save-project-content {
+    min-width: 400px;
+}
+
+.save-project-content textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+.save-project-content textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
 }

@@ -201,7 +201,10 @@ class SeismicColumnService:
 
             if not longitudinal.is_ok:
                 if longitudinal.rho < longitudinal.rho_min:
-                    dcr = longitudinal.rho_min / longitudinal.rho
+                    if longitudinal.rho > 0:
+                        dcr = longitudinal.rho_min / longitudinal.rho
+                    else:
+                        dcr = 999.0  # Sin acero = DCR muy alto
                 elif longitudinal.rho > longitudinal.rho_max:
                     dcr = longitudinal.rho / longitudinal.rho_max
                 else:

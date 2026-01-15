@@ -8,8 +8,8 @@
  * - UploadManager: Carga de archivos y análisis
  *
  * Módulos:
- * - WallsModule: Muros y columnas
- * - BeamsModule: Vigas
+ * - WallsModule: Elementos verticales (muros y columnas)
+ * - BeamsModule: Elementos horizontales (vigas y vigas capitel)
  */
 
 class StructuralPage {
@@ -38,6 +38,7 @@ class StructuralPage {
         // Managers y componentes (se inicializan en init)
         this.materialsManager = null;
         this.uploadManager = null;
+        this.projectManager = null;
         this.resultsTable = null;
         this.plotModal = null;
         this.reportModal = null;
@@ -83,8 +84,7 @@ class StructuralPage {
             // Vigas (Beams)
             beamsTableBody: document.getElementById('beams-table')?.querySelector('tbody'),
 
-            // Vigas Capitel (Drop Beams)
-            dropBeamsPlaceholder: document.getElementById('drop-beams-placeholder'),
+            // Vigas Capitel (Drop Beams) - dentro de beams-page
             dropBeamsResultsSection: document.getElementById('drop-beams-results-section'),
             dropBeamsTable: document.getElementById('drop-beams-table')?.querySelector('tbody'),
 
@@ -92,7 +92,6 @@ class StructuralPage {
             configPage: document.getElementById('config-page'),
             wallsPage: document.getElementById('walls-page'),
             beamsPage: document.getElementById('beams-page'),
-            dropBeamsPage: document.getElementById('drop-beams-page'),
 
             // Resultados
             resultsTable: document.getElementById('results-table')?.querySelector('tbody'),
@@ -137,6 +136,12 @@ class StructuralPage {
         // Managers
         this.materialsManager = new MaterialsManager(this);
         this.uploadManager = new UploadManager(this);
+
+        // Project Manager (si existe la clase)
+        if (typeof ProjectManager !== 'undefined') {
+            this.projectManager = new ProjectManager(this);
+            this.projectManager.init();
+        }
 
         // Componentes de UI
         this.resultsTable = new ResultsTable(this);
@@ -197,6 +202,19 @@ class StructuralPage {
 
         // Botón de diagrama P-M en modal de detalles
         document.getElementById('open-pm-diagram-btn')?.addEventListener('click', () => this.wallsModule.openPmDiagram());
+
+        // Botones de proyecto
+        document.getElementById('save-project-btn')?.addEventListener('click', () => {
+            if (this.projectManager) {
+                this.projectManager.saveProject();
+            }
+        });
+
+        document.getElementById('open-projects-btn')?.addEventListener('click', () => {
+            if (this.projectManager) {
+                this.projectManager.openProjectsModal();
+            }
+        });
     }
 
     // =========================================================================
@@ -213,7 +231,6 @@ class StructuralPage {
         this.elements.configPage?.classList.toggle('hidden', pageId !== 'config-page');
         this.elements.wallsPage?.classList.toggle('hidden', pageId !== 'walls-page');
         this.elements.beamsPage?.classList.toggle('hidden', pageId !== 'beams-page');
-        this.elements.dropBeamsPage?.classList.toggle('hidden', pageId !== 'drop-beams-page');
 
         this.currentPage = pageId;
     }
@@ -231,12 +248,9 @@ class StructuralPage {
         this.elements.wallsPlaceholder?.classList.toggle('hidden', section !== 'upload');
         this.elements.resultsSection?.classList.toggle('hidden', section !== 'results');
 
-        // Beams page
+        // Beams page (incluye vigas capitel)
         this.elements.beamsPlaceholder?.classList.toggle('hidden', section !== 'upload');
         this.elements.beamsResultsSection?.classList.toggle('hidden', section !== 'results');
-
-        // Drop Beams page
-        this.elements.dropBeamsPlaceholder?.classList.toggle('hidden', section !== 'upload');
         this.elements.dropBeamsResultsSection?.classList.toggle('hidden', section !== 'results');
 
         if (section === 'upload') {
@@ -277,6 +291,11 @@ class StructuralPage {
         this.resultsTable.reset();
         this.beamsModule.clearBeamsTable();
         this.clearDropBeamsTable();
+
+        // Reset proyecto
+        if (this.projectManager) {
+            this.projectManager.clearCurrentProject();
+        }
     }
 
     // =========================================================================

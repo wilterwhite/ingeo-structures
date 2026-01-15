@@ -10,6 +10,120 @@ class WallsModule {
         this._currentPierLabel = null;
         this._currentPierData = null;
         this._currentElementType = 'pier';  // pier, column, beam, drop_beam
+        // Estado para navegación por ubicación
+        this._uniqueLocations = [];      // ['Station-1', 'Station-2'] o ['Top', 'Bottom']
+        this._locationMap = new Map();   // Map<location, combinations[]>
+        this._currentLocationIndex = 0;
+    }
+
+    // =========================================================================
+    // Helpers de Renderizado de Tablas
+    // =========================================================================
+
+    // =========================================================================
+    // Navegación por Ubicación (Station/Top/Bottom)
+    // =========================================================================
+
+    /**
+     * Agrupa combinaciones por ubicación (location).
+     * Para columnas: Station-1, Station-2, etc.
+     * Para piers: Top, Bottom
+     *
+     * Retorna también el índice de la ubicación crítica (donde está la combo crítica).
+     */
+    _groupCombinationsByLocation(combinationsList) {
+        const locationMap = new Map();
+        let criticalLocationIndex = 0;
+        let criticalLocation = null;
+
+        for (const combo of combinationsList) {
+            const loc = combo.location || 'Unknown';
+            if (!locationMap.has(loc)) locationMap.set(loc, []);
+            locationMap.get(loc).push(combo);
+
+            // Encontrar la ubicación con la combinación crítica
+            if (combo.is_critical && !criticalLocation) {
+                criticalLocation = loc;
+            }
+        }
+
+        // Ordenar: Station-1, Station-2... o Top antes de Bottom
+        const locations = Array.from(locationMap.keys()).sort((a, b) => {
+            const matchA = a.match(/Station-(\d+)/);
+            const matchB = b.match(/Station-(\d+)/);
+            if (matchA && matchB) return parseInt(matchA[1]) - parseInt(matchB[1]);
+            if (a === 'Top') return -1;
+            if (b === 'Top') return 1;
+            return a.localeCompare(b);
+        });
+
+        // Encontrar índice de la ubicación crítica
+        if (criticalLocation) {
+            criticalLocationIndex = locations.indexOf(criticalLocation);
+            if (criticalLocationIndex < 0) criticalLocationIndex = 0;
+        }
+
+        return { locations, locationMap, criticalLocationIndex };
+    }
+
+    /**
+     * Configura el selector de ubicación según el tipo de elemento.
+     */
+    _setupLocationSelector(elementType, locations) {
+        const container = document.getElementById('location-selector-container');
+        if (!container) return;
+
+        // Si solo hay 1 ubicación, ocultar selector
+        if (locations.length <= 1) {
+            container.classList.add('hidden');
+            return;
+        }
+        container.classList.remove('hidden');
+
+        // Para piers/drop_beam: botones Top/Bottom; Para columnas: dropdown
+        if (elementType === 'pier' || elementType === 'drop_beam') {
+            container.innerHTML = locations.map((loc, idx) =>
+                `<button type="button" class="loc-btn ${idx === 0 ? 'active' : ''}" data-idx="${idx}">${loc}</button>`
+            ).join('');
+        } else {
+            // Columnas/struts: dropdown para múltiples estaciones
+            container.innerHTML = `<select id="location-dropdown">
+                ${locations.map((loc, idx) => `<option value="${idx}">${loc}</option>`).join('')}
+            </select>
+            <span class="location-count">(${locations.length} estaciones)</span>`;
+        }
+
+        // Event listeners
+        container.querySelectorAll('.loc-btn').forEach(btn => {
+            btn.onclick = () => {
+                container.querySelectorAll('.loc-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this._selectLocation(parseInt(btn.dataset.idx));
+            };
+        });
+        const dropdown = container.querySelector('#location-dropdown');
+        if (dropdown) {
+            dropdown.addEventListener('change', e => {
+                this._selectLocation(parseInt(e.target.value));
+            });
+        }
+    }
+
+    /**
+     * Selecciona una ubicación y filtra las combinaciones.
+     */
+    _selectLocation(locationIndex) {
+        this._currentLocationIndex = locationIndex;
+        const location = this._uniqueLocations[locationIndex];
+        const filteredCombos = this._locationMap.get(location) || [];
+
+        // Re-poblar el selector de combinaciones con las filtradas
+        this.populateComboSelector(filteredCombos);
+
+        // Cargar detalles de la primera combinación filtrada
+        if (filteredCombos.length > 0) {
+            this.onComboSelectorChange();
+        }
     }
 
     // =========================================================================
@@ -80,19 +194,33 @@ class WallsModule {
                     this._toggleSectionsForType(elementType, data.display_config);
                 }
                 this.updateElementDetailsContent(data, elementType);
-                this.populateComboSelector(data.combinations_list || []);
 
-                // Cargar datos de la primera combinación (la más crítica)
-                const combinations = data.combinations_list || [];
-                if (combinations.length > 0) {
-                    const firstComboIndex = combinations[0].index;
-                    const comboDetails = await structuralAPI.getCombinationDetails(
-                        this.page.sessionId,
-                        elementKey,
-                        firstComboIndex
-                    );
-                    if (comboDetails.success) {
-                        this.updateDesignTablesForCombo(comboDetails);
+                // Agrupar combinaciones por ubicación (Station/Top/Bottom)
+                const allCombinations = data.combinations_list || [];
+                const { locations, locationMap } = this._groupCombinationsByLocation(allCombinations);
+                this._uniqueLocations = locations;
+                this._locationMap = locationMap;
+                this._currentLocationIndex = 0;
+
+                // Configurar selector de ubicación
+                this._setupLocationSelector(elementType, locations);
+
+                // Poblar combos de la primera ubicación (esto también carga los detalles)
+                if (locations.length > 0) {
+                    this._selectLocation(0);
+                } else {
+                    // Sin ubicaciones, poblar todas las combinaciones
+                    this.populateComboSelector(allCombinations);
+                    if (allCombinations.length > 0) {
+                        const firstComboIndex = allCombinations[0].index;
+                        const comboDetails = await structuralAPI.getCombinationDetails(
+                            this.page.sessionId,
+                            elementKey,
+                            firstComboIndex
+                        );
+                        if (comboDetails.success) {
+                            this.updateDesignTablesForCombo(comboDetails);
+                        }
                     }
                 }
             } else {

@@ -333,17 +333,13 @@
 - 22.9 Friccion por Cortante (Shear Friction)
 
 ### Capitulo 23 - Metodo Puntal-Tensor
-- 23.1 Alcance
-- 23.2 General
-- 23.3 Resistencia de Diseno
-- 23.4 Resistencia de Puntales
-- 23.5 Refuerzo Distribuido Minimo
-- 23.6 Detallado de Refuerzo en Puntales
-- 23.7 Resistencia de Tensores
-- 23.8 Detallado de Refuerzo en Tensores
-- 23.9 Resistencia de Zonas Nodales
-- 23.10 Nodos de Barra Curva
-- 23.11 Diseno Sismo-Resistente
+> Ver subcarpeta [chapter_23_Puntal_Tensor/](chapter_23_Puntal_Tensor/) con archivos individuales:
+- [23.1-23.2 Alcance y General](chapter_23_Puntal_Tensor/23_01_02_Alcance_General.md) - D-regions, componentes, tipos de nodos
+- [23.3-23.4 Resistencia de Struts](chapter_23_Puntal_Tensor/23_03_04_Resistencia_Struts.md) - fce, coeficientes beta_s y beta_c
+- [23.5-23.6 Refuerzo de Struts](chapter_23_Puntal_Tensor/23_05_06_Refuerzo_Struts.md) - Refuerzo distribuido, closed ties
+- [23.7-23.8 Resistencia de Ties](chapter_23_Puntal_Tensor/23_07_08_Resistencia_Ties.md) - Fnt, desarrollo, anclaje
+- [23.9-23.10 Nodal Zones](chapter_23_Puntal_Tensor/23_09_10_Nodal_Zones.md) - Fnn, beta_n, curved-bar nodes
+- [23.11 Diseno Sismico](chapter_23_Puntal_Tensor/23_11_Diseno_Sismico.md) - SDC D/E/F, reducciones 0.8
 
 ### Capitulo 24 - Serviciabilidad
 - 24.1 Alcance

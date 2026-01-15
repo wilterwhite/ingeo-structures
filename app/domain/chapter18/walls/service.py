@@ -20,6 +20,7 @@ from ..boundary_elements import BoundaryElementService
 from ..wall_piers import WallPierService, classify_wall_pier
 from ..reinforcement import SeismicReinforcementService
 from ..design_forces import ShearAmplificationService
+from ...constants import DCR_MAX_FINITE
 from ...constants.reinforcement import RHO_MIN, MAX_SPACING_SEISMIC_MM
 from ...constants.materials import get_effective_fc_shear
 from ...constants.shear import PHI_SHEAR, PHI_SHEAR_SEISMIC
@@ -606,7 +607,7 @@ class SeismicWallService:
         Vn_max_ok = Vn_tonf <= Vn_max_tonf
 
         # DCR
-        dcr = Ve / phi_Vn if phi_Vn > 0 else float('inf')
+        dcr = Ve / phi_Vn if phi_Vn > 0 else DCR_MAX_FINITE
         is_ok = dcr <= 1.0 and Vn_max_ok
 
         return WallShearResult(

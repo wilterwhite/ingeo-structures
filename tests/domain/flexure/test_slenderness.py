@@ -20,7 +20,22 @@ from app.domain.constants.stiffness import (
     CM_MIN,
     CM_TRANSVERSE,
 )
-from app.domain.entities.pier import Pier
+from app.domain.entities import VerticalElement, VerticalElementSource
+
+
+def Pier(label: str, story: str, width: float, thickness: float, height: float, fc: float, fy: float) -> VerticalElement:
+    """Helper para crear pier de test (compatibilidad)."""
+    return VerticalElement(
+        label=label,
+        story=story,
+        source=VerticalElementSource.PIER,
+        length=width,  # lw
+        thickness=thickness,  # tw
+        height=height,
+        fc=fc,
+        fy=fy,
+        n_shear_legs=2,
+    )
 
 
 @pytest.fixture
@@ -32,14 +47,15 @@ def service():
 @pytest.fixture
 def pier_tipico():
     """Pier tipico para tests."""
-    return Pier(
+    return VerticalElement(
         label="P1",
         story="Piso 1",
-        width=3000,      # 3m de largo
-        thickness=200,   # 20cm de espesor
-        height=3000,     # 3m de altura
-        fc=28,           # H28
+        length=3000,      # 3m de largo (lw)
+        thickness=200,    # 20cm de espesor (tw)
+        height=3000,      # 3m de altura
+        fc=28,            # H28
         fy=420,
+        source=VerticalElementSource.PIER,
     )
 
 

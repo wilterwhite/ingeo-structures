@@ -21,7 +21,16 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-from ...domain.entities import Pier, LoadCombination, PierForces, ParsedData
+from ...domain.entities import (
+    VerticalElement,
+    VerticalElementSource,
+    MeshReinforcement,
+    HorizontalElement,
+    LoadCombination,
+    ElementForces,
+    ElementForceType,
+    ParsedData,
+)
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
 from .material_mapper import parse_material_to_fc
 from .table_extractor import (
@@ -223,15 +232,30 @@ class EtabsExcelParser:
             if s not in all_stories:
                 all_stories.append(s)
 
+        # Combinar piers y columns en vertical_elements
+        vertical_elements = {}
+        vertical_elements.update(piers)
+        vertical_elements.update(columns)
+
+        # Combinar beams y drop_beams en horizontal_elements
+        horizontal_elements = {}
+        horizontal_elements.update(beams)
+        horizontal_elements.update(drop_beams)
+
+        # Combinar todas las fuerzas verticales y horizontales
+        vertical_forces = {}
+        vertical_forces.update(pier_forces)
+        vertical_forces.update(column_forces)
+
+        horizontal_forces = {}
+        horizontal_forces.update(beam_forces)
+        horizontal_forces.update(drop_beam_forces)
+
         return ParsedData(
-            piers=piers,
-            pier_forces=pier_forces,
-            columns=columns,
-            column_forces=column_forces,
-            beams=beams,
-            beam_forces=beam_forces,
-            drop_beams=drop_beams,
-            drop_beam_forces=drop_beam_forces,
+            vertical_elements=vertical_elements,
+            horizontal_elements=horizontal_elements,
+            vertical_forces=vertical_forces,
+            horizontal_forces=horizontal_forces,
             materials=materials,
             stories=all_stories,
             raw_data=raw_data
@@ -273,9 +297,9 @@ class EtabsExcelParser:
         self,
         df: pd.DataFrame,
         materials: Dict[str, float]
-    ) -> tuple[Dict[str, Pier], List[str]]:
-        """Extrae los piers con su geometría."""
-        piers: Dict[str, Pier] = {}
+    ) -> tuple[Dict[str, VerticalElement], List[str]]:
+        """Extrae los piers con su geometría como VerticalElement."""
+        piers: Dict[str, VerticalElement] = {}
         stories: List[str] = []
 
         if df is None:
@@ -330,17 +354,20 @@ class EtabsExcelParser:
                 )
                 continue
 
-            # Crear Pier
+            # Crear VerticalElement con source=PIER
             pier_key = f"{story}_{pier_label}"
-            piers[pier_key] = Pier(
+            piers[pier_key] = VerticalElement(
                 label=pier_label,
                 story=story,
-                width=width,
+                # Para pier: length=width (lw), thickness=thickness (tw)
+                length=width,
                 thickness=thickness,
                 height=height,
                 fc=fc,
                 fy=FY_DEFAULT_MPA,
-                axis_angle=axis_angle
+                source=VerticalElementSource.PIER,
+                axis_angle=axis_angle,
+                # MeshReinforcement se inicializa automáticamente en __post_init__
             )
             imported_ok += 1
 
@@ -356,9 +383,9 @@ class EtabsExcelParser:
 
         return piers, stories
 
-    def _parse_forces(self, df: pd.DataFrame) -> Dict[str, PierForces]:
+    def _parse_forces(self, df: pd.DataFrame) -> Dict[str, ElementForces]:
         """Extrae las fuerzas por combinación de carga."""
-        pier_forces: Dict[str, PierForces] = {}
+        pier_forces: Dict[str, ElementForces] = {}
 
         if df is None:
             return pier_forces
@@ -374,11 +401,12 @@ class EtabsExcelParser:
 
             pier_key = f"{story}_{pier_label}"
 
-            # Crear PierForces si no existe
+            # Crear ElementForces si no existe
             if pier_key not in pier_forces:
-                pier_forces[pier_key] = PierForces(
-                    pier_label=pier_label,
+                pier_forces[pier_key] = ElementForces(
+                    label=pier_label,
                     story=story,
+                    element_type=ElementForceType.PIER,
                     combinations=[]
                 )
 
@@ -554,16 +582,31 @@ class EtabsExcelParser:
             if s not in all_stories:
                 all_stories.append(s)
 
+        # Combinar piers y columns en vertical_elements
+        vertical_elements = {}
+        vertical_elements.update(piers)
+        vertical_elements.update(columns)
+
+        # Combinar beams y drop_beams en horizontal_elements
+        horizontal_elements = {}
+        horizontal_elements.update(beams)
+        horizontal_elements.update(drop_beams)
+
+        # Combinar todas las fuerzas verticales y horizontales
+        vertical_forces = {}
+        vertical_forces.update(pier_forces)
+        vertical_forces.update(column_forces)
+
+        horizontal_forces = {}
+        horizontal_forces.update(beam_forces)
+        horizontal_forces.update(drop_beam_forces)
+
         # Emitir resultado final
         result = ParsedData(
-            piers=piers,
-            pier_forces=pier_forces,
-            columns=columns,
-            column_forces=column_forces,
-            beams=beams,
-            beam_forces=beam_forces,
-            drop_beams=drop_beams,
-            drop_beam_forces=drop_beam_forces,
+            vertical_elements=vertical_elements,
+            horizontal_elements=horizontal_elements,
+            vertical_forces=vertical_forces,
+            horizontal_forces=horizontal_forces,
             materials=materials,
             stories=all_stories,
             raw_data=raw_data
@@ -573,10 +616,16 @@ class EtabsExcelParser:
 
     def get_summary(self, data: ParsedData) -> Dict[str, Any]:
         """Genera un resumen de los datos parseados."""
+        # Usar métodos helper de ParsedData para filtrar por tipo
+        piers = data.get_piers()
+        columns = data.get_columns()
+        beams = data.get_beams()
+        drop_beams = data.get_drop_beams()
+
         # Extraer ejes y grillas únicos de piers
         axes = set()
         grillas = set()
-        for pier in data.piers.values():
+        for pier in piers.values():
             if pier.eje:
                 axes.add(pier.eje)
             if pier.grilla:
@@ -584,16 +633,16 @@ class EtabsExcelParser:
 
         # Construir resumen base
         summary = {
-            'total_piers': len(data.piers),
-            'total_columns': len(data.columns) if data.columns else 0,
-            'total_beams': len(data.beams) if data.beams else 0,
-            'total_drop_beams': len(data.drop_beams) if data.drop_beams else 0,
+            'total_piers': len(piers),
+            'total_columns': len(columns),
+            'total_beams': len(beams),
+            'total_drop_beams': len(drop_beams),
             'total_stories': len(data.stories),
             'stories': data.stories,
             'axes': sorted(list(axes)),
             'grillas': sorted(list(grillas)),
             'total_combinations': sum(
-                len(pf.combinations) for pf in data.pier_forces.values()
+                len(f.combinations) for f in data.vertical_forces.values()
             ),
             'materials': list(data.materials.keys()),
             'piers_list': [
@@ -603,12 +652,12 @@ class EtabsExcelParser:
                     'story': pier.story,
                     'grilla': pier.grilla,
                     'eje': pier.eje,
-                    'width_m': pier.width / 1000,
+                    'width_m': pier.lw / 1000,  # length es lw para PIER
                     'thickness_m': pier.thickness / 1000,
                     'height_m': pier.height / 1000,
                     'fc_MPa': pier.fc,
                     'fy_MPa': pier.fy,
-                    # Configuración de armadura
+                    # Configuración de armadura (desde mesh_reinforcement)
                     'n_meshes': pier.n_meshes,
                     'diameter_v': pier.diameter_v,
                     'spacing_v': pier.spacing_v,
@@ -628,20 +677,20 @@ class EtabsExcelParser:
                     'rho_horizontal': pier.rho_horizontal,
                     'reinforcement_desc': pier.reinforcement_description
                 }
-                for key, pier in data.piers.items()
+                for key, pier in piers.items()
             ]
         }
 
         # Agregar columnas si existen
-        if data.columns:
+        if columns:
             summary['columns_list'] = [
                 {
                     'key': key,
                     'label': col.label,
                     'story': col.story,
                     'section': col.section_name,
-                    'depth_m': col.depth / 1000,
-                    'width_m': col.width / 1000,
+                    'depth_m': col.depth / 1000,  # length es depth para FRAME
+                    'width_m': col.width / 1000,  # thickness es width para FRAME
                     'height_m': col.height / 1000,
                     'fc_MPa': col.fc,
                     'fy_MPa': col.fy,
@@ -654,11 +703,11 @@ class EtabsExcelParser:
                     'rho_longitudinal': col.rho_longitudinal,
                     'reinforcement_desc': col.reinforcement_description
                 }
-                for key, col in data.columns.items()
+                for key, col in columns.items()
             ]
 
         # Agregar vigas si existen
-        if data.beams:
+        if beams:
             summary['beams_list'] = [
                 {
                     'key': key,
@@ -680,11 +729,11 @@ class EtabsExcelParser:
                     'Av_mm2': beam.Av,
                     'reinforcement_desc': beam.reinforcement_description
                 }
-                for key, beam in data.beams.items()
+                for key, beam in beams.items()
             ]
 
         # Agregar vigas capitel si existen
-        if data.drop_beams:
+        if drop_beams:
             summary['drop_beams_list'] = [
                 {
                     'key': key,
@@ -692,12 +741,12 @@ class EtabsExcelParser:
                     'story': db.story,
                     'axis_slab': db.axis_slab,
                     'location': db.location,
-                    'width_m': db.width / 1000,       # Espesor de losa
-                    'thickness_m': db.thickness / 1000,  # Ancho tributario
+                    'width_m': db.width / 1000,
+                    'depth_m': db.depth / 1000,
                     'length_m': db.length / 1000,
                     'fc_MPa': db.fc,
                     'fy_MPa': db.fy,
-                    # Configuración de armadura (igual que pier)
+                    # Configuración de armadura (desde mesh_reinforcement)
                     'n_meshes': db.n_meshes,
                     'diameter_v': db.diameter_v,
                     'spacing_v': db.spacing_v,
@@ -716,7 +765,7 @@ class EtabsExcelParser:
                     'rho_horizontal': db.rho_horizontal,
                     'reinforcement_desc': db.reinforcement_description
                 }
-                for key, db in data.drop_beams.items()
+                for key, db in drop_beams.items()
             ]
 
         return summary

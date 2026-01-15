@@ -12,7 +12,7 @@ Mantiene la misma API pública pero elimina capas de indirección.
 """
 from typing import Dict, Any, Optional, List, Tuple
 
-from ...domain.entities import Pier, PierForces
+from ...domain.entities import VerticalElement, ElementForces
 from ...domain.shear import (
     ShearVerificationService,
     WallClassificationService as DomainWallClassificationService,
@@ -59,8 +59,8 @@ class ShearService:
 
     def check_shear(
         self,
-        pier: Pier,
-        pier_forces: Optional[PierForces],
+        pier: 'VerticalElement',
+        pier_forces: Optional[ElementForces],
         Mpr_total: float = 0,
         lu: float = 0,
         lambda_factor: float = 1.0,
@@ -89,13 +89,14 @@ class ShearService:
 
         # Clasificar el elemento
         classification = self._classification.classify(
-            lw=pier.width, tw=pier.thickness, hw=pier.height
+            lw=pier.length, tw=pier.thickness, hw=pier.height
         )
 
-        # Encontrar combinación crítica
+        # Encontrar combinación crítica y cachear TODOS los resultados
         critical_result = None
         critical_combo = None
         max_dcr = 0
+        combo_shear_results = []  # Cachear resultado de CADA combinación
 
         for combo in pier_forces.combinations:
             Vu2 = abs(combo.V2) if hasattr(combo, 'V2') else 0
@@ -103,7 +104,7 @@ class ShearService:
             Nu = -combo.P if hasattr(combo, 'P') else 0  # Compresión positiva
 
             result = self._shear_verification.verify_combined_shear(
-                lw=pier.width,
+                lw=pier.length,
                 tw=pier.thickness,
                 hw=pier.height,
                 fc=pier.fc,
@@ -117,6 +118,27 @@ class ShearService:
                 lambda_factor=lambda_factor,
                 seismic_category=seismic_category
             )
+
+            # Cachear resultado de este combo (ya se calculó, no desperdiciar)
+            r2 = result.result_V2
+            r3 = result.result_V3
+            combo_shear_results.append({
+                'combo_name': combo.name,
+                'combo_location': combo.location if hasattr(combo, 'location') else 'Middle',
+                'Vu_2': round(Vu2, 2),
+                'Vu_3': round(Vu3, 2),
+                'Pu': round(-Nu, 2),
+                'phi_Vn_2': round(r2.phi_Vn, 2),
+                'phi_Vn_3': round(r3.phi_Vn, 2),
+                'phi_Vc': round(r2.Vc * result.phi_v, 2),
+                'Vc': round(r2.Vc, 2),
+                'Vs': round(r2.Vs, 2),
+                'dcr_2': round(result.dcr_2, 3),
+                'dcr_3': round(result.dcr_3, 3),
+                'dcr_combined': round(result.dcr_combined, 3),
+                'sf': round(1.0 / result.dcr_combined, 2) if result.dcr_combined > 0 else 100.0,
+                'status': 'OK' if result.dcr_combined <= 1.0 else 'NO OK'
+            })
 
             if result.dcr_combined > max_dcr:
                 max_dcr = result.dcr_combined
@@ -147,6 +169,7 @@ class ShearService:
             'Vs': round(r2.Vs, 2),
             'aci_reference': r2.aci_reference,
             'phi_v': critical_result.phi_v,
+            'combo_results': combo_shear_results,  # Resultados de TODAS las combinaciones
         }
 
     def _empty_shear_result(self) -> Dict[str, Any]:
@@ -164,7 +187,7 @@ class ShearService:
 
     def get_shear_capacity(
         self,
-        pier: Pier,
+        pier: 'VerticalElement',
         Nu: float = 0,
         seismic_category: SeismicCategory = None
     ) -> Dict[str, Any]:
@@ -175,7 +198,7 @@ class ShearService:
 
         # Usar verify_combined_shear con Vu=0 para obtener capacidades en V2 y V3
         result = self._shear_verification.verify_combined_shear(
-            lw=pier.width,
+            lw=pier.length,
             tw=pier.thickness,
             hw=pier.height,
             fc=pier.fc,
@@ -258,13 +281,13 @@ class ShearService:
     # CLASIFICACIÓN DE MUROS (§18.10.8)
     # =========================================================================
 
-    def classify_wall(self, pier: Pier) -> WallClassification:
+    def classify_wall(self, pier: 'VerticalElement') -> WallClassification:
         """Clasifica un pier según ACI 318-25 §18.10.8."""
         return self._classification.classify(
-            lw=pier.width, tw=pier.thickness, hw=pier.height
+            lw=pier.length, tw=pier.thickness, hw=pier.height
         )
 
-    def get_classification_dict(self, pier: Pier) -> Dict[str, Any]:
+    def get_classification_dict(self, pier: 'VerticalElement') -> Dict[str, Any]:
         """Obtiene la clasificación del pier como diccionario."""
         classification = self.classify_wall(pier)
         return {
@@ -285,7 +308,7 @@ class ShearService:
 
     def amplify_shear(
         self,
-        pier: Pier,
+        pier: 'VerticalElement',
         Vu: float,
         hwcs: Optional[float] = None,
         hn_ft: Optional[float] = None,
@@ -304,20 +327,20 @@ class ShearService:
                 Omega_v=1.0,
                 omega_v_dyn=1.0,
                 amplification=1.0,
-                hwcs_lw=hwcs_value / pier.width if pier.width > 0 else 0,
+                hwcs_lw=hwcs_value / pier.length if pier.length > 0 else 0,
                 hn_ft=None,
                 applies=False,
                 aci_reference="No aplica: pilar de muro o viga de acoplamiento"
             )
 
         return self._amplification.calculate_amplified_shear(
-            Vu=Vu, hwcs=hwcs_value, lw=pier.width,
+            Vu=Vu, hwcs=hwcs_value, lw=pier.length,
             hn_ft=hn_ft, use_omega_0=use_omega_0, omega_0=omega_0
         )
 
     def get_amplification_dict(
         self,
-        pier: Pier,
+        pier: 'VerticalElement',
         Vu: float,
         hwcs: Optional[float] = None,
         hn_ft: Optional[float] = None
@@ -341,7 +364,7 @@ class ShearService:
 
     def check_boundary_element(
         self,
-        pier: Pier,
+        pier: 'VerticalElement',
         Pu: float,
         Mu: float,
         c: Optional[float] = None,
@@ -350,7 +373,7 @@ class ShearService:
         method: str = 'auto'
     ) -> BoundaryElementResult:
         """Verifica si se requiere elemento de borde según §18.10.6."""
-        hwcs_lw = pier.height / pier.width if pier.width > 0 else 0
+        hwcs_lw = pier.height / pier.length if pier.length > 0 else 0
         Ag = pier.Ag
         Ach = Ag * 0.85
 
@@ -367,7 +390,7 @@ class ShearService:
         if use_method == BoundaryElementMethod.DISPLACEMENT and c and delta_u:
             return self._boundary.verify_boundary_element(
                 method=use_method,
-                lw=pier.width, c=c, hu=pier.height,
+                lw=pier.length, c=c, hu=pier.height,
                 fc=pier.fc, fyt=pier.fy, Ag=Ag, Ach=Ach,
                 b=pier.thickness, delta_u=delta_u,
                 hwcs=pier.height, Mu=Mu, Vu=Vu, Ve=Vu, Acv=Ag
@@ -380,14 +403,14 @@ class ShearService:
 
             return self._boundary.verify_boundary_element(
                 method=BoundaryElementMethod.STRESS,
-                lw=pier.width, c=c or pier.width / 4, hu=pier.height,
+                lw=pier.length, c=c or pier.length / 4, hu=pier.height,
                 fc=pier.fc, fyt=pier.fy, Ag=Ag, Ach=Ach,
                 b=pier.thickness, Mu=Mu, Vu=Vu, sigma_max=sigma_max
             )
 
     def get_boundary_element_dict(
         self,
-        pier: Pier,
+        pier: 'VerticalElement',
         Pu: float,
         Mu: float
     ) -> Dict[str, Any]:
@@ -431,8 +454,8 @@ class ShearService:
 
     def check_complete(
         self,
-        pier: Pier,
-        pier_forces: Optional[PierForces],
+        pier: 'VerticalElement',
+        pier_forces: Optional[ElementForces],
         hwcs: Optional[float] = None,
         hn_ft: Optional[float] = None
     ) -> Dict[str, Any]:

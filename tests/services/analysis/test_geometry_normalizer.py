@@ -11,92 +11,110 @@ from app.services.analysis.geometry_normalizer import (
     BeamGeometry,
     WallGeometry,
 )
-from app.domain.entities import Column, Pier, Beam, DropBeam
+from app.domain.entities import (
+    VerticalElement, VerticalElementSource,
+    HorizontalElement, HorizontalElementSource,
+    DiscreteReinforcement, MeshReinforcement,
+    HorizontalDiscreteReinforcement, HorizontalMeshReinforcement,
+)
 
 
 @pytest.fixture
 def sample_column():
-    """Column de prueba."""
-    return Column(
+    """Column de prueba (VerticalElement con source FRAME)."""
+    return VerticalElement(
         label="C1",
         story="Piso 1",
-        depth=500,          # mm
-        width=400,          # mm
+        source=VerticalElementSource.FRAME,
+        length=500,         # depth (mm)
+        thickness=400,      # width (mm)
         height=3000,        # mm
         fc=30,              # MPa
         fy=420,             # MPa
-        diameter_long=20,   # mm
-        n_bars_depth=3,
-        n_bars_width=4,
+        discrete_reinforcement=DiscreteReinforcement(
+            n_bars_length=3,
+            n_bars_thickness=4,
+            diameter=20,
+        ),
         stirrup_diameter=10,
         stirrup_spacing=100,
-        n_stirrup_legs_depth=2,
-        n_stirrup_legs_width=3,
+        n_shear_legs=2,
+        n_shear_legs_secondary=3,
     )
 
 
 @pytest.fixture
 def sample_pier():
-    """Pier de prueba (muro)."""
-    return Pier(
+    """Pier de prueba (VerticalElement con source PIER)."""
+    return VerticalElement(
         label="M1-A",
         story="Cielo P1",
-        width=2000,         # lw (mm)
+        source=VerticalElementSource.PIER,
+        length=2000,        # lw (mm)
         thickness=200,      # tw (mm)
         height=2700,        # hw (mm)
         fc=25,
         fy=420,
-        n_meshes=2,
-        diameter_v=10,
-        spacing_v=200,
-        diameter_h=8,
-        spacing_h=200,
-        n_edge_bars=4,
-        diameter_edge=16,
+        mesh_reinforcement=MeshReinforcement(
+            n_meshes=2,
+            diameter_v=10,
+            spacing_v=200,
+            diameter_h=8,
+            spacing_h=200,
+            n_edge_bars=4,
+            diameter_edge=16,
+        ),
         stirrup_diameter=8,
         stirrup_spacing=150,
+        n_shear_legs=2,
     )
 
 
 @pytest.fixture
 def sample_beam():
-    """Beam de prueba."""
-    return Beam(
+    """Beam de prueba (HorizontalElement con source FRAME)."""
+    return HorizontalElement(
         label="V1",
         story="Piso 1",
+        source=HorizontalElementSource.FRAME,
         width=300,          # mm
         depth=600,          # mm
         length=6000,        # mm
         fc=25,
         fy=420,
-        diameter_top=16,
-        n_bars_top=3,
-        diameter_bottom=20,
-        n_bars_bottom=4,
         stirrup_diameter=8,
         stirrup_spacing=150,
         n_stirrup_legs=2,
+        discrete_reinforcement=HorizontalDiscreteReinforcement(
+            n_bars_top=3,
+            n_bars_bottom=4,
+            diameter_top=16,
+            diameter_bottom=20,
+        ),
     )
 
 
 @pytest.fixture
 def sample_drop_beam():
-    """DropBeam de prueba."""
-    return DropBeam(
+    """DropBeam de prueba (HorizontalElement con source DROP_BEAM)."""
+    return HorizontalElement(
         label="VC1",
         story="Cielo P1",
+        source=HorizontalElementSource.DROP_BEAM,
         width=200,          # espesor losa (mm)
-        thickness=2400,     # ancho tributario (mm)
+        depth=2400,         # ancho tributario (mm)
         length=1500,        # luz libre (mm)
         fc=25,
         fy=420,
-        n_meshes=2,
-        diameter_v=10,
-        spacing_v=150,
-        diameter_h=10,
-        spacing_h=200,
-        n_edge_bars=2,
-        diameter_edge=16,
+        mesh_reinforcement=HorizontalMeshReinforcement(
+            n_meshes=2,
+            diameter_v=10,
+            spacing_v=150,
+            diameter_h=10,
+            spacing_h=200,
+            n_edge_bars=2,
+            diameter_edge=16,
+        ),
     )
 
 
@@ -223,7 +241,7 @@ class TestPierToColumnGeometry:
 
         # Ash = area_estribo * n_legs
         stirrup_area = math.pi * (sample_pier.stirrup_diameter / 2) ** 2
-        expected_Ash = stirrup_area * sample_pier.n_stirrup_legs
+        expected_Ash = stirrup_area * sample_pier.n_shear_legs
         assert abs(geom.Ash - expected_Ash) < 1
 
 
@@ -364,42 +382,6 @@ class TestDropBeamToWallGeometry:
 
         assert geom.n_edge_bars == 2
         assert geom.diameter_edge == 16
-
-
-class TestValidation:
-    """Tests para metodos de validacion."""
-
-    def test_validate_column_valid(self, sample_column):
-        """Column valida sin warnings."""
-        geom = GeometryNormalizer.to_column(sample_column)
-        warnings = GeometryNormalizer.validate_column_geometry(geom)
-        assert len(warnings) == 0
-
-    def test_validate_column_invalid_dimensions(self):
-        """Column invalida por dimensiones."""
-        geom = ColumnGeometry(b=0, h=500)
-        warnings = GeometryNormalizer.validate_column_geometry(geom)
-        assert len(warnings) > 0
-        assert "Dimensiones invalidas" in warnings[0]
-
-    def test_validate_beam_valid(self, sample_beam):
-        """Beam valida sin warnings."""
-        geom = GeometryNormalizer.to_beam(sample_beam)
-        warnings = GeometryNormalizer.validate_beam_geometry(geom)
-        assert len(warnings) == 0
-
-    def test_validate_beam_no_reinforcement(self):
-        """Beam sin refuerzo genera warning."""
-        geom = BeamGeometry(bw=300, h=600, d=540, As_top=0, As_bottom=0)
-        warnings = GeometryNormalizer.validate_beam_geometry(geom)
-        assert len(warnings) > 0
-        assert "acero" in warnings[0].lower()
-
-    def test_validate_wall_valid(self, sample_pier):
-        """Wall valida sin warnings."""
-        geom = GeometryNormalizer.to_wall(sample_pier)
-        warnings = GeometryNormalizer.validate_wall_geometry(geom)
-        assert len(warnings) == 0
 
 
 class TestEdgeCases:

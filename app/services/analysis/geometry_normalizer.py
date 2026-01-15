@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Union, Optional, Dict, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...domain.entities import Beam, Column, Pier, DropBeam
+    from ...domain.entities import VerticalElement, HorizontalElement
 
 
 @dataclass
@@ -150,10 +150,10 @@ class GeometryNormalizer:
 
     @staticmethod
     def to_column(
-        element: Union['Column', 'Pier', 'Beam']
+        element: Union['VerticalElement', 'HorizontalElement']
     ) -> ColumnGeometry:
         """
-        Convierte Column, Pier o Beam a geometria de columna.
+        Convierte VerticalElement o HorizontalElement a geometria de columna.
 
         Args:
             element: Elemento a normalizar
@@ -161,25 +161,26 @@ class GeometryNormalizer:
         Returns:
             ColumnGeometry con propiedades normalizadas para §18.7
         """
-        from ...domain.entities import Column, Pier, Beam
+        from ...domain.entities import VerticalElement, HorizontalElement
 
         geom = ColumnGeometry()
 
-        if isinstance(element, Column):
-            geom = GeometryNormalizer._column_to_column_geom(element)
-        elif isinstance(element, Pier):
-            geom = GeometryNormalizer._pier_to_column_geom(element)
-        elif isinstance(element, Beam):
+        if isinstance(element, VerticalElement):
+            if element.is_frame_source:
+                geom = GeometryNormalizer._column_to_column_geom(element)
+            else:  # PIER
+                geom = GeometryNormalizer._pier_to_column_geom(element)
+        elif isinstance(element, HorizontalElement):
             geom = GeometryNormalizer._beam_to_column_geom(element)
 
         return geom
 
     @staticmethod
     def to_beam(
-        element: Union['Beam', 'Column']
+        element: Union['VerticalElement', 'HorizontalElement']
     ) -> BeamGeometry:
         """
-        Convierte Beam o Column a geometria de viga.
+        Convierte HorizontalElement o VerticalElement a geometria de viga.
 
         Args:
             element: Elemento a normalizar
@@ -187,21 +188,21 @@ class GeometryNormalizer:
         Returns:
             BeamGeometry con propiedades normalizadas para §18.6
         """
-        from ...domain.entities import Column, Beam
+        from ...domain.entities import VerticalElement, HorizontalElement
 
-        if isinstance(element, Beam):
+        if isinstance(element, HorizontalElement):
             return GeometryNormalizer._beam_to_beam_geom(element)
-        elif isinstance(element, Column):
+        elif isinstance(element, VerticalElement) and element.is_frame_source:
             return GeometryNormalizer._column_to_beam_geom(element)
 
         return BeamGeometry()
 
     @staticmethod
     def to_wall(
-        element: Union['Pier', 'DropBeam']
+        element: Union['VerticalElement', 'HorizontalElement']
     ) -> WallGeometry:
         """
-        Convierte Pier o DropBeam a geometria de muro.
+        Convierte VerticalElement (pier) o HorizontalElement (drop_beam) a geometria de muro.
 
         Args:
             element: Elemento a normalizar
@@ -209,11 +210,11 @@ class GeometryNormalizer:
         Returns:
             WallGeometry con propiedades normalizadas para §18.10
         """
-        from ...domain.entities import Pier, DropBeam
+        from ...domain.entities import VerticalElement, HorizontalElement
 
-        if isinstance(element, Pier):
+        if isinstance(element, VerticalElement) and element.is_pier_source:
             return GeometryNormalizer._pier_to_wall_geom(element)
-        elif isinstance(element, DropBeam):
+        elif isinstance(element, HorizontalElement) and element.is_drop_beam:
             return GeometryNormalizer._drop_beam_to_wall_geom(element)
 
         return WallGeometry()
@@ -223,11 +224,12 @@ class GeometryNormalizer:
     # =========================================================================
 
     @staticmethod
-    def _column_to_column_geom(col: 'Column') -> ColumnGeometry:
-        """Extrae geometria de Column para verificacion tipo columna."""
+    def _column_to_column_geom(col: 'VerticalElement') -> ColumnGeometry:
+        """Extrae geometria de VerticalElement (source=FRAME) para verificacion tipo columna."""
+        # Para FRAME: length=depth, thickness=width
         return ColumnGeometry(
-            b=min(col.depth, col.width),
-            h=max(col.depth, col.width),
+            b=min(col.length, col.thickness),
+            h=max(col.length, col.thickness),
             lu=getattr(col, 'lu_calculated', col.height),
             cover=col.cover,
             Ag=col.Ag,
@@ -247,25 +249,26 @@ class GeometryNormalizer:
         )
 
     @staticmethod
-    def _pier_to_column_geom(pier: 'Pier') -> ColumnGeometry:
+    def _pier_to_column_geom(pier: 'VerticalElement') -> ColumnGeometry:
         """
-        Extrae geometria de Pier para verificacion tipo columna (§18.7).
+        Extrae geometria de VerticalElement (source=PIER) para verificacion tipo columna (§18.7).
 
         Cuando un Pier es clasificado como WALL_PIER_COLUMN (lw/tw <= 2.5, hw/lw < 2.0),
         se trata como columna sismica. La geometria se normaliza:
-        - b = min(width, thickness) - dimension menor
-        - h = max(width, thickness) - dimension mayor
+        - b = min(length, thickness) - dimension menor
+        - h = max(length, thickness) - dimension mayor
 
         Esto permite que el mismo servicio SeismicColumnService verifique
         tanto columnas como wall piers clasificados como columna.
         """
         # Normalizar geometria: b = lado corto, h = lado largo
-        b = min(pier.width, pier.thickness)
-        h = max(pier.width, pier.thickness)
+        # Para PIER: length=lw, thickness=tw
+        b = min(pier.length, pier.thickness)
+        h = max(pier.length, pier.thickness)
 
         # Ash para pier: area de estribo * num ramas
         stirrup_area = math.pi * (pier.stirrup_diameter / 2) ** 2
-        Ash = stirrup_area * pier.n_stirrup_legs
+        Ash = stirrup_area * pier.n_shear_legs
 
         return ColumnGeometry(
             b=b,
@@ -291,8 +294,8 @@ class GeometryNormalizer:
         )
 
     @staticmethod
-    def _beam_to_column_geom(beam: 'Beam') -> ColumnGeometry:
-        """Extrae geometria de Beam para verificacion tipo columna."""
+    def _beam_to_column_geom(beam: 'HorizontalElement') -> ColumnGeometry:
+        """Extrae geometria de HorizontalElement para verificacion tipo columna."""
         As_top = getattr(beam, 'As_top', 0)
         As_bottom = getattr(beam, 'As_bottom', 0)
         n_top = getattr(beam, 'n_bars_top', 0)
@@ -323,8 +326,8 @@ class GeometryNormalizer:
     # =========================================================================
 
     @staticmethod
-    def _beam_to_beam_geom(beam: 'Beam') -> BeamGeometry:
-        """Extrae geometria de Beam para verificacion tipo viga."""
+    def _beam_to_beam_geom(beam: 'HorizontalElement') -> BeamGeometry:
+        """Extrae geometria de HorizontalElement para verificacion tipo viga."""
         return BeamGeometry(
             bw=beam.width,
             h=beam.depth,
@@ -348,11 +351,12 @@ class GeometryNormalizer:
         )
 
     @staticmethod
-    def _column_to_beam_geom(col: 'Column') -> BeamGeometry:
-        """Extrae geometria de Column para verificacion tipo viga."""
+    def _column_to_beam_geom(col: 'VerticalElement') -> BeamGeometry:
+        """Extrae geometria de VerticalElement (source=FRAME) para verificacion tipo viga."""
         # Columna con axial insignificante tratada como viga
-        b = min(col.depth, col.width)
-        h = max(col.depth, col.width)
+        # Para FRAME: length=depth, thickness=width
+        b = min(col.length, col.thickness)
+        h = max(col.length, col.thickness)
         d = h - col.cover
 
         return BeamGeometry(
@@ -379,15 +383,16 @@ class GeometryNormalizer:
     # =========================================================================
 
     @staticmethod
-    def _pier_to_wall_geom(pier: 'Pier') -> WallGeometry:
-        """Extrae geometria de Pier para verificacion tipo muro."""
+    def _pier_to_wall_geom(pier: 'VerticalElement') -> WallGeometry:
+        """Extrae geometria de VerticalElement (source=PIER) para verificacion tipo muro."""
+        # Para PIER: length=lw, thickness=tw
         return WallGeometry(
-            lw=pier.width,
+            lw=pier.length,
             tw=pier.thickness,
             hw=pier.height,
             cover=pier.cover,
             Ag=pier.Ag,
-            Acv=getattr(pier, 'Acv', pier.width * pier.thickness),
+            Acv=getattr(pier, 'Acv', pier.length * pier.thickness),
             fc=pier.fc,
             fy=pier.fy,
             rho_v=getattr(pier, 'rho_v', 0),
@@ -397,16 +402,16 @@ class GeometryNormalizer:
             diameter_edge=pier.diameter_edge,
             stirrup_diameter=pier.stirrup_diameter,
             stirrup_spacing=pier.stirrup_spacing,
-            n_stirrup_legs=pier.n_stirrup_legs,
+            n_stirrup_legs=pier.n_shear_legs,
         )
 
     @staticmethod
-    def _drop_beam_to_wall_geom(db: 'DropBeam') -> WallGeometry:
-        """Extrae geometría de DropBeam para verificación tipo muro.
+    def _drop_beam_to_wall_geom(db: 'HorizontalElement') -> WallGeometry:
+        """Extrae geometría de HorizontalElement (source=DROP_BEAM) para verificación tipo muro.
 
         Mapeo según comportamiento estructural (consistente con SeismicWallService):
         - hw (altura muro) ← length (luz libre de viga capitel)
-        - lw (longitud muro) ← thickness (ancho tributario/peralte)
+        - lw (longitud muro) ← depth (ancho tributario/peralte)
         - tw (espesor muro) ← width (espesor de losa)
 
         El DropBeam se diseña como muro con flexión fuera del plano,
@@ -414,11 +419,11 @@ class GeometryNormalizer:
         """
         return WallGeometry(
             hw=db.length,        # Altura muro = luz libre
-            lw=db.thickness,     # Longitud muro = ancho tributario
-            tw=db.width,         # Espesor muro = espesor losa
+            lw=db.depth,         # Longitud muro = ancho tributario (peralte)
+            tw=db.width,         # Espesor muro = espesor losa (ancho)
             cover=getattr(db, 'cover', 25),
-            Ag=getattr(db, 'Ag', db.thickness * db.width),   # lw × tw
-            Acv=getattr(db, 'Acv', db.thickness * db.width), # lw × tw (área de corte)
+            Ag=getattr(db, 'Ag', db.depth * db.width),   # lw × tw
+            Acv=getattr(db, 'Acv', db.depth * db.width), # lw × tw (área de corte)
             fc=db.fc,
             fy=db.fy,
             rho_v=getattr(db, 'rho_vertical', 0),
@@ -431,42 +436,3 @@ class GeometryNormalizer:
             n_stirrup_legs=getattr(db, 'n_stirrup_legs', 2),
         )
 
-    # =========================================================================
-    # VALIDACION
-    # =========================================================================
-
-    @staticmethod
-    def validate_column_geometry(geom: ColumnGeometry) -> list:
-        """Valida geometria de columna, retorna lista de warnings."""
-        warnings = []
-        if geom.b <= 0 or geom.h <= 0:
-            warnings.append("Dimensiones invalidas (b o h <= 0)")
-        if geom.Ag <= 0:
-            warnings.append("Area bruta invalida (Ag <= 0)")
-        if geom.Ast <= 0:
-            warnings.append("Sin acero longitudinal (Ast <= 0)")
-        if geom.s_transverse <= 0:
-            warnings.append("Espaciamiento transversal invalido")
-        return warnings
-
-    @staticmethod
-    def validate_beam_geometry(geom: BeamGeometry) -> list:
-        """Valida geometria de viga, retorna lista de warnings."""
-        warnings = []
-        if geom.bw <= 0 or geom.h <= 0:
-            warnings.append("Dimensiones invalidas (bw o h <= 0)")
-        if geom.d <= 0:
-            warnings.append("Altura efectiva invalida (d <= 0)")
-        if geom.As_top <= 0 and geom.As_bottom <= 0:
-            warnings.append("Sin acero longitudinal")
-        return warnings
-
-    @staticmethod
-    def validate_wall_geometry(geom: WallGeometry) -> list:
-        """Valida geometria de muro, retorna lista de warnings."""
-        warnings = []
-        if geom.lw <= 0 or geom.tw <= 0:
-            warnings.append("Dimensiones invalidas (lw o tw <= 0)")
-        if geom.Ag <= 0:
-            warnings.append("Area bruta invalida (Ag <= 0)")
-        return warnings

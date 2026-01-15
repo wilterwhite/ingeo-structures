@@ -14,7 +14,7 @@ import sys
 
 from flask import Flask, render_template, send_from_directory
 
-from app.routes import piers_bp, columns_bp, beams_bp, drop_beams_bp, common_bp
+from app.routes import piers_bp, projects_bp, common_bp
 
 
 def create_app() -> Flask:
@@ -50,9 +50,7 @@ def create_app() -> Flask:
 
     # Registrar blueprints
     app.register_blueprint(piers_bp)
-    app.register_blueprint(columns_bp)
-    app.register_blueprint(beams_bp)
-    app.register_blueprint(drop_beams_bp)
+    app.register_blueprint(projects_bp)
     app.register_blueprint(common_bp)
 
     # Ruta principal
@@ -65,6 +63,12 @@ def create_app() -> Flask:
     @app.route('/structural/static/<path:filename>')
     def structural_static(filename):
         return send_from_directory(static_dir, filename)
+
+    # Favicon
+    @app.route('/favicon.ico')
+    def favicon():
+        root_dir = os.path.dirname(__file__)
+        return send_from_directory(root_dir, 'favicon.ico', mimetype='image/x-icon')
 
     # Manejo de errores
     @app.errorhandler(413)

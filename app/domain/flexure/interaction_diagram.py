@@ -330,3 +330,109 @@ class InteractionDiagramService:
         curve = [(p.phi_Mn, p.phi_Pn) for p in points]
         return curve
 
+    def generate_strut_interaction_curve(
+        self,
+        width: float,
+        thickness: float,
+        fc: float,
+        lambda_factor: float = 1.0,
+        n_points: int = 10
+    ) -> List[InteractionPoint]:
+        """
+        Genera diagrama P-M simplificado para strut no confinado (Cap. 23).
+
+        Para elementos pequeños (<150mm) con 1 barra y sin estribos.
+
+        Características:
+        - Tracción = 0 (hormigón sin refuerzo efectivo)
+        - Compresión = φ×Fns = 0.75 × 0.34 × fc' × Acs
+        - Flexión = Mcr = fr × S (momento de agrietamiento)
+        - Curva lineal entre compresión pura y flexión pura
+
+        Args:
+            width: Dimensión en dirección del momento (mm) - h
+            thickness: Espesor perpendicular (mm) - b
+            fc: Resistencia del hormigón (MPa)
+            lambda_factor: Factor por hormigón liviano (1.0 = normal)
+            n_points: Número de puntos en la curva
+
+        Returns:
+            Lista de InteractionPoint para diagrama simplificado
+        """
+        from ..constants.chapter23 import (
+            PHI_STRUT,
+            BETA_S_SMALL_COLUMN,
+            BETA_C_SMALL_COLUMN,
+            WHITNEY_FACTOR,
+        )
+
+        b = thickness
+        h = width
+        Acs = b * h
+
+        # 1. Compresión pura (strut) - ACI 318-25 §23.4
+        # fce = 0.85 × βc × βs × fc' = 0.85 × 1.0 × 0.4 × fc' = 0.34 × fc'
+        fce = WHITNEY_FACTOR * BETA_C_SMALL_COLUMN * BETA_S_SMALL_COLUMN * fc
+        Fns = fce * Acs  # N
+        Pn_max = Fns / N_TO_TONF  # tonf
+
+        # 2. Flexión pura (agrietamiento) - ACI 318-25 §19.2.3
+        # fr = 0.62 × λ × √fc' (módulo de rotura en MPa)
+        fr = 0.62 * lambda_factor * math.sqrt(fc)
+        S = b * h**2 / 6  # mm³ (módulo de sección elástico)
+        Mcr = fr * S / NMM_TO_TONFM  # tonf-m
+
+        # 3. Generar puntos del diagrama
+        points = []
+
+        # Punto 1: Compresión pura (vértice superior)
+        points.append(InteractionPoint(
+            Pn=Pn_max,
+            Mn=0,
+            phi=PHI_STRUT,
+            phi_Pn=PHI_STRUT * Pn_max,
+            phi_Mn=0,
+            c=float('inf'),
+            epsilon_t=0
+        ))
+
+        # Puntos intermedios: línea recta de compresión a flexión
+        for i in range(1, n_points):
+            ratio = i / n_points
+            Pn_i = Pn_max * (1 - ratio)
+            Mn_i = Mcr * ratio
+            # φ = 0.75 para todo el diagrama (strut)
+            points.append(InteractionPoint(
+                Pn=Pn_i,
+                Mn=Mn_i,
+                phi=PHI_STRUT,
+                phi_Pn=PHI_STRUT * Pn_i,
+                phi_Mn=PHI_STRUT * Mn_i,
+                c=h * (1 - ratio),  # aproximación geométrica
+                epsilon_t=0
+            ))
+
+        # Punto final: Flexión pura (Mn = Mcr, Pn = 0)
+        points.append(InteractionPoint(
+            Pn=0,
+            Mn=Mcr,
+            phi=PHI_STRUT,
+            phi_Pn=0,
+            phi_Mn=PHI_STRUT * Mcr,
+            c=0,
+            epsilon_t=0
+        ))
+
+        # Punto de tracción: cero (hormigón sin refuerzo no resiste tracción)
+        points.append(InteractionPoint(
+            Pn=0,
+            Mn=0,
+            phi=PHI_STRUT,
+            phi_Pn=0,
+            phi_Mn=0,
+            c=0,
+            epsilon_t=float('inf')
+        ))
+
+        return points
+

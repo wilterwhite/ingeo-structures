@@ -12,6 +12,7 @@ Referencias:
 """
 from typing import Optional
 from ...shear.verification import ShearVerificationService
+from ...constants import DCR_MAX_FINITE
 from ...constants.shear import PHI_SHEAR_SEISMIC
 from ..results import WallPierShearDesign
 
@@ -120,7 +121,7 @@ def verify_shear_strength(
     # φ = 0.60 para wall piers sísmicos especiales (§21.2.4.1)
     phi_Vn = PHI_SHEAR_SEISMIC * Vn
 
-    dcr = Ve / phi_Vn if phi_Vn > 0 else float('inf')
+    dcr = Ve / phi_Vn if phi_Vn > 0 else DCR_MAX_FINITE
     is_ok = dcr <= 1.0
 
     return WallPierShearDesign(

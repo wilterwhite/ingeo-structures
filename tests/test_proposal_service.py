@@ -3,7 +3,7 @@
 Tests para el servicio de propuestas de diseño.
 """
 import pytest
-from app.domain.entities import Pier
+from app.domain.entities import VerticalElement, VerticalElementSource, MeshReinforcement
 from app.domain.entities.design_proposal import (
     DesignProposal,
     ReinforcementConfig,
@@ -24,46 +24,54 @@ def proposal_service():
 @pytest.fixture
 def failing_pier():
     """Pier que falla por flexión."""
-    return Pier(
+    return VerticalElement(
         label="Test-A1-1",
         story="Cielo P1",
-        width=2000,      # 2m
-        thickness=200,   # 20cm
+        source=VerticalElementSource.PIER,
+        length=2000,     # lw: 2m
+        thickness=200,   # tw: 20cm
         height=2700,     # 2.7m
         fc=25,
         fy=420,
-        n_meshes=2,
-        diameter_v=8,
-        spacing_v=200,
-        diameter_h=8,
-        spacing_h=200,
-        n_edge_bars=2,
-        diameter_edge=10,
+        mesh_reinforcement=MeshReinforcement(
+            n_meshes=2,
+            diameter_v=8,
+            spacing_v=200,
+            diameter_h=8,
+            spacing_h=200,
+            n_edge_bars=2,
+            diameter_edge=10,
+        ),
         stirrup_diameter=8,
-        stirrup_spacing=150
+        stirrup_spacing=150,
+        n_shear_legs=2,
     )
 
 
 @pytest.fixture
 def ok_pier():
     """Pier que pasa verificación."""
-    return Pier(
+    return VerticalElement(
         label="Test-A2-1",
         story="Cielo P1",
-        width=1500,      # 1.5m
-        thickness=300,   # 30cm
+        source=VerticalElementSource.PIER,
+        length=1500,     # lw: 1.5m
+        thickness=300,   # tw: 30cm
         height=2700,     # 2.7m
         fc=30,
         fy=420,
-        n_meshes=2,
-        diameter_v=10,
-        spacing_v=150,
-        diameter_h=10,
-        spacing_h=150,
-        n_edge_bars=4,
-        diameter_edge=20,
+        mesh_reinforcement=MeshReinforcement(
+            n_meshes=2,
+            diameter_v=10,
+            spacing_v=150,
+            diameter_h=10,
+            spacing_h=150,
+            n_edge_bars=4,
+            diameter_edge=20,
+        ),
         stirrup_diameter=10,
-        stirrup_spacing=100
+        stirrup_spacing=100,
+        n_shear_legs=2,
     )
 
 
@@ -328,21 +336,25 @@ class TestColumnMinimumThickness:
         Pier clasificado como columna (hw/lw >= 2.0 y lw/bw <= 2.5).
         Con espesor < 300mm, debería requerir aumento.
         """
-        return Pier(
+        return VerticalElement(
             label="Col-A1-1",
             story="Cielo P1",
-            width=600,       # 600mm -> lw
+            source=VerticalElementSource.PIER,
+            length=600,      # 600mm -> lw
             thickness=200,   # 200mm -> bw (< 300mm mínimo para columna)
             height=2700,     # 2700mm -> hw (hw/lw = 4.5 >= 2.0)
             fc=25,           # lw/bw = 600/200 = 3.0 > 2.5 -> ALTERNATIVE
             fy=420,
-            n_meshes=2,
-            diameter_v=8,
-            spacing_v=200,
-            diameter_h=8,
-            spacing_h=200,
-            n_edge_bars=2,
-            diameter_edge=12,
+            mesh_reinforcement=MeshReinforcement(
+                n_meshes=2,
+                diameter_v=8,
+                spacing_v=200,
+                diameter_h=8,
+                spacing_h=200,
+                n_edge_bars=2,
+                diameter_edge=12,
+            ),
+            n_shear_legs=2,
         )
 
     @pytest.fixture
@@ -350,21 +362,25 @@ class TestColumnMinimumThickness:
         """
         Pier clasificado como columna con lw/bw <= 2.5 (columna especial).
         """
-        return Pier(
+        return VerticalElement(
             label="Col-A2-1",
             story="Cielo P1",
-            width=500,       # 500mm -> lw
+            source=VerticalElementSource.PIER,
+            length=500,      # 500mm -> lw
             thickness=200,   # 200mm -> bw (< 300mm)
             height=2700,     # hw/lw = 5.4 >= 2.0
             fc=25,           # lw/bw = 500/200 = 2.5 <= 2.5 -> COLUMN
             fy=420,
-            n_meshes=2,
-            diameter_v=8,
-            spacing_v=200,
-            diameter_h=8,
-            spacing_h=200,
-            n_edge_bars=2,
-            diameter_edge=12,
+            mesh_reinforcement=MeshReinforcement(
+                n_meshes=2,
+                diameter_v=8,
+                spacing_v=200,
+                diameter_h=8,
+                spacing_h=200,
+                n_edge_bars=2,
+                diameter_edge=12,
+            ),
+            n_shear_legs=2,
         )
 
     @pytest.fixture
@@ -373,21 +389,25 @@ class TestColumnMinimumThickness:
         Pier clasificado como muro (hw/lw < 2.0).
         No requiere 300mm mínimo.
         """
-        return Pier(
+        return VerticalElement(
             label="Wall-A1-1",
             story="Cielo P1",
-            width=2000,      # 2000mm -> lw
+            source=VerticalElementSource.PIER,
+            length=2000,     # 2000mm -> lw
             thickness=200,   # 200mm -> bw
             height=2700,     # hw/lw = 1.35 < 2.0 -> WALL
             fc=25,
             fy=420,
-            n_meshes=2,
-            diameter_v=8,
-            spacing_v=200,
-            diameter_h=8,
-            spacing_h=200,
-            n_edge_bars=2,
-            diameter_edge=12,
+            mesh_reinforcement=MeshReinforcement(
+                n_meshes=2,
+                diameter_v=8,
+                spacing_v=200,
+                diameter_h=8,
+                spacing_h=200,
+                n_edge_bars=2,
+                diameter_edge=12,
+            ),
+            n_shear_legs=2,
         )
 
     def test_classify_pier_detects_column(self, proposal_service, column_with_500mm_width):

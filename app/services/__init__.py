@@ -4,13 +4,13 @@ Servicios del módulo estructural.
 
 Estructura:
 - structural_analysis.py: Orquestador principal
-- analysis/: Servicios de análisis (flexocompresión, estadísticas)
+- analysis/: Servicios de análisis (flexocompresión, verificación)
 - parsing/: Servicios de parsing Excel
 - presentation/: Servicios de visualización
 """
 from .structural_analysis import StructuralAnalysisService
 from .factory import ServiceFactory
-from .analysis import FlexocompressionService, StatisticsService
+from .analysis import FlexocompressionService
 from .parsing import (
     EtabsExcelParser,
     ParsedData,
@@ -23,7 +23,6 @@ __all__ = [
     'StructuralAnalysisService',
     'ServiceFactory',
     'FlexocompressionService',
-    'StatisticsService',
     'EtabsExcelParser',
     'ParsedData',
     'SessionManager',

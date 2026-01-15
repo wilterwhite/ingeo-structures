@@ -100,10 +100,9 @@ class ReinforcementUpdateService:
                 diameter_long=update.get('diameter_long'),
                 stirrup_diameter=update.get('stirrup_diameter'),
                 stirrup_spacing=update.get('stirrup_spacing'),
-                n_stirrup_legs_depth=update.get('n_stirrup_legs_depth'),
-                n_stirrup_legs_width=update.get('n_stirrup_legs_width'),
+                n_shear_legs=update.get('n_shear_legs'),
+                n_shear_legs_secondary=update.get('n_shear_legs_secondary'),
                 fy=update.get('fy'),
-                fyt=update.get('fyt'),
                 cover=update.get('cover'),
             )
             count += 1
@@ -214,16 +213,22 @@ class ReinforcementUpdateService:
         """
         counts = {}
 
-        if pier_updates and parsed_data.piers:
-            counts['piers'] = cls.apply_pier_updates(parsed_data.piers, pier_updates)
+        # Elementos verticales contienen tanto piers como columnas
+        vertical_elements = parsed_data.vertical_elements or {}
 
-        if column_updates and parsed_data.columns:
-            counts['columns'] = cls.apply_column_updates(parsed_data.columns, column_updates)
+        if pier_updates and vertical_elements:
+            counts['piers'] = cls.apply_pier_updates(vertical_elements, pier_updates)
 
-        if beam_updates and parsed_data.beams:
-            counts['beams'] = cls.apply_beam_updates(parsed_data.beams, beam_updates)
+        if column_updates and vertical_elements:
+            counts['columns'] = cls.apply_column_updates(vertical_elements, column_updates)
 
-        if drop_beam_updates and parsed_data.drop_beams:
-            counts['drop_beams'] = cls.apply_drop_beam_updates(parsed_data.drop_beams, drop_beam_updates)
+        # Elementos horizontales contienen tanto vigas como vigas capitel
+        horizontal_elements = parsed_data.horizontal_elements or {}
+
+        if beam_updates and horizontal_elements:
+            counts['beams'] = cls.apply_beam_updates(horizontal_elements, beam_updates)
+
+        if drop_beam_updates and horizontal_elements:
+            counts['drop_beams'] = cls.apply_drop_beam_updates(horizontal_elements, drop_beam_updates)
 
         return counts

@@ -17,7 +17,7 @@ from ...domain.constants.geometry import COLUMN_MIN_DIMENSION_MM
 
 if TYPE_CHECKING:
     from ..analysis.element_orchestrator import OrchestrationResult
-    from ...domain.entities import Beam, Column, Pier, DropBeam
+    from ...domain.entities import HorizontalElement, VerticalElement
     from ...domain.calculations.wall_continuity import WallContinuityInfo
 
 
@@ -95,9 +95,38 @@ def format_dcr_display(dcr: float) -> str:
     Returns:
         String formateado, ej: "0.85" o ">100"
     """
-    if dcr > 100:
+    if math.isinf(dcr) or dcr > 100:
         return '>100'
     return f"{dcr:.2f}"
+
+
+def calculate_statistics(
+    results: list,
+    status_key: str = 'overall_status'
+) -> Dict[str, Any]:
+    """
+    Calcula estadísticas de resultados de verificación.
+
+    Args:
+        results: Lista de dicts con clave status_key
+        status_key: Clave que contiene el estado ('OK'/'NO OK')
+
+    Returns:
+        Dict con total, ok, fail, pass_rate
+    """
+    if not results:
+        return {'total': 0, 'ok': 0, 'fail': 0, 'pass_rate': 100.0}
+
+    total = len(results)
+    ok = sum(1 for r in results if r.get(status_key) == 'OK')
+    fail = total - ok
+
+    return {
+        'total': total,
+        'ok': ok,
+        'fail': fail,
+        'pass_rate': round(ok / total * 100, 1) if total > 0 else 100.0
+    }
 
 
 class ResultFormatter:
@@ -117,7 +146,7 @@ class ResultFormatter:
 
     @staticmethod
     def _format_wall_continuity(
-        pier: 'Pier',
+        pier: 'VerticalElement',
         continuity_info: 'WallContinuityInfo' = None
     ) -> Dict[str, Any]:
         """Formatea información de continuidad del muro."""
@@ -134,7 +163,7 @@ class ResultFormatter:
 
         # Fallback: calcular de la geometría del pier
         hwcs_m = pier.height / 1000  # mm -> m
-        lw_m = pier.width / 1000  # mm -> m
+        lw_m = pier.length / 1000  # mm -> m
         hwcs_lw = hwcs_m / lw_m if lw_m > 0 else 0
         return {
             'hwcs_m': round(hwcs_m, 2),
@@ -223,7 +252,7 @@ class ResultFormatter:
         }
 
     @staticmethod
-    def _extract_pier_geometry_reinforcement(pier: 'Pier') -> tuple:
+    def _extract_pier_geometry_reinforcement(pier: 'VerticalElement') -> tuple:
         """
         Extrae geometría y refuerzo base de un Pier.
 
@@ -237,8 +266,8 @@ class ResultFormatter:
         from ...domain.calculations.minimum_reinforcement import MinimumReinforcementCalculator
 
         geometry = {
-            'width_mm': pier.width,
-            'width_m': pier.width / 1000,
+            'width_mm': pier.length,
+            'width_m': pier.length / 1000,
             'thickness_mm': pier.thickness,
             'thickness_m': pier.thickness / 1000,
             'height_mm': pier.height,
@@ -405,6 +434,8 @@ class ResultFormatter:
                 'sf': round(sf, 2) if sf < 100 else 100.0,
                 'dcr': round(dcr, 3),  # Precisión 3 decimales como el servicio
                 'status': flex.get('status', 'OK'),
+                # Resultados de TODAS las combinaciones (para modal sin recálculo)
+                'combo_results': flex.get('combo_results', []),
             })
             flexure_data['dcr_class'] = get_dcr_css_class(flexure_data['dcr'])
 
@@ -486,7 +517,7 @@ class ResultFormatter:
 
     @staticmethod
     def format_orchestration_result(
-        pier: 'Pier',
+        pier: 'VerticalElement',
         result: 'OrchestrationResult',
         key: str,
         continuity_info: 'WallContinuityInfo' = None,
@@ -527,9 +558,17 @@ class ResultFormatter:
                 'max_spacing': MAX_SPACING_SEISMIC_MM
             })
 
+        # Determinar tipo de elemento: priorizar service_used, luego source
+        if service_used == 'strut':
+            element_type = 'strut'
+        elif pier.is_frame_source:
+            element_type = 'column'
+        else:
+            element_type = 'pier'
+
         # Construir resultado base
         formatted = ResultFormatter._build_base_result(
-            element_type='pier',
+            element_type=element_type,
             key=key,
             label=pier.label,
             story=pier.story,
@@ -567,7 +606,7 @@ class ResultFormatter:
     @staticmethod
     def _format_wall_specific(
         formatted: Dict,
-        pier: 'Pier',
+        pier: 'VerticalElement',
         result: 'OrchestrationResult',
         domain_result
     ) -> None:
@@ -584,10 +623,13 @@ class ResultFormatter:
                 'aci_section': result.design_behavior.aci_section
             }
 
-        # Cortante tipo muro
+        # Cortante tipo muro (extraer del domain para datos del critical combo)
         formatted['shear'] = ResultFormatter._extract_shear_from_domain(
             domain_result, result.dcr_max, 'wall'
         )
+        # Agregar combo_results del ShearService (para modal sin recálculos)
+        if hasattr(result, 'shear_data') and result.shear_data:
+            formatted['shear']['combo_results'] = result.shear_data.get('combo_results', [])
 
         # Elementos de borde
         if hasattr(domain_result, 'boundary') and domain_result.boundary:
@@ -618,7 +660,7 @@ class ResultFormatter:
     @staticmethod
     def _format_column_specific(
         formatted: Dict,
-        pier: 'Pier',
+        pier: 'VerticalElement',
         result: 'OrchestrationResult',
         domain_result
     ) -> None:
@@ -626,17 +668,20 @@ class ResultFormatter:
         # Clasificación como pier-columna
         formatted['classification'] = {
             'type': 'wall_pier_column',
-            'lw_tw': pier.width / pier.thickness if pier.thickness > 0 else 0,
-            'hw_lw': pier.height / pier.width if pier.width > 0 else 0,
+            'lw_tw': pier.length / pier.thickness if pier.thickness > 0 else 0,
+            'hw_lw': pier.height / pier.length if pier.length > 0 else 0,
             'is_slender': False,
             'is_wall_pier': True,
             'aci_section': '§18.7'
         }
 
-        # Cortante tipo columna
+        # Cortante tipo columna (extraer del domain para datos del critical combo)
         formatted['shear'] = ResultFormatter._extract_shear_from_domain(
             domain_result, result.dcr_max, 'column'
         )
+        # Agregar combo_results del ShearService (para modal sin recálculos)
+        if hasattr(result, 'shear_data') and result.shear_data:
+            formatted['shear']['combo_results'] = result.shear_data.get('combo_results', [])
 
         # Verificaciones sísmicas de columna
         dimensional = None
@@ -718,7 +763,7 @@ class ResultFormatter:
 
     @staticmethod
     def format_any_element(
-        element: Union['Beam', 'Column', 'Pier', 'DropBeam'],
+        element: Union['HorizontalElement', 'VerticalElement'],
         result: 'OrchestrationResult',
         key: str,
         continuity_info: 'WallContinuityInfo' = None,
@@ -730,24 +775,28 @@ class ResultFormatter:
         Este es el método principal para la nueva arquitectura unificada.
         Detecta el tipo de elemento y delega al formateador apropiado.
         """
-        from ...domain.entities import Pier, Column, Beam, DropBeam
+        from ...domain.entities import VerticalElement, HorizontalElement, VerticalElementSource
+
+        # PRIORIDAD: Si es strut (servicio 'strut'), usar formateador de strut
+        # Esto aplica a columnas, muros, vigas pequeñas (<15cm)
+        if result.service_used == 'strut':
+            return ResultFormatter._format_strut_element(
+                element, result, key
+            )
 
         # Delegar según tipo de elemento
-        if isinstance(element, Pier):
+        if isinstance(element, VerticalElement):
             return ResultFormatter.format_orchestration_result(
                 element, result, key, continuity_info, pm_plot
             )
-        elif isinstance(element, Column):
-            return ResultFormatter._format_column_element(
-                element, result, key, pm_plot
-            )
-        elif isinstance(element, Beam):
+        elif isinstance(element, HorizontalElement):
+            # Verificar si es DROP_BEAM antes que BEAM genérico
+            if element.is_drop_beam:
+                return ResultFormatter._format_drop_beam_element(
+                    element, result, key, pm_plot
+                )
             return ResultFormatter._format_beam_element(
                 element, result, key
-            )
-        elif isinstance(element, DropBeam):
-            return ResultFormatter._format_drop_beam_element(
-                element, result, key, pm_plot
             )
 
         # Fallback genérico
@@ -760,7 +809,7 @@ class ResultFormatter:
 
     @staticmethod
     def _format_column_element(
-        column: 'Column',
+        column: 'VerticalElement',
         result: 'OrchestrationResult',
         key: str,
         pm_plot: str = None
@@ -822,56 +871,275 @@ class ResultFormatter:
         return formatted
 
     @staticmethod
-    def _format_beam_element(
-        beam: 'Beam',
+    def _format_strut_element(
+        element: Union['VerticalElement', 'HorizontalElement'],
         result: 'OrchestrationResult',
         key: str
     ) -> Dict[str, Any]:
-        """Formatea resultado de Beam desde OrchestrationResult."""
+        """
+        Formatea resultado de elemento pequeño verificado como strut no confinado.
+
+        Aplica a columnas, muros, vigas pequeñas (<15cm) según ACI 318-25 Cap. 23.
+        La barra central NO cuenta como refuerzo de compresión.
+
+        Capacidad: Fns = 0.34 × fc' × Acs
+        Factor: phi = 0.60 (diseño sísmico)
+        """
         domain_result = result.domain_result
 
-        # Para beams: width_m=width (ancho), thickness_m=depth (altura), length_m=length (luz)
+        # Obtener DCR del orchestrator (ya corregido para mostrar compresión, no 100)
+        flex_data = result.flexure_data or {}
+        dcr_display = flex_data.get('dcr', domain_result.dcr)
+
+        # Obtener geometría del elemento (genérico)
+        if hasattr(element, 'depth') and hasattr(element, 'width'):
+            # Column
+            width_mm = element.depth
+            thickness_mm = element.width
+            height_mm = element.height
+        elif hasattr(element, 'width') and hasattr(element, 'thickness'):
+            # Pier o DropBeam
+            width_mm = element.width
+            thickness_mm = element.thickness
+            height_mm = element.height
+        else:
+            width_mm = 0
+            thickness_mm = 0
+            height_mm = 0
+
+        geometry = {
+            'width_mm': width_mm,
+            'thickness_mm': thickness_mm,
+            'height_mm': height_mm,
+            'fc': getattr(element, 'fc', 0),
+            'fy': getattr(element, 'fy', 0)
+        }
+
+        # Refuerzo simplificado para strut
+        # Calcular As de la barra central (aunque no cuenta para compresión)
+        import math
+        diameter = getattr(element, 'diameter_long', 12)
+        n_bars = getattr(element, 'n_total_bars', 1)
+        As_per_bar = math.pi * (diameter / 2) ** 2  # mm²
+        As_total = As_per_bar * n_bars
+
+        reinforcement = {
+            'type': 'strut_unconfined',
+            'n_total_bars': n_bars,
+            'n_bars_depth': 1,  # STRUT siempre 1×1
+            'n_bars_width': 1,
+            'diameter_long': diameter,
+            'As_longitudinal_mm2': round(As_total, 0),
+            'stirrup_spacing': 0,  # Sin estribos
+            'note': 'Barra central como acero constructivo (no As de compresion)',
+            'description': f"1phi{diameter} (strut)"
+        }
+
+        # Datos específicos de strut desde StrutCapacityResult
+        strut_data = {
+            'Acs_mm2': domain_result.Acs,
+            'b_mm': domain_result.b,
+            'h_mm': domain_result.h,
+            'fce_MPa': domain_result.fce,
+            'beta_s': domain_result.beta_s,
+            'beta_c': domain_result.beta_c,
+            'fr_MPa': domain_result.fr,
+            # Capacidades
+            'Fns_tonf': domain_result.Fns,
+            'phi_Fns_tonf': domain_result.phi_Fns,
+            'Mcr_tonfm': domain_result.Mcr,
+            'phi_Mcr_tonfm': domain_result.phi_Mcr,
+            # Demandas
+            'Pu_tonf': domain_result.Pu,
+            'Mu_tonfm': domain_result.Mu,
+            # DCR (usa dcr_display que ya es el valor corregido)
+            'dcr': dcr_display,
+            'dcr_P': domain_result.dcr_P,
+            'dcr_M': domain_result.dcr_M,
+            'formula_P': 'Fns = 0.34 x fc x Acs (ACI 23.4)',
+            'formula_M': 'Mcr = fr x S = 0.62√fc x bh²/6 (ACI 19.2.3)',
+        }
+
+        # Clasificación especial para strut
+        classification = {
+            'type': 'strut_unconfined',
+            'aci_section': 'ACI 318-25 23.4',
+            'description': 'Elemento pequeno como strut no confinado',
+        }
+
+        # Generar datos de diagrama P-M simplificado
+        pm_plot = None
+        if hasattr(domain_result, 'diagram_points') and domain_result.diagram_points:
+            pm_plot = {
+                'phi_Mn_values': [p.phi_Mn for p in domain_result.diagram_points],
+                'phi_Pn_values': [p.phi_Pn for p in domain_result.diagram_points],
+                'demand_points': [{
+                    'Mu': domain_result.Mu,
+                    'Pu': domain_result.Pu,
+                    'combo': 'Envolvente',
+                }],
+                'is_strut_diagram': True,
+            }
+
+        formatted = ResultFormatter._build_base_result(
+            element_type='strut',
+            key=key,
+            label=getattr(element, 'label', key),
+            story=getattr(element, 'story', ''),
+            result=result,
+            geometry=geometry,
+            reinforcement=reinforcement,
+            pm_plot=pm_plot,  # Ahora sí incluye diagrama P-M simplificado
+            seismic_category=getattr(element, 'seismic_category', None)
+        )
+
+        # Agregar datos específicos de strut
+        formatted['strut'] = strut_data
+        formatted['classification'] = classification
+
+        # Info de tracción viene del orchestrator (conteo real de combinaciones)
+        flex_data = result.flexure_data or {}
+        has_tension = flex_data.get('has_tension', False)
+        tension_combos = flex_data.get('tension_combos', 0)
+        combo_results = flex_data.get('combo_results', [])
+        critical_combo = flex_data.get('critical_combo', 'Envolvente')
+
+        # DCR real de la envolvente (ya no forzamos 100 por tracción)
+        dcr_display = flex_data.get('dcr', domain_result.dcr)
+
+        # Flexocompresión para struts (campos normalizados para frontend)
+        formatted['flexure'] = {
+            'status': 'OK' if result.is_ok else 'NO OK',
+            'note': 'Diagrama P-M simplificado (traccion=0, compresion=Fns, flexion=Mcr)',
+            'dcr': dcr_display,
+            'dcr_class': get_dcr_css_class(dcr_display),
+            'dcr_P': domain_result.dcr_P,
+            'dcr_M': domain_result.dcr_M,
+            # Campos normalizados (igual que pier/column)
+            'Pu': domain_result.Pu,
+            'Mu': domain_result.Mu,
+            'phi_Mn_at_Pu': domain_result.phi_Fns,  # Capacidad axial como referencia
+            'phi_Mn_0': domain_result.phi_Mcr,  # Capacidad a flexión pura
+            'critical_combo': critical_combo,
+            # Campos específicos de strut (para debug/detalles)
+            'phi_Fns': domain_result.phi_Fns,
+            'phi_Mcr': domain_result.phi_Mcr,
+            # Indicador de tracción para mostrar ⚡ en UI (conteo real de combos)
+            'has_tension': has_tension,
+            'tension_combos': tension_combos,
+            # Resultados de TODAS las combinaciones (para modal sin recálculo)
+            'combo_results': combo_results,
+        }
+        formatted['shear'] = {
+            'status': 'N/A',
+            'note': 'Struts sin estribos - cortante no verificado',
+        }
+        formatted['boundary_element'] = {
+            'required': False,
+            'method': 'N/A',
+            'status': 'N/A',
+            'warnings': [],
+            'geometry_warnings': [],
+        }
+
+        return formatted
+
+    @staticmethod
+    def _format_beam_element(
+        beam: 'HorizontalElement',
+        result: 'OrchestrationResult',
+        key: str,
+        pm_plot: str = None
+    ) -> Dict[str, Any]:
+        """
+        Formatea resultado de Beam (FRAME, SPANDREL o DROP_BEAM) desde OrchestrationResult.
+
+        Unifica el formato JSON para todos los tipos de vigas, usando nomenclatura
+        consistente:
+        - Barras de borde (n_edge_bars, diameter_edge)
+        - Estribos (stirrup_diameter, stirrup_spacing)
+        - Barras laterales (n_lateral_bars, diameter_lateral, spacing_lateral)
+        """
+        domain_result = result.domain_result
+        is_drop_beam = beam.is_drop_beam
+
+        # Geometría unificada: ancho × peralte × luz
         geometry = {
             'width_mm': beam.width,
             'thickness_mm': beam.depth,
-            'height_mm': beam.length,  # Mantener para compatibilidad
-            'length_mm': beam.length,  # Luz de la viga
+            'height_mm': beam.length,
+            'length_mm': beam.length,
             'fc': beam.fc,
             'fy': beam.fy
         }
-        reinforcement = {
-            'n_bars_top': beam.n_bars_top,
-            'n_bars_bottom': beam.n_bars_bottom,
-            'diameter_top': beam.diameter_top,
-            'diameter_bottom': beam.diameter_bottom,
-            'stirrup_diameter': beam.stirrup_diameter,
-            'stirrup_spacing': beam.stirrup_spacing,
-            'description': f"{beam.n_bars_top}phi{beam.diameter_top} + {beam.n_bars_bottom}phi{beam.diameter_bottom}"
-        }
+
+        # Armadura unificada
+        if is_drop_beam:
+            # DROP_BEAM: mapear terminología de malla a terminología de viga
+            mr = beam.mesh_reinforcement
+            reinforcement = {
+                # Barras de borde (extremos superior e inferior)
+                'n_edge_bars': mr.n_edge_bars if mr else 0,
+                'diameter_edge': mr.diameter_edge if mr else 16,
+                # Estribos
+                'stirrup_diameter': beam.stirrup_diameter,
+                'stirrup_spacing': beam.stirrup_spacing,
+                # Barras laterales (distribuidas en el alma)
+                'n_lateral_bars': 0,  # Calculado por espaciamiento
+                'diameter_lateral': mr.diameter_v if mr else 12,
+                'spacing_lateral': mr.spacing_v if mr else 200,
+                # Descripción legible
+                'description': beam.reinforcement_description
+            }
+        else:
+            # FRAME/SPANDREL: armadura discreta top/bottom
+            dr = beam.discrete_reinforcement
+            reinforcement = {
+                # Barras de borde = barras top + bottom
+                'n_edge_bars': (dr.n_bars_top if dr else 0) + (dr.n_bars_bottom if dr else 0),
+                'diameter_edge': max(dr.diameter_top if dr else 16, dr.diameter_bottom if dr else 16),
+                # Detalle top/bottom para compatibilidad
+                'n_bars_top': dr.n_bars_top if dr else 0,
+                'n_bars_bottom': dr.n_bars_bottom if dr else 0,
+                'diameter_top': dr.diameter_top if dr else 16,
+                'diameter_bottom': dr.diameter_bottom if dr else 16,
+                # Estribos
+                'stirrup_diameter': beam.stirrup_diameter,
+                'stirrup_spacing': beam.stirrup_spacing,
+                # Barras laterales (vigas normales no suelen tener)
+                'n_lateral_bars': 0,
+                'diameter_lateral': 0,
+                'spacing_lateral': 0,
+                # Descripción legible
+                'description': f"{dr.n_bars_top if dr else 0}phi{dr.diameter_top if dr else 16} + {dr.n_bars_bottom if dr else 0}phi{dr.diameter_bottom if dr else 16}"
+            }
+
+        element_type = 'drop_beam' if is_drop_beam else 'beam'
+        shear_type = 'wall' if is_drop_beam else 'beam'
 
         formatted = ResultFormatter._build_base_result(
-            element_type='beam',
+            element_type=element_type,
             key=key,
             label=beam.label,
             story=beam.story,
             result=result,
             geometry=geometry,
             reinforcement=reinforcement,
-            pm_plot=None,
+            pm_plot=pm_plot,
             seismic_category=getattr(beam, 'seismic_category', None)
         )
 
-        # Extraer datos de flexión y cortante del domain_result
+        # Extraer datos de flexión y cortante
         formatted['flexure'] = ResultFormatter._extract_flexure_from_result(
             result, result.dcr_max
         )
         formatted['shear'] = ResultFormatter._extract_shear_from_domain(
-            domain_result, result.dcr_max, 'beam'
+            domain_result, result.dcr_max, shear_type
         )
 
         # Usar helper centralizado para geometry_warnings
         geometry_warnings = ResultFormatter._extract_geometry_warnings(
-            domain_result, 'beam'
+            domain_result, element_type
         )
         formatted['boundary_element'] = {
             'required': False,
@@ -885,64 +1153,17 @@ class ResultFormatter:
 
     @staticmethod
     def _format_drop_beam_element(
-        drop_beam: 'DropBeam',
+        drop_beam: 'HorizontalElement',
         result: 'OrchestrationResult',
         key: str,
         pm_plot: str = None
     ) -> Dict[str, Any]:
-        """Formatea resultado de DropBeam desde OrchestrationResult."""
-        domain_result = result.domain_result
+        """
+        Formatea resultado de DropBeam (alias de Beam con beam_type=DROP_BEAM).
 
-        # Para drop beams: width_m=length (luz libre), thickness_m=thickness (ancho tributario), height_m=width (espesor losa)
-        geometry = {
-            'width_mm': drop_beam.length,
-            'thickness_mm': drop_beam.thickness,
-            'height_mm': drop_beam.width,
-            'fc': drop_beam.fc,
-            'fy': drop_beam.fy
-        }
-        reinforcement = {
-            'As_vertical_mm2': drop_beam.As_vertical,
-            'As_edge_total': drop_beam.As_edge_total,
-            'n_edge_bars': drop_beam.n_edge_bars,
-            'diameter_edge': drop_beam.diameter_edge,
-            'rho_vertical': round(drop_beam.rho_vertical, 5),
-            'description': drop_beam.reinforcement_description
-        }
-
-        formatted = ResultFormatter._build_base_result(
-            element_type='drop_beam',
-            key=key,
-            label=drop_beam.label,
-            story=drop_beam.story,
-            result=result,
-            geometry=geometry,
-            reinforcement=reinforcement,
-            pm_plot=pm_plot,
-            seismic_category=getattr(drop_beam, 'seismic_category', None)
-        )
-
-        # Extraer datos de flexión y cortante
-        formatted['flexure'] = ResultFormatter._extract_flexure_from_result(
-            result, result.dcr_max
-        )
-        formatted['shear'] = ResultFormatter._extract_shear_from_domain(
-            domain_result, result.dcr_max, 'wall'
-        )
-
-        # Usar helper centralizado para geometry_warnings
-        geometry_warnings = ResultFormatter._extract_geometry_warnings(
-            domain_result, 'drop_beam'
-        )
-        formatted['boundary_element'] = {
-            'required': False,
-            'method': 'N/A',
-            'status': 'OK' if not geometry_warnings else 'CHECK',
-            'warnings': [],
-            'geometry_warnings': geometry_warnings,
-        }
-
-        return formatted
+        Delega a _format_beam_element que maneja ambos tipos.
+        """
+        return ResultFormatter._format_beam_element(drop_beam, result, key, pm_plot)
 
     # =========================================================================
     # Formateo de Capacidades (sin OrchestrationResult)
@@ -950,7 +1171,7 @@ class ResultFormatter:
 
     @staticmethod
     def format_beam_capacities(
-        beam: 'Beam',
+        beam: 'HorizontalElement',
         beam_forces=None
     ) -> Dict[str, Any]:
         """
@@ -1020,7 +1241,7 @@ class ResultFormatter:
 
     @staticmethod
     def format_column_capacities(
-        column: 'Column',
+        column: 'VerticalElement',
         column_forces=None
     ) -> Dict[str, Any]:
         """

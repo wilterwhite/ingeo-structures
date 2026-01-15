@@ -46,9 +46,14 @@ class SessionManager:
         parsed_data = self._excel_parser.parse_excel(file_content)
 
         # Calcular continuidad de muros y hwcs para cada pier
-        if parsed_data.piers and parsed_data.stories:
+        # Filtrar solo piers (source=PIER) de vertical_elements
+        from ...domain.entities import VerticalElementSource
+        piers = {k: v for k, v in parsed_data.vertical_elements.items()
+                 if v.source == VerticalElementSource.PIER}
+
+        if piers and parsed_data.stories:
             continuity_info = self._continuity_service.analyze_continuity(
-                piers=parsed_data.piers,
+                piers=piers,
                 stories=parsed_data.stories,
                 hn_ft=hn_ft
             )
@@ -107,9 +112,14 @@ class SessionManager:
 
         # Calcular continuidad de muros y hwcs para cada pier
         yield {'type': 'progress', 'phase': 'continuity', 'current': 1, 'total': 1, 'element': 'Calculando continuidad de muros'}
-        if parsed_data.piers and parsed_data.stories:
+        # Filtrar solo piers (source=PIER) de vertical_elements
+        from ...domain.entities import VerticalElementSource
+        piers = {k: v for k, v in parsed_data.vertical_elements.items()
+                 if v.source == VerticalElementSource.PIER}
+
+        if piers and parsed_data.stories:
             continuity_info = self._continuity_service.analyze_continuity(
-                piers=parsed_data.piers,
+                piers=piers,
                 stories=parsed_data.stories,
                 hn_ft=hn_ft
             )
@@ -199,14 +209,14 @@ class SessionManager:
         parsed_data = self.get_session(session_id)
         if not parsed_data:
             return None
-        return parsed_data.piers.get(pier_key)
+        return parsed_data.vertical_elements.get(pier_key)
 
     def get_column(self, session_id: str, column_key: str):
         """Obtiene una columna específica de una sesión."""
         parsed_data = self.get_session(session_id)
-        if not parsed_data or not parsed_data.columns:
+        if not parsed_data or not parsed_data.vertical_elements:
             return None
-        return parsed_data.columns.get(column_key)
+        return parsed_data.vertical_elements.get(column_key)
 
     def validate_column(self, session_id: str, column_key: str) -> Optional[Dict[str, Any]]:
         """
@@ -229,42 +239,42 @@ class SessionManager:
         parsed_data = self.get_session(session_id)
         if not parsed_data:
             return None
-        return parsed_data.pier_forces.get(pier_key)
+        return parsed_data.vertical_forces.get(pier_key)
 
     def get_column_forces(self, session_id: str, column_key: str):
         """Obtiene las fuerzas de una columna específica."""
         parsed_data = self.get_session(session_id)
-        if not parsed_data or not parsed_data.column_forces:
+        if not parsed_data or not parsed_data.vertical_forces:
             return None
-        return parsed_data.column_forces.get(column_key)
+        return parsed_data.vertical_forces.get(column_key)
 
     def get_beam(self, session_id: str, beam_key: str):
         """Obtiene una viga específica de una sesión."""
         parsed_data = self.get_session(session_id)
-        if not parsed_data or not parsed_data.beams:
+        if not parsed_data or not parsed_data.horizontal_elements:
             return None
-        return parsed_data.beams.get(beam_key)
+        return parsed_data.horizontal_elements.get(beam_key)
 
     def get_beam_forces(self, session_id: str, beam_key: str):
         """Obtiene las fuerzas de una viga específica."""
         parsed_data = self.get_session(session_id)
-        if not parsed_data or not parsed_data.beam_forces:
+        if not parsed_data or not parsed_data.horizontal_forces:
             return None
-        return parsed_data.beam_forces.get(beam_key)
+        return parsed_data.horizontal_forces.get(beam_key)
 
     def get_drop_beam(self, session_id: str, key: str):
         """Obtiene una viga capitel específica de una sesión."""
         parsed_data = self.get_session(session_id)
-        if not parsed_data or not parsed_data.drop_beams:
+        if not parsed_data or not parsed_data.horizontal_elements:
             return None
-        return parsed_data.drop_beams.get(key)
+        return parsed_data.horizontal_elements.get(key)
 
     def get_drop_beam_forces(self, session_id: str, key: str):
         """Obtiene las fuerzas de una viga capitel específica."""
         parsed_data = self.get_session(session_id)
-        if not parsed_data or not parsed_data.drop_beam_forces:
+        if not parsed_data or not parsed_data.horizontal_forces:
             return None
-        return parsed_data.drop_beam_forces.get(key)
+        return parsed_data.horizontal_forces.get(key)
 
     def get_hwcs(self, session_id: str, pier_key: str) -> float:
         """
@@ -289,7 +299,7 @@ class SessionManager:
             return parsed_data.continuity_info[pier_key].hwcs
 
         # Fallback: usar altura del pier
-        pier = parsed_data.piers.get(pier_key)
+        pier = parsed_data.vertical_elements.get(pier_key)
         return pier.height if pier else 0
 
     def get_hn_ft(self, session_id: str) -> float:
@@ -418,7 +428,7 @@ class SessionManager:
             True si se aplicó la configuración
         """
         parsed_data = self.get_session(session_id)
-        if not parsed_data or pier_key not in parsed_data.piers:
+        if not parsed_data or pier_key not in parsed_data.vertical_elements:
             return False
 
         # Crear vigas específicas si se proveen configs
@@ -575,7 +585,7 @@ class SessionManager:
         if not parsed_data:
             return None
 
-        beam = parsed_data.beams.get(beam_key)
+        beam = parsed_data.horizontal_elements.get(beam_key)
         if beam:
             return {
                 'width': beam.width,
@@ -627,8 +637,8 @@ class SessionManager:
         Returns:
             Dict con 'success', 'beam_key' o 'error'
         """
-        from ...domain.entities import Beam
-        from ...domain.entities.beam import BeamSource
+        from ...domain.entities import HorizontalElement, HorizontalElementSource
+        from ...domain.entities import HorizontalDiscreteReinforcement
 
         parsed_data = self.get_session(session_id)
         if not parsed_data:
@@ -636,30 +646,32 @@ class SessionManager:
 
         beam_key = f"{story}_{label}"
 
-        if beam_key in parsed_data.beams:
+        if beam_key in parsed_data.horizontal_elements:
             return {
                 'success': False,
                 'error': f'Ya existe una viga con el nombre {label} en {story}'
             }
 
-        beam = Beam(
+        beam = HorizontalElement(
             label=label,
             story=story,
             length=float(length),
             depth=float(depth),
             width=float(width),
             fc=float(fc),
-            source=BeamSource.FRAME,
+            source=HorizontalElementSource.FRAME,
             is_custom=True,
-            n_bars_top=int(n_bars_top),
-            n_bars_bottom=int(n_bars_bottom),
-            diameter_top=int(diameter_top),
-            diameter_bottom=int(diameter_bottom),
+            discrete_reinforcement=HorizontalDiscreteReinforcement(
+                n_bars_top=int(n_bars_top),
+                n_bars_bottom=int(n_bars_bottom),
+                diameter_top=int(diameter_top),
+                diameter_bottom=int(diameter_bottom),
+            ),
             stirrup_diameter=int(stirrup_diameter),
             stirrup_spacing=int(stirrup_spacing),
-            n_stirrup_legs=int(n_stirrup_legs)
+            n_shear_legs=int(n_stirrup_legs)
         )
 
-        parsed_data.beams[beam_key] = beam
+        parsed_data.horizontal_elements[beam_key] = beam
 
         return {'success': True, 'beam_key': beam_key}

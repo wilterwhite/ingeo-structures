@@ -7,6 +7,7 @@
 class UploadManager {
     constructor(page) {
         this.page = page;
+        this.lastUploadedFile = null;  // Guardar referencia al ultimo archivo
     }
 
     /**
@@ -75,6 +76,9 @@ class UploadManager {
             return this.handleE2KFile(file);
         }
 
+        // Guardar referencia al archivo para poder crear proyecto despues
+        this.lastUploadedFile = file;
+
         this.page.elements.uploadArea?.classList.add('hidden');
         this.page.elements.uploadLoading?.classList.add('active');
 
@@ -90,37 +94,13 @@ class UploadManager {
             if (!uploadData.success) throw new Error(uploadData.error);
             this.storeUploadData(uploadData);
 
-            // Fase 2: Análisis con progreso
-            this.showProgressModal();
-
             // Delay necesario: el navegador limita conexiones simultáneas al mismo host.
             // Sin esto, el fetch del análisis puede quedar bloqueado esperando que
             // la conexión del upload-stream se libere completamente.
             await new Promise(r => setTimeout(r, 100));
 
-            const params = {
-                session_id: this.page.sessionId,
-                pier_updates: [],
-                generate_plots: true,
-                moment_axis: 'M3',
-                angle_deg: 0,
-                materials_config: this.page.materialsManager.getConfig(),
-                seismic_category: this.page.getSeismicCategory()
-            };
-
-            const result = await structuralAPI.analyzeWithProgress(
-                params,
-                (current, total, pier) => {
-                    this.updateProgress(current, total, pier);
-                }
-            );
-
-            this.hideProgressModal();
-            if (result.success) {
-                this.onAnalysisComplete(result);
-            } else {
-                throw new Error(result.error || 'Error en análisis');
-            }
+            // Fase 2: Análisis con progreso (usa método unificado)
+            await this._executeAnalysis();
 
         } catch (error) {
             console.error('Error en análisis:', error);
@@ -297,6 +277,11 @@ class UploadManager {
         page.beamsModule.renderBeamsTable();
         page.renderDropBeamsTable();
         page.showSection('results');
+
+        // Actualizar UI de proyecto (mostrar boton de guardar si hay sesion)
+        if (page.projectManager) {
+            page.projectManager.updateProjectUI();
+        }
     }
 
     /**
@@ -313,35 +298,133 @@ class UploadManager {
     }
 
     /**
-     * Re-ejecuta el análisis con la configuración actual.
+     * Ejecuta el análisis estructural.
+     * Método unificado usado por handleFile, reanalyze y runAnalysisAfterLoad.
+     *
+     * @param {Object} options - Opciones de ejecución
+     * @param {boolean} options.showModal - Mostrar modal de progreso (default: true)
+     * @returns {Promise<Object>} Resultado del análisis
      */
-    async reanalyze() {
-        this.showProgressModal();
+    async _executeAnalysis(options = {}) {
+        const { showModal = true } = options;
+
+        if (showModal) {
+            this.showProgressModal();
+        }
+
         try {
+            const params = {
+                session_id: this.page.sessionId,
+                pier_updates: [],
+                generate_plots: true,
+                moment_axis: 'M3',
+                angle_deg: 0,
+                materials_config: this.page.materialsManager.getConfig(),
+                seismic_category: this.page.getSeismicCategory()
+            };
+
             const result = await structuralAPI.analyzeWithProgress(
-                {
-                    session_id: this.page.sessionId,
-                    pier_updates: [],
-                    generate_plots: true,
-                    moment_axis: 'M3',
-                    angle_deg: 0,
-                    materials_config: this.page.materialsManager.getConfig(),
-                    seismic_category: this.page.getSeismicCategory()
-                },
+                params,
                 (current, total, pier) => {
                     this.updateProgress(current, total, pier);
                 }
             );
 
             this.hideProgressModal();
+
             if (result.success) {
                 this.onAnalysisComplete(result);
             } else {
                 throw new Error(result.error || 'Error en análisis');
             }
+
+            return result;
+
         } catch (error) {
-            this.hideProgressModal();
+            console.error('Error en análisis:', error);
             this.page.showNotification('Error: ' + error.message, 'error');
+            this.hideProgressModal();
+            throw error;
         }
+    }
+
+    /**
+     * Re-ejecuta el análisis con la configuración actual.
+     */
+    async reanalyze() {
+        return this._executeAnalysis();
+    }
+
+    /**
+     * Ejecuta análisis después de cargar un proyecto.
+     * @param {Object} summary - Summary del proyecto cargado
+     */
+    async runAnalysisAfterLoad(summary) {
+        // Almacenar datos del summary en la página
+        this._storeSummaryData(summary);
+
+        // Extraer materiales
+        this.page.materialsManager.extractFromData(
+            this.page.piersData,
+            this.page.columnsData
+        );
+
+        // Transición de UI: ocultar upload, mostrar config
+        this.page.elements.uploadSection?.classList.add('hidden');
+        this.page.elements.configCard?.classList.remove('hidden');
+
+        // Ejecutar análisis
+        return this._executeAnalysis();
+    }
+
+    /**
+     * Carga resultados desde cache sin re-analizar.
+     * Se usa cuando el proyecto tiene results.json guardado.
+     * @param {Object} data - Respuesta del load con results y summary
+     */
+    async loadCachedResults(data) {
+        // Almacenar datos del summary
+        this._storeSummaryData(data.summary);
+
+        // Extraer materiales
+        this.page.materialsManager.extractFromData(
+            this.page.piersData,
+            this.page.columnsData
+        );
+
+        // Transición de UI: ocultar upload, mostrar config
+        this.page.elements.uploadSection?.classList.add('hidden');
+        this.page.elements.configCard?.classList.remove('hidden');
+
+        // Restaurar resultados desde cache
+        const results = data.results;
+        this.page.results = results.piers || [];
+        this.page.columnResults = results.columns || [];
+        this.page.beamResults = results.beams || [];
+        this.page.dropBeamResults = results.drop_beams || [];
+
+        // Renderizar usando el flujo existente
+        this.onAnalysisComplete({
+            success: true,
+            results: this.page.results,
+            column_results: this.page.columnResults,
+            beam_results: this.page.beamResults,
+            drop_beam_results: this.page.dropBeamResults
+        });
+    }
+
+    /**
+     * Almacena los datos del summary en la página.
+     * @param {Object} summary - Summary con listas de elementos
+     */
+    _storeSummaryData(summary) {
+        const page = this.page;
+        page.piersData = summary.piers_list || [];
+        page.columnsData = summary.columns_list || [];
+        page.beamsData = summary.beams_list || [];
+        page.dropBeamsData = summary.drop_beams_list || [];
+        page.uniqueGrillas = summary.grillas || [];
+        page.uniqueStories = summary.stories || [];
+        page.uniqueAxes = summary.axes || [];
     }
 }

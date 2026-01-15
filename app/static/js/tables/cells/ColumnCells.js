@@ -69,26 +69,41 @@ const ColumnCells = {
 
     /**
      * Celda de estribos.
+     * @param {Object} result - Resultado del elemento
+     * @param {string} colKey - Key del elemento
+     * @param {boolean} disabled - Si true, muestra estribos deshabilitados (para STRUT)
      */
-    createStirrupsCell(result, colKey) {
+    createStirrupsCell(result, colKey, disabled = false) {
         const reinf = result.reinforcement || {};
         const td = document.createElement('td');
-        td.className = 'stirrups-cell';
+        td.className = 'stirrups-cell' + (disabled ? ' strut-disabled' : '');
         td.dataset.colKey = colKey;
 
-        td.innerHTML = `
-            <div class="stirrup-row">
-                <span class="stirrup-label">Estribo:</span>
-                <select class="edit-stirrup-d" title="φ Estribo">
-                    ${StructuralConstants.generateDiameterOptions('estribos', reinf.stirrup_diameter, 'E')}
-                </select>
-            </div>
-            <div class="stirrup-row">
-                <select class="edit-stirrup-s" title="@ Estribo">
-                    ${StructuralConstants.generateSpacingOptions('columnas', reinf.stirrup_spacing)}
-                </select>
-            </div>
-        `;
+        if (disabled) {
+            // STRUT: estribos deshabilitados (no confinado)
+            td.innerHTML = `
+                <div class="stirrup-row">
+                    <span class="disabled-label">Sin estribos</span>
+                </div>
+                <div class="stirrup-row">
+                    <span class="disabled-note">(no confinado)</span>
+                </div>
+            `;
+        } else {
+            td.innerHTML = `
+                <div class="stirrup-row">
+                    <span class="stirrup-label">Estribo:</span>
+                    <select class="edit-stirrup-d" title="φ Estribo">
+                        ${StructuralConstants.generateDiameterOptions('estribos', reinf.stirrup_diameter, 'E')}
+                    </select>
+                </div>
+                <div class="stirrup-row">
+                    <select class="edit-stirrup-s" title="@ Estribo">
+                        ${StructuralConstants.generateSpacingOptions('columnas', reinf.stirrup_spacing)}
+                    </select>
+                </div>
+            `;
+        }
         return td;
     }
 };

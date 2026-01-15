@@ -20,8 +20,8 @@ from .element_classifier import ElementType
 from ...domain.constants.units import TONF_TO_N
 
 if TYPE_CHECKING:
-    from ...domain.entities import Beam, Column, Pier, DropBeam
-    from ...domain.entities import BeamForces, ColumnForces, PierForces, DropBeamForces
+    from ...domain.entities import HorizontalElement, VerticalElement
+    from ...domain.entities import ElementForces
 
 
 class DesignBehaviorResolver:
@@ -50,8 +50,8 @@ class DesignBehaviorResolver:
     def resolve(
         self,
         element_type: ElementType,
-        element: Union['Beam', 'Column', 'Pier', 'DropBeam'],
-        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces']] = None,
+        element: Union['HorizontalElement', 'VerticalElement'],
+        forces: Optional['ElementForces'] = None,
         is_seismic: bool = True,
     ) -> DesignBehavior:
         """
@@ -91,8 +91,8 @@ class DesignBehaviorResolver:
 
     def _resolve_beam_behavior(
         self,
-        element: 'Beam',
-        forces: Optional['BeamForces'],
+        element: 'HorizontalElement',
+        forces: Optional['ElementForces'],
         is_seismic: bool,
     ) -> DesignBehavior:
         """
@@ -128,8 +128,8 @@ class DesignBehaviorResolver:
 
     def _has_significant_axial(
         self,
-        element: Union['Beam', 'Column', 'Pier', 'DropBeam'],
-        forces: Optional[Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces']],
+        element: Union['HorizontalElement', 'VerticalElement'],
+        forces: Optional['ElementForces'],
         divisor: float = 10.0,
     ) -> bool:
         """
@@ -168,7 +168,7 @@ class DesignBehaviorResolver:
 
     def _get_max_axial(
         self,
-        forces: Union['BeamForces', 'ColumnForces', 'PierForces', 'DropBeamForces'],
+        forces: 'ElementForces',
     ) -> float:
         """
         Obtiene la carga axial maxima de las fuerzas.

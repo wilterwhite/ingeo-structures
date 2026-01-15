@@ -11,7 +11,12 @@ from app.services.analysis.element_orchestrator import (
 )
 from app.services.analysis.element_classifier import ElementType
 from app.services.analysis.design_behavior import DesignBehavior
-from app.domain.entities import Column, Beam, Pier, DropBeam
+from app.domain.entities import (
+    VerticalElement, VerticalElementSource,
+    HorizontalElement, HorizontalElementSource,
+    DiscreteReinforcement, MeshReinforcement,
+    HorizontalDiscreteReinforcement, HorizontalMeshReinforcement,
+)
 from app.domain.chapter18 import SeismicCategory
 
 
@@ -22,86 +27,99 @@ from app.domain.chapter18 import SeismicCategory
 @pytest.fixture
 def sample_column():
     """Columna de prueba."""
-    return Column(
+    return VerticalElement(
         label="C1",
         story="Piso 1",
-        depth=500,
-        width=400,
+        source=VerticalElementSource.FRAME,
+        length=500,  # depth
+        thickness=400,  # width
         height=3000,
         fc=30,
         fy=420,
-        diameter_long=20,
-        n_bars_depth=3,
-        n_bars_width=4,
+        discrete_reinforcement=DiscreteReinforcement(
+            n_bars_length=3,
+            n_bars_thickness=4,
+            diameter=20,
+        ),
         stirrup_diameter=10,
         stirrup_spacing=100,
-        n_stirrup_legs_depth=2,
-        n_stirrup_legs_width=3,
+        n_shear_legs=2,
+        n_shear_legs_secondary=3,
     )
 
 
 @pytest.fixture
 def sample_beam():
     """Viga de prueba."""
-    return Beam(
+    return HorizontalElement(
         label="V1",
         story="Piso 1",
+        source=HorizontalElementSource.FRAME,
         width=300,
         depth=600,
         length=6000,
         fc=25,
         fy=420,
-        diameter_top=16,
-        n_bars_top=3,
-        diameter_bottom=20,
-        n_bars_bottom=4,
         stirrup_diameter=8,
         stirrup_spacing=150,
         n_stirrup_legs=2,
+        discrete_reinforcement=HorizontalDiscreteReinforcement(
+            n_bars_top=3,
+            n_bars_bottom=4,
+            diameter_top=16,
+            diameter_bottom=20,
+        ),
     )
 
 
 @pytest.fixture
 def sample_pier():
     """Pier/muro de prueba."""
-    return Pier(
+    return VerticalElement(
         label="M1",
         story="Piso 1",
-        width=2000,
-        thickness=200,
+        source=VerticalElementSource.PIER,
+        length=2000,  # lw
+        thickness=200,  # tw
         height=2700,
         fc=25,
         fy=420,
-        n_meshes=2,
-        diameter_v=10,
-        spacing_v=200,
-        diameter_h=8,
-        spacing_h=200,
-        n_edge_bars=4,
-        diameter_edge=16,
+        mesh_reinforcement=MeshReinforcement(
+            n_meshes=2,
+            diameter_v=10,
+            spacing_v=200,
+            diameter_h=8,
+            spacing_h=200,
+            n_edge_bars=4,
+            diameter_edge=16,
+        ),
         stirrup_diameter=8,
         stirrup_spacing=150,
+        n_shear_legs=2,
     )
 
 
 @pytest.fixture
 def sample_drop_beam():
     """Viga capitel de prueba."""
-    return DropBeam(
+    return HorizontalElement(
         label="VC1",
         story="Piso 1",
+        source=HorizontalElementSource.DROP_BEAM,
         width=200,
-        thickness=2400,
+        depth=2400,
         length=1500,
         fc=25,
         fy=420,
-        n_meshes=2,
-        diameter_v=10,
-        spacing_v=150,
-        diameter_h=10,
-        spacing_h=200,
-        n_edge_bars=2,
-        diameter_edge=16,
+        mesh_reinforcement=HorizontalMeshReinforcement(
+            n_meshes=2,
+            diameter_v=10,
+            spacing_v=150,
+            diameter_h=10,
+            spacing_h=200,
+            n_edge_bars=2,
+            diameter_edge=16,
+        ),
     )
 
 
