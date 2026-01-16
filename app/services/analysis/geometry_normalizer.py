@@ -117,6 +117,9 @@ class WallGeometry:
     stirrup_diameter: float = 8.0  # Diametro estribos (mm)
     stirrup_spacing: float = 150.0  # Espaciamiento estribos (mm)
     n_stirrup_legs: int = 2  # Numero de ramas
+    # Tipo de forma (rectangular, L, T, C, custom)
+    shape_type: str = "rectangular"
+    is_composite: bool = False  # True si es seccion compuesta (L, T, C)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convierte a diccionario para paso a servicios."""
@@ -129,6 +132,8 @@ class WallGeometry:
             'stirrup_diameter': self.stirrup_diameter,
             'stirrup_spacing': self.stirrup_spacing,
             'n_stirrup_legs': self.n_stirrup_legs,
+            'shape_type': self.shape_type,
+            'is_composite': self.is_composite,
         }
 
 
@@ -386,13 +391,22 @@ class GeometryNormalizer:
     def _pier_to_wall_geom(pier: 'VerticalElement') -> WallGeometry:
         """Extrae geometria de VerticalElement (source=PIER) para verificacion tipo muro."""
         # Para PIER: length=lw, thickness=tw
+        # Para secciones compuestas (L, T, C): usar propiedades del composite
+        if pier.is_composite:
+            cs = pier.composite_section
+            lw = cs.overall_length
+            tw = cs.web_thickness
+        else:
+            lw = pier.length
+            tw = pier.thickness
+
         return WallGeometry(
-            lw=pier.length,
-            tw=pier.thickness,
+            lw=lw,
+            tw=tw,
             hw=pier.height,
             cover=pier.cover,
-            Ag=pier.Ag,
-            Acv=getattr(pier, 'Acv', pier.length * pier.thickness),
+            Ag=pier.Ag,  # Ya usa composite_section.Ag si existe
+            Acv=pier.Acv,  # Ya usa composite_section.calculate_Acv() si existe
             fc=pier.fc,
             fy=pier.fy,
             rho_v=getattr(pier, 'rho_v', 0),
@@ -403,6 +417,8 @@ class GeometryNormalizer:
             stirrup_diameter=pier.stirrup_diameter,
             stirrup_spacing=pier.stirrup_spacing,
             n_stirrup_legs=pier.n_shear_legs,
+            shape_type=pier.shape_type,
+            is_composite=pier.is_composite,
         )
 
     @staticmethod
@@ -416,7 +432,17 @@ class GeometryNormalizer:
 
         El DropBeam se diseña como muro con flexión fuera del plano,
         donde la luz libre actúa como altura del muro equivalente.
+
+        Nota: DROP_BEAM ahora usa discrete_reinforcement (barras top/bottom).
+        Para compatibilidad con WallGeometry, mapeamos:
+        - n_edge_bars ← n_bars_top + n_bars_bottom
+        - diameter_edge ← max(diameter_top, diameter_bottom)
         """
+        # Obtener valores de discrete_reinforcement
+        dr = db.discrete_reinforcement
+        n_edge = (dr.n_bars_top + dr.n_bars_bottom) if dr else 0
+        diam_edge = max(dr.diameter_top, dr.diameter_bottom) if dr else 16
+
         return WallGeometry(
             hw=db.length,        # Altura muro = luz libre
             lw=db.depth,         # Longitud muro = ancho tributario (peralte)
@@ -426,11 +452,11 @@ class GeometryNormalizer:
             Acv=getattr(db, 'Acv', db.depth * db.width), # lw × tw (área de corte)
             fc=db.fc,
             fy=db.fy,
-            rho_v=getattr(db, 'rho_vertical', 0),
-            rho_h=getattr(db, 'rho_horizontal', 0),
-            As_edge=getattr(db, 'As_edge_total', 0),
-            n_edge_bars=getattr(db, 'n_edge_bars', 0),
-            diameter_edge=getattr(db, 'diameter_edge', 12),
+            rho_v=0,  # DROP_BEAM no usa malla
+            rho_h=0,  # DROP_BEAM no usa malla
+            As_edge=getattr(db, 'As_flexure_total', 0),
+            n_edge_bars=n_edge,
+            diameter_edge=diam_edge,
             stirrup_diameter=getattr(db, 'stirrup_diameter', 8),
             stirrup_spacing=getattr(db, 'stirrup_spacing', 150),
             n_stirrup_legs=getattr(db, 'n_stirrup_legs', 2),

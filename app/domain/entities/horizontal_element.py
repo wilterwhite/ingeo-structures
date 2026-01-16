@@ -50,7 +50,7 @@ class HorizontalElement:
     Soporta tres tipos (source):
     - FRAME: vigas modeladas como elementos lineales
     - SPANDREL: vigas de acople modeladas como shells
-    - DROP_BEAM: vigas capitel (losas con armadura de malla)
+    - DROP_BEAM: vigas capitel (barras top/bottom como vigas normales)
     """
     label: str              # "B1", "S1", "CL - C3"
     story: str              # "Story4"
@@ -78,11 +78,10 @@ class HorizontalElement:
     stirrup_spacing: int = 150
     n_stirrup_legs: int = 2
 
-    # Armadura longitudinal - depende del tipo
-    # Para FRAME/SPANDREL: usa discrete_reinforcement
-    # Para DROP_BEAM: usa mesh_reinforcement
+    # Armadura longitudinal - todos los tipos usan discrete_reinforcement
+    # mesh_reinforcement se mantiene para compatibilidad pero está deprecated
     discrete_reinforcement: Optional[HorizontalDiscreteReinforcement] = None
-    mesh_reinforcement: Optional[HorizontalMeshReinforcement] = None
+    mesh_reinforcement: Optional[HorizontalMeshReinforcement] = None  # DEPRECATED
 
     # Otros
     cover: float = 40.0
@@ -116,22 +115,26 @@ class HorizontalElement:
 
         self._bar_area_stirrup = get_bar_area(self.stirrup_diameter, 78.5)
 
-        # Inicializar armadura segun tipo si no se proporciono
-        if self.source == HorizontalElementSource.DROP_BEAM:
-            if self.mesh_reinforcement is None:
-                # Defaults específicos para vigas capitel (phi12@200)
-                self.mesh_reinforcement = MeshReinforcement(
-                    diameter_v=12,
-                    diameter_h=10,
-                    n_edge_bars=4,
-                    diameter_edge=16,
+        # Inicializar armadura - todos los tipos usan discrete_reinforcement
+        if self.discrete_reinforcement is None:
+            if self.source == HorizontalElementSource.DROP_BEAM:
+                # Defaults para vigas capitel: 4phi16 top + 4phi16 bottom
+                self.discrete_reinforcement = BeamReinforcement(
+                    n_bars_top=4,
+                    n_bars_bottom=4,
+                    diameter_top=16,
+                    diameter_bottom=16,
                 )
-            # Cover default para DROP_BEAM es 25mm
-            if self.cover == 40.0:
-                self.cover = 25.0
-        else:
-            if self.discrete_reinforcement is None:
+            else:
                 self.discrete_reinforcement = BeamReinforcement()
+
+        # Cover default para DROP_BEAM es 25mm
+        if self.source == HorizontalElementSource.DROP_BEAM and self.cover == 40.0:
+            self.cover = 25.0
+
+        # Limpiar mesh_reinforcement si existe (migración de formato antiguo)
+        if self.source == HorizontalElementSource.DROP_BEAM:
+            self.mesh_reinforcement = None
 
     # =========================================================================
     # Propiedades de Tipo
@@ -169,15 +172,14 @@ class HorizontalElement:
     @property
     def reinforcement_description(self) -> str:
         """Descripcion legible de la armadura."""
-        if self.is_drop_beam and self.mesh_reinforcement:
-            mr = self.mesh_reinforcement
-            mesh_text = "1M" if mr.n_meshes == 1 else "2M"
-            edge_text = f"+{mr.n_edge_bars}phi{mr.diameter_edge}"
-            stirrup_text = f"E{self.stirrup_diameter}@{self.stirrup_spacing}"
-            return f"{mesh_text} phi{mr.diameter_v}@{mr.spacing_v} {edge_text} {stirrup_text}"
-        else:
+        if self.discrete_reinforcement:
+            dr = self.discrete_reinforcement
+            top_text = f"{dr.n_bars_top}phi{dr.diameter_top}"
+            bot_text = f"{dr.n_bars_bottom}phi{dr.diameter_bottom}"
             legs = f"{self.n_stirrup_legs}R" if self.n_stirrup_legs > 2 else ""
-            return f"{legs}E{self.stirrup_diameter}@{self.stirrup_spacing}"
+            stirrup_text = f"{legs}E{self.stirrup_diameter}@{self.stirrup_spacing}"
+            return f"{top_text} + {bot_text} {stirrup_text}"
+        return f"E{self.stirrup_diameter}@{self.stirrup_spacing}"
 
     # =========================================================================
     # Propiedades de Armadura (FRAME/SPANDREL)
@@ -222,7 +224,30 @@ class HorizontalElement:
         return self.n_bars_bottom * get_bar_area(self.diameter_bottom)
 
     # =========================================================================
-    # Propiedades de Armadura (DROP_BEAM - malla)
+    # Propiedades de Armadura Lateral (distribuida en alma)
+    # =========================================================================
+
+    @property
+    def diameter_lateral(self) -> int:
+        """Diámetro barras laterales (mm), 0=sin laterales."""
+        if self.discrete_reinforcement:
+            return self.discrete_reinforcement.diameter_lateral
+        return 0
+
+    @property
+    def spacing_lateral(self) -> int:
+        """Espaciamiento barras laterales (mm)."""
+        if self.discrete_reinforcement:
+            return self.discrete_reinforcement.spacing_lateral
+        return 200
+
+    @property
+    def has_lateral_bars(self) -> bool:
+        """Indica si la viga tiene armadura lateral."""
+        return self.diameter_lateral > 0
+
+    # =========================================================================
+    # Propiedades de Armadura (DROP_BEAM - malla) - LEGACY
     # =========================================================================
 
     @property
@@ -436,18 +461,14 @@ class HorizontalElement:
     @property
     def As_flexure_total(self) -> float:
         """Area total de acero longitudinal (mm2)."""
-        if self.is_drop_beam:
-            return self.As_edge_total + self.As_vertical
+        # Todos los tipos usan As_top + As_bottom ahora
         return self.As_top + self.As_bottom
 
     def get_steel_layers(self, direction: str = 'primary') -> List['SteelLayer']:
         """Capas de acero para diagrama de interaccion."""
-        if self.is_drop_beam:
-            from ..calculations.steel_layer_calculator import SteelLayerCalculator
-            return SteelLayerCalculator.calculate_from_horizontal_element_drop(self)
-
         from ..calculations.steel_layer_calculator import SteelLayer
 
+        # Todos los tipos usan la misma lógica: top + bottom
         d_top = self.cover + self.diameter_top / 2
         As_top = self.n_bars_top * get_bar_area(self.diameter_top)
 
@@ -477,12 +498,15 @@ class HorizontalElement:
         stirrup_diameter: Optional[int] = None,
         stirrup_spacing: Optional[int] = None,
         n_stirrup_legs: Optional[int] = None,
-        # FRAME/SPANDREL
+        # FRAME/SPANDREL/DROP_BEAM - barras top/bottom
         n_bars_top: Optional[int] = None,
         n_bars_bottom: Optional[int] = None,
         diameter_top: Optional[int] = None,
         diameter_bottom: Optional[int] = None,
-        # DROP_BEAM
+        # Barras laterales (distribuidas en alma)
+        diameter_lateral: Optional[int] = None,
+        spacing_lateral: Optional[int] = None,
+        # DROP_BEAM legacy (mesh_reinforcement) - ya no usado
         n_meshes: Optional[int] = None,
         diameter_v: Optional[int] = None,
         spacing_v: Optional[int] = None,
@@ -508,7 +532,7 @@ class HorizontalElement:
         if cover is not None:
             self.cover = cover
 
-        # FRAME/SPANDREL
+        # FRAME/SPANDREL/DROP_BEAM - barras top/bottom + laterales
         if self.discrete_reinforcement:
             if n_bars_top is not None:
                 self.discrete_reinforcement.n_bars_top = n_bars_top
@@ -518,6 +542,11 @@ class HorizontalElement:
                 self.discrete_reinforcement.diameter_top = diameter_top
             if diameter_bottom is not None:
                 self.discrete_reinforcement.diameter_bottom = diameter_bottom
+            # Barras laterales
+            if diameter_lateral is not None:
+                self.discrete_reinforcement.diameter_lateral = diameter_lateral
+            if spacing_lateral is not None:
+                self.discrete_reinforcement.spacing_lateral = spacing_lateral
 
         # DROP_BEAM
         if self.mesh_reinforcement:
@@ -565,29 +594,24 @@ class HorizontalElement:
             'is_custom': self.is_custom,
         }
 
-        if self.source == HorizontalElementSource.DROP_BEAM and self.mesh_reinforcement:
-            mr = self.mesh_reinforcement
-            data['mesh_reinforcement'] = {
-                'n_meshes': mr.n_meshes,
-                'diameter_v': mr.diameter_v,
-                'spacing_v': mr.spacing_v,
-                'diameter_h': mr.diameter_h,
-                'spacing_h': mr.spacing_h,
-                'n_edge_bars': mr.n_edge_bars,
-                'diameter_edge': mr.diameter_edge,
+        # Todos los tipos usan discrete_reinforcement
+        if self.discrete_reinforcement:
+            dr = self.discrete_reinforcement
+            data['discrete_reinforcement'] = {
+                'n_bars_top': dr.n_bars_top,
+                'n_bars_bottom': dr.n_bars_bottom,
+                'diameter_top': dr.diameter_top,
+                'diameter_bottom': dr.diameter_bottom,
+                'diameter_lateral': dr.diameter_lateral,
+                'spacing_lateral': dr.spacing_lateral,
             }
+
+        # Campos específicos por tipo
+        if self.source == HorizontalElementSource.DROP_BEAM:
             data['axis_slab'] = self.axis_slab
             data['location'] = self.location
             data['axis_angle'] = self.axis_angle
         else:
-            if self.discrete_reinforcement:
-                dr = self.discrete_reinforcement
-                data['discrete_reinforcement'] = {
-                    'n_bars_top': dr.n_bars_top,
-                    'n_bars_bottom': dr.n_bars_bottom,
-                    'diameter_top': dr.diameter_top,
-                    'diameter_bottom': dr.diameter_bottom,
-                }
             data['ln'] = self.ln
             data['column_depth_left'] = self.column_depth_left
             data['column_depth_right'] = self.column_depth_right
@@ -602,28 +626,29 @@ class HorizontalElement:
         source = HorizontalElementSource(data.get('source', data.get('beam_type', 'frame')))
         shape = HorizontalElementShape(data.get('shape', 'rectangular'))
 
-        # Armadura segun tipo
-        discrete_reinforcement = None
-        mesh_reinforcement = None
+        # Todos los tipos usan discrete_reinforcement
+        dr_data = data.get('discrete_reinforcement', {})
 
-        if source == HorizontalElementSource.DROP_BEAM:
-            mr_data = data.get('mesh_reinforcement', {})
-            mesh_reinforcement = HorizontalMeshReinforcement(
-                n_meshes=mr_data.get('n_meshes', 2),
-                diameter_v=mr_data.get('diameter_v', 12),
-                spacing_v=mr_data.get('spacing_v', 200),
-                diameter_h=mr_data.get('diameter_h', 10),
-                spacing_h=mr_data.get('spacing_h', 200),
-                n_edge_bars=mr_data.get('n_edge_bars', 4),
-                diameter_edge=mr_data.get('diameter_edge', 16),
+        # Migración: si es DROP_BEAM y tiene mesh_reinforcement antiguo, convertir
+        if source == HorizontalElementSource.DROP_BEAM and 'mesh_reinforcement' in data and not dr_data:
+            mr_data = data['mesh_reinforcement']
+            # Convertir formato antiguo (malla) a nuevo (barras)
+            discrete_reinforcement = HorizontalDiscreteReinforcement(
+                n_bars_top=mr_data.get('n_edge_bars', 4),
+                n_bars_bottom=mr_data.get('n_edge_bars', 4),
+                diameter_top=mr_data.get('diameter_edge', 16),
+                diameter_bottom=mr_data.get('diameter_edge', 16),
+                diameter_lateral=mr_data.get('diameter_v', 0),  # Migrar malla V a laterales
+                spacing_lateral=mr_data.get('spacing_v', 200),
             )
         else:
-            dr_data = data.get('discrete_reinforcement', {})
             discrete_reinforcement = HorizontalDiscreteReinforcement(
-                n_bars_top=dr_data.get('n_bars_top', 3),
-                n_bars_bottom=dr_data.get('n_bars_bottom', 3),
+                n_bars_top=dr_data.get('n_bars_top', 4 if source == HorizontalElementSource.DROP_BEAM else 3),
+                n_bars_bottom=dr_data.get('n_bars_bottom', 4 if source == HorizontalElementSource.DROP_BEAM else 3),
                 diameter_top=dr_data.get('diameter_top', 16),
                 diameter_bottom=dr_data.get('diameter_bottom', 16),
+                diameter_lateral=dr_data.get('diameter_lateral', 0),
+                spacing_lateral=dr_data.get('spacing_lateral', 200),
             )
 
         return cls(
@@ -641,7 +666,7 @@ class HorizontalElement:
             stirrup_spacing=data.get('stirrup_spacing', 150),
             n_stirrup_legs=data.get('n_stirrup_legs', 2),
             discrete_reinforcement=discrete_reinforcement,
-            mesh_reinforcement=mesh_reinforcement,
+            mesh_reinforcement=None,  # Ya no se usa
             cover=data.get('cover', 40.0),
             is_seismic=data.get('is_seismic', True),
             is_custom=data.get('is_custom', False),

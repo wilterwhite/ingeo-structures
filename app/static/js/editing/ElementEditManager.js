@@ -249,11 +249,14 @@ class ElementEditManager {
         },
         beam: {
             n_bars_top: 3, diameter_top: 16, n_bars_bottom: 3, diameter_bottom: 16,
+            diameter_lateral: 0, spacing_lateral: 200,
             n_stirrup_legs: 2, stirrup_diameter: 10, stirrup_spacing: 150
         },
         drop_beam: {
-            n_meshes: 2, diameter_v: 12, diameter_h: 10, spacing_v: 200, spacing_h: 200,
-            n_edge_bars: 4, diameter_edge: 16, stirrup_diameter: 10, stirrup_spacing: 150
+            // DROP_BEAM ahora usa mismo formato que BEAM (barras top/bottom)
+            n_bars_top: 4, diameter_top: 16, n_bars_bottom: 4, diameter_bottom: 16,
+            diameter_lateral: 0, spacing_lateral: 200,
+            n_stirrup_legs: 2, stirrup_diameter: 10, stirrup_spacing: 150
         }
     };
 
@@ -407,17 +410,18 @@ class ElementEditManager {
             });
         }
 
-        // Actualizar beamResults y re-renderizar
+        // Actualizar beamResults y dropBeamResults, luego re-renderizar tabla unificada
         if (data.beam_results && beamKeys.length > 0) {
             this.table.page.beamResults = data.beam_results;
-            this.table.page.beamsModule.renderBeamsTable();
-            beamKeys.forEach(key => this._unmarkRowPending(key, 'beam'));
         }
-
-        // Actualizar dropBeamResults y re-renderizar
         if (data.drop_beam_results && dropBeamKeys.length > 0) {
             this.table.page.dropBeamResults = data.drop_beam_results;
-            this.table.page.renderDropBeamsTable();
+        }
+
+        // Re-renderizar tabla unificada de vigas (BEAM + DROP_BEAM)
+        if (beamKeys.length > 0 || dropBeamKeys.length > 0) {
+            this.table.page.beamsModule.renderBeamsTable();
+            beamKeys.forEach(key => this._unmarkRowPending(key, 'beam'));
             dropBeamKeys.forEach(key => this._unmarkRowPending(key, 'drop_beam'));
         }
     }

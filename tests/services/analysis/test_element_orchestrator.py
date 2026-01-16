@@ -101,7 +101,7 @@ def sample_pier():
 
 @pytest.fixture
 def sample_drop_beam():
-    """Viga capitel de prueba."""
+    """Viga capitel de prueba (usa discrete_reinforcement igual que BEAM)."""
     return HorizontalElement(
         label="VC1",
         story="Piso 1",
@@ -111,14 +111,11 @@ def sample_drop_beam():
         length=1500,
         fc=25,
         fy=420,
-        mesh_reinforcement=HorizontalMeshReinforcement(
-            n_meshes=2,
-            diameter_v=10,
-            spacing_v=150,
-            diameter_h=10,
-            spacing_h=200,
-            n_edge_bars=2,
-            diameter_edge=16,
+        discrete_reinforcement=HorizontalDiscreteReinforcement(
+            n_bars_top=4,
+            n_bars_bottom=4,
+            diameter_top=16,
+            diameter_bottom=16,
         ),
     )
 

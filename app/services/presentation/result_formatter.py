@@ -172,13 +172,17 @@ class ResultFormatter:
         Extrae geometría y refuerzo base de un Pier.
 
         Centraliza la lógica común para _format_wall/column/flexure_orchestration.
-        Detecta campos modificados comparando contra el MÍNIMO CALCULADO para
-        cada pier (no contra constantes hardcodeadas).
+        Detecta campos modificados comparando contra la PROPUESTA INICIAL
+        calculada por ReinforcementProposer (no contra mínimo ACI).
 
         Returns:
             (geometry, reinforcement) dicts
         """
-        from ...domain.calculations.minimum_reinforcement import MinimumReinforcementCalculator
+        from ...domain.calculations.reinforcement_proposer import (
+            ReinforcementProposer,
+            ProposedLayout,
+        )
+        from ...domain.constants.reinforcement import MESH_DEFAULTS
 
         geometry = {
             'width_mm': pier.length,
@@ -193,32 +197,41 @@ class ResultFormatter:
         # Verificar cuantía máxima (4% según ACI 318-25 §18.10.2.1)
         rho_v_exceeds_max = pier.rho_vertical > RHO_MAX
 
-        # Calcular enfierradura mínima para ESTE pier (según espesor y cover)
-        min_config = MinimumReinforcementCalculator.calculate_for_pier(pier.thickness)
-        min_n_edge, min_diam_edge = MinimumReinforcementCalculator.calculate_edge_reinforcement(
-            pier.thickness, pier.cover
-        )
+        # Obtener propuesta inicial para ESTA geometría
+        proposal = ReinforcementProposer.propose(pier.length, pier.thickness)
 
-        # Detectar campos modificados respecto al MÍNIMO CALCULADO
+        # Detectar campos modificados vs propuesta inicial
         modified_fields = []
-        if pier.n_meshes != min_config.n_meshes:
-            modified_fields.append('n_meshes')
-        if pier.diameter_v != min_config.diameter:
-            modified_fields.append('diameter_v')
-        if pier.spacing_v != min_config.spacing:
-            modified_fields.append('spacing_v')
-        if pier.diameter_h != min_config.diameter:
-            modified_fields.append('diameter_h')
-        if pier.spacing_h != min_config.spacing:
-            modified_fields.append('spacing_h')
-        if pier.n_edge_bars != min_n_edge:
-            modified_fields.append('n_edge_bars')
-        if pier.diameter_edge != min_diam_edge:
-            modified_fields.append('diameter_edge')
-        # Estribos: no hay mínimo calculado, mantener check simple contra valores típicos
-        if pier.stirrup_diameter != 10:
+
+        if proposal.layout == ProposedLayout.MESH or pier.is_mesh_layout:
+            # Comparar contra MESH_DEFAULTS para layout de malla
+            if pier.n_meshes != MESH_DEFAULTS['n_meshes']:
+                modified_fields.append('n_meshes')
+            if pier.diameter_v != MESH_DEFAULTS['diameter_v']:
+                modified_fields.append('diameter_v')
+            if pier.spacing_v != MESH_DEFAULTS['spacing_v']:
+                modified_fields.append('spacing_v')
+            if pier.diameter_h != MESH_DEFAULTS['diameter_h']:
+                modified_fields.append('diameter_h')
+            if pier.spacing_h != MESH_DEFAULTS['spacing_h']:
+                modified_fields.append('spacing_h')
+            if pier.n_edge_bars != MESH_DEFAULTS['n_edge_bars']:
+                modified_fields.append('n_edge_bars')
+            if pier.diameter_edge != MESH_DEFAULTS['diameter_edge']:
+                modified_fields.append('diameter_edge')
+        else:
+            # Comparar contra propuesta para layout STIRRUPS
+            if pier.n_bars_depth != proposal.n_bars_length:
+                modified_fields.append('n_bars_depth')
+            if pier.n_bars_width != proposal.n_bars_thickness:
+                modified_fields.append('n_bars_width')
+            if pier.diameter_long != proposal.diameter:
+                modified_fields.append('diameter_long')
+
+        # Estribos: comparar contra propuesta
+        if pier.stirrup_diameter != proposal.stirrup_diameter:
             modified_fields.append('stirrup_diameter')
-        if pier.stirrup_spacing != 150:
+        if pier.stirrup_spacing != proposal.stirrup_spacing:
             modified_fields.append('stirrup_spacing')
 
         reinforcement = {
@@ -229,7 +242,7 @@ class ResultFormatter:
             'As_horizontal_per_m': round(pier.As_horizontal, 1),
             'rho_vertical': round(pier.rho_vertical, 5),
             'rho_horizontal': round(pier.rho_horizontal, 5),
-            # Valores de configuración (para que el frontend pueda actualizar dropdowns)
+            # Valores de configuración para MALLA (para que el frontend pueda actualizar dropdowns)
             'n_meshes': pier.n_meshes,
             'diameter_v': pier.diameter_v,
             'spacing_v': pier.spacing_v,
@@ -237,6 +250,12 @@ class ResultFormatter:
             'spacing_h': pier.spacing_h,
             'n_edge_bars': pier.n_edge_bars,
             'diameter_edge': pier.diameter_edge,
+            # Valores de configuración para STIRRUPS (columnas/struts)
+            'n_bars_depth': pier.n_bars_depth,
+            'n_bars_width': pier.n_bars_width,
+            'n_total_bars': pier.n_total_bars,
+            'diameter_long': pier.diameter_long,
+            'As_longitudinal_mm2': round(pier.As_longitudinal, 0),
             'stirrup_diameter': pier.stirrup_diameter,
             'stirrup_spacing': pier.stirrup_spacing,
             # Validaciones adicionales
@@ -1007,46 +1026,24 @@ class ResultFormatter:
             'fy': beam.fy
         }
 
-        # Armadura unificada
-        if is_drop_beam:
-            # DROP_BEAM: mapear terminología de malla a terminología de viga
-            mr = beam.mesh_reinforcement
-            reinforcement = {
-                # Barras de borde (extremos superior e inferior)
-                'n_edge_bars': mr.n_edge_bars if mr else 0,
-                'diameter_edge': mr.diameter_edge if mr else 16,
-                # Estribos
-                'stirrup_diameter': beam.stirrup_diameter,
-                'stirrup_spacing': beam.stirrup_spacing,
-                # Barras laterales (distribuidas en el alma)
-                'n_lateral_bars': 0,  # Calculado por espaciamiento
-                'diameter_lateral': mr.diameter_v if mr else 12,
-                'spacing_lateral': mr.spacing_v if mr else 200,
-                # Descripción legible
-                'description': beam.reinforcement_description
-            }
-        else:
-            # FRAME/SPANDREL: armadura discreta top/bottom
-            dr = beam.discrete_reinforcement
-            reinforcement = {
-                # Barras de borde = barras top + bottom
-                'n_edge_bars': (dr.n_bars_top if dr else 0) + (dr.n_bars_bottom if dr else 0),
-                'diameter_edge': max(dr.diameter_top if dr else 16, dr.diameter_bottom if dr else 16),
-                # Detalle top/bottom para compatibilidad
-                'n_bars_top': dr.n_bars_top if dr else 0,
-                'n_bars_bottom': dr.n_bars_bottom if dr else 0,
-                'diameter_top': dr.diameter_top if dr else 16,
-                'diameter_bottom': dr.diameter_bottom if dr else 16,
-                # Estribos
-                'stirrup_diameter': beam.stirrup_diameter,
-                'stirrup_spacing': beam.stirrup_spacing,
-                # Barras laterales (vigas normales no suelen tener)
-                'n_lateral_bars': 0,
-                'diameter_lateral': 0,
-                'spacing_lateral': 0,
-                # Descripción legible
-                'description': f"{dr.n_bars_top if dr else 0}phi{dr.diameter_top if dr else 16} + {dr.n_bars_bottom if dr else 0}phi{dr.diameter_bottom if dr else 16}"
-            }
+        # Armadura unificada: tanto BEAM como DROP_BEAM usan discrete_reinforcement
+        dr = beam.discrete_reinforcement
+        reinforcement = {
+            # Barras top/bottom
+            'n_bars_top': dr.n_bars_top if dr else 0,
+            'n_bars_bottom': dr.n_bars_bottom if dr else 0,
+            'diameter_top': dr.diameter_top if dr else 16,
+            'diameter_bottom': dr.diameter_bottom if dr else 16,
+            # Barras laterales (distribuidas en alma)
+            'diameter_lateral': dr.diameter_lateral if dr else 0,
+            'spacing_lateral': dr.spacing_lateral if dr else 200,
+            # Estribos
+            'stirrup_diameter': beam.stirrup_diameter,
+            'stirrup_spacing': beam.stirrup_spacing,
+            'n_stirrup_legs': beam.n_stirrup_legs,
+            # Descripción legible
+            'description': beam.reinforcement_description
+        }
 
         element_type = 'drop_beam' if is_drop_beam else 'beam'
         shear_type = 'wall' if is_drop_beam else 'beam'

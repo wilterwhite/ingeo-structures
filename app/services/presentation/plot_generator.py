@@ -212,6 +212,10 @@ class PlotGenerator:
         Returns:
             Imagen en formato base64
         """
+        # Si es sección compuesta (L, T, C), usar método especializado
+        if pier.is_composite:
+            return self._generate_composite_section_diagram(pier, figsize)
+
         fig, ax = plt.subplots(figsize=figsize)
 
         # Dimensiones en mm
@@ -671,6 +675,564 @@ class PlotGenerator:
         ax.set_xlim(x0 - dim_offset * 2, x0 + width + dim_offset * 2 + 150)
         ax.set_ylim(y0 - dim_offset * 2, y0 + depth + dim_offset * 2)
         ax.axis('off')
+
+        plt.tight_layout()
+
+        # Convertir a base64
+        buffer = BytesIO()
+        fig.savefig(buffer, format='png', dpi=self.dpi, bbox_inches='tight',
+                   facecolor='white', edgecolor='none')
+        buffer.seek(0)
+        plt.close(fig)
+
+        return base64.b64encode(buffer.read()).decode('utf-8')
+
+    def generate_strut_section_diagram(
+        self,
+        element: 'VerticalElement',
+        figsize: Tuple[int, int] = (8, 8)
+    ) -> str:
+        """
+        Genera diagrama de seccion para strut (1x1, sin estribos).
+
+        Muestra:
+        - Seccion de hormigon cuadrada/rectangular
+        - 1 barra centrada
+        - Dimensiones
+        - Info: "1phi{d} (strut)"
+
+        Args:
+            element: VerticalElement configurado como strut
+            figsize: Tamano de la figura
+
+        Returns:
+            Imagen en formato base64
+        """
+        fig, ax = plt.subplots(figsize=figsize)
+
+        # Dimensiones en mm (usar depth/width para columnas, length/thickness para piers)
+        if hasattr(element, 'depth') and element.depth > 0:
+            width = element.width
+            depth = element.depth
+        else:
+            width = element.thickness
+            depth = element.length
+
+        cover = element.cover
+
+        # Origen centrado
+        x0 = -width / 2
+        y0 = -depth / 2
+
+        # 1. Dibujar seccion de hormigon
+        concrete = Rectangle(
+            (x0, y0), width, depth,
+            facecolor=self.COLOR_CONCRETE,
+            edgecolor=self.COLOR_CONCRETE_EDGE,
+            linewidth=2,
+            zorder=1
+        )
+        ax.add_patch(concrete)
+
+        # 2. Dibujar 1 barra centrada
+        bar_d = element.diameter_long if hasattr(element, 'diameter_long') else 12
+        bar_radius = bar_d / 2
+
+        # Barra en el centro geometrico
+        bar = Circle(
+            (0, 0), bar_radius,
+            facecolor=self.COLOR_REBAR,
+            edgecolor='white',
+            linewidth=0.5,
+            zorder=5
+        )
+        ax.add_patch(bar)
+
+        # 3. Agregar dimensiones
+        dim_offset = max(depth, width) * 0.15
+        arrow_props = dict(arrowstyle='<->', color=self.COLOR_DIMENSION, lw=1.5)
+
+        # Dimension del ancho (width - horizontal)
+        ax.annotate('', xy=(x0, y0 - dim_offset), xytext=(x0 + width, y0 - dim_offset),
+                   arrowprops=arrow_props)
+        ax.text(x0 + width/2, y0 - dim_offset - 15, f'lw = {width:.0f} mm',
+               ha='center', va='top', fontsize=10, color=self.COLOR_DIMENSION)
+
+        # Dimension de la profundidad (depth - vertical)
+        ax.annotate('', xy=(x0 - dim_offset, y0), xytext=(x0 - dim_offset, y0 + depth),
+                   arrowprops=arrow_props)
+        ax.text(x0 - dim_offset - 15, y0 + depth/2, f'tw = {depth:.0f} mm',
+               ha='right', va='center', fontsize=10, color=self.COLOR_DIMENSION,
+               rotation=90)
+
+        # Dimension del recubrimiento
+        ax.annotate('', xy=(x0, y0 + depth + 10), xytext=(x0 + cover, y0 + depth + 10),
+                   arrowprops=dict(arrowstyle='<->', color='#9ca3af', lw=1))
+        ax.text(x0 + cover/2, y0 + depth + 25, f'r={cover:.0f}',
+               ha='center', va='bottom', fontsize=8, color='#9ca3af')
+
+        # 4. Agregar leyenda de armadura
+        info_x = x0 + width + dim_offset + 20
+        info_y = y0 + depth
+
+        # Calcular area de acero
+        As = math.pi * (bar_d / 2) ** 2
+
+        info_lines = [
+            f"ARMADURA:",
+            f"",
+            f"Longitudinal: 1phi{bar_d}",
+            f"  (1 x 1 centrada)",
+            f"",
+            f"Estribos: sin confinar",
+            f"  (strut hormigon simple)",
+            f"",
+            f"Recubrimiento: {cover:.0f} mm",
+            f"",
+            f"As total: {As:.0f} mm2",
+        ]
+
+        for i, line in enumerate(info_lines):
+            ax.text(info_x, info_y - i * 18, line,
+                   ha='left', va='top', fontsize=9,
+                   fontfamily='monospace', color='#374151')
+
+        # 5. Titulo
+        ax.set_title(f'Seccion - Strut - {element.story} / {element.label}\n'
+                    f'({width/1000:.2f}m x {depth/1000:.2f}m)',
+                    fontsize=14, fontweight='bold')
+
+        # 6. Configurar ejes
+        ax.set_aspect('equal')
+        ax.set_xlim(x0 - dim_offset * 2, x0 + width + dim_offset * 2 + 150)
+        ax.set_ylim(y0 - dim_offset * 2, y0 + depth + dim_offset * 2)
+        ax.axis('off')
+
+        plt.tight_layout()
+
+        # Convertir a base64
+        buffer = BytesIO()
+        fig.savefig(buffer, format='png', dpi=self.dpi, bbox_inches='tight',
+                   facecolor='white', edgecolor='none')
+        buffer.seek(0)
+        plt.close(fig)
+
+        return base64.b64encode(buffer.read()).decode('utf-8')
+
+    # =========================================================================
+    # Composite Section Diagram (L, T, C shapes)
+    # =========================================================================
+
+    def _generate_composite_section_diagram(
+        self,
+        pier: 'VerticalElement',
+        figsize: Tuple[int, int] = (12, 10)
+    ) -> str:
+        """
+        Genera diagrama de seccion compuesta (L, T, C).
+
+        Muestra:
+        - Seccion unificada (union de segmentos sin bordes internos)
+        - Refuerzo en extremos de cada segmento
+        - Centroide de la seccion compuesta
+        - Dimensiones generales
+        - Informacion de propiedades
+
+        Args:
+            pier: VerticalElement con composite_section
+            figsize: Tamano de la figura
+
+        Returns:
+            Imagen en formato base64
+        """
+        fig, ax = plt.subplots(figsize=figsize)
+
+        cs = pier.composite_section
+        if cs is None:
+            plt.close(fig)
+            return ""
+
+        # Obtener bounding box de la seccion
+        x_min, y_min, x_max, y_max = cs.bounding_box
+
+        # Centrar la seccion
+        center_x = (x_min + x_max) / 2
+        center_y = (y_min + y_max) / 2
+
+        # 1. Crear poligono unificado usando shapely si disponible, sino usar union manual
+        try:
+            from shapely.geometry import Polygon
+            from shapely.ops import unary_union
+
+            # Crear poligonos para cada segmento, extendiendolos para que se solapen
+            # en las esquinas donde se conectan con otros segmentos
+            polygons = []
+
+            # Encontrar puntos de conexion entre segmentos
+            connection_points = set()
+            for i, seg1 in enumerate(cs.segments):
+                for j, seg2 in enumerate(cs.segments):
+                    if i >= j:
+                        continue
+                    # Verificar si comparten un extremo (con tolerancia)
+                    for p1 in [(seg1.x1, seg1.y1), (seg1.x2, seg1.y2)]:
+                        for p2 in [(seg2.x1, seg2.y1), (seg2.x2, seg2.y2)]:
+                            if abs(p1[0] - p2[0]) < 1 and abs(p1[1] - p2[1]) < 1:
+                                connection_points.add((round(p1[0]), round(p1[1])))
+
+            for segment in cs.segments:
+                # Obtener esquinas del segmento
+                corners = segment.get_corners()
+                if len(corners) < 3:
+                    continue
+
+                # Extender el segmento en los extremos que conectan con otros
+                # Esto asegura que los poligonos se solapen en las esquinas
+                ext_corners = list(corners)
+
+                # Vector direccion del segmento
+                length = segment.length
+                if length > 0:
+                    dx = (segment.x2 - segment.x1) / length
+                    dy = (segment.y2 - segment.y1) / length
+                    # Vector perpendicular
+                    nx, ny = -dy, dx
+
+                    # Verificar si cada extremo es un punto de conexion
+                    p1 = (round(segment.x1), round(segment.y1))
+                    p2 = (round(segment.x2), round(segment.y2))
+
+                    half_t = segment.thickness / 2
+
+                    # Si el extremo 1 conecta, extender las esquinas 0 y 3 hacia atras
+                    if p1 in connection_points:
+                        ext_corners[0] = (corners[0][0] - dx * half_t, corners[0][1] - dy * half_t)
+                        ext_corners[3] = (corners[3][0] - dx * half_t, corners[3][1] - dy * half_t)
+
+                    # Si el extremo 2 conecta, extender las esquinas 1 y 2 hacia adelante
+                    if p2 in connection_points:
+                        ext_corners[1] = (corners[1][0] + dx * half_t, corners[1][1] + dy * half_t)
+                        ext_corners[2] = (corners[2][0] + dx * half_t, corners[2][1] + dy * half_t)
+
+                poly = Polygon(ext_corners)
+                if poly.is_valid:
+                    polygons.append(poly)
+
+            if polygons:
+                # Unir todos los poligonos
+                unified = unary_union(polygons)
+
+                # Dibujar el poligono unificado
+                if unified.geom_type == 'Polygon':
+                    ext_coords = list(unified.exterior.coords)
+                    xs = [c[0] - center_x for c in ext_coords]
+                    ys = [c[1] - center_y for c in ext_coords]
+                    ax.fill(xs, ys, color=self.COLOR_CONCRETE, edgecolor=self.COLOR_CONCRETE_EDGE,
+                           linewidth=2, zorder=1)
+                elif unified.geom_type == 'MultiPolygon':
+                    for poly in unified.geoms:
+                        ext_coords = list(poly.exterior.coords)
+                        xs = [c[0] - center_x for c in ext_coords]
+                        ys = [c[1] - center_y for c in ext_coords]
+                        ax.fill(xs, ys, color=self.COLOR_CONCRETE, edgecolor=self.COLOR_CONCRETE_EDGE,
+                               linewidth=2, zorder=1)
+            else:
+                raise ValueError("No valid polygons")
+
+        except (ImportError, Exception):
+            # Fallback: dibujar cada segmento por separado (comportamiento anterior)
+            for segment in cs.segments:
+                corners = segment.get_corners()
+                translated_corners = [(x - center_x, y - center_y) for x, y in corners]
+                xs = [c[0] for c in translated_corners] + [translated_corners[0][0]]
+                ys = [c[1] for c in translated_corners] + [translated_corners[0][1]]
+                ax.fill(xs, ys, color=self.COLOR_CONCRETE, edgecolor=self.COLOR_CONCRETE_EDGE,
+                       linewidth=2, zorder=1)
+
+        # 2. Dibujar refuerzo en cada segmento
+        cover = pier.cover
+        edge_bar_d = pier.diameter_edge
+        n_edge = pier.n_edge_bars
+        bar_radius = edge_bar_d / 2
+
+        # Calcular posiciones de barras segun n_meshes
+        if pier.n_meshes == 1:
+            rows = 1
+            bars_per_row = n_edge
+        else:
+            rows = 2
+            bars_per_row = max(1, n_edge // 2)
+
+        bar_spacing_x = min(150, pier.stirrup_spacing)
+
+        # Identificar puntos de conexion entre segmentos
+        connection_info = {}  # punto -> lista de segmentos que conectan ahi
+        for i, seg in enumerate(cs.segments):
+            for pt in [(seg.x1, seg.y1), (seg.x2, seg.y2)]:
+                pt_key = (round(pt[0]), round(pt[1]))
+                if pt_key not in connection_info:
+                    connection_info[pt_key] = []
+                connection_info[pt_key].append(i)
+
+        # Puntos donde se conectan 2+ segmentos
+        connection_points = {pt for pt, segs in connection_info.items() if len(segs) >= 2}
+
+        # Dibujar barras en extremos libres de cada segmento
+        for segment in cs.segments:
+            seg_thickness = segment.thickness
+
+            dx = segment.x2 - segment.x1
+            dy = segment.y2 - segment.y1
+            length = math.sqrt(dx*dx + dy*dy)
+            if length < 1:
+                continue
+
+            ux, uy = dx / length, dy / length
+            px, py = -uy, ux
+
+            if rows == 1:
+                perp_offsets = [0]
+            else:
+                half_t = seg_thickness / 2 - cover - edge_bar_d / 2
+                perp_offsets = [-half_t, half_t]
+
+            endpoints = [(segment.x1, segment.y1, 1), (segment.x2, segment.y2, -1)]
+
+            for base_x, base_y, sign in endpoints:
+                is_connected = (round(base_x), round(base_y)) in connection_points
+                if is_connected:
+                    continue
+
+                for perp_offset in perp_offsets:
+                    for col_idx in range(bars_per_row):
+                        long_offset = cover + edge_bar_d / 2 + col_idx * bar_spacing_x
+                        bar_x = base_x + sign * long_offset * ux + perp_offset * px - center_x
+                        bar_y = base_y + sign * long_offset * uy + perp_offset * py - center_y
+
+                        bar = Circle(
+                            (bar_x, bar_y), bar_radius,
+                            facecolor=self.COLOR_REBAR,
+                            edgecolor='white',
+                            linewidth=0.5,
+                            zorder=5
+                        )
+                        ax.add_patch(bar)
+
+        # 2b. Dibujar barras en las intersecciones (esquinas de la L, T, C)
+        for conn_pt in connection_points:
+            # Obtener los segmentos que conectan en este punto
+            seg_indices = connection_info[conn_pt]
+            if len(seg_indices) < 2:
+                continue
+
+            # Calcular la posicion de las barras en la esquina
+            # Las barras van en las 4 esquinas del area de interseccion
+            seg1 = cs.segments[seg_indices[0]]
+            seg2 = cs.segments[seg_indices[1]]
+
+            # Vectores perpendiculares de cada segmento
+            def get_perp_vector(seg):
+                dx = seg.x2 - seg.x1
+                dy = seg.y2 - seg.y1
+                length = math.sqrt(dx*dx + dy*dy)
+                if length < 1:
+                    return (0, 1)
+                return (-dy / length, dx / length)
+
+            px1, py1 = get_perp_vector(seg1)
+            px2, py2 = get_perp_vector(seg2)
+
+            half_t1 = seg1.thickness / 2 - cover - edge_bar_d / 2
+            half_t2 = seg2.thickness / 2 - cover - edge_bar_d / 2
+
+            # Las 4 barras de esquina estan en las combinaciones de offsets
+            corner_offsets = [
+                (half_t1 * px1 + half_t2 * px2, half_t1 * py1 + half_t2 * py2),
+                (half_t1 * px1 - half_t2 * px2, half_t1 * py1 - half_t2 * py2),
+                (-half_t1 * px1 + half_t2 * px2, -half_t1 * py1 + half_t2 * py2),
+                (-half_t1 * px1 - half_t2 * px2, -half_t1 * py1 - half_t2 * py2),
+            ]
+
+            for off_x, off_y in corner_offsets:
+                bar_x = conn_pt[0] + off_x - center_x
+                bar_y = conn_pt[1] + off_y - center_y
+
+                bar = Circle(
+                    (bar_x, bar_y), bar_radius,
+                    facecolor=self.COLOR_REBAR,
+                    edgecolor='white',
+                    linewidth=0.5,
+                    zorder=5
+                )
+                ax.add_patch(bar)
+
+        # 2c. Dibujar mallas distribuidas a lo largo de cada segmento
+        mesh_bar_d = pier.diameter_v
+        mesh_bar_radius = mesh_bar_d / 2
+        mesh_spacing = pier.spacing_v
+
+        for segment in cs.segments:
+            seg_thickness = segment.thickness
+            seg_length = segment.length
+
+            dx = segment.x2 - segment.x1
+            dy = segment.y2 - segment.y1
+            if seg_length < 1:
+                continue
+
+            ux, uy = dx / seg_length, dy / seg_length
+            px, py = -uy, ux
+
+            # Posiciones perpendiculares para las mallas
+            if rows == 1:
+                mesh_perp_offsets = [0]
+            else:
+                half_t = seg_thickness / 2 - cover - mesh_bar_d / 2
+                mesh_perp_offsets = [-half_t, half_t]
+
+            # Verificar si cada extremo es libre o conectado
+            p1_key = (round(segment.x1), round(segment.y1))
+            p2_key = (round(segment.x2), round(segment.y2))
+            p1_connected = p1_key in connection_points
+            p2_connected = p2_key in connection_points
+
+            # Posicion de la ultima barra de borde/interseccion en cada extremo
+            # Si el extremo es libre: ultima barra de borde esta a cover + edge_bar_d/2 + (bars_per_row-1)*bar_spacing_x
+            # Si el extremo esta conectado: las barras de interseccion estan dentro de la zona de interseccion
+            #   La zona de interseccion tiene tamaño = thickness del segmento perpendicular / 2
+            #   Las barras estan a (other_thickness/2 - cover - edge_bar_d/2) desde el punto de conexion
+
+            def get_connected_segment_thickness(pt_key, current_seg_idx):
+                """Obtiene el thickness del segmento perpendicular que conecta en pt_key."""
+                for idx in connection_info.get(pt_key, []):
+                    if idx != current_seg_idx:
+                        return cs.segments[idx].thickness
+                return seg_thickness  # Fallback
+
+            current_seg_idx = cs.segments.index(segment)
+
+            if not p1_connected:
+                last_bar_from_start = cover + edge_bar_d/2 + (bars_per_row - 1) * bar_spacing_x
+            else:
+                # Barra de interseccion esta a (other_thickness/2 - cover - bar_d/2) del punto de conexion
+                other_thickness = get_connected_segment_thickness(p1_key, current_seg_idx)
+                last_bar_from_start = other_thickness / 2 - cover - edge_bar_d / 2
+
+            if not p2_connected:
+                last_bar_from_end = cover + edge_bar_d/2 + (bars_per_row - 1) * bar_spacing_x
+            else:
+                other_thickness = get_connected_segment_thickness(p2_key, current_seg_idx)
+                last_bar_from_end = other_thickness / 2 - cover - edge_bar_d / 2
+
+            # Distancia "A" entre la ultima barra de borde/interseccion de cada lado
+            dist_A = seg_length - last_bar_from_start - last_bar_from_end
+
+            if dist_A > mesh_spacing:
+                # n_barras = truncar(A / spacing)
+                n_mesh_bars = int(dist_A / mesh_spacing)
+
+                if n_mesh_bars > 0:
+                    # Distribuir n_mesh_bars uniformemente en el espacio A
+                    # n_mesh_bars barras crean (n_mesh_bars + 1) espacios
+                    actual_spacing = dist_A / (n_mesh_bars + 1)
+
+                    # Punto de inicio del segmento
+                    start_x, start_y = segment.x1, segment.y1
+
+                    for i in range(n_mesh_bars):
+                        # Posicion a lo largo del segmento (desde el inicio)
+                        # Primera barra a actual_spacing de la ultima barra de borde
+                        long_pos = last_bar_from_start + (i + 1) * actual_spacing
+
+                        for perp_offset in mesh_perp_offsets:
+                            bar_x = start_x + long_pos * ux + perp_offset * px - center_x
+                            bar_y = start_y + long_pos * uy + perp_offset * py - center_y
+
+                            bar = Circle(
+                                (bar_x, bar_y), mesh_bar_radius,
+                                facecolor=self.COLOR_REBAR,
+                                edgecolor='white',
+                                linewidth=0.5,
+                                zorder=5
+                            )
+                            ax.add_patch(bar)
+
+        # 3. Marcar centroide
+        cx, cy = cs.centroid
+        ax.plot(cx - center_x, cy - center_y, 'r+', markersize=15, markeredgewidth=2,
+               label='Centroide', zorder=10)
+
+        # 4. Agregar dimensiones generales
+        width = x_max - x_min
+        height = y_max - y_min
+        dim_offset = max(width, height) * 0.1
+
+        arrow_props = dict(arrowstyle='<->', color=self.COLOR_DIMENSION, lw=1.5)
+
+        # Dimension horizontal
+        ax.annotate('', xy=(-width/2, -height/2 - dim_offset),
+                   xytext=(width/2, -height/2 - dim_offset),
+                   arrowprops=arrow_props)
+        ax.text(0, -height/2 - dim_offset - 30, f'{width:.0f} mm',
+               ha='center', va='top', fontsize=10, color=self.COLOR_DIMENSION)
+
+        # Dimension vertical
+        ax.annotate('', xy=(-width/2 - dim_offset, -height/2),
+                   xytext=(-width/2 - dim_offset, height/2),
+                   arrowprops=arrow_props)
+        ax.text(-width/2 - dim_offset - 20, 0, f'{height:.0f} mm',
+               ha='right', va='center', fontsize=10, color=self.COLOR_DIMENSION,
+               rotation=90)
+
+        # 5. Informacion de propiedades
+        info_x = width/2 + dim_offset + 30
+        info_y = height/2
+
+        # Mapeo de tipos de forma a nombres
+        shape_names = {
+            'L': 'Forma L',
+            'T': 'Forma T',
+            'C': 'Forma C / U',
+            'rectangular': 'Rectangular',
+            'custom': 'Custom'
+        }
+        shape_name = shape_names.get(cs.shape_type.value, cs.shape_type.value)
+
+        info_lines = [
+            f"SECCION COMPUESTA",
+            f"",
+            f"Tipo: {shape_name}",
+            f"Segmentos: {len(cs.segments)}",
+            f"",
+            f"PROPIEDADES:",
+            f"Ag: {cs.Ag/100:.0f} cm2",
+            f"Ixx: {cs.Ixx/1e8:.1f} x10^8 mm4",
+            f"Iyy: {cs.Iyy/1e8:.1f} x10^8 mm4",
+            f"",
+            f"Centroide:",
+            f"  x: {cs.centroid[0]:.0f} mm",
+            f"  y: {cs.centroid[1]:.0f} mm",
+            f"",
+            f"Acv (alma): {cs.calculate_Acv('primary')/100:.0f} cm2",
+        ]
+
+        for i, line in enumerate(info_lines):
+            ax.text(info_x, info_y - i * 20, line,
+                   ha='left', va='top', fontsize=9,
+                   fontfamily='monospace', color='#374151')
+
+        # 6. Titulo
+        ax.set_title(f'Seccion Compuesta - {pier.story} / {pier.label}\n'
+                    f'({shape_name})',
+                    fontsize=14, fontweight='bold')
+
+        # 7. Configurar ejes
+        ax.set_aspect('equal')
+        margin = max(width, height) * 0.2
+        ax.set_xlim(-width/2 - margin, width/2 + margin + 200)
+        ax.set_ylim(-height/2 - margin, height/2 + margin)
+        ax.axis('off')
+        ax.legend(loc='lower right')
 
         plt.tight_layout()
 

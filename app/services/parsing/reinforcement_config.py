@@ -3,20 +3,20 @@
 Configuración de armadura para muros de hormigón armado.
 
 Calcula áreas de acero a partir de malla, diámetro y espaciamiento.
-Usa constantes centralizadas de domain/constants/materials.py.
+Usa constantes centralizadas de domain/constants/.
 """
 from dataclasses import dataclass
 
-from ...domain.constants.reinforcement import RHO_MIN, FY_DEFAULT_MPA
-from ...domain.constants.materials import BAR_AREAS, AVAILABLE_DIAMETERS
+from ...domain.constants.reinforcement import (
+    RHO_MIN,
+    FY_DEFAULT_MPA,
+    MESH_DEFAULTS,
+)
+from ...domain.constants.materials import BAR_AREAS, AVAILABLE_DIAMETERS, get_bar_area
 
-# Diámetro por defecto (más común para mínimo)
-DEFAULT_DIAMETER = 8
-
-# Espaciamientos típicos en mm
+# Usar constantes centralizadas
+DEFAULT_DIAMETER = MESH_DEFAULTS['diameter_v']
 TYPICAL_SPACINGS = [100, 150, 200, 250, 300]
-
-# Cuantía mínima según ACI 318-19 para muros
 
 
 # =============================================================================
@@ -196,27 +196,6 @@ def create_minimum_config(
         diameter_h=preferred_diameter,
         spacing_h=spacing
     )
-
-
-def get_bar_area(diameter: int) -> float:
-    """
-    Obtiene el área de una barra por su diámetro.
-
-    Args:
-        diameter: Diámetro nominal en mm
-
-    Returns:
-        Área en mm²
-
-    Raises:
-        ValueError: Si el diámetro no está disponible
-    """
-    if diameter not in BAR_AREAS:
-        raise ValueError(
-            f"Diámetro {diameter}mm no disponible. "
-            f"Opciones: {AVAILABLE_DIAMETERS}"
-        )
-    return BAR_AREAS[diameter]
 
 
 def calculate_spacing_for_As(

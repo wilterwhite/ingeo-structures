@@ -32,6 +32,56 @@ COVER_DEFAULT_PIER_MM = 25.0
 COVER_DEFAULT_COLUMN_MM = 40.0
 COVER_DEFAULT_BEAM_MM = 40.0
 
+# =============================================================================
+# LÍMITES GEOMÉTRICOS PARA PROPUESTA DE ARMADURA
+# =============================================================================
+
+# Límite para strut: ambas dimensiones < 150mm (práctica chilena, pilar 15x15)
+STRUT_MAX_DIM_MM = 150.0
+
+# Espaciamiento máximo entre barras longitudinales (20cm)
+MAX_BAR_SPACING_MM = 200.0
+
+# Cantidad mínima de barras en un lado para cambiar a layout MESH
+MIN_BARS_FOR_MESH = 5
+
+# =============================================================================
+# DEFAULTS DE ARMADURA POR TIPO DE ELEMENTO
+# =============================================================================
+
+# Strut (1×1, sin estribos) - Columnas pequeñas < 15cm
+STRUT_DEFAULTS = {
+    'n_bars_length': 1,
+    'n_bars_thickness': 1,
+    'diameter': 12,
+    'stirrup_diameter': 0,
+    'stirrup_spacing': 0,
+}
+
+# Columna con estribos (grilla ≥ 2×2)
+COLUMN_DEFAULTS = {
+    'diameter': 16,
+    'stirrup_diameter': 10,
+    'stirrup_spacing': 150,
+}
+
+# Muro/Malla (≥5 barras en un lado)
+MESH_DEFAULTS = {
+    'n_meshes': 2,
+    'diameter_v': 8,
+    'spacing_v': 200,
+    'diameter_h': 8,
+    'spacing_h': 200,
+    'n_edge_bars': 2,
+    'diameter_edge': 12,
+}
+
+# Estribos por defecto
+STIRRUP_DEFAULTS = {
+    'stirrup_diameter': 10,
+    'stirrup_spacing': 150,
+}
+
 from .shear import HW_LW_SLENDER_LIMIT
 
 

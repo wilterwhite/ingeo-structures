@@ -97,6 +97,7 @@ def sample_beam():
 @pytest.fixture
 def sample_drop_beam():
     """DropBeam de prueba (HorizontalElement con source DROP_BEAM)."""
+    # DROP_BEAM ahora usa discrete_reinforcement (barras top/bottom) igual que BEAM
     return HorizontalElement(
         label="VC1",
         story="Cielo P1",
@@ -106,14 +107,11 @@ def sample_drop_beam():
         length=1500,        # luz libre (mm)
         fc=25,
         fy=420,
-        mesh_reinforcement=HorizontalMeshReinforcement(
-            n_meshes=2,
-            diameter_v=10,
-            spacing_v=150,
-            diameter_h=10,
-            spacing_h=200,
-            n_edge_bars=2,
-            diameter_edge=16,
+        discrete_reinforcement=HorizontalDiscreteReinforcement(
+            n_bars_top=4,
+            n_bars_bottom=4,
+            diameter_top=16,
+            diameter_bottom=16,
         ),
     )
 
@@ -377,10 +375,11 @@ class TestDropBeamToWallGeometry:
         assert geom.fc == 25
 
     def test_edge_reinforcement(self, sample_drop_beam):
-        """Refuerzo de borde de viga capitel."""
+        """Refuerzo de borde de viga capitel (ahora barras top/bottom)."""
         geom = GeometryNormalizer.to_wall(sample_drop_beam)
 
-        assert geom.n_edge_bars == 2
+        # DROP_BEAM usa discrete_reinforcement: n_edge_bars = n_bars_top + n_bars_bottom
+        assert geom.n_edge_bars == 8  # 4 top + 4 bottom
         assert geom.diameter_edge == 16
 
 

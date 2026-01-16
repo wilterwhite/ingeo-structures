@@ -1,127 +1,28 @@
 // app/static/js/tables/cells/BeamCells.js
 /**
- * Celdas específicas para elementos Beam y DropBeam.
- * Incluye: info, sección, longitud, armaduras.
+ * Celdas específicas para elementos Beam (VIGA y VCAP).
+ *
+ * Tanto BEAM como DROP_BEAM usan el mismo formato de armadura:
+ * barras top/bottom + estribos.
+ * Se diferencian por el badge: "VIGA" vs "VCAP".
  */
 
 const BeamCells = {
     // =========================================================================
-    // Drop Beam (Viga Capitel)
-    // =========================================================================
-
-    createDropBeamInfoCell(result) {
-        const td = document.createElement('td');
-        td.className = 'pier-info-cell';
-        td.innerHTML = `
-            <span class="element-type-badge type-drop_beam">VCAP</span>
-            <span class="pier-name">${result.label || result.pier_label || ''}</span>
-            <span class="story-badge">${result.story || ''}</span>
-        `;
-        return td;
-    },
-
-    createDropBeamSectionCell(result) {
-        const td = document.createElement('td');
-        td.className = 'geometry-cell';
-        // Usar dimensiones del backend
-        const sectionText = getDimensionsDisplay(result);
-        td.innerHTML = sectionText;
-        td.title = `Sección: ${sectionText}`;
-        return td;
-    },
-
-    createDropBeamLengthCell(result) {
-        const td = document.createElement('td');
-        td.className = 'length-cell';
-        const length_m = (result.geometry?.length_m || 0).toFixed(2);
-        td.textContent = `${length_m}`;
-        return td;
-    },
-
-    createDropBeamMallaVCell(result, dropBeamKey) {
-        const td = document.createElement('td');
-        td.className = 'malla-cell malla-v-cell';
-        td.dataset.dropBeamKey = dropBeamKey;
-        const reinf = result.reinforcement || {};
-
-        td.innerHTML = `
-            <div class="malla-row">
-                <select class="edit-meshes" title="Mallas">
-                    ${StructuralConstants.generateOptions('mesh_counts', reinf.n_meshes || 2, 'M')}
-                </select>
-                <span class="malla-label">V</span>
-                <select class="edit-diameter-v" title="φ Vertical">
-                    ${StructuralConstants.generateDiameterOptions('malla', reinf.diameter_v || 12)}
-                </select>
-                <select class="edit-spacing-v" title="@ Vertical">
-                    ${StructuralConstants.generateSpacingOptions('malla', reinf.spacing_v || 200)}
-                </select>
-            </div>
-        `;
-        td.title = `ρv=${(reinf.rho_vertical || 0).toFixed(4)}`;
-        return td;
-    },
-
-    createDropBeamMallaHCell(result, dropBeamKey) {
-        const td = document.createElement('td');
-        td.className = 'malla-cell malla-h-cell';
-        td.dataset.dropBeamKey = dropBeamKey;
-        const reinf = result.reinforcement || {};
-
-        td.innerHTML = `
-            <div class="malla-row">
-                <span class="malla-spacer"></span>
-                <span class="malla-label">H</span>
-                <select class="edit-diameter-h" title="φ Horizontal">
-                    ${StructuralConstants.generateDiameterOptions('malla', reinf.diameter_h || 10)}
-                </select>
-                <select class="edit-spacing-h" title="@ Horizontal">
-                    ${StructuralConstants.generateSpacingOptions('malla', reinf.spacing_h || 200)}
-                </select>
-            </div>
-        `;
-        td.title = `ρh=${(reinf.rho_horizontal || 0).toFixed(4)}`;
-        return td;
-    },
-
-    createDropBeamBordeCell(result, dropBeamKey) {
-        const td = document.createElement('td');
-        td.className = 'borde-cell';
-        td.dataset.dropBeamKey = dropBeamKey;
-        const reinf = result.reinforcement || {};
-
-        td.innerHTML = `
-            <div class="borde-row">
-                <select class="edit-n-edge" title="Nº barras borde">
-                    ${StructuralConstants.generateOptions('edge_bar_counts', reinf.n_edge_bars || 4, 'φ')}
-                </select>
-                <select class="edit-edge" title="φ Borde">
-                    ${StructuralConstants.generateDiameterOptions('borde', reinf.diameter_edge || 16)}
-                </select>
-            </div>
-            <div class="borde-row borde-estribos">
-                <span class="borde-label">E</span>
-                <select class="edit-stirrup-d" title="φ Estribo">
-                    ${StructuralConstants.generateDiameterOptions('estribos', reinf.stirrup_diameter || 10, 'E')}
-                </select>
-                <select class="edit-stirrup-s" title="@ Estribo">
-                    ${StructuralConstants.generateSpacingOptions('estribos', reinf.stirrup_spacing || 150)}
-                </select>
-            </div>
-        `;
-        td.title = `As borde=${reinf.As_edge_mm2 || 0}mm²`;
-        return td;
-    },
-
-    // =========================================================================
-    // Beam (Viga)
+    // Beam (Viga) - Usado por BEAM y DROP_BEAM
     // =========================================================================
 
     createBeamInfoCell(result) {
         const td = document.createElement('td');
         td.className = 'pier-info-cell';
+
+        // DROP_BEAM usa badge "VCAP", BEAM usa "VIGA"
+        const isDropBeam = result.element_type === 'drop_beam';
+        const badge = isDropBeam ? 'VCAP' : 'VIGA';
+        const badgeClass = isDropBeam ? 'type-drop_beam' : 'type-beam';
+
         td.innerHTML = `
-            <span class="element-type-badge type-beam">VIGA</span>
+            <span class="element-type-badge ${badgeClass}">${badge}</span>
             <span class="pier-name">${result.label || result.pier_label || ''}</span>
             <span class="story-badge">${result.story || ''}</span>
         `;
@@ -216,6 +117,32 @@ const BeamCells = {
             </div>
         `;
         td.title = `Av = ${reinf.Av_mm2 || 0} mm²`;
+        return td;
+    },
+
+    createBeamLateralCell(result, beamKey) {
+        const td = document.createElement('td');
+        td.className = 'beam-lateral-cell';
+        td.dataset.beamKey = beamKey;
+        const reinf = result.reinforcement || {};
+
+        // 0 = sin laterales
+        const diamLateral = reinf.diameter_lateral || 0;
+        const spacingLateral = reinf.spacing_lateral || 200;
+
+        td.innerHTML = `
+            <div class="lateral-row">
+                <select class="edit-beam-diam-lateral" title="φ Laterales (0=sin)">
+                    ${StructuralConstants.generateDiameterOptions('laterales', diamLateral)}
+                </select>
+                <select class="edit-beam-spacing-lateral" title="@ Laterales">
+                    ${StructuralConstants.generateSpacingOptions('laterales', spacingLateral)}
+                </select>
+            </div>
+        `;
+        td.title = diamLateral > 0
+            ? `Laterales: φ${diamLateral}@${spacingLateral}`
+            : 'Sin armadura lateral';
         return td;
     }
 };

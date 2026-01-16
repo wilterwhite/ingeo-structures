@@ -143,8 +143,14 @@ class BeamsModule {
     // =========================================================================
 
     renderBeamsTable() {
+        // Combinar resultados de BEAM y DROP_BEAM en una sola tabla
+        const allBeamResults = [
+            ...(this.page.beamResults || []),
+            ...(this.page.dropBeamResults || [])
+        ];
+
         // Obtener resultados (filtrados si hay filtros activos)
-        const results = this.beamFilters?.getResults() || this.page.beamResults;
+        const results = this.beamFilters?.getResults() || allBeamResults;
         let filtered = results;
 
         // Aplicar filtros si existen
@@ -160,13 +166,20 @@ class BeamsModule {
         );
 
         // Inicializar o actualizar filtros Excel-style
-        this._initBeamFilters();
+        this._initBeamFilters(allBeamResults);
     }
 
     /**
      * Inicializa los filtros de columna para la tabla de vigas.
+     * @param {Array} allResults - Resultados combinados de BEAM y DROP_BEAM
      */
-    _initBeamFilters() {
+    _initBeamFilters(allResults) {
+        // Combinar resultados si no se pasan como parámetro
+        const combinedResults = allResults || [
+            ...(this.page.beamResults || []),
+            ...(this.page.dropBeamResults || [])
+        ];
+
         if (!this.beamFilters) {
             this.beamFilters = new ColumnFilters(
                 this,
@@ -180,11 +193,11 @@ class BeamsModule {
                     this.page.elements.beamsTableBody,
                     'beam', 11, 'No hay vigas para analizar', 'Beams'
                 );
-                this._initBeamFilters();  // Re-crear botones
+                this._initBeamFilters(combinedResults);  // Re-crear botones
             };
         }
-        // Actualizar los resultados disponibles
-        this.beamFilters.setResults(this.page.beamResults);
+        // Actualizar los resultados disponibles (combinados)
+        this.beamFilters.setResults(combinedResults);
         this.beamFilters.createHeaderButtons();
     }
 

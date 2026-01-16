@@ -310,6 +310,7 @@
                                 <th title="Luz de la viga">L (m)</th>
                                 <th title="Armadura longitudinal superior">Arm. Sup.</th>
                                 <th title="Armadura longitudinal inferior">Arm. Inf.</th>
+                                <th title="Armadura lateral en alma (φ@s)">Laterales</th>
                                 <th title="Estribos de confinamiento">Estribos</th>
                                 <th title="Demanda/Capacidad Flexión">D/C Flex.</th>
                                 <th title="Capacidad y demanda de flexión">Flexión</th>
@@ -324,58 +325,7 @@
             </div>
         </div>
 
-        <!-- Drop Beams Results (estilo pier) -->
-        <div class="card hidden" id="drop-beams-results-section">
-            <div class="card-header">Vigas Capitel</div>
-            <div class="card-body">
-                <!-- Stats + Filters -->
-                <div class="toolbar-bar">
-                    <div class="stats-inline">
-                        <span class="stat-item"><strong id="drop-beam-stat-total">0</strong> elementos</span>
-                        <span class="stat-item stat-ok"><strong id="drop-beam-stat-ok">0</strong> OK</span>
-                        <span class="stat-item stat-fail"><strong id="drop-beam-stat-fail">0</strong> Fail</span>
-                        <span class="stat-item"><strong id="drop-beam-stat-rate">0%</strong></span>
-                    </div>
-                    <div class="toolbar-divider"></div>
-                    <div class="filter-group">
-                        <label>Piso:</label>
-                        <select id="drop-beam-story-filter">
-                            <option value="">Todos</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>Estado:</label>
-                        <select id="drop-beam-status-filter">
-                            <option value="">Todos</option>
-                            <option value="OK">OK</option>
-                            <option value="FAIL">Fail</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Drop Beams Table (usa ResultsTable estilo pier) -->
-                <div class="table-wrapper">
-                    <table class="results-table pier-results-table" id="drop-beams-table">
-                        <thead>
-                            <tr>
-                                <th title="Viga capitel / Piso">V. Capitel</th>
-                                <th title="Espesor × Ancho (mm)">Sección</th>
-                                <th title="Luz libre">L (m)</th>
-                                <th title="Armadura vertical malla">Malla V</th>
-                                <th title="Armadura horizontal malla">Malla H</th>
-                                <th title="Barras de borde">Borde</th>
-                                <th title="Demanda/Capacidad Flexión">D/C Flex.</th>
-                                <th title="Capacidad y demanda de flexión">Flexión</th>
-                                <th title="Demanda/Capacidad Corte">D/C Corte</th>
-                                <th title="Capacidad y demanda de corte">Corte</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+        <!-- Sección de vigas capitel eliminada: DROP_BEAM ahora usa la tabla de vigas -->
 
         </div><!-- Fin PAGE: Elementos Horizontales -->
 

@@ -44,16 +44,20 @@ def get_status_css_class(status: str) -> str:
 
 def format_dimensions(width_mm: float, thickness_mm: float) -> str:
     """
-    Formatea dimensiones en formato "espesor × ancho mm".
+    Formatea dimensiones en formato "ancho × espesor cm".
+
+    Para muros: lw (largo) × tw (espesor)
+    Para columnas: depth × width (como en nomenclatura COL_40x20)
+    Para vigas: ancho × peralte
 
     Args:
-        width_mm: Ancho en mm (lw para muros)
-        thickness_mm: Espesor en mm (tw para muros)
+        width_mm: Ancho/largo en mm (lw para muros, depth para columnas)
+        thickness_mm: Espesor en mm (tw para muros, width para columnas)
 
     Returns:
-        String formateado, ej: "200 × 3000 mm"
+        String formateado, ej: "40 × 20 cm" para COL_40x20
     """
-    return f"{int(thickness_mm)} × {int(width_mm)} mm"
+    return f"{int(width_mm / 10)} × {int(thickness_mm / 10)} cm"
 
 
 def format_dcr_display(dcr: float) -> str:

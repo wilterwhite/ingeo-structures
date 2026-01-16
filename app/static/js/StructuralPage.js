@@ -84,9 +84,7 @@ class StructuralPage {
             // Vigas (Beams)
             beamsTableBody: document.getElementById('beams-table')?.querySelector('tbody'),
 
-            // Vigas Capitel (Drop Beams) - dentro de beams-page
-            dropBeamsResultsSection: document.getElementById('drop-beams-results-section'),
-            dropBeamsTable: document.getElementById('drop-beams-table')?.querySelector('tbody'),
+            // DROP_BEAM ahora usa la tabla de vigas (beamsTableBody)
 
             // Paginas principales
             configPage: document.getElementById('config-page'),
@@ -248,10 +246,9 @@ class StructuralPage {
         this.elements.wallsPlaceholder?.classList.toggle('hidden', section !== 'upload');
         this.elements.resultsSection?.classList.toggle('hidden', section !== 'results');
 
-        // Beams page (incluye vigas capitel)
+        // Beams page (BEAM y DROP_BEAM en una sola tabla)
         this.elements.beamsPlaceholder?.classList.toggle('hidden', section !== 'upload');
         this.elements.beamsResultsSection?.classList.toggle('hidden', section !== 'results');
-        this.elements.dropBeamsResultsSection?.classList.toggle('hidden', section !== 'results');
 
         if (section === 'upload') {
             this.resetUploadArea();
@@ -427,61 +424,10 @@ class StructuralPage {
     }
 
     // =========================================================================
-    // Drop Beams (Vigas Capitel)
+    // Drop Beams (Vigas Capitel) - Ahora integrado en BeamsModule
     // =========================================================================
-
-    renderDropBeamsTable() {
-        // Obtener resultados (filtrados si hay filtros activos)
-        const results = this.dropBeamFilters?.getResults() || this.dropBeamResults;
-        let filtered = results;
-
-        // Aplicar filtros si existen
-        if (this.dropBeamFilters && Object.keys(this.dropBeamFilters.filters).length > 0) {
-            filtered = results.filter(r => this.dropBeamFilters.matchesFilters(r));
-            filtered = this.dropBeamFilters.sortResults(filtered);
-        }
-
-        this.renderElementTable(
-            filtered,
-            this.elements.dropBeamsTable,
-            'drop-beam', 11, 'No hay vigas capitel para analizar', 'DropBeams'
-        );
-
-        // Inicializar o actualizar filtros Excel-style
-        this._initDropBeamFilters();
-    }
-
-    /**
-     * Inicializa los filtros de columna para la tabla de vigas capitel.
-     */
-    _initDropBeamFilters() {
-        if (!this.dropBeamFilters) {
-            this.dropBeamFilters = new ColumnFilters(
-                this,
-                'drop-beams-table',
-                ColumnFilters.DROP_BEAMS_CONFIG
-            );
-            // Callback para re-renderizar cuando se apliquen filtros
-            this.dropBeamFilters.onFilterApply = (filtered) => {
-                this.renderElementTable(
-                    filtered,
-                    this.elements.dropBeamsTable,
-                    'drop-beam', 11, 'No hay vigas capitel para analizar', 'DropBeams'
-                );
-                this._initDropBeamFilters();  // Re-crear botones
-            };
-        }
-        // Actualizar los resultados disponibles
-        this.dropBeamFilters.setResults(this.dropBeamResults);
-        this.dropBeamFilters.createHeaderButtons();
-    }
-
-    clearDropBeamsTable() {
-        if (this.elements.dropBeamsTable) {
-            this.elements.dropBeamsTable.innerHTML = '';
-        }
-        this.updateElementStats([], 'drop-beam');
-    }
+    // Los drop beams se renderizan en la misma tabla que los beams.
+    // Ver BeamsModule.renderBeamsTable() para la implementación.
 }
 
 // Instancia global

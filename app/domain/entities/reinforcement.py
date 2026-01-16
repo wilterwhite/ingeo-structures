@@ -91,11 +91,16 @@ class DiscreteReinforcement:
 @dataclass
 class BeamReinforcement:
     """
-    Armadura discreta para vigas (top/bottom).
+    Armadura discreta para vigas (top/bottom + laterales).
 
-    Distribución típica de vigas con barras superiores e inferiores.
+    Distribución típica de vigas con barras superiores, inferiores y laterales.
+    Las barras laterales son distribuidas en el alma (similar a malla pero en vigas).
     """
     n_bars_top: int = 3         # Barras superiores
     n_bars_bottom: int = 3      # Barras inferiores
     diameter_top: int = 16      # Diámetro barras superiores (mm)
     diameter_bottom: int = 16   # Diámetro barras inferiores (mm)
+
+    # Barras laterales (distribuidas en el alma, ambas caras)
+    diameter_lateral: int = 0   # Diámetro barras laterales (mm), 0=sin laterales
+    spacing_lateral: int = 200  # Espaciamiento barras laterales (mm)

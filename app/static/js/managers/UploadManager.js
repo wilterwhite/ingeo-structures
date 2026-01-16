@@ -274,8 +274,7 @@ class UploadManager {
         // Renderizar resultados
         page.resultsTable.populateFilters();
         page.resultsTable.render(data);
-        page.beamsModule.renderBeamsTable();
-        page.renderDropBeamsTable();
+        page.beamsModule.renderBeamsTable();  // Incluye BEAM y DROP_BEAM
         page.showSection('results');
 
         // Actualizar UI de proyecto (mostrar boton de guardar si hay sesion)

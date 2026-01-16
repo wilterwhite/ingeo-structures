@@ -38,9 +38,8 @@ class RowFactory {
             this._createColumnRow(row, result, elementKey, isExpanded);
         } else if (elementType === 'strut') {
             this._createStrutRow(row, result, elementKey, isExpanded);
-        } else if (elementType === 'drop_beam') {
-            this._createDropBeamRow(row, result, elementKey, isExpanded);
-        } else if (elementType === 'beam') {
+        } else if (elementType === 'beam' || elementType === 'drop_beam') {
+            // BEAM y DROP_BEAM usan la misma fila (diferenciados por badge)
             this._createBeamRow(row, result, elementKey, isExpanded);
         } else {
             this._createPierRow(row, result, elementKey, isExpanded);
@@ -82,7 +81,7 @@ class RowFactory {
     _createStrutRow(row, result, strutKey, isExpanded) {
         row.appendChild(SharedCells.createInfoCell(result, 'strut'));
         row.appendChild(SharedCells.createStoryCell(result));
-        row.appendChild(SharedCells.createEmptyCell());  // Sin categoría sísmica
+        row.appendChild(PierCells.createSeismicCategoryCell(result, strutKey));  // Categoría sísmica
         row.appendChild(ColumnCells.createGeometryCell(result));
         row.appendChild(ColumnCells.createLongitudinalCell(result, strutKey));  // Armadura editable
         row.appendChild(ColumnCells.createStirrupsCell(result, strutKey, true));  // Estribos disabled
@@ -101,43 +100,30 @@ class RowFactory {
     _createColumnRow(row, result, colKey, isExpanded) {
         row.appendChild(SharedCells.createInfoCell(result, 'column'));
         row.appendChild(SharedCells.createStoryCell(result));
+        row.appendChild(PierCells.createSeismicCategoryCell(result, colKey));  // Categoría sísmica
         row.appendChild(ColumnCells.createGeometryCell(result));
         row.appendChild(ColumnCells.createLongitudinalCell(result, colKey));
         row.appendChild(ColumnCells.createStirrupsCell(result, colKey));
-        row.appendChild(SharedCells.createEmptyCell());
-        row.appendChild(SharedCells.createEmptyCell());
+        row.appendChild(SharedCells.createEmptyCell());  // Sin viga izq
+        row.appendChild(SharedCells.createEmptyCell());  // Sin viga der
         row.appendChild(SharedCells.createFlexureSfCell(result));
         row.appendChild(SharedCells.createFlexureCapCell(result));
         row.appendChild(SharedCells.createShearSfCell(result));
         row.appendChild(SharedCells.createShearCapCell(result));
-        row.appendChild(SharedCells.createEmptyCell());
+        row.appendChild(SharedCells.createEmptyCell());  // Sin propuesta
         row.appendChild(SharedCells.createActionsCell(result, colKey, isExpanded, true));
 
         this.attachRowEventHandlers(row, colKey, result, 'column');
     }
 
-    _createDropBeamRow(row, result, dropBeamKey, isExpanded) {
-        row.appendChild(BeamCells.createDropBeamInfoCell(result));
-        row.appendChild(BeamCells.createDropBeamSectionCell(result));
-        row.appendChild(BeamCells.createDropBeamLengthCell(result));
-        row.appendChild(BeamCells.createDropBeamMallaVCell(result, dropBeamKey));
-        row.appendChild(BeamCells.createDropBeamMallaHCell(result, dropBeamKey));
-        row.appendChild(BeamCells.createDropBeamBordeCell(result, dropBeamKey));
-        row.appendChild(SharedCells.createFlexureSfCell(result));
-        row.appendChild(SharedCells.createFlexureCapCell(result));
-        row.appendChild(SharedCells.createShearSfCell(result));
-        row.appendChild(SharedCells.createShearCapCell(result));
-        row.appendChild(SharedCells.createActionsCell(result, dropBeamKey, isExpanded));
-
-        this.attachRowEventHandlers(row, dropBeamKey, result, 'drop_beam');
-    }
-
     _createBeamRow(row, result, beamKey, isExpanded) {
+        // Usado tanto para BEAM como DROP_BEAM (diferenciados por badge en BeamCells)
         row.appendChild(BeamCells.createBeamInfoCell(result));
         row.appendChild(BeamCells.createBeamSectionCell(result));
         row.appendChild(BeamCells.createBeamLengthCell(result));
         row.appendChild(BeamCells.createBeamTopReinfCell(result, beamKey));
         row.appendChild(BeamCells.createBeamBottomReinfCell(result, beamKey));
+        row.appendChild(BeamCells.createBeamLateralCell(result, beamKey));
         row.appendChild(BeamCells.createBeamStirrupsCell(result, beamKey));
         row.appendChild(SharedCells.createFlexureSfCell(result));
         row.appendChild(SharedCells.createFlexureCapCell(result));
@@ -145,7 +131,9 @@ class RowFactory {
         row.appendChild(SharedCells.createShearCapCell(result));
         row.appendChild(SharedCells.createActionsCell(result, beamKey, isExpanded));
 
-        this.attachRowEventHandlers(row, beamKey, result, 'beam');
+        // Usar element_type original para event handlers (beam vs drop_beam)
+        const elementType = result.element_type || 'beam';
+        this.attachRowEventHandlers(row, beamKey, result, elementType);
     }
 
     // =========================================================================
@@ -173,13 +161,15 @@ class RowFactory {
             n_bars_width: ['.longitudinal-cell .edit-n-bars-w', 3],
             diameter_long: ['.longitudinal-cell .edit-diam-long', 20],
             stirrup_diameter: ['.stirrups-cell .edit-stirrup-d', 10],
-            stirrup_spacing: ['.stirrups-cell .edit-stirrup-s', 150]
+            stirrup_spacing: ['.stirrups-cell .edit-stirrup-s', 150],
+            seismic_category: ['.seismic-category-cell .edit-seismic-category', '']
         },
         strut: {
             // STRUT usa mismos selectores que column pero sin estribos (no confinado)
             n_bars_depth: ['.longitudinal-cell .edit-n-bars', 1],
             n_bars_width: ['.longitudinal-cell .edit-n-bars-w', 1],
-            diameter_long: ['.longitudinal-cell .edit-diam-long', 12]
+            diameter_long: ['.longitudinal-cell .edit-diam-long', 12],
+            seismic_category: ['.seismic-category-cell .edit-seismic-category', '']
             // Sin stirrup_diameter/stirrup_spacing - STRUT no usa estribos
         },
         beam: {
@@ -187,20 +177,23 @@ class RowFactory {
             diameter_top: ['.edit-beam-diam-top', 16],
             n_bars_bottom: ['.edit-beam-n-bot', 3],
             diameter_bottom: ['.edit-beam-diam-bot', 16],
+            diameter_lateral: ['.edit-beam-diam-lateral', 0],
+            spacing_lateral: ['.edit-beam-spacing-lateral', 200],
             n_stirrup_legs: ['.edit-beam-stirrup-legs', 2],
             stirrup_diameter: ['.edit-beam-stirrup-d', 10],
             stirrup_spacing: ['.edit-beam-stirrup-s', 150]
         },
         drop_beam: {
-            n_meshes: ['.malla-v-cell .edit-meshes', 2],
-            diameter_v: ['.malla-v-cell .edit-diameter-v', 12],
-            spacing_v: ['.malla-v-cell .edit-spacing-v', 200],
-            diameter_h: ['.malla-h-cell .edit-diameter-h', 10],
-            spacing_h: ['.malla-h-cell .edit-spacing-h', 200],
-            n_edge_bars: ['.borde-cell .edit-n-edge', 4],
-            diameter_edge: ['.borde-cell .edit-edge', 16],
-            stirrup_diameter: ['.borde-cell .edit-stirrup-d', 10],
-            stirrup_spacing: ['.borde-cell .edit-stirrup-s', 150]
+            // DROP_BEAM ahora usa mismos selectores que BEAM (barras top/bottom)
+            n_bars_top: ['.edit-beam-n-top', 4],
+            diameter_top: ['.edit-beam-diam-top', 16],
+            n_bars_bottom: ['.edit-beam-n-bot', 4],
+            diameter_bottom: ['.edit-beam-diam-bot', 16],
+            diameter_lateral: ['.edit-beam-diam-lateral', 0],
+            spacing_lateral: ['.edit-beam-spacing-lateral', 200],
+            n_stirrup_legs: ['.edit-beam-stirrup-legs', 2],
+            stirrup_diameter: ['.edit-beam-stirrup-d', 10],
+            stirrup_spacing: ['.edit-beam-stirrup-s', 150]
         }
     };
 
@@ -254,10 +247,10 @@ class RowFactory {
         // Nota: los selectores deben coincidir con los definidos en BeamCells.js
         const selectorsByType = {
             pier: ['.malla-cell select', '.borde-cell select', '.seismic-category-cell select'],
-            column: ['.longitudinal-cell select', '.stirrups-cell select'],
-            strut: ['.longitudinal-cell select'],  // Solo armadura longitudinal (sin estribos)
+            column: ['.longitudinal-cell select', '.stirrups-cell select', '.seismic-category-cell select'],
+            strut: ['.longitudinal-cell select', '.seismic-category-cell select'],
             beam: ['select[class^="edit-beam-"]'],  // Todos los selects de beam
-            drop_beam: ['.malla-v-cell select', '.malla-h-cell select', '.borde-cell select']
+            drop_beam: ['select[class^="edit-beam-"]']  // DROP_BEAM usa mismos selects que BEAM
         };
 
         // Event listeners para cambios de armadura

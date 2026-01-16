@@ -15,10 +15,10 @@ import pandas as pd
 from ...domain.entities import (
     HorizontalElement,
     HorizontalElementSource,
-    HorizontalMeshReinforcement,
     ElementForces,
     ElementForceType,
 )
+from ...domain.entities.reinforcement import BeamReinforcement
 from ...domain.entities.section_cut import SectionCutInfo
 from ...domain.entities.load_combination import LoadCombination
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
@@ -127,15 +127,12 @@ class DropBeamParser:
             sc = forces.section_cut
             label = f"{sc.axis_slab} - {sc.location}"
 
-            # Crear HorizontalMeshReinforcement con valores por defecto
-            mesh_reinforcement = HorizontalMeshReinforcement(
-                n_meshes=2,
-                diameter_v=12,
-                spacing_v=200,
-                diameter_h=10,
-                spacing_h=200,
-                n_edge_bars=4,
-                diameter_edge=16,
+            # Crear BeamReinforcement con valores por defecto para vigas capitel
+            discrete_reinforcement = BeamReinforcement(
+                n_bars_top=4,
+                n_bars_bottom=4,
+                diameter_top=16,
+                diameter_bottom=16,
             )
 
             drop_beams[key] = HorizontalElement(
@@ -150,7 +147,7 @@ class DropBeamParser:
                 fc=self._default_fc,
                 fy=FY_DEFAULT_MPA,
                 source=HorizontalElementSource.DROP_BEAM,
-                mesh_reinforcement=mesh_reinforcement,
+                discrete_reinforcement=discrete_reinforcement,
                 cover=25.0,  # Cover típico para losas
                 axis_slab=sc.axis_slab,
                 location=sc.location,

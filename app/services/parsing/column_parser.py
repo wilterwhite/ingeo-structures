@@ -4,15 +4,15 @@ Parser para columnas desde archivos Excel de ETABS.
 
 Tablas requeridas:
 - Frame Section Property Definitions - Concrete Rectangular: geometria
+- Frame Assignments - Section Properties: mapeo columna -> seccion
 - Element Forces - Columns: fuerzas por combinacion de carga
 """
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import pandas as pd
 
 from ...domain.entities import (
     VerticalElement,
     VerticalElementSource,
-    DiscreteReinforcement,
     ElementForces,
     ElementForceType,
 )
@@ -31,12 +31,14 @@ class ColumnParser:
 
     Extrae columnas desde:
     - Frame Section Property Definitions - Concrete Rectangular
+    - Frame Assignments - Section Properties
     - Element Forces - Columns
     """
 
     def parse_columns(
         self,
         section_df: pd.DataFrame,
+        assigns_df: Optional[pd.DataFrame],
         forces_df: pd.DataFrame,
         materials: Dict[str, float]
     ) -> Tuple[Dict[str, VerticalElement], Dict[str, ElementForces], List[str]]:
@@ -45,6 +47,7 @@ class ColumnParser:
 
         Args:
             section_df: DataFrame con definiciones de secciones (Frame Sec Def)
+            assigns_df: DataFrame con asignaciones columna->seccion (Frame Assigns)
             forces_df: DataFrame con fuerzas (Element Forces - Columns)
             materials: Diccionario de materiales ya parseados
 
@@ -55,9 +58,12 @@ class ColumnParser:
         # Parsear definiciones de secciones
         section_defs = self._parse_section_definitions(section_df, materials)
 
+        # Parsear asignaciones columna -> seccion
+        column_sections = self._parse_section_assignments(assigns_df)
+
         # Parsear fuerzas y crear columnas
         columns, column_forces, stories = self._parse_forces_and_columns(
-            forces_df, section_defs, materials
+            forces_df, section_defs, column_sections, materials
         )
 
         return columns, column_forces, stories
@@ -114,10 +120,44 @@ class ColumnParser:
 
         return sections
 
+    def _parse_section_assignments(
+        self,
+        df: Optional[pd.DataFrame]
+    ) -> Dict[str, str]:
+        """
+        Parsea las asignaciones de secciones a columnas.
+
+        Retorna diccionario con (story, label) -> nombre_seccion
+        """
+        assignments = {}
+
+        if df is None:
+            return assignments
+
+        df = normalize_columns(df)
+
+        for _, row in df.iterrows():
+            story = str(row.get('story', ''))
+            label = str(row.get('label', ''))
+            section_prop = str(row.get('section property', ''))
+
+            if not story or story == 'nan' or not label or label == 'nan':
+                continue
+
+            if not section_prop or section_prop == 'nan':
+                continue
+
+            key = f"{story}_{label}"
+            assignments[key] = section_prop
+
+        logger.info(f"Column assignments: {len(assignments)} asignaciones parseadas")
+        return assignments
+
     def _parse_forces_and_columns(
         self,
         df: pd.DataFrame,
         section_defs: Dict[str, dict],
+        column_sections: Dict[str, str],
         materials: Dict[str, float]
     ) -> Tuple[Dict[str, VerticalElement], Dict[str, ElementForces], List[str]]:
         """
@@ -193,15 +233,26 @@ class ColumnParser:
         for column_key, forces in column_forces.items():
             story, column_label = column_key.split('_', 1)
 
-            # Buscar seccion (por ahora usamos la primera definicion disponible)
-            # En una implementacion mas completa, habria que mapear columna -> seccion
+            # Buscar seccion usando el mapeo de asignaciones
             section = None
-            for sec_name, sec_props in section_defs.items():
-                section = sec_props
-                break  # Usar la primera por ahora
 
+            # 1. Buscar en asignaciones (Frame Assigns - Sect Prop)
+            if column_key in column_sections:
+                section_name = column_sections[column_key]
+                section = section_defs.get(section_name)
+
+            # 2. Fallback: buscar por label directo en secciones
             if section is None:
-                # Valores por defecto si no hay seccion
+                section = section_defs.get(column_label)
+
+            # 3. Fallback: usar la primera seccion disponible
+            if section is None:
+                for sec_name, sec_props in section_defs.items():
+                    section = sec_props
+                    break
+
+            # 4. Valores por defecto si no hay seccion
+            if section is None:
                 section = {'depth': 450, 'width': 450, 'fc': 28}
 
             # Calcular altura desde stations
@@ -216,25 +267,12 @@ class ColumnParser:
             # Actualizar altura en forces
             forces.height = height
 
-            # Determinar armadura por defecto basada en dimensiones
+            # Crear VerticalElement con source=FRAME (columna)
+            # La armadura se propone automaticamente en __post_init__
+            # segun ReinforcementProposer basado en geometria
             depth = section['depth']
             width = section['width']
-            min_dim = min(depth, width)
 
-            # Para pilares pequeños (<150mm), usar 1 barra centrada (hormigón no confinado)
-            if min_dim < 150:
-                n_bars_length = 1
-                n_bars_thickness = 1
-                diameter_long = 12  # Barra pequeña para pilares chicos
-                stirrup_spacing = 0  # Sin estribos
-            else:
-                # Armadura convencional para columnas normales
-                n_bars_length = 3
-                n_bars_thickness = 3
-                diameter_long = 20
-                stirrup_spacing = 150
-
-            # Crear VerticalElement con source=FRAME (columna)
             columns[column_key] = VerticalElement(
                 label=column_label,
                 story=story,
@@ -245,12 +283,8 @@ class ColumnParser:
                 fc=section['fc'],
                 fy=FY_DEFAULT_MPA,
                 source=VerticalElementSource.FRAME,
-                discrete_reinforcement=DiscreteReinforcement(
-                    n_bars_length=n_bars_length,
-                    n_bars_thickness=n_bars_thickness,
-                    diameter=diameter_long,
-                ),
-                stirrup_spacing=stirrup_spacing,
+                # discrete_reinforcement se inicializa automaticamente
+                # en __post_init__ segun propuesta del ReinforcementProposer
             )
 
         return columns, column_forces, stories

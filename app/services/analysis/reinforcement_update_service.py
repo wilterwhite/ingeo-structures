@@ -140,6 +140,8 @@ class ReinforcementUpdateService:
                 n_bars_bottom=update.get('n_bars_bottom'),
                 diameter_top=update.get('diameter_top'),
                 diameter_bottom=update.get('diameter_bottom'),
+                diameter_lateral=update.get('diameter_lateral'),
+                spacing_lateral=update.get('spacing_lateral'),
                 stirrup_diameter=update.get('stirrup_diameter'),
                 stirrup_spacing=update.get('stirrup_spacing'),
                 n_stirrup_legs=update.get('n_stirrup_legs'),
@@ -157,9 +159,11 @@ class ReinforcementUpdateService:
         """
         Aplica actualizaciones de armadura a vigas capitel.
 
+        DROP_BEAM ahora usa el mismo formato que BEAM (barras top/bottom).
+
         Args:
             drop_beams: Diccionario {drop_beam_key: DropBeam}
-            updates: Lista de actualizaciones [{key, n_meshes, diameter_v, ...}]
+            updates: Lista de actualizaciones [{key, n_bars_top, diameter_top, ...}]
 
         Returns:
             Número de vigas capitel actualizadas
@@ -174,16 +178,17 @@ class ReinforcementUpdateService:
                 continue
 
             drop_beam = drop_beams[key]
+            # DROP_BEAM ahora usa el mismo formato que BEAM
             drop_beam.update_reinforcement(
-                n_meshes=update.get('n_meshes'),
-                diameter_v=update.get('diameter_v'),
-                spacing_v=update.get('spacing_v'),
-                diameter_h=update.get('diameter_h'),
-                spacing_h=update.get('spacing_h'),
-                diameter_edge=update.get('diameter_edge'),
-                n_edge_bars=update.get('n_edge_bars'),
+                n_bars_top=update.get('n_bars_top'),
+                n_bars_bottom=update.get('n_bars_bottom'),
+                diameter_top=update.get('diameter_top'),
+                diameter_bottom=update.get('diameter_bottom'),
+                diameter_lateral=update.get('diameter_lateral'),
+                spacing_lateral=update.get('spacing_lateral'),
                 stirrup_diameter=update.get('stirrup_diameter'),
                 stirrup_spacing=update.get('stirrup_spacing'),
+                n_stirrup_legs=update.get('n_stirrup_legs'),
                 fy=update.get('fy'),
                 cover=update.get('cover'),
             )

@@ -89,12 +89,14 @@ const StructuralConstants = {
             borde: [8, 10, 12, 16, 18, 20, 22, 25, 28, 32],
             estribos: [8, 10, 12],
             longitudinal: [16, 18, 20, 22, 25, 28, 32],
-            vigas: [12, 16, 18, 20, 22, 25]
+            vigas: [12, 16, 18, 20, 22, 25],
+            laterales: [0, 6, 8, 10, 12, 16]  // 0 = sin laterales, resto igual a malla
         };
         this.spacings = {
             malla: [100, 125, 150, 175, 200, 250, 300],
             estribos: [75, 100, 125, 150, 200],
-            columnas: [75, 100, 125, 150, 200, 250]
+            columnas: [75, 100, 125, 150, 200, 250],
+            laterales: [100, 125, 150, 175, 200, 250, 300]  // Mismos que malla
         };
         this.options = {
             mesh_counts: [1, 2],

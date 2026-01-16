@@ -42,6 +42,7 @@ from .table_extractor import (
 from .column_parser import ColumnParser
 from .beam_parser import BeamParser
 from .drop_beam_parser import DropBeamParser
+from .composite_pier_parser import CompositePierParser
 
 
 # Nombres de tablas soportadas (para mostrar al usuario)
@@ -50,6 +51,11 @@ SUPPORTED_TABLES = {
         'Wall Property Definitions',
         'Pier Section Properties',
         'Pier Forces'
+    ],
+    'piers_composite': [
+        'Wall Object Connectivity',
+        'Point Object Connectivity',
+        'Area Assigns - Pier Labels'
     ],
     'columns': [
         'Frame Section Property Definitions - Concrete Rectangular',
@@ -86,6 +92,7 @@ class EtabsExcelParser:
         self.column_parser = ColumnParser()
         self.beam_parser = BeamParser()
         self.drop_beam_parser = DropBeamParser()
+        self.composite_pier_parser = CompositePierParser()
 
     def parse_excel(self, file_content: bytes) -> ParsedData:
         """
@@ -121,6 +128,10 @@ class EtabsExcelParser:
         spandrel_forces_df = None
         # Vigas capitel (Section Cuts)
         section_cut_df = None
+        # Geometria compuesta de piers (L, T, C)
+        walls_connectivity_df = None
+        points_connectivity_df = None
+        pier_assigns_df = None
 
         # Buscar tablas en todas las hojas
         for sheet_name in excel_file.sheet_names:
@@ -174,6 +185,16 @@ class EtabsExcelParser:
             if section_cut_df is None:
                 section_cut_df = find_table_in_sheet(df, "Section Cut Forces - Analysis")
 
+            # Geometria compuesta de piers (L, T, C)
+            if walls_connectivity_df is None:
+                walls_connectivity_df = find_table_in_sheet(df, "Wall Object Connectivity")
+
+            if points_connectivity_df is None:
+                points_connectivity_df = find_table_in_sheet(df, "Point Object Connectivity")
+
+            if pier_assigns_df is None:
+                pier_assigns_df = find_table_in_sheet(df, "Area Assignments - Pier Labels")
+
         # Fallback: buscar por nombre de hoja (piers)
         if wall_props_df is None:
             wall_props_df = find_table_by_sheet_name(excel_file, ['wall', 'prop'])
@@ -197,13 +218,28 @@ class EtabsExcelParser:
         piers, pier_stories = self._parse_piers(pier_props_df, materials)
         pier_forces = self._parse_forces(pier_forces_df)
 
+        # Procesar geometria compuesta de piers (L, T, C)
+        if walls_connectivity_df is not None and points_connectivity_df is not None and pier_assigns_df is not None:
+            composite_sections = self.composite_pier_parser.parse_composite_piers(
+                walls_connectivity_df,
+                points_connectivity_df,
+                pier_assigns_df
+            )
+            # Asignar composite_section a los VerticalElements correspondientes
+            for key, composite in composite_sections.items():
+                if key in piers:
+                    piers[key].composite_section = composite
+                    logger.info(f"Pier {key}: asignada geometria compuesta {composite.shape_type.value}")
+                else:
+                    logger.debug(f"Pier compuesto {key} no tiene propiedades en Pier Section Properties")
+
         # Procesar columnas
         columns = {}
         column_forces = {}
         column_stories = []
         if column_forces_df is not None:
             columns, column_forces, column_stories = self.column_parser.parse_columns(
-                frame_section_df, column_forces_df, materials
+                frame_section_df, frame_assigns_df, column_forces_df, materials
             )
 
         # Procesar vigas
@@ -472,6 +508,10 @@ class EtabsExcelParser:
         spandrel_props_df = None
         spandrel_forces_df = None
         section_cut_df = None
+        # Geometria compuesta de piers
+        walls_connectivity_df = None
+        points_connectivity_df = None
+        pier_assigns_df = None
 
         # Buscar tablas en todas las hojas con progreso
         for i, sheet_name in enumerate(excel_file.sheet_names):
@@ -525,6 +565,14 @@ class EtabsExcelParser:
             if section_cut_df is None:
                 section_cut_df = find_table_in_sheet(df, "Section Cut Forces - Analysis")
 
+            # Geometria compuesta de piers (L, T, C)
+            if walls_connectivity_df is None:
+                walls_connectivity_df = find_table_in_sheet(df, "Wall Object Connectivity")
+            if points_connectivity_df is None:
+                points_connectivity_df = find_table_in_sheet(df, "Point Object Connectivity")
+            if pier_assigns_df is None:
+                pier_assigns_df = find_table_in_sheet(df, "Area Assignments - Pier Labels")
+
         # Fallback: buscar por nombre de hoja
         if wall_props_df is None:
             wall_props_df = find_table_by_sheet_name(excel_file, ['wall', 'prop'])
@@ -534,27 +582,39 @@ class EtabsExcelParser:
             pier_forces_df = find_table_by_sheet_name(excel_file, ['pier', 'force'])
 
         # Fase 2: Procesar tablas (progreso 50-100%)
-        yield {'type': 'progress', 'phase': 'parsing', 'current': 1, 'total': 6, 'element': 'Procesando materiales'}
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 1, 'total': 7, 'element': 'Procesando materiales'}
         if wall_props_df is not None:
             materials = self._parse_materials(wall_props_df)
         if frame_section_df is not None:
             frame_materials = self._parse_frame_materials(frame_section_df)
             materials.update(frame_materials)
 
-        yield {'type': 'progress', 'phase': 'parsing', 'current': 2, 'total': 6, 'element': 'Procesando muros'}
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 2, 'total': 7, 'element': 'Procesando muros'}
         piers, pier_stories = self._parse_piers(pier_props_df, materials)
         pier_forces = self._parse_forces(pier_forces_df)
 
-        yield {'type': 'progress', 'phase': 'parsing', 'current': 3, 'total': 6, 'element': 'Procesando columnas'}
+        # Procesar geometria compuesta de piers (L, T, C)
+        if walls_connectivity_df is not None and points_connectivity_df is not None and pier_assigns_df is not None:
+            yield {'type': 'progress', 'phase': 'parsing', 'current': 3, 'total': 7, 'element': 'Procesando piers compuestos (L, T, C)'}
+            composite_sections = self.composite_pier_parser.parse_composite_piers(
+                walls_connectivity_df,
+                points_connectivity_df,
+                pier_assigns_df
+            )
+            for key, composite in composite_sections.items():
+                if key in piers:
+                    piers[key].composite_section = composite
+
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 4, 'total': 7, 'element': 'Procesando columnas'}
         columns = {}
         column_forces = {}
         column_stories = []
         if column_forces_df is not None:
             columns, column_forces, column_stories = self.column_parser.parse_columns(
-                frame_section_df, column_forces_df, materials
+                frame_section_df, frame_assigns_df, column_forces_df, materials
             )
 
-        yield {'type': 'progress', 'phase': 'parsing', 'current': 4, 'total': 6, 'element': 'Procesando vigas'}
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 5, 'total': 7, 'element': 'Procesando vigas'}
         beams = {}
         beam_forces = {}
         beam_stories = []
@@ -565,7 +625,7 @@ class EtabsExcelParser:
                 materials, frame_circular_df
             )
 
-        yield {'type': 'progress', 'phase': 'parsing', 'current': 5, 'total': 6, 'element': 'Procesando vigas capitel'}
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 6, 'total': 7, 'element': 'Procesando vigas capitel'}
         drop_beams = {}
         drop_beam_forces = {}
         drop_beam_stories = []
@@ -574,7 +634,7 @@ class EtabsExcelParser:
                 section_cut_df, materials
             )
 
-        yield {'type': 'progress', 'phase': 'parsing', 'current': 6, 'total': 6, 'element': 'Finalizando'}
+        yield {'type': 'progress', 'phase': 'parsing', 'current': 7, 'total': 7, 'element': 'Finalizando'}
 
         # Combinar stories
         all_stories = pier_stories.copy()

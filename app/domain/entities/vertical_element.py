@@ -11,8 +11,14 @@ from typing import Optional, List, Tuple, TYPE_CHECKING
 from enum import Enum
 
 from ..constants.materials import get_bar_area
-from ..constants.reinforcement import FY_DEFAULT_MPA, COVER_DEFAULT_COLUMN_MM
+from ..constants.reinforcement import (
+    FY_DEFAULT_MPA,
+    COVER_DEFAULT_COLUMN_MM,
+    COVER_DEFAULT_PIER_MM,
+    MESH_DEFAULTS,
+)
 from .reinforcement import MeshReinforcement, DiscreteReinforcement
+from .composite_section import CompositeSection, SectionShapeType
 
 if TYPE_CHECKING:
     from ..calculations.steel_layer_calculator import SteelLayer
@@ -89,11 +95,19 @@ class VerticalElement:
     # Campos especificos PIER
     axis_angle: float = 0.0
 
+    # Geometria compuesta (opcional, para piers L, T, C)
+    composite_section: Optional[CompositeSection] = None
+
     # Layout calculado (se determina en __post_init__)
     _reinforcement_layout: Optional[ReinforcementLayout] = field(default=None, repr=False)
 
     def __post_init__(self):
-        """Inicializa armadura segun layout y valida geometria."""
+        """Inicializa armadura segun geometria usando ReinforcementProposer."""
+        from ..calculations.reinforcement_proposer import (
+            ReinforcementProposer,
+            ProposedLayout,
+        )
+
         # Validar geometria
         if self.length <= 0:
             raise ValueError(f"VerticalElement {self.label}: length debe ser > 0")
@@ -102,49 +116,56 @@ class VerticalElement:
         if self.height <= 0:
             raise ValueError(f"VerticalElement {self.label}: height debe ser > 0")
 
-        # Calcular layout
-        self._reinforcement_layout = self._calculate_reinforcement_layout()
+        # Obtener propuesta automatica segun geometria
+        proposal = ReinforcementProposer.propose(self.length, self.thickness)
 
-        # Inicializar armadura segun layout si no se proporciono
+        # Asignar layout segun propuesta
+        if proposal.layout == ProposedLayout.MESH:
+            self._reinforcement_layout = ReinforcementLayout.MESH
+        else:
+            self._reinforcement_layout = ReinforcementLayout.STIRRUPS
+
+        # Inicializar armadura si no se proporciono
         if self._reinforcement_layout == ReinforcementLayout.STIRRUPS:
             if self.discrete_reinforcement is None:
-                self.discrete_reinforcement = DiscreteReinforcement()
-            # Para columnas, usar cover de columna
-            if self.source == VerticalElementSource.FRAME and self.cover == 25.0:
+                self.discrete_reinforcement = DiscreteReinforcement(
+                    n_bars_length=proposal.n_bars_length,
+                    n_bars_thickness=proposal.n_bars_thickness,
+                    diameter=proposal.diameter,
+                )
+            # Estribos/trabas segun propuesta (solo si no es strut)
+            if proposal.stirrup_diameter > 0:
+                # Solo actualizar si tienen valores por defecto
+                if self.stirrup_diameter == 10 and self.stirrup_spacing == 150:
+                    self.stirrup_diameter = proposal.stirrup_diameter
+                    self.stirrup_spacing = proposal.stirrup_spacing
+                if self.n_shear_legs == 2 and self.n_shear_legs_secondary is None:
+                    self.n_shear_legs = proposal.n_shear_legs
+                    if proposal.n_shear_legs_secondary != proposal.n_shear_legs:
+                        self.n_shear_legs_secondary = proposal.n_shear_legs_secondary
+            else:
+                # Strut: sin estribos
+                self.stirrup_diameter = 0
+                self.stirrup_spacing = 0
+                self.n_shear_legs = 0
+            # Cover para columnas
+            if self.source == VerticalElementSource.FRAME and self.cover == COVER_DEFAULT_PIER_MM:
                 self.cover = COVER_DEFAULT_COLUMN_MM
         else:
+            # MESH layout
             if self.mesh_reinforcement is None:
-                # Defaults específicos para muros (phi8@200)
                 self.mesh_reinforcement = MeshReinforcement(
-                    diameter_v=8,
-                    diameter_h=8,
+                    n_meshes=MESH_DEFAULTS['n_meshes'],
+                    diameter_v=MESH_DEFAULTS['diameter_v'],
+                    spacing_v=MESH_DEFAULTS['spacing_v'],
+                    diameter_h=MESH_DEFAULTS['diameter_h'],
+                    spacing_h=MESH_DEFAULTS['spacing_h'],
+                    n_edge_bars=MESH_DEFAULTS['n_edge_bars'],
+                    diameter_edge=MESH_DEFAULTS['diameter_edge'],
                 )
-            # Para muros, usar cover de muro (25mm)
+            # Cover para muros
             if self.source == VerticalElementSource.PIER and self.cover == COVER_DEFAULT_COLUMN_MM:
-                self.cover = 25.0
-
-    def _calculate_reinforcement_layout(self) -> ReinforcementLayout:
-        """
-        Calcula el layout de armadura segun clasificacion geometrica.
-
-        Reglas:
-        - FRAME normal (lw/tw < 4.0): STIRRUPS
-        - FRAME alargado (lw/tw >= 4.0): MESH
-        - PIER corto (lw/tw <= 2.5): STIRRUPS
-        - PIER normal (lw/tw > 2.5): MESH
-        """
-        lw_tw = self.length / self.thickness if self.thickness > 0 else 0
-
-        if self.source == VerticalElementSource.FRAME:
-            # Frames: si es muy alargado, se disena como muro
-            if lw_tw >= 4.0:
-                return ReinforcementLayout.MESH
-            return ReinforcementLayout.STIRRUPS
-
-        # PIER: clasificar segun ACI 318-25
-        if lw_tw <= 2.5:
-            return ReinforcementLayout.STIRRUPS  # Pier corto -> columna
-        return ReinforcementLayout.MESH  # Pier normal -> malla
+                self.cover = COVER_DEFAULT_PIER_MM
 
     # =========================================================================
     # Propiedades de Layout
@@ -154,7 +175,16 @@ class VerticalElement:
     def reinforcement_layout(self) -> ReinforcementLayout:
         """Tipo de armadura (STIRRUPS o MESH)."""
         if self._reinforcement_layout is None:
-            self._reinforcement_layout = self._calculate_reinforcement_layout()
+            # Fallback: usar proposer si no se inicializo
+            from ..calculations.reinforcement_proposer import (
+                ReinforcementProposer,
+                ProposedLayout,
+            )
+            proposal = ReinforcementProposer.propose(self.length, self.thickness)
+            if proposal.layout == ProposedLayout.MESH:
+                self._reinforcement_layout = ReinforcementLayout.MESH
+            else:
+                self._reinforcement_layout = ReinforcementLayout.STIRRUPS
         return self._reinforcement_layout
 
     @property
@@ -176,6 +206,22 @@ class VerticalElement:
     def is_pier_source(self) -> bool:
         """True si viene de Pier/Shell en ETABS."""
         return self.source == VerticalElementSource.PIER
+
+    # =========================================================================
+    # Propiedades de Seccion Compuesta
+    # =========================================================================
+
+    @property
+    def is_composite(self) -> bool:
+        """True si tiene geometria compuesta (L, T, C)."""
+        return self.composite_section is not None
+
+    @property
+    def shape_type(self) -> str:
+        """Tipo de forma: rectangular, L, T, C, custom."""
+        if self.composite_section:
+            return self.composite_section.shape_type.value
+        return "rectangular"
 
     # =========================================================================
     # Properties Semanticas (compatibilidad Column/Pier)
@@ -210,6 +256,8 @@ class VerticalElement:
     @property
     def Ag(self) -> float:
         """Area bruta de la seccion (mm2)."""
+        if self.composite_section:
+            return self.composite_section.Ag
         return self.length * self.thickness
 
     @property
@@ -530,6 +578,8 @@ class VerticalElement:
     @property
     def Ig(self) -> float:
         """Momento de inercia de la seccion bruta (mm4)."""
+        if self.composite_section:
+            return self.composite_section.Ixx
         return self.thickness * (self.length ** 3) / 12
 
     @property
@@ -541,6 +591,18 @@ class VerticalElement:
     def S(self) -> float:
         """Modulo de seccion elastico (mm3)."""
         return self.Ig / self.y_extreme if self.y_extreme > 0 else 0
+
+    @property
+    def Acv(self) -> float:
+        """
+        Area de cortante efectiva (mm2).
+
+        Para secciones compuestas (L, T, C): solo area del alma segun ACI 318-25.
+        Para secciones rectangulares: area bruta completa.
+        """
+        if self.composite_section:
+            return self.composite_section.calculate_Acv('primary')
+        return self.length * self.thickness
 
     @property
     def As_boundary_left(self) -> float:
@@ -578,12 +640,28 @@ class VerticalElement:
         return parts[2] if len(parts) > 2 else '1'
 
     # =========================================================================
+    # Deteccion de Strut
+    # =========================================================================
+
+    @property
+    def is_strut(self) -> bool:
+        """True si el elemento es un strut (ambas dimensiones < 15cm)."""
+        from ..calculations.reinforcement_proposer import ReinforcementProposer, ProposedLayout
+        proposal = ReinforcementProposer.propose(self.length, self.thickness)
+        return proposal.layout == ProposedLayout.STRUT
+
+    # =========================================================================
     # Descripcion de Armadura
     # =========================================================================
 
     @property
     def reinforcement_description(self) -> str:
         """Descripcion legible de la armadura."""
+        # Caso strut: 1 barra centrada, sin estribos
+        if self.is_strut and self.discrete_reinforcement:
+            dr = self.discrete_reinforcement
+            return f"1phi{dr.diameter} (strut)"
+
         if self.is_stirrups_layout and self.discrete_reinforcement:
             dr = self.discrete_reinforcement
             return (
@@ -769,6 +847,11 @@ class VerticalElement:
                 'n_edge_bars': mr.n_edge_bars,
                 'diameter_edge': mr.diameter_edge,
             }
+
+        # Seccion compuesta
+        if self.composite_section:
+            data['composite_section'] = self.composite_section.to_dict()
+            data['shape_type'] = self.shape_type
 
         return data
 

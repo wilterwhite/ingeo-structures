@@ -126,9 +126,20 @@ Propiedades clave:
 - `seismic_category` → SPECIAL, INTERMEDIATE, ORDINARY, NON_SFRS
 
 ### HorizontalElement
-Unifica Beam y DropBeam. Se distinguen por `source`:
-- `FRAME` → Viga normal
-- `DROP_BEAM` → Viga capitel (se diseña como muro §18.10)
+Unifica Beam, Spandrel y DropBeam. Se distinguen por `source`:
+- `FRAME` → Viga de pórtico (Element Forces - Beams)
+- `SPANDREL` → Viga de acople tipo shell (Spandrel Forces)
+- `DROP_BEAM` → Viga capitel de losa (Section Cut Forces)
+
+**Diferencia Spandrel vs Drop Beam:**
+
+| Característica | Spandrel | Drop Beam |
+|----------------|----------|-----------|
+| Origen ETABS | `Spandrel Section Properties` | `Section Cut Forces - Analysis` |
+| Modelado | Shell (área) | Section Cut en losa |
+| Armadura típica | Barras longitudinales | Malla + barras de borde |
+| Uso | Vigas de acople entre muros | Vigas capitel de losas |
+| Diseño | §18.10.7 (vigas acople) | §18.10 (como muro) |
 
 ### ElementForces
 Fuerzas unificadas para cualquier tipo de elemento:
@@ -256,6 +267,9 @@ pytest tests/domain/flexure/test_slenderness.py -v
 - `Frame Section Property Definitions - Concrete Rectangular`
 - `Element Forces - Beams`
 
-**Spandrels:**
+**Spandrels (Vigas de Acople):**
 - `Spandrel Section Properties`
 - `Spandrel Forces`
+
+**Drop Beams (Vigas Capitel):**
+- `Section Cut Forces - Analysis` (nombre incluye dimensiones, ej: "SCut-Losa S01-29x100 eje A")

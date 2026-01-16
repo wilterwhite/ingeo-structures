@@ -16,6 +16,7 @@ Referencias ACI 318-25:
 """
 from typing import Dict, List, Any, Optional
 import uuid
+import math
 
 from .parsing.session_manager import SessionManager
 from .presentation.plot_generator import PlotGenerator
@@ -27,7 +28,7 @@ from .analysis.reinforcement_update_service import ReinforcementUpdateService
 from .presentation.modal_data_service import ElementDetailsService
 from .analysis.element_orchestrator import ElementOrchestrator
 from ..domain.entities import VerticalElement, ElementForces
-from ..domain.flexure import InteractionDiagramService, SlendernessService, FlexureChecker
+from ..domain.flexure import InteractionDiagramService, SlendernessService, FlexureChecker, InteractionPoint
 from ..domain.chapter18 import SeismicCategory
 
 
@@ -101,17 +102,23 @@ class StructuralAnalysisService:
     def _generate_interaction_data(
         self,
         pier: VerticalElement,
-        apply_slenderness: bool = False
+        apply_slenderness: bool = False,
+        direction: str = 'primary'
     ) -> tuple:
         """
         Genera steel_layers, interaction_points y phi_Mn_0.
 
+        Args:
+            pier: Elemento vertical a analizar
+            apply_slenderness: Si aplicar efectos de esbeltez
+            direction: 'primary' (M3, eje fuerte) o 'secondary' (M2, eje debil)
+
         Returns:
             (steel_layers, interaction_points, phi_Mn_0)
         """
-        steel_layers = pier.get_steel_layers()
+        steel_layers = pier.get_steel_layers(direction)
         interaction_points, _ = self._flexo_service.generate_interaction_curve(
-            pier, direction='primary', apply_slenderness=apply_slenderness, k=0.8
+            pier, direction=direction, apply_slenderness=apply_slenderness, k=0.8
         )
 
         # Obtener phi_Mn_0 directamente del FlexureChecker
@@ -613,8 +620,77 @@ class StructuralAnalysisService:
         combo = pier_forces.combinations[combination_index]
         angle_deg = combo.moment_angle_deg
 
-        # Generar datos de interacción para reutilizar
-        _, interaction_points, _ = self._generate_interaction_data(pier)
+        # Generar curvas de interacción para M3 (primary) y M2 (secondary)
+        _, points_M3, _ = self._generate_interaction_data(pier, direction='primary')
+        _, points_M2, _ = self._generate_interaction_data(pier, direction='secondary')
+
+        # Interpolar la curva al ángulo específico de la combinación
+        # Fórmula: Mn(θ) = Mn3 * cos(θ) + Mn2 * sin(θ)
+        angle_rad = math.radians(abs(angle_deg))
+        cos_angle = math.cos(angle_rad)
+        sin_angle = math.sin(angle_rad)
+
+        # Crear funciones de interpolación para obtener Mn dado Pn
+        # Ordenar por phi_Pn para interpolar correctamente
+        points_M3_sorted = sorted(points_M3, key=lambda p: p.phi_Pn, reverse=True)
+        points_M2_sorted = sorted(points_M2, key=lambda p: p.phi_Pn, reverse=True)
+
+        def interpolate_Mn_at_Pn(points: list, target_Pn: float) -> tuple:
+            """Interpola Mn, phi, c, epsilon_t para un Pn dado."""
+            # Buscar el segmento donde cae target_Pn
+            for i in range(len(points) - 1):
+                p1, p2 = points[i], points[i + 1]
+                if p1.phi_Pn >= target_Pn >= p2.phi_Pn:
+                    # Interpolación lineal
+                    if abs(p1.phi_Pn - p2.phi_Pn) < 0.001:
+                        ratio = 0.5
+                    else:
+                        ratio = (p1.phi_Pn - target_Pn) / (p1.phi_Pn - p2.phi_Pn)
+                    Mn = p1.phi_Mn + ratio * (p2.phi_Mn - p1.phi_Mn)
+                    phi = p1.phi + ratio * (p2.phi - p1.phi)
+                    c = p1.c + ratio * (p2.c - p1.c) if p1.c != float('inf') and p2.c != float('inf') else p1.c
+                    eps = p1.epsilon_t + ratio * (p2.epsilon_t - p1.epsilon_t) if p1.epsilon_t != float('inf') and p2.epsilon_t != float('inf') else p1.epsilon_t
+                    return Mn, phi, c, eps
+            # Si está fuera del rango, usar el extremo más cercano
+            if target_Pn > points[0].phi_Pn:
+                return points[0].phi_Mn, points[0].phi, points[0].c, points[0].epsilon_t
+            return points[-1].phi_Mn, points[-1].phi, points[-1].c, points[-1].epsilon_t
+
+        # Usar los valores de phi_Pn de la curva M3 como referencia
+        interpolated_points = []
+        for p3 in points_M3_sorted:
+            target_Pn = p3.phi_Pn
+
+            # Obtener Mn de M3 (ya lo tenemos)
+            Mn3 = p3.phi_Mn
+            phi3 = p3.phi
+
+            # Interpolar Mn de M2 al mismo Pn
+            Mn2, phi2, c2, eps2 = interpolate_Mn_at_Pn(points_M2_sorted, target_Pn)
+
+            # Interpolar según ángulo
+            phi_Mn_interp = Mn3 * cos_angle + Mn2 * sin_angle
+            phi_interp = min(phi3, phi2)
+
+            # Calcular Mn nominal (sin phi)
+            Mn_interp = phi_Mn_interp / phi_interp if phi_interp > 0 else 0
+
+            # c y epsilon_t del punto M3 (aproximación razonable)
+            c_interp = p3.c
+            epsilon_t_interp = p3.epsilon_t
+
+            interpolated_points.append(InteractionPoint(
+                Pn=p3.Pn,
+                Mn=Mn_interp,
+                phi=phi_interp,
+                phi_Pn=target_Pn,
+                phi_Mn=phi_Mn_interp,
+                c=c_interp,
+                epsilon_t=epsilon_t_interp
+            ))
+
+        # Usar la curva interpolada para el ángulo de esta combinación
+        interaction_points = interpolated_points
         design_curve = self._interaction_service.get_design_curve(interaction_points)
 
         # Usar orquestador para verificar la combinación
@@ -627,16 +703,17 @@ class StructuralAnalysisService:
         flexure_sf = result.flexure_sf
         flexure_status = result.flexure_status
 
-        # Generar gráfico
+        # Generar gráfico - solo mostrar el punto de ESTA combinación
         pm_plot = ""
         if generate_plot:
-            all_points = pier_forces.get_critical_pm_points(
-                moment_axis='combined',
-                angle_deg=angle_deg
-            )
+            # Solo el punto de la combinación actual (no todos los puntos)
+            # El punto está en el plano del ángulo de esta combinación
+            # Formato: (Pu, Mu, combo_name)
+            combo_label = f"{combo.name} ({combo.location})"
+            combo_point = [(result.P, combo.moment_resultant, combo_label)]
             pm_plot = self._plot_generator.generate_pm_diagram(
                 capacity_curve=design_curve,
-                demand_points=all_points,
+                demand_points=combo_point,
                 pier_label=f"{pier.story} - {pier.label}",
                 safety_factor=flexure_sf,
                 moment_axis='combined',

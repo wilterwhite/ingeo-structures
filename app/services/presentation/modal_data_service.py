@@ -253,7 +253,11 @@ class ElementDetailsService:
         if pier is not None:
             if proposed_config:
                 pier = self._apply_proposed_config_pier(pier, proposed_config)
-            section_diagram = self._plot_generator.generate_section_diagram(pier)
+            # Detectar strut antes de elegir generador
+            if pier.is_strut:
+                section_diagram = self._plot_generator.generate_strut_section_diagram(pier)
+            else:
+                section_diagram = self._plot_generator.generate_section_diagram(pier)
             return {
                 'success': True,
                 'pier_key': element_key,
@@ -264,7 +268,11 @@ class ElementDetailsService:
         # Intentar obtener como columna
         column = self._session_manager.get_column(session_id, element_key)
         if column is not None:
-            section_diagram = self._plot_generator.generate_column_section_diagram(column)
+            # Detectar strut antes de elegir generador
+            if column.is_strut:
+                section_diagram = self._plot_generator.generate_strut_section_diagram(column)
+            else:
+                section_diagram = self._plot_generator.generate_column_section_diagram(column)
             return {
                 'success': True,
                 'pier_key': element_key,
