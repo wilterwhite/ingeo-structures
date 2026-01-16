@@ -167,6 +167,9 @@ class BeamsModule {
 
         // Inicializar o actualizar filtros Excel-style
         this._initBeamFilters(allBeamResults);
+
+        // Log del estado del frontend (para debugging remoto)
+        this.page.logState();
     }
 
     /**

@@ -251,7 +251,8 @@ class StructuralAnalysisService:
         materials_config: Optional[Dict] = None,
         continuity_info=None,
         hn_ft: Optional[float] = None,
-        seismic_category: SeismicCategory = SeismicCategory.SPECIAL
+        seismic_category: SeismicCategory = SeismicCategory.SPECIAL,
+        coupling_config=None
     ) -> Dict[str, Any]:
         """
         Analiza un elemento individual usando ElementOrchestrator.
@@ -267,6 +268,7 @@ class StructuralAnalysisService:
             continuity_info: Info de continuidad para piers (opcional)
             hn_ft: Altura del edificio en pies (opcional)
             seismic_category: Categoría sísmica (SPECIAL, INTERMEDIATE, ORDINARY)
+            coupling_config: Configuración de vigas de acople (PierCouplingConfig)
 
         Returns:
             Diccionario formateado para la UI
@@ -291,7 +293,9 @@ class StructuralAnalysisService:
 
         # Formatear resultado
         return ResultFormatter.format_any_element(
-            element, result, key, continuity_info=continuity_info
+            element, result, key,
+            continuity_info=continuity_info,
+            coupling_config=coupling_config
         )
 
     def _calculate_statistics(
@@ -431,12 +435,16 @@ class StructuralAnalysisService:
             if parsed_data.continuity_info and key in parsed_data.continuity_info:
                 continuity_info = parsed_data.continuity_info[key]
 
+            # Obtener configuración de vigas de acople para este pier
+            coupling_config = parsed_data.pier_coupling_configs.get(key)
+
             formatted = self._analyze_element(
                 key, pier, vertical_forces.get(key),
                 materials_config=materials_config,
                 continuity_info=continuity_info,
                 hn_ft=hn_ft,
-                seismic_category=category_enum
+                seismic_category=category_enum,
+                coupling_config=coupling_config
             )
             pier_results.append(formatted)
 

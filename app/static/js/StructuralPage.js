@@ -45,6 +45,9 @@ class StructuralPage {
 
         // Filtros Excel-style para drop beams
         this.dropBeamFilters = null;
+
+        // Frontend Logger (para debugging remoto)
+        this.frontendLogger = null;
     }
 
     // =========================================================================
@@ -139,6 +142,13 @@ class StructuralPage {
         if (typeof ProjectManager !== 'undefined') {
             this.projectManager = new ProjectManager(this);
             this.projectManager.init();
+        }
+
+        // Frontend Logger (para debugging remoto)
+        if (typeof FrontendLogger !== 'undefined') {
+            this.frontendLogger = new FrontendLogger(this);
+            this.frontendLogger.initErrorCapture();
+            window.frontendLogger = this.frontendLogger;
         }
 
         // Componentes de UI
@@ -428,6 +438,29 @@ class StructuralPage {
     // =========================================================================
     // Los drop beams se renderizan en la misma tabla que los beams.
     // Ver BeamsModule.renderBeamsTable() para la implementación.
+
+    // =========================================================================
+    // Frontend Logger (para debugging remoto)
+    // =========================================================================
+
+    /**
+     * Registra el estado actual del frontend en el archivo de log.
+     * Se llama automáticamente después de cambios importantes.
+     */
+    logState() {
+        if (this.frontendLogger) {
+            this.frontendLogger.log();
+        }
+    }
+
+    /**
+     * Registra el estado inmediatamente (sin debounce).
+     */
+    logStateNow() {
+        if (this.frontendLogger) {
+            this.frontendLogger.logNow();
+        }
+    }
 }
 
 // Instancia global

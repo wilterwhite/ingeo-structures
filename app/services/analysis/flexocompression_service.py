@@ -25,6 +25,7 @@ from ...domain.constants.phi_chapter21 import (
     PHI_COMPRESSION,
     PN_MAX_FACTOR_TIED,
     ALPHA_OVERSTRENGTH,
+    WHITNEY_STRESS_FACTOR,
 )
 from ...domain.constants.units import N_TO_TONF
 from ...domain.chapter18.beams.service import (

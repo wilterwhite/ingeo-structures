@@ -5,7 +5,7 @@ Crea diagramas de interacción P-M usando matplotlib.
 """
 import base64
 from io import BytesIO
-from typing import List, Tuple, Optional, TYPE_CHECKING
+from typing import List, Tuple, TYPE_CHECKING
 import math
 
 import matplotlib
@@ -13,10 +13,10 @@ matplotlib.use('Agg')  # Backend sin GUI para servidor
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.patches import Rectangle, Circle, FancyBboxPatch
-import numpy as np
 
 if TYPE_CHECKING:
     from ...domain.entities import VerticalElement
+    from ...domain.entities.rebar import RebarLayout
 
 
 class PlotGenerator:
@@ -191,6 +191,50 @@ class PlotGenerator:
     COLOR_DIMENSION = '#374151'     # Gris
     COLOR_BOUNDARY = '#fef3c7'      # Amarillo claro para zona de borde
 
+    @staticmethod
+    def _calculate_edge_bar_distribution(n_meshes: int, n_edge: int) -> Tuple[int, int]:
+        """
+        Calcula distribucion de barras de borde para leyenda.
+
+        Args:
+            n_meshes: Numero de mallas (1 o 2)
+            n_edge: Numero total de barras de borde
+
+        Returns:
+            Tupla (rows, bars_per_row) para mostrar en leyenda
+        """
+        if n_meshes == 1:
+            return 1, n_edge
+        else:
+            return 2, max(1, n_edge // 2)
+
+    def _draw_bars_from_layout(
+        self,
+        ax,
+        layout: 'RebarLayout',
+        offset_x: float = 0,
+        offset_y: float = 0
+    ) -> None:
+        """
+        Dibuja todas las barras del layout en el axes.
+
+        Args:
+            ax: Axes de matplotlib
+            layout: RebarLayout con las barras a dibujar
+            offset_x: Offset para centrar la seccion en X
+            offset_y: Offset para centrar la seccion en Y
+        """
+        for bar in layout.bars:
+            circle = Circle(
+                (bar.x + offset_x, bar.y + offset_y),
+                bar.radius,
+                facecolor=self.COLOR_REBAR,
+                edgecolor='white',
+                linewidth=0.5,
+                zorder=5
+            )
+            ax.add_patch(circle)
+
     def generate_section_diagram(
         self,
         pier: 'VerticalElement',
@@ -223,9 +267,6 @@ class PlotGenerator:
         tw = pier.thickness   # Espesor
         cover = pier.cover
 
-        # Escala para visualización (queremos que el muro quepa bien)
-        scale = 1.0  # mm
-
         # Origen centrado
         x0 = -lw / 2
         y0 = -tw / 2
@@ -249,13 +290,9 @@ class PlotGenerator:
 
         # Configuración del elemento de borde
         # Asumimos barras distribuidas en filas según n_meshes
-        if pier.n_meshes == 1:
-            # Malla simple: barras en el centro del espesor
-            rows = 1
-            bars_per_row = n_edge
-        else:
-            # Malla doble: barras en 2 capas
-            rows = 2
+        # Calcular distribucion para estribos
+        rows, bars_per_row = self._calculate_edge_bar_distribution(pier.n_meshes, n_edge)
+        if pier.n_meshes == 2:
             bars_per_row = max(1, n_edge // 2)
 
         # Espaciamiento entre barras en el elemento de borde
@@ -330,95 +367,14 @@ class PlotGenerator:
             )
             ax.add_patch(stirrup_right)
 
-        # 5. Dibujar barras de borde
-        bar_radius = edge_bar_d / 2
+        # 5. Dibujar barras usando el layout unificado
+        layout = pier.get_rebar_layout()
+        self._draw_bars_from_layout(ax, layout, offset_x=x0, offset_y=y0)
 
-        # Posiciones Y de las barras según número de filas
-        if rows == 1:
-            y_positions = [0]  # Centro
-        else:
-            y_positions = [y0 + cover + edge_bar_d/2,
-                          y0 + tw - cover - edge_bar_d/2]
+        # Variables para info de armadura (mantener compatibilidad)
+        rows, bars_per_row = self._calculate_edge_bar_distribution(pier.n_meshes, n_edge)
 
-        # Barras en extremo izquierdo
-        for row_idx, y_bar in enumerate(y_positions):
-            for col_idx in range(bars_per_row):
-                x_bar = x0 + cover + edge_bar_d/2 + col_idx * bar_spacing_x
-                bar = Circle(
-                    (x_bar, y_bar), bar_radius,
-                    facecolor=self.COLOR_REBAR,
-                    edgecolor='white',
-                    linewidth=0.5,
-                    zorder=5
-                )
-                ax.add_patch(bar)
-
-        # Barras en extremo derecho
-        for row_idx, y_bar in enumerate(y_positions):
-            for col_idx in range(bars_per_row):
-                x_bar = x0 + lw - cover - edge_bar_d/2 - col_idx * bar_spacing_x
-                bar = Circle(
-                    (x_bar, y_bar), bar_radius,
-                    facecolor=self.COLOR_REBAR,
-                    edgecolor='white',
-                    linewidth=0.5,
-                    zorder=5
-                )
-                ax.add_patch(bar)
-
-        # 6. Dibujar armadura distribuida (malla intermedia)
-        mesh_bar_d = pier.diameter_v
-        mesh_bar_radius = mesh_bar_d / 2
-        mesh_spacing = pier.spacing_v
-
-        # Calcular número de barras intermedias y centrarlas
-        # Si hay elementos de borde, las barras de malla van ENTRE ellos
-        # Si no hay elementos de borde, van entre las barras de borde (desde cover)
-        if has_boundary_element:
-            # Las barras de malla van entre los elementos de borde
-            mesh_start = boundary_length
-            mesh_end = lw - boundary_length
-        else:
-            # Las barras de malla van desde cover a lw-cover
-            mesh_start = cover
-            mesh_end = lw - cover
-
-        # Espacio disponible para barras intermedias
-        available_span = mesh_end - mesh_start
-
-        # Número de barras intermedias necesarias en el espacio disponible
-        # El espaciamiento es el MÁXIMO permitido entre barras
-        # Si available_span > spacing, necesitamos barras para que ningún tramo exceda el máximo
-        if available_span > mesh_spacing:
-            # Número de barras necesarias para que el espaciamiento no exceda el máximo
-            # n_intermediate = ceil(available_span / mesh_spacing) - 1
-            n_intermediate = math.ceil(available_span / mesh_spacing) - 1
-        else:
-            # El espacio ya es menor que el máximo permitido, no se necesitan barras
-            n_intermediate = 0
-
-        if n_intermediate > 0 and available_span > 0:
-            # Calcular posiciones centradas
-            # Distribuir n_intermediate barras en el espacio disponible
-            actual_spacing = available_span / (n_intermediate + 1)
-
-            # Posición de la primera barra intermedia
-            first_bar_pos = mesh_start + actual_spacing
-
-            # Dibujar barras intermedias centradas
-            for i in range(n_intermediate):
-                bar_x = x0 + first_bar_pos + i * actual_spacing
-                for y_bar in y_positions:
-                    bar = Circle(
-                        (bar_x, y_bar), mesh_bar_radius,
-                        facecolor=self.COLOR_REBAR,
-                        edgecolor='white',
-                        linewidth=0.5,
-                        zorder=5
-                    )
-                    ax.add_patch(bar)
-
-        # 7. Agregar dimensiones
+        # 6. Agregar dimensiones
         dim_offset = tw * 0.3
         arrow_props = dict(arrowstyle='<->', color=self.COLOR_DIMENSION, lw=1.5)
 
@@ -441,7 +397,7 @@ class PlotGenerator:
         ax.text(x0 + cover/2, y0 + tw + 25, f'r={cover:.0f}',
                ha='center', va='bottom', fontsize=8, color='#9ca3af')
 
-        # 8. Agregar leyenda de armadura
+        # 7. Agregar leyenda de armadura
         info_x = x0 + lw + dim_offset + 20
         info_y = y0 + tw
 
@@ -476,12 +432,12 @@ class PlotGenerator:
                    ha='left', va='top', fontsize=9,
                    fontfamily='monospace', color='#374151')
 
-        # 9. Título
+        # 8. Título
         ax.set_title(f'Seccion Transversal - {pier.story} / {pier.label}\n'
                     f'({lw/1000:.2f}m x {tw/1000:.2f}m)',
                     fontsize=14, fontweight='bold')
 
-        # 10. Configurar ejes
+        # 9. Configurar ejes
         ax.set_aspect('equal')
         ax.set_xlim(x0 - dim_offset * 2, x0 + lw + dim_offset * 3 + 180)
         ax.set_ylim(y0 - dim_offset * 2, y0 + tw + dim_offset * 2)
@@ -566,58 +522,13 @@ class PlotGenerator:
         )
         ax.add_patch(stirrup)
 
-        # 3. Dibujar barras longitudinales
-        bar_d = column.diameter_long
-        bar_radius = bar_d / 2
+        # 3. Dibujar barras longitudinales desde layout unificado
+        # Layout tiene origen en (0,0), necesitamos trasladar a (x0, y0)
+        layout = column.get_rebar_layout()
+        self._draw_bars_from_layout(ax, layout, offset_x=x0, offset_y=y0)
+
         n_bars_depth = column.n_bars_depth
         n_bars_width = column.n_bars_width
-
-        # Posiciones de las barras en cada dirección
-        # Depth: desde cover hasta depth - cover
-        if n_bars_depth >= 2:
-            y_first = y0 + cover
-            y_last = y0 + depth - cover
-            if n_bars_depth == 2:
-                y_positions = [y_first, y_last]
-            else:
-                y_spacing = (y_last - y_first) / (n_bars_depth - 1)
-                y_positions = [y_first + i * y_spacing for i in range(n_bars_depth)]
-        else:
-            y_positions = [0]  # Centro
-
-        # Width: desde cover hasta width - cover
-        if n_bars_width >= 2:
-            x_first = x0 + cover
-            x_last = x0 + width - cover
-            if n_bars_width == 2:
-                x_positions = [x_first, x_last]
-            else:
-                x_spacing = (x_last - x_first) / (n_bars_width - 1)
-                x_positions = [x_first + i * x_spacing for i in range(n_bars_width)]
-        else:
-            x_positions = [0]  # Centro
-
-        # Dibujar barras: esquinas y lados
-        drawn_positions = set()
-
-        # Dibujar todas las posiciones del perímetro
-        for i, y_bar in enumerate(y_positions):
-            for j, x_bar in enumerate(x_positions):
-                # Solo dibujar si está en el borde (primera/última fila o columna)
-                is_edge = (i == 0 or i == len(y_positions) - 1 or
-                          j == 0 or j == len(x_positions) - 1)
-                if is_edge:
-                    pos_key = (round(x_bar, 1), round(y_bar, 1))
-                    if pos_key not in drawn_positions:
-                        bar = Circle(
-                            (x_bar, y_bar), bar_radius,
-                            facecolor=self.COLOR_REBAR,
-                            edgecolor='white',
-                            linewidth=0.5,
-                            zorder=5
-                        )
-                        ax.add_patch(bar)
-                        drawn_positions.add(pos_key)
 
         # 4. Agregar dimensiones
         dim_offset = max(depth, width) * 0.15
@@ -734,19 +645,10 @@ class PlotGenerator:
         )
         ax.add_patch(concrete)
 
-        # 2. Dibujar 1 barra centrada
+        # 2. Dibujar barra centrada desde layout unificado
         bar_d = element.diameter_long if hasattr(element, 'diameter_long') else 12
-        bar_radius = bar_d / 2
-
-        # Barra en el centro geometrico
-        bar = Circle(
-            (0, 0), bar_radius,
-            facecolor=self.COLOR_REBAR,
-            edgecolor='white',
-            linewidth=0.5,
-            zorder=5
-        )
-        ax.add_patch(bar)
+        layout = element.get_rebar_layout()
+        self._draw_bars_from_layout(ax, layout, offset_x=x0, offset_y=y0)
 
         # 3. Agregar dimensiones
         dim_offset = max(depth, width) * 0.15
@@ -949,213 +851,17 @@ class PlotGenerator:
                 ax.fill(xs, ys, color=self.COLOR_CONCRETE, edgecolor=self.COLOR_CONCRETE_EDGE,
                        linewidth=2, zorder=1)
 
-        # 2. Dibujar refuerzo en cada segmento
+        # 2. Dibujar refuerzo usando el layout unificado
+        layout = pier.get_rebar_layout()
+        self._draw_bars_from_layout(ax, layout, offset_x=-center_x, offset_y=-center_y)
+
+        # Variables para info (compatibilidad con leyenda)
         cover = pier.cover
         edge_bar_d = pier.diameter_edge
         n_edge = pier.n_edge_bars
         bar_radius = edge_bar_d / 2
 
-        # Calcular posiciones de barras segun n_meshes
-        if pier.n_meshes == 1:
-            rows = 1
-            bars_per_row = n_edge
-        else:
-            rows = 2
-            bars_per_row = max(1, n_edge // 2)
-
-        bar_spacing_x = min(150, pier.stirrup_spacing)
-
-        # Identificar puntos de conexion entre segmentos
-        connection_info = {}  # punto -> lista de segmentos que conectan ahi
-        for i, seg in enumerate(cs.segments):
-            for pt in [(seg.x1, seg.y1), (seg.x2, seg.y2)]:
-                pt_key = (round(pt[0]), round(pt[1]))
-                if pt_key not in connection_info:
-                    connection_info[pt_key] = []
-                connection_info[pt_key].append(i)
-
-        # Puntos donde se conectan 2+ segmentos
-        connection_points = {pt for pt, segs in connection_info.items() if len(segs) >= 2}
-
-        # Dibujar barras en extremos libres de cada segmento
-        for segment in cs.segments:
-            seg_thickness = segment.thickness
-
-            dx = segment.x2 - segment.x1
-            dy = segment.y2 - segment.y1
-            length = math.sqrt(dx*dx + dy*dy)
-            if length < 1:
-                continue
-
-            ux, uy = dx / length, dy / length
-            px, py = -uy, ux
-
-            if rows == 1:
-                perp_offsets = [0]
-            else:
-                half_t = seg_thickness / 2 - cover - edge_bar_d / 2
-                perp_offsets = [-half_t, half_t]
-
-            endpoints = [(segment.x1, segment.y1, 1), (segment.x2, segment.y2, -1)]
-
-            for base_x, base_y, sign in endpoints:
-                is_connected = (round(base_x), round(base_y)) in connection_points
-                if is_connected:
-                    continue
-
-                for perp_offset in perp_offsets:
-                    for col_idx in range(bars_per_row):
-                        long_offset = cover + edge_bar_d / 2 + col_idx * bar_spacing_x
-                        bar_x = base_x + sign * long_offset * ux + perp_offset * px - center_x
-                        bar_y = base_y + sign * long_offset * uy + perp_offset * py - center_y
-
-                        bar = Circle(
-                            (bar_x, bar_y), bar_radius,
-                            facecolor=self.COLOR_REBAR,
-                            edgecolor='white',
-                            linewidth=0.5,
-                            zorder=5
-                        )
-                        ax.add_patch(bar)
-
-        # 2b. Dibujar barras en las intersecciones (esquinas de la L, T, C)
-        for conn_pt in connection_points:
-            # Obtener los segmentos que conectan en este punto
-            seg_indices = connection_info[conn_pt]
-            if len(seg_indices) < 2:
-                continue
-
-            # Calcular la posicion de las barras en la esquina
-            # Las barras van en las 4 esquinas del area de interseccion
-            seg1 = cs.segments[seg_indices[0]]
-            seg2 = cs.segments[seg_indices[1]]
-
-            # Vectores perpendiculares de cada segmento
-            def get_perp_vector(seg):
-                dx = seg.x2 - seg.x1
-                dy = seg.y2 - seg.y1
-                length = math.sqrt(dx*dx + dy*dy)
-                if length < 1:
-                    return (0, 1)
-                return (-dy / length, dx / length)
-
-            px1, py1 = get_perp_vector(seg1)
-            px2, py2 = get_perp_vector(seg2)
-
-            half_t1 = seg1.thickness / 2 - cover - edge_bar_d / 2
-            half_t2 = seg2.thickness / 2 - cover - edge_bar_d / 2
-
-            # Las 4 barras de esquina estan en las combinaciones de offsets
-            corner_offsets = [
-                (half_t1 * px1 + half_t2 * px2, half_t1 * py1 + half_t2 * py2),
-                (half_t1 * px1 - half_t2 * px2, half_t1 * py1 - half_t2 * py2),
-                (-half_t1 * px1 + half_t2 * px2, -half_t1 * py1 + half_t2 * py2),
-                (-half_t1 * px1 - half_t2 * px2, -half_t1 * py1 - half_t2 * py2),
-            ]
-
-            for off_x, off_y in corner_offsets:
-                bar_x = conn_pt[0] + off_x - center_x
-                bar_y = conn_pt[1] + off_y - center_y
-
-                bar = Circle(
-                    (bar_x, bar_y), bar_radius,
-                    facecolor=self.COLOR_REBAR,
-                    edgecolor='white',
-                    linewidth=0.5,
-                    zorder=5
-                )
-                ax.add_patch(bar)
-
-        # 2c. Dibujar mallas distribuidas a lo largo de cada segmento
-        mesh_bar_d = pier.diameter_v
-        mesh_bar_radius = mesh_bar_d / 2
-        mesh_spacing = pier.spacing_v
-
-        for segment in cs.segments:
-            seg_thickness = segment.thickness
-            seg_length = segment.length
-
-            dx = segment.x2 - segment.x1
-            dy = segment.y2 - segment.y1
-            if seg_length < 1:
-                continue
-
-            ux, uy = dx / seg_length, dy / seg_length
-            px, py = -uy, ux
-
-            # Posiciones perpendiculares para las mallas
-            if rows == 1:
-                mesh_perp_offsets = [0]
-            else:
-                half_t = seg_thickness / 2 - cover - mesh_bar_d / 2
-                mesh_perp_offsets = [-half_t, half_t]
-
-            # Verificar si cada extremo es libre o conectado
-            p1_key = (round(segment.x1), round(segment.y1))
-            p2_key = (round(segment.x2), round(segment.y2))
-            p1_connected = p1_key in connection_points
-            p2_connected = p2_key in connection_points
-
-            # Posicion de la ultima barra de borde/interseccion en cada extremo
-            # Si el extremo es libre: ultima barra de borde esta a cover + edge_bar_d/2 + (bars_per_row-1)*bar_spacing_x
-            # Si el extremo esta conectado: las barras de interseccion estan dentro de la zona de interseccion
-            #   La zona de interseccion tiene tamaño = thickness del segmento perpendicular / 2
-            #   Las barras estan a (other_thickness/2 - cover - edge_bar_d/2) desde el punto de conexion
-
-            def get_connected_segment_thickness(pt_key, current_seg_idx):
-                """Obtiene el thickness del segmento perpendicular que conecta en pt_key."""
-                for idx in connection_info.get(pt_key, []):
-                    if idx != current_seg_idx:
-                        return cs.segments[idx].thickness
-                return seg_thickness  # Fallback
-
-            current_seg_idx = cs.segments.index(segment)
-
-            if not p1_connected:
-                last_bar_from_start = cover + edge_bar_d/2 + (bars_per_row - 1) * bar_spacing_x
-            else:
-                # Barra de interseccion esta a (other_thickness/2 - cover - bar_d/2) del punto de conexion
-                other_thickness = get_connected_segment_thickness(p1_key, current_seg_idx)
-                last_bar_from_start = other_thickness / 2 - cover - edge_bar_d / 2
-
-            if not p2_connected:
-                last_bar_from_end = cover + edge_bar_d/2 + (bars_per_row - 1) * bar_spacing_x
-            else:
-                other_thickness = get_connected_segment_thickness(p2_key, current_seg_idx)
-                last_bar_from_end = other_thickness / 2 - cover - edge_bar_d / 2
-
-            # Distancia "A" entre la ultima barra de borde/interseccion de cada lado
-            dist_A = seg_length - last_bar_from_start - last_bar_from_end
-
-            if dist_A > mesh_spacing:
-                # n_barras = truncar(A / spacing)
-                n_mesh_bars = int(dist_A / mesh_spacing)
-
-                if n_mesh_bars > 0:
-                    # Distribuir n_mesh_bars uniformemente en el espacio A
-                    # n_mesh_bars barras crean (n_mesh_bars + 1) espacios
-                    actual_spacing = dist_A / (n_mesh_bars + 1)
-
-                    # Punto de inicio del segmento
-                    start_x, start_y = segment.x1, segment.y1
-
-                    for i in range(n_mesh_bars):
-                        # Posicion a lo largo del segmento (desde el inicio)
-                        # Primera barra a actual_spacing de la ultima barra de borde
-                        long_pos = last_bar_from_start + (i + 1) * actual_spacing
-
-                        for perp_offset in mesh_perp_offsets:
-                            bar_x = start_x + long_pos * ux + perp_offset * px - center_x
-                            bar_y = start_y + long_pos * uy + perp_offset * py - center_y
-
-                            bar = Circle(
-                                (bar_x, bar_y), mesh_bar_radius,
-                                facecolor=self.COLOR_REBAR,
-                                edgecolor='white',
-                                linewidth=0.5,
-                                zorder=5
-                            )
-                            ax.add_patch(bar)
+        rows, bars_per_row = self._calculate_edge_bar_distribution(pier.n_meshes, n_edge)
 
         # 3. Marcar centroide
         cx, cy = cs.centroid

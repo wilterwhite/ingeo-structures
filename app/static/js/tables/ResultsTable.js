@@ -96,10 +96,17 @@ class ResultsTable extends FilterableTable {
 
     render(data) {
         this.updateStatistics(data.statistics);
+
+        // Sincronizar asignaciones de vigas de acople desde los resultados del backend
+        this.couplingBeamManager.syncFromResults(data.results);
+
         this.renderTable(data.results);
 
         // Inicializar filtros de columna después de renderizar
         this.columnFilters.init();
+
+        // Log del estado del frontend (para debugging remoto)
+        this.page.logState();
     }
 
     updateStatistics(stats) {

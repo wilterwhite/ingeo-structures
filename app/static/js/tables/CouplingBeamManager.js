@@ -174,4 +174,29 @@ class CouplingBeamManager {
     clearAssignments() {
         this.pierBeamAssignments = {};
     }
+
+    /**
+     * Sincroniza las asignaciones de vigas desde los resultados del backend.
+     * Esto permite que el frontend refleje el estado real almacenado en el servidor.
+     * @param {Array} results - Resultados de piers con coupling_beam_left/right
+     */
+    syncFromResults(results) {
+        if (!results || !Array.isArray(results)) return;
+
+        results.forEach(r => {
+            // Solo sincronizar piers (no columnas)
+            if (r.element_type === 'pier' && r.key) {
+                const left = r.coupling_beam_left || 'generic';
+                const right = r.coupling_beam_right || 'generic';
+
+                // Solo guardar si hay asignación (evitar crear entradas vacías)
+                if (left !== 'generic' || right !== 'generic') {
+                    this.pierBeamAssignments[r.key] = { izq: left, der: right };
+                } else if (!this.pierBeamAssignments[r.key]) {
+                    // Si no hay asignación previa, crear con genérica
+                    this.pierBeamAssignments[r.key] = { izq: 'generic', der: 'generic' };
+                }
+            }
+        });
+    }
 }

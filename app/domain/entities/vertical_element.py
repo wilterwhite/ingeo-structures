@@ -22,6 +22,7 @@ from .composite_section import CompositeSection, SectionShapeType
 
 if TYPE_CHECKING:
     from ..calculations.steel_layer_calculator import SteelLayer
+    from .rebar import RebarLayout
 
 
 class VerticalElementSource(Enum):
@@ -100,6 +101,9 @@ class VerticalElement:
 
     # Layout calculado (se determina en __post_init__)
     _reinforcement_layout: Optional[ReinforcementLayout] = field(default=None, repr=False)
+
+    # Cache del layout de barras (se invalida cuando cambia armadura)
+    _rebar_layout: Optional['RebarLayout'] = field(default=None, repr=False)
 
     def __post_init__(self):
         """Inicializa armadura segun geometria usando ReinforcementProposer."""
@@ -561,16 +565,6 @@ class VerticalElement:
         """Area de refuerzo transversal perpendicular a width (mm2)."""
         return self.As_transversal_width
 
-    @property
-    def bc_depth(self) -> float:
-        """Dimension del nucleo confinado perpendicular a depth (mm)."""
-        return self.length - 2 * self.cover
-
-    @property
-    def bc_width(self) -> float:
-        """Dimension del nucleo confinado perpendicular a width (mm)."""
-        return self.thickness - 2 * self.cover
-
     # =========================================================================
     # Propiedades PIER adicionales (zonas de borde)
     # =========================================================================
@@ -757,13 +751,42 @@ class VerticalElement:
             if n_edge_bars is not None:
                 mr.n_edge_bars = n_edge_bars
 
+        # Invalidar cache de layout de barras
+        self.invalidate_rebar_cache()
+
     # =========================================================================
     # Metodos para FlexuralElement Protocol
     # =========================================================================
 
+    def get_rebar_layout(self) -> 'RebarLayout':
+        """
+        Obtiene el layout de armadura (UNICA fuente de verdad).
+
+        El layout se calcula una vez y se cachea. Contiene todas las barras
+        con su posicion 2D exacta. Puede convertirse a:
+        - Capas 1D para calculos P-M (layout.get_steel_layers())
+        - Lista de RebarPosition para visualizacion (iterar layout.bars)
+
+        Returns:
+            RebarLayout con todas las barras posicionadas.
+        """
+        if self._rebar_layout is None:
+            from ..calculations.rebar_layout_calculator import RebarLayoutCalculator
+            self._rebar_layout = RebarLayoutCalculator.calculate(self)
+        return self._rebar_layout
+
+    def invalidate_rebar_cache(self) -> None:
+        """Invalida el cache del layout de barras. Llamar cuando cambie la armadura."""
+        self._rebar_layout = None
+
     def get_steel_layers(self, direction: str = 'primary') -> List['SteelLayer']:
         """
         Genera las capas de acero para el diagrama de interaccion.
+
+        NOTA: Para secciones rectangulares con STIRRUPS layout, la conversion
+        de barras 2D a capas 1D usa el metodo anterior por ser mas preciso
+        para ese tipo de distribucion. Para secciones MESH y compuestas,
+        usa el layout unificado.
 
         Args:
             direction: 'primary' para eje fuerte, 'secondary' para eje debil
@@ -773,12 +796,15 @@ class VerticalElement:
         """
         from ..calculations.steel_layer_calculator import SteelLayerCalculator
 
+        # Para STIRRUPS layout, usar el metodo anterior por ahora
+        # (es mas preciso para esa distribucion de barras)
         if self.is_stirrups_layout:
             return SteelLayerCalculator.calculate_from_vertical_element_discrete(
                 self, direction=direction
             )
-        else:
-            return SteelLayerCalculator.calculate_from_vertical_element_mesh(self)
+
+        # Para MESH y compuestas, usar el layout unificado
+        return self.get_rebar_layout().get_steel_layers(direction)
 
     def get_section_dimensions(self, direction: str = 'primary') -> Tuple[float, float]:
         """

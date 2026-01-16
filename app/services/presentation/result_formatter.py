@@ -455,12 +455,16 @@ class ResultFormatter:
         result: 'OrchestrationResult',
         key: str,
         continuity_info: 'WallContinuityInfo' = None,
-        pm_plot: str = None
+        pm_plot: str = None,
+        coupling_config: 'PierCouplingConfig' = None
     ) -> Dict[str, Any]:
         """
         Formatea resultado de OrchestrationResult al formato UI.
 
         Método unificado que soporta wall, column, y flexure según service_used.
+
+        Args:
+            coupling_config: Configuración de vigas de acople (PierCouplingConfig)
         """
         service_used = result.service_used
         domain_result = result.domain_result
@@ -553,6 +557,20 @@ class ResultFormatter:
         formatted['wall_continuity'] = ResultFormatter._format_wall_continuity(
             pier, continuity_info
         )
+
+        # Vigas de acople asignadas (para sincronización frontend)
+        if coupling_config:
+            # Determinar el valor a mostrar: 'generic', 'none', o el key de la viga
+            formatted['coupling_beam_left'] = ResultFormatter._format_coupling_beam_value(
+                coupling_config.has_beam_left, coupling_config.beam_left
+            )
+            formatted['coupling_beam_right'] = ResultFormatter._format_coupling_beam_value(
+                coupling_config.has_beam_right, coupling_config.beam_right
+            )
+        else:
+            # Por defecto: genérica (como en el frontend)
+            formatted['coupling_beam_left'] = 'generic'
+            formatted['coupling_beam_right'] = 'generic'
 
         return formatted
 
@@ -710,6 +728,26 @@ class ResultFormatter:
             'geometry_warnings': geometry_warnings,
         }
 
+    @staticmethod
+    def _format_coupling_beam_value(has_beam: bool, beam_config) -> str:
+        """
+        Formatea el valor de viga de acople para el frontend.
+
+        Returns:
+            'generic': Viga genérica por defecto
+            'none': Sin viga asignada
+            str: Key de la viga específica asignada
+        """
+        if not has_beam:
+            return 'none'
+        if beam_config is None:
+            return 'generic'
+        # Si tiene una viga específica, devolver su identificador
+        # beam_config es un CouplingBeamConfig con atributos como label, story
+        if hasattr(beam_config, 'label') and beam_config.label:
+            return beam_config.label
+        return 'generic'
+
     # =========================================================================
     # Método unificado para cualquier elemento (nueva arquitectura)
     # =========================================================================
@@ -720,13 +758,17 @@ class ResultFormatter:
         result: 'OrchestrationResult',
         key: str,
         continuity_info: 'WallContinuityInfo' = None,
-        pm_plot: str = None
+        pm_plot: str = None,
+        coupling_config: 'PierCouplingConfig' = None
     ) -> Dict[str, Any]:
         """
         Formatea resultado de OrchestrationResult para CUALQUIER tipo de elemento.
 
         Este es el método principal para la nueva arquitectura unificada.
         Detecta el tipo de elemento y delega al formateador apropiado.
+
+        Args:
+            coupling_config: Configuración de vigas de acople para piers (PierCouplingConfig)
         """
         from ...domain.entities import VerticalElement, HorizontalElement, VerticalElementSource
 
@@ -740,7 +782,7 @@ class ResultFormatter:
         # Delegar según tipo de elemento
         if isinstance(element, VerticalElement):
             return ResultFormatter.format_orchestration_result(
-                element, result, key, continuity_info, pm_plot
+                element, result, key, continuity_info, pm_plot, coupling_config
             )
         elif isinstance(element, HorizontalElement):
             # Verificar si es DROP_BEAM antes que BEAM genérico

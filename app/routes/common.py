@@ -41,6 +41,9 @@ bp = Blueprint('common', __name__, url_prefix='/api')
 
 logger = logging.getLogger(__name__)
 
+# Path para el archivo de log del frontend (se sobreescribe, no acumula)
+FRONTEND_LOG_PATH = 'frontend_state.log'
+
 # Instancias globales (singleton pattern con thread-safety)
 _analysis_service = None
 _orchestrator = None
@@ -486,6 +489,26 @@ def success_response(data: dict = None, code: int = 200):
 # =============================================================================
 # ENDPOINT: Constantes del Backend
 # =============================================================================
+
+@bp.route('/frontend-log', methods=['POST'])
+def write_frontend_log():
+    """
+    Escribe el estado del frontend a un archivo de log.
+
+    Se sobreescribe en cada llamada (no acumula).
+    Útil para debugging: permite ver el estado de las tablas sin acceso al navegador.
+    """
+    data = get_json_data()
+    content = data.get('content', '')
+
+    try:
+        with open(FRONTEND_LOG_PATH, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"Error escribiendo frontend log: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @bp.route('/constants', methods=['GET'])
 def get_constants():
