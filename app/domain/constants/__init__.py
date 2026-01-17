@@ -51,6 +51,7 @@ from .shear import (
     VN_MAX_INDIVIDUAL_COEF,
     VN_MAX_GROUP_COEF,
     VC_COEF_COLUMN,
+    FC_EFF_SHEAR_MAX_MPA,
     VS_MAX_COEF,
     # Factor alpha_sh (§18.10.4.4)
     ALPHA_SH_MIN,

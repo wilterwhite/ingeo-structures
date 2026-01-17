@@ -15,7 +15,6 @@ from ..constants.reinforcement import (
     FY_DEFAULT_MPA,
     COVER_DEFAULT_COLUMN_MM,
     COVER_DEFAULT_PIER_MM,
-    MESH_DEFAULTS,
 )
 from .reinforcement import MeshReinforcement, DiscreteReinforcement
 from .composite_section import CompositeSection, SectionShapeType
@@ -96,6 +95,16 @@ class VerticalElement:
     # Campos especificos PIER
     axis_angle: float = 0.0
 
+    # Property Modifiers (factores de rigidez ETABS, default 1.0 = sin modificar)
+    # Estos valores modifican la rigidez del elemento para modelar agrietamiento
+    pm_axial: float = 1.0       # A - Rigidez axial
+    pm_m2: float = 1.0          # M2 - Rigidez a flexion eje 2 (mayor)
+    pm_m3: float = 1.0          # M3 - Rigidez a flexion eje 3 (menor)
+    pm_v2: float = 1.0          # V2 - Rigidez a cortante eje 2
+    pm_v3: float = 1.0          # V3 - Rigidez a cortante eje 3
+    pm_torsion: float = 1.0     # T - Rigidez torsional
+    pm_weight: float = 1.0      # W - Peso propio
+
     # Geometria compuesta (opcional, para piers L, T, C)
     composite_section: Optional[CompositeSection] = None
 
@@ -111,6 +120,7 @@ class VerticalElement:
             ReinforcementProposer,
             ProposedLayout,
         )
+        from ..calculations.minimum_reinforcement import MinimumReinforcementCalculator
 
         # Validar geometria
         if self.length <= 0:
@@ -156,16 +166,24 @@ class VerticalElement:
             if self.source == VerticalElementSource.FRAME and self.cover == COVER_DEFAULT_PIER_MM:
                 self.cover = COVER_DEFAULT_COLUMN_MM
         else:
-            # MESH layout
+            # MESH layout - calcular armadura minima segun espesor
             if self.mesh_reinforcement is None:
+                # Calcular malla minima segun ACI 318-25 (rho_min = 0.0025)
+                min_config = MinimumReinforcementCalculator.calculate_for_pier(self.thickness)
+
+                # Calcular barras de borde minimas
+                n_edge, diam_edge = MinimumReinforcementCalculator.calculate_edge_reinforcement(
+                    self.thickness, self.cover
+                )
+
                 self.mesh_reinforcement = MeshReinforcement(
-                    n_meshes=MESH_DEFAULTS['n_meshes'],
-                    diameter_v=MESH_DEFAULTS['diameter_v'],
-                    spacing_v=MESH_DEFAULTS['spacing_v'],
-                    diameter_h=MESH_DEFAULTS['diameter_h'],
-                    spacing_h=MESH_DEFAULTS['spacing_h'],
-                    n_edge_bars=MESH_DEFAULTS['n_edge_bars'],
-                    diameter_edge=MESH_DEFAULTS['diameter_edge'],
+                    n_meshes=min_config.n_meshes,
+                    diameter_v=min_config.diameter,
+                    spacing_v=min_config.spacing,
+                    diameter_h=min_config.diameter,  # Mismo que vertical
+                    spacing_h=min_config.spacing,    # Mismo que vertical
+                    n_edge_bars=n_edge,
+                    diameter_edge=diam_edge,
                 )
             # Cover para muros
             if self.source == VerticalElementSource.PIER and self.cover == COVER_DEFAULT_COLUMN_MM:
@@ -359,6 +377,13 @@ class VerticalElement:
         return self.n_shear_legs
 
     @property
+    def has_crossties(self) -> bool:
+        """True si usa trabas en vez de estribos (1 rama en alguna direccion)."""
+        if self.stirrup_diameter == 0 or self.stirrup_spacing == 0:
+            return False
+        return self.n_stirrup_legs_depth == 1 or self.n_stirrup_legs_width == 1
+
+    @property
     def As_transversal_depth(self) -> float:
         """Area de acero transversal en direccion depth (mm2)."""
         return self.n_stirrup_legs_depth * get_bar_area(self.stirrup_diameter)
@@ -482,8 +507,15 @@ class VerticalElement:
 
     @property
     def rho_vertical(self) -> float:
-        """Cuantia de acero vertical total (MESH)."""
-        return (self.As_vertical + self.As_edge_total) / self.Ag if self.Ag > 0 else 0.0
+        """
+        Cuantia de acero vertical total (MESH).
+
+        Para secciones compuestas (L, T, C): usa Acv (area del alma) en lugar de Ag,
+        ya que la armadura de malla solo esta en el alma, no en las alas.
+        """
+        # Usar Acv para secciones compuestas (solo alma), Ag para rectangulares
+        area = self.Acv if self.composite_section else self.Ag
+        return (self.As_vertical + self.As_edge_total) / area if area > 0 else 0.0
 
     @property
     def rho_horizontal(self) -> float:
@@ -494,10 +526,16 @@ class VerticalElement:
 
     @property
     def rho_mesh_vertical(self) -> float:
-        """Cuantia de acero vertical de malla (sin incluir borde, MESH)."""
+        """
+        Cuantia de acero vertical de malla (sin incluir borde, MESH).
+
+        Para secciones compuestas: usa Acv (area del alma).
+        """
         if not self.mesh_reinforcement:
             return 0.0
-        return self.As_vertical / self.Ag if self.Ag > 0 else 0.0
+        # Usar Acv para secciones compuestas (solo alma), Ag para rectangulares
+        area = self.Acv if self.composite_section else self.Ag
+        return self.As_vertical / area if area > 0 else 0.0
 
     # =========================================================================
     # Propiedades Especiales (unconfined, small_strut)
@@ -508,14 +546,23 @@ class VerticalElement:
         """
         True si tiene refuerzo no confinado.
 
-        Para STIRRUPS: 1 barra centrada sin estribos.
-        Para MESH: malla simple sin estribos.
+        Casos no confinados:
+        - 1x1 sin estribos
+        - Con trabas (1 rama no confina)
+        - MESH simple sin estribos
         """
         if self.is_stirrups_layout:
+            # 1x1 sin estribos
             if self.discrete_reinforcement:
-                return (self.discrete_reinforcement.n_bars_length == 1 and
-                        self.discrete_reinforcement.n_bars_thickness == 1)
+                is_single_bar = (self.discrete_reinforcement.n_bars_length == 1 and
+                                 self.discrete_reinforcement.n_bars_thickness == 1)
+                if is_single_bar:
+                    return True
+            # Trabas no confinan
+            if self.has_crossties:
+                return True
         else:
+            # MESH: no confinado si malla simple sin estribos
             no_confinement = (self.stirrup_spacing == 0 or self.stirrup_diameter == 0)
             single_mesh = (self.n_meshes == 1)
             return no_confinement and single_mesh
@@ -523,10 +570,12 @@ class VerticalElement:
 
     @property
     def is_small_strut(self) -> bool:
-        """True si califica para diseno como strut pequeno (<150mm)."""
+        """True si califica para diseno como strut pequeno (espesor <150mm, ratio <3)."""
         from ..constants.chapter23 import SMALL_COLUMN_MAX_DIM_MM
-        max_dim = max(self.length, self.thickness)
-        return max_dim < SMALL_COLUMN_MAX_DIM_MM and self.is_unconfined
+        from ..constants.reinforcement import STRUT_MAX_RATIO
+        min_dim = min(self.length, self.thickness)
+        ratio = self.length / self.thickness if self.thickness > 0 else 999.0
+        return min_dim < SMALL_COLUMN_MAX_DIM_MM and ratio < STRUT_MAX_RATIO and self.is_unconfined
 
     # =========================================================================
     # Propiedades Sismicas
@@ -846,6 +895,14 @@ class VerticalElement:
             'is_seismic': self.is_seismic,
             'seismic_category': self.seismic_category,
             'axis_angle': self.axis_angle,
+            # Property Modifiers
+            'pm_axial': self.pm_axial,
+            'pm_m2': self.pm_m2,
+            'pm_m3': self.pm_m3,
+            'pm_v2': self.pm_v2,
+            'pm_v3': self.pm_v3,
+            'pm_torsion': self.pm_torsion,
+            'pm_weight': self.pm_weight,
         }
 
         if self.is_stirrups_layout and self.discrete_reinforcement:
@@ -878,6 +935,9 @@ class VerticalElement:
         if self.composite_section:
             data['composite_section'] = self.composite_section.to_dict()
             data['shape_type'] = self.shape_type
+
+        # Propiedades calculadas para UI
+        data['has_crossties'] = self.has_crossties
 
         return data
 
@@ -935,4 +995,213 @@ class VerticalElement:
             sum_Mnb_minor=data.get('sum_Mnb_minor'),
             lu=data.get('lu'),
             axis_angle=data.get('axis_angle', 0.0),
+            # Property Modifiers
+            pm_axial=data.get('pm_axial', 1.0),
+            pm_m2=data.get('pm_m2', 1.0),
+            pm_m3=data.get('pm_m3', 1.0),
+            pm_v2=data.get('pm_v2', 1.0),
+            pm_v3=data.get('pm_v3', 1.0),
+            pm_torsion=data.get('pm_torsion', 1.0),
+            pm_weight=data.get('pm_weight', 1.0),
         )
+
+    # =========================================================================
+    # Property Modifiers - Metodos Helper
+    # =========================================================================
+
+    @property
+    def has_property_modifiers(self) -> bool:
+        """True si tiene algun property modifier diferente de 1.0."""
+        return any([
+            self.pm_axial != 1.0,
+            self.pm_m2 != 1.0,
+            self.pm_m3 != 1.0,
+            self.pm_v2 != 1.0,
+            self.pm_v3 != 1.0,
+            self.pm_torsion != 1.0,
+            self.pm_weight != 1.0,
+        ])
+
+    @property
+    def pm_dict(self) -> dict:
+        """Retorna los property modifiers como diccionario."""
+        return {
+            'A': self.pm_axial,
+            'M2': self.pm_m2,
+            'M3': self.pm_m3,
+            'V2': self.pm_v2,
+            'V3': self.pm_v3,
+            'T': self.pm_torsion,
+            'W': self.pm_weight,
+        }
+
+    @property
+    def pm_summary(self) -> str:
+        """
+        Resumen de property modifiers modificados para tooltip.
+
+        Ejemplo: "A=0.20, M2=0.35, M3=0.35"
+        """
+        modified = []
+        if self.pm_axial != 1.0:
+            modified.append(f"A={self.pm_axial:.2f}")
+        if self.pm_m2 != 1.0:
+            modified.append(f"M2={self.pm_m2:.2f}")
+        if self.pm_m3 != 1.0:
+            modified.append(f"M3={self.pm_m3:.2f}")
+        if self.pm_v2 != 1.0:
+            modified.append(f"V2={self.pm_v2:.2f}")
+        if self.pm_v3 != 1.0:
+            modified.append(f"V3={self.pm_v3:.2f}")
+        if self.pm_torsion != 1.0:
+            modified.append(f"T={self.pm_torsion:.2f}")
+        if self.pm_weight != 1.0:
+            modified.append(f"W={self.pm_weight:.2f}")
+        return ", ".join(modified) if modified else "Sin modificar"
+
+    @property
+    def base_section_name(self) -> str:
+        """
+        Nombre de seccion sin sufijo de property modifiers.
+
+        Ejemplo: "C45x45-PM:0.20A-0.35M2" -> "C45x45"
+        """
+        if '-PM:' in self.section_name:
+            return self.section_name.split('-PM:')[0]
+        return self.section_name
+
+    def generate_section_name_with_pm(self) -> str:
+        """
+        Genera nombre de seccion con nomenclatura PM.
+
+        Formato: "nombre_base-PM:0.01A-0.35M2-0.35M3"
+        Solo incluye los modifiers que son != 1.0
+
+        Returns:
+            Nombre de seccion con sufijo PM si hay modifiers, o base_section_name
+        """
+        if not self.has_property_modifiers:
+            return self.base_section_name
+
+        parts = [self.base_section_name, "PM:"]
+        pm_parts = []
+
+        if self.pm_axial != 1.0:
+            pm_parts.append(f"{self.pm_axial:.2f}A")
+        if self.pm_m2 != 1.0:
+            pm_parts.append(f"{self.pm_m2:.2f}M2")
+        if self.pm_m3 != 1.0:
+            pm_parts.append(f"{self.pm_m3:.2f}M3")
+        if self.pm_v2 != 1.0:
+            pm_parts.append(f"{self.pm_v2:.2f}V2")
+        if self.pm_v3 != 1.0:
+            pm_parts.append(f"{self.pm_v3:.2f}V3")
+        if self.pm_torsion != 1.0:
+            pm_parts.append(f"{self.pm_torsion:.2f}T")
+        if self.pm_weight != 1.0:
+            pm_parts.append(f"{self.pm_weight:.2f}W")
+
+        return f"{self.base_section_name}-PM:{'-'.join(pm_parts)}"
+
+    @staticmethod
+    def parse_pm_from_section_name(section_name: str) -> dict:
+        """
+        Extrae property modifiers desde el nombre de seccion.
+
+        Formato esperado: "nombre-PM:0.01A-0.35M2-0.35M3"
+
+        Args:
+            section_name: Nombre de seccion con posible sufijo PM
+
+        Returns:
+            Dict con los PM parseados (solo los presentes en el nombre)
+        """
+        import re
+
+        result = {}
+        if '-PM:' not in section_name:
+            return result
+
+        # Extraer la parte despues de -PM:
+        pm_part = section_name.split('-PM:')[1]
+
+        # Patterns para cada modifier
+        patterns = {
+            'pm_axial': r'([\d.]+)A(?:-|$)',
+            'pm_m2': r'([\d.]+)M2(?:-|$)',
+            'pm_m3': r'([\d.]+)M3(?:-|$)',
+            'pm_v2': r'([\d.]+)V2(?:-|$)',
+            'pm_v3': r'([\d.]+)V3(?:-|$)',
+            'pm_torsion': r'([\d.]+)T(?:-|$)',
+            'pm_weight': r'([\d.]+)W(?:-|$)',
+        }
+
+        for key, pattern in patterns.items():
+            match = re.search(pattern, pm_part)
+            if match:
+                result[key] = float(match.group(1))
+
+        return result
+
+    def apply_pm_from_section_name(self) -> None:
+        """
+        Parsea y aplica los property modifiers desde section_name.
+
+        Modifica los atributos pm_* del elemento segun lo parseado.
+        """
+        pm_values = self.parse_pm_from_section_name(self.section_name)
+        for key, value in pm_values.items():
+            setattr(self, key, value)
+
+    def apply_cracking(self, dcr: float, mode: str = 'flexure') -> None:
+        """
+        Aplica agrietamiento basado en DCR.
+
+        El factor de agrietamiento es 1/DCR, aplicado sobre el PM actual.
+        Por ejemplo, si DCR=5.0 y pm_m2=1.0, el nuevo pm_m2=0.20
+
+        Args:
+            dcr: Demand/Capacity ratio (debe ser > 1.0 para agrietar)
+            mode: Tipo de agrietamiento:
+                - 'flexure': Aplica a M2 y M3
+                - 'shear': Aplica a V2 y V3
+                - 'axial': Aplica a A
+                - 'all': Aplica a A, M2, M3
+
+        Raises:
+            ValueError: Si DCR <= 0
+        """
+        if dcr <= 0:
+            raise ValueError(f"DCR debe ser > 0, recibido: {dcr}")
+
+        # Factor de reduccion: si DCR=5, factor=0.20
+        factor = min(1.0, 1.0 / dcr)
+
+        if mode == 'flexure':
+            self.pm_m2 = self.pm_m2 * factor
+            self.pm_m3 = self.pm_m3 * factor
+        elif mode == 'shear':
+            self.pm_v2 = self.pm_v2 * factor
+            self.pm_v3 = self.pm_v3 * factor
+        elif mode == 'axial':
+            self.pm_axial = self.pm_axial * factor
+        elif mode == 'all':
+            self.pm_axial = self.pm_axial * factor
+            self.pm_m2 = self.pm_m2 * factor
+            self.pm_m3 = self.pm_m3 * factor
+        else:
+            raise ValueError(f"Modo de agrietamiento invalido: {mode}")
+
+        # Actualizar section_name con la nueva nomenclatura
+        self.section_name = self.generate_section_name_with_pm()
+
+    def reset_property_modifiers(self) -> None:
+        """Resetea todos los property modifiers a 1.0."""
+        self.pm_axial = 1.0
+        self.pm_m2 = 1.0
+        self.pm_m3 = 1.0
+        self.pm_v2 = 1.0
+        self.pm_v3 = 1.0
+        self.pm_torsion = 1.0
+        self.pm_weight = 1.0
+        self.section_name = self.base_section_name

@@ -428,9 +428,11 @@ class SeismicWallService:
         hw_lw = hw / lw if lw > 0 else 0
         lw_tw = lw / tw if tw > 0 else 0
 
-        is_slender = hw_lw >= 2.0
-        is_wall_pier = lw_tw <= 6.0 and hw_lw < 2.0
-        requires_boundary_zones = hw_lw >= 2.0
+        # Convertir explícitamente a bool nativo para evitar numpy.bool_
+        # que no es JSON serializable
+        is_slender = bool(hw_lw >= 2.0)
+        is_wall_pier = bool(lw_tw <= 6.0 and hw_lw < 2.0)
+        requires_boundary_zones = bool(hw_lw >= 2.0)
 
         return WallClassificationResult(
             hw=hw,
@@ -468,18 +470,18 @@ class SeismicWallService:
         rho_t_min = RHO_MIN
         spacing_max = MAX_SPACING_SEISMIC_MM
 
-        # Verificar cuantías
-        rho_l_ok = rho_v >= rho_l_min
-        rho_t_ok = rho_h >= rho_t_min
+        # Verificar cuantías (bool() para evitar numpy.bool_)
+        rho_l_ok = bool(rho_v >= rho_l_min)
+        rho_t_ok = bool(rho_h >= rho_t_min)
 
         if not rho_l_ok:
             warnings.append(f"ρ_vertical={rho_v:.4f} < {rho_l_min:.4f} mínimo (§18.10.2.1)")
         if not rho_t_ok:
             warnings.append(f"ρ_horizontal={rho_h:.4f} < {rho_t_min:.4f} mínimo (§18.10.2.1)")
 
-        # Verificar espaciamiento
-        spacing_v_ok = spacing_v <= spacing_max
-        spacing_h_ok = spacing_h <= spacing_max
+        # Verificar espaciamiento (bool() para evitar numpy.bool_)
+        spacing_v_ok = bool(spacing_v <= spacing_max)
+        spacing_h_ok = bool(spacing_h <= spacing_max)
 
         if not spacing_v_ok:
             warnings.append(f"Espaciamiento V={spacing_v:.0f}mm > {spacing_max:.0f}mm (§18.10.2.1)")
@@ -491,8 +493,8 @@ class SeismicWallService:
         hw_lw = hw / lw if lw > 0 else 0
         threshold_double = 2 * lambda_factor * math.sqrt(fc) * Acv / TONF_TO_N  # N → tonf
 
-        requires_double = (abs(Vu) > threshold_double) or (hw_lw >= 2.0)
-        has_double = n_meshes >= 2
+        requires_double = bool((abs(Vu) > threshold_double) or (hw_lw >= 2.0))
+        has_double = bool(n_meshes >= 2)
 
         if abs(Vu) > threshold_double:
             double_reason = f"Vu={abs(Vu):.1f} > 2×λ×√f'c×Acv={threshold_double:.1f}"
@@ -505,15 +507,15 @@ class SeismicWallService:
             warnings.append(f"Se requiere doble cortina: {double_reason}")
 
         # rho_l >= rho_t para muros bajos (§18.10.4.3)
-        rho_l_ge_rho_t_required = hw_lw <= 2.0 if hw_lw > 0 else False
-        rho_l_ge_rho_t_ok = rho_v >= rho_h if rho_l_ge_rho_t_required else True
+        rho_l_ge_rho_t_required = bool(hw_lw <= 2.0) if hw_lw > 0 else False
+        rho_l_ge_rho_t_ok = bool(rho_v >= rho_h) if rho_l_ge_rho_t_required else True
 
         if rho_l_ge_rho_t_required and not rho_l_ge_rho_t_ok:
             warnings.append(
                 f"Para hw/lw={hw_lw:.2f} <= 2.0, se requiere ρ_v >= ρ_h (§18.10.4.3)"
             )
 
-        is_ok = (
+        is_ok = bool(
             rho_l_ok and rho_t_ok and
             spacing_v_ok and spacing_h_ok and
             rho_l_ge_rho_t_ok and

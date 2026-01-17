@@ -26,7 +26,6 @@ from .combined import calculate_combined_dcr
 from .concrete_shear import (
     VcResult,
     calculate_Vc_beam,
-    calculate_Vc_column,
     check_Vc_zero_condition,
 )
 from .steel_shear import (
@@ -57,7 +56,6 @@ __all__ = [
     # concrete shear (Vc) - centralized calculations
     'VcResult',
     'calculate_Vc_beam',
-    'calculate_Vc_column',
     'check_Vc_zero_condition',
     # steel shear (Vs) - centralized calculations
     'VsResult',

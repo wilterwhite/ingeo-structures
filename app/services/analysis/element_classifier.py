@@ -145,6 +145,9 @@ class ElementClassifier:
 
         # VerticalElement: Columnas y piers
         if isinstance(element, VerticalElement):
+            # Si tiene mesh layout (ratio >= 3), tratar como muro aunque venga de Frame
+            if element.is_mesh_layout:
+                return self._classify_pier(element)
             if element.is_frame_source:
                 return self._classify_column(element)
             else:  # PIER source

@@ -48,6 +48,9 @@ class StructuralPage {
 
         // Frontend Logger (para debugging remoto)
         this.frontendLogger = null;
+
+        // Módulo de tablas ETABS
+        this.etabsTablesModule = null;
     }
 
     // =========================================================================
@@ -93,6 +96,7 @@ class StructuralPage {
             configPage: document.getElementById('config-page'),
             wallsPage: document.getElementById('walls-page'),
             beamsPage: document.getElementById('beams-page'),
+            etabsTablesPage: document.getElementById('etabs-tables-page'),
 
             // Resultados
             resultsTable: document.getElementById('results-table')?.querySelector('tbody'),
@@ -161,6 +165,12 @@ class StructuralPage {
         // Módulos de elementos
         this.wallsModule = new WallsModule(this);
         this.beamsModule = new BeamsModule(this);
+
+        // Módulo de tablas ETABS
+        if (typeof EtabsTablesModule !== 'undefined') {
+            this.etabsTablesModule = new EtabsTablesModule(this);
+            this.etabsTablesModule.init();
+        }
 
         this.initPierDetailsModal();
         this.wallsModule.initSectionModal();
@@ -239,6 +249,7 @@ class StructuralPage {
         this.elements.configPage?.classList.toggle('hidden', pageId !== 'config-page');
         this.elements.wallsPage?.classList.toggle('hidden', pageId !== 'walls-page');
         this.elements.beamsPage?.classList.toggle('hidden', pageId !== 'beams-page');
+        this.elements.etabsTablesPage?.classList.toggle('hidden', pageId !== 'etabs-tables-page');
 
         this.currentPage = pageId;
     }
@@ -298,6 +309,7 @@ class StructuralPage {
         this.resultsTable.reset();
         this.beamsModule.clearBeamsTable();
         this.clearDropBeamsTable();
+        this.etabsTablesModule?.reset();
 
         // Reset proyecto
         if (this.projectManager) {

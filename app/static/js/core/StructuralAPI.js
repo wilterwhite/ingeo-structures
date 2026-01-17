@@ -104,11 +104,17 @@ class StructuralAPI {
      * Sube un archivo Excel con progreso en tiempo real (SSE).
      * @param {File} file - Archivo Excel
      * @param {Function} onProgress - Callback para progreso (current, total, element)
+     * @param {string|null} existingSessionId - ID de sesión existente para merge (opcional)
      * @returns {Promise<Object>} Resultado del upload
      */
-    async uploadWithProgress(file, onProgress) {
+    async uploadWithProgress(file, onProgress, existingSessionId = null) {
         const formData = new FormData();
         formData.append('file', file);
+
+        // Si hay session_id existente, agregarlo para combinar datos
+        if (existingSessionId) {
+            formData.append('session_id', existingSessionId);
+        }
 
         const response = await fetch(`${this.baseUrl}/upload-stream`, {
             method: 'POST',
@@ -362,6 +368,50 @@ class StructuralAPI {
                 session_id: sessionId,
                 beam_key: beamKey,
                 reinforcement
+            })
+        });
+    }
+
+    // =========================================================================
+    // Property Modifiers (Cracking/Agrietamiento)
+    // =========================================================================
+
+    /**
+     * Aplica agrietamiento a un elemento basado en su DCR.
+     * @param {string} sessionId - ID de sesión
+     * @param {string} elementKey - Clave del elemento (Story_Label)
+     * @param {string} elementType - 'column', 'pier', 'beam', 'strut'
+     * @param {number} dcr - Demand/Capacity ratio
+     * @param {string} mode - 'flexure', 'shear', 'axial', 'all'
+     * @returns {Promise<Object>} Nuevo section_name y property_modifiers
+     */
+    async applyCracking(sessionId, elementKey, elementType, dcr, mode = 'flexure') {
+        return this.request('/apply-cracking', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                element_key: elementKey,
+                element_type: elementType,
+                dcr: dcr,
+                mode: mode
+            })
+        });
+    }
+
+    /**
+     * Resetea los Property Modifiers de un elemento a 1.0.
+     * @param {string} sessionId - ID de sesión
+     * @param {string} elementKey - Clave del elemento (Story_Label)
+     * @param {string} elementType - 'column', 'pier', 'beam', 'strut'
+     * @returns {Promise<Object>}
+     */
+    async resetCracking(sessionId, elementKey, elementType) {
+        return this.request('/reset-cracking', {
+            method: 'POST',
+            body: JSON.stringify({
+                session_id: sessionId,
+                element_key: elementKey,
+                element_type: elementType
             })
         });
     }

@@ -8,6 +8,11 @@ Funciona con cualquier elemento que implemente el Protocol FlexuralElement:
 
 Centraliza la generacion de curvas de interaccion P-M y verificacion
 de flexocompresion segun ACI 318-25 Capitulo 22.
+
+OPTIMIZACIÓN DE RENDIMIENTO:
+Las curvas P-M se pre-generan y almacenan en ParsedData.interaction_curves
+antes del análisis paralelo. Esto evita recálculos costosos durante la
+verificación de múltiples combinaciones de carga.
 """
 from typing import Dict, List, Any, Optional, Tuple, Union
 import math
@@ -28,6 +33,7 @@ from ...domain.constants.phi_chapter21 import (
     WHITNEY_STRESS_FACTOR,
 )
 from ...domain.constants.units import N_TO_TONF
+from ..presentation.formatters import format_safety_factor
 from ...domain.chapter18.beams.service import (
     calculate_Mpr as _calculate_Mpr,
     calculate_Ve_beam as _calculate_Ve_beam,
@@ -66,10 +72,15 @@ class FlexocompressionService:
         direction: str = 'primary',
         apply_slenderness: bool = True,
         k: float = 0.8,
-        braced: bool = True
+        braced: bool = True,
+        use_cache: bool = True  # Mantenido por compatibilidad, ignorado
     ) -> Tuple[List[InteractionPoint], Dict[str, Any]]:
         """
         Genera la curva de interaccion P-M para cualquier elemento.
+
+        NOTA: El cache ahora se maneja externamente en ParsedData.interaction_curves.
+        Las curvas se pre-generan en structural_analysis.py antes del análisis
+        paralelo para optimizar rendimiento.
 
         Args:
             element: Pier, Column, o cualquier FlexuralElement
@@ -77,6 +88,7 @@ class FlexocompressionService:
             apply_slenderness: Si aplicar reduccion por esbeltez
             k: Factor de longitud efectiva (0.8 para muros, 1.0 para columnas)
             braced: Si el elemento esta arriostrado
+            use_cache: Ignorado (mantenido por compatibilidad)
 
         Returns:
             Tuple (interaction_points, slenderness_data)
@@ -121,7 +133,8 @@ class FlexocompressionService:
         direction: str = 'primary',
         angle_deg: float = 0,
         k: float = 0.8,
-        braced: bool = True
+        braced: bool = True,
+        interaction_points: Optional[List[InteractionPoint]] = None
     ) -> Dict[str, Any]:
         """
         Verifica flexocompresion de cualquier elemento.
@@ -134,14 +147,26 @@ class FlexocompressionService:
             angle_deg: Angulo del momento resultante
             k: Factor de longitud efectiva
             braced: Si el elemento esta arriostrado
+            interaction_points: Curva P-M pre-calculada (optimización de rendimiento)
 
         Returns:
             Dict con resultados de la verificacion
         """
-        # Generar curva con esbeltez
-        interaction_points, slenderness_data = self.generate_interaction_curve(
-            element, direction, apply_slenderness=True, k=k, braced=braced
-        )
+        # Usar curva pre-calculada si se proporciona, sino generar
+        if interaction_points is not None:
+            # Analizar esbeltez para slenderness_data
+            slenderness = self._slenderness_service.analyze(element, k=k, braced=braced)
+            slenderness_data = {
+                'lambda': round(slenderness.lambda_ratio, 1),
+                'is_slender': slenderness.is_slender,
+                'delta_ns': round(slenderness.delta_ns, 3) if slenderness.is_slender else 1.0,
+                'magnification_pct': round(slenderness.magnification_pct, 1) if slenderness.is_slender else 0.0
+            }
+        else:
+            # Generar curva con esbeltez
+            interaction_points, slenderness_data = self.generate_interaction_curve(
+                element, direction, apply_slenderness=True, k=k, braced=braced
+            )
         design_curve = self._interaction_service.get_design_curve(interaction_points)
 
         # Obtener puntos de demanda
@@ -176,8 +201,8 @@ class FlexocompressionService:
                     'location': c.combo_location,
                     'Pu': round(c.Pu, 2),
                     'Mu': round(c.Mu, 2),
-                    'sf': round(c.sf, 3),
-                    'dcr': round(c.dcr, 3),
+                    'sf': format_safety_factor(c.sf, as_string=False),
+                    'dcr': round(c.dcr, 3) if not math.isinf(c.dcr) else 0,
                     'phi_Mn_at_Pu': round(c.phi_Mn_at_Pu, 2),
                     'is_tension': c.is_tension,
                     'status': 'OK' if c.sf >= 1.0 else 'NO OK'
@@ -196,7 +221,7 @@ class FlexocompressionService:
         dcr = 1 / sf if sf > 0 and sf < float('inf') else 0
 
         return {
-            'sf': sf,
+            'sf': format_safety_factor(sf, as_string=False),
             'dcr': round(dcr, 3),            # DCR centralizado (Mu/φMn)
             'status': status,
             'critical_combo': critical,

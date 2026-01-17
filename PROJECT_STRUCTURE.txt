@@ -1,23 +1,26 @@
 ======================================================================
   INGEO STRUCTURES - Estructura del Proyecto
-  Generado: 2026-01-15 22:35:16
+  Generado: 2026-01-16 20:35:48
 ======================================================================
 
 ingeo-structures/
 ├── .gitignore                          (  32 líneas)  # Archivos ignorados por git
+├── claude_state.log                    (  64 líneas)
 ├── favicon.ico                         (binario)
+├── frontend_state.log                  (4055 líneas)
 ├── PROJECT_STRUCTURE.txt               ( 235 líneas)
 ├── README.md                           ( 275 líneas)  # Documentación del proyecto
 ├── requirements.txt                    (  16 líneas)  # Dependencias Python del proyecto
-├── run.py                              ( 105 líneas)  # Punto de entrada de la aplicación
+├── run.py                              ( 111 líneas)  # Punto de entrada de la aplicación
 └── app/
     ├── domain/
     │   ├── calculations/
     │   │   ├── confinement.py                      (  98 líneas)
     │   │   ├── coupling_beam_capacity.py           ( 111 líneas)
     │   │   ├── minimum_reinforcement.py            ( 241 líneas)
+    │   │   ├── rebar_layout_calculator.py          ( 635 líneas)
     │   │   ├── reinforcement_proposer.py           ( 177 líneas)
-    │   │   ├── steel_layer_calculator.py           ( 225 líneas)  # Cálculo de capas de acero para P-M
+    │   │   ├── steel_layer_calculator.py           ( 118 líneas)  # Cálculo de capas de acero para P-M
     │   │   ├── wall_boundary_zone.py               ( 133 líneas)
     │   │   └── wall_continuity.py                  ( 205 líneas)  # Cálculo de altura efectiva hwcs
     │   ├── chapter11/
@@ -75,7 +78,7 @@ ingeo-structures/
     │   ├── chapter22/
     │   │   └── flexural_capacity.py                ( 165 líneas)
     │   ├── chapter23/
-    │   │   └── strut_capacity.py                   ( 312 líneas)
+    │   │   └── strut_capacity.py                   ( 358 líneas)
     │   ├── constants/
     │   │   ├── chapter18.py                        ( 103 líneas)
     │   │   ├── chapter23.py                        (  76 líneas)
@@ -89,17 +92,19 @@ ingeo-structures/
     │   │   ├── tolerances.py                       (  36 líneas)
     │   │   └── units.py                            ( 116 líneas)  # Factores de conversión de unidades
     │   ├── entities/
+    │   │   ├── composite_section.py                ( 497 líneas)
     │   │   ├── coupling_beam.py                    ( 176 líneas)  # Configuración de vigas de acople
     │   │   ├── design_proposal.py                  ( 232 líneas)  # Propuestas de diseño para piers que fallan
-    │   │   ├── element_forces.py                   ( 274 líneas)
-    │   │   ├── horizontal_element.py               ( 656 líneas)
+    │   │   ├── element_forces.py                   ( 422 líneas)
+    │   │   ├── horizontal_element.py               ( 907 líneas)
     │   │   ├── load_combination.py                 (  52 líneas)
-    │   │   ├── parsed_data.py                      ( 139 líneas)
+    │   │   ├── parsed_data.py                      ( 153 líneas)
     │   │   ├── protocols.py                        (  71 líneas)
-    │   │   ├── reinforcement.py                    ( 101 líneas)
+    │   │   ├── rebar.py                            ( 135 líneas)
+    │   │   ├── reinforcement.py                    ( 106 líneas)
     │   │   ├── section_cut.py                      (  45 líneas)
     │   │   ├── value_objects.py                    ( 131 líneas)
-    │   │   ├── vertical_element.py                 ( 871 líneas)
+    │   │   ├── vertical_element.py                 (1186 líneas)
     │   │   └── serialization/
     │   │       └── load_combination.py                 (  45 líneas)
     │   ├── flexure/
@@ -129,43 +134,46 @@ ingeo-structures/
     │       ├── steel_shear.py                      ( 195 líneas)
     │       └── verification.py                     ( 551 líneas)
     ├── routes/
-    │   ├── common.py                           ( 572 líneas)
-    │   ├── piers.py                            ( 667 líneas)
+    │   ├── common.py                           ( 614 líneas)
+    │   ├── piers.py                            ( 950 líneas)
     │   └── projects.py                         ( 229 líneas)
     ├── services/
     │   ├── factory.py                          (  66 líneas)
-    │   ├── structural_analysis.py              ( 889 líneas)  # Servicio principal de análisis estructural
+    │   ├── structural_analysis.py              (1169 líneas)  # Servicio principal de análisis estructural
     │   ├── analysis/
     │   │   ├── design_behavior.py                  ( 214 líneas)
     │   │   ├── design_behavior_resolver.py         ( 188 líneas)
     │   │   ├── element_classifier.py               ( 222 líneas)
-    │   │   ├── element_orchestrator.py             ( 830 líneas)
-    │   │   ├── flexocompression_service.py         ( 431 líneas)
+    │   │   ├── element_orchestrator.py             ( 889 líneas)
+    │   │   ├── flexocompression_service.py         ( 457 líneas)
     │   │   ├── force_extractor.py                  ( 250 líneas)
-    │   │   ├── geometry_normalizer.py              ( 438 líneas)
-    │   │   ├── reinforcement_update_service.py     ( 234 líneas)
+    │   │   ├── geometry_normalizer.py              ( 464 líneas)
+    │   │   ├── reinforcement_update_service.py     ( 239 líneas)
     │   │   ├── shear_service.py                    ( 535 líneas)  # Verificación de corte según ACI 318
     │   │   ├── statistics_service.py               (  36 líneas)
     │   │   └── verification_config.py              ( 195 líneas)
+    │   ├── logging/
+    │   │   └── claude_state_logger.py              ( 213 líneas)
     │   ├── parsing/
-    │   │   ├── beam_parser.py                      ( 559 líneas)
-    │   │   ├── column_parser.py                    ( 295 líneas)
+    │   │   ├── beam_parser.py                      ( 694 líneas)
+    │   │   ├── column_parser.py                    ( 349 líneas)
+    │   │   ├── composite_pier_parser.py            ( 522 líneas)
     │   │   ├── config_parser.py                    (  37 líneas)
-    │   │   ├── drop_beam_parser.py                 ( 261 líneas)
-    │   │   ├── e2k_processor.py                    ( 141 líneas)
-    │   │   ├── excel_parser.py                     ( 771 líneas)  # Parser de archivos Excel de ETABS
+    │   │   ├── drop_beam_parser.py                 ( 268 líneas)
+    │   │   ├── e2k_processor.py                    ( 314 líneas)
+    │   │   ├── excel_parser.py                     ( 671 líneas)  # Parser de archivos Excel de ETABS
     │   │   ├── material_mapper.py                  ( 140 líneas)
     │   │   ├── reinforcement_config.py             ( 225 líneas)  # Configuración de armadura
-    │   │   ├── session_manager.py                  ( 677 líneas)  # Gestión de sesiones de análisis
-    │   │   └── table_extractor.py                  ( 211 líneas)
+    │   │   ├── session_manager.py                  ( 831 líneas)  # Gestión de sesiones de análisis
+    │   │   └── table_extractor.py                  ( 290 líneas)
     │   ├── persistence/
     │   │   ├── parsed_data_serializer.py           ( 637 líneas)
     │   │   └── project_manager.py                  ( 303 líneas)
     │   ├── presentation/
-    │   │   ├── formatters.py                       (  74 líneas)
+    │   │   ├── formatters.py                       (  75 líneas)
     │   │   ├── modal_data_service.py               (1092 líneas)
-    │   │   ├── plot_generator.py                   ( 816 líneas)
-    │   │   ├── result_formatter.py                 (1252 líneas)
+    │   │   ├── plot_generator.py                   ( 952 líneas)
+    │   │   ├── result_formatter.py                 (1351 líneas)
     │   │   └── summary_builder.py                  (  88 líneas)
     │   └── report/
     │       ├── pdf_generator.py                    ( 729 líneas)
@@ -175,61 +183,64 @@ ingeo-structures/
     │   │   ├── base.css                            ( 813 líneas)
     │   │   ├── modals.css                          ( 879 líneas)  # Estilos de ventanas modales
     │   │   ├── structural.css                      (   7 líneas)  # Estilos principales de la aplicación
-    │   │   ├── tables.css                          (1167 líneas)  # Estilos de tablas de piers y resultados
+    │   │   ├── tables.css                          (1328 líneas)  # Estilos de tablas de piers y resultados
     │   │   └── variables.css                       (  26 líneas)
     │   ├── img/
     │   │   └── Tablas_Etabs.png                    (binario)
     │   └── js/
-    │       ├── StructuralPage.js                   ( 488 líneas)  # Controlador principal de la página
+    │       ├── StructuralPage.js                   ( 479 líneas)  # Controlador principal de la página
     │       ├── core/
-    │       │   ├── Constants.js                        ( 207 líneas)
+    │       │   ├── Constants.js                        ( 209 líneas)
+    │       │   ├── FrontendLogger.js                   ( 626 líneas)
     │       │   ├── ProjectAPI.js                       ( 115 líneas)
-    │       │   ├── StructuralAPI.js                    ( 374 líneas)  # API client para comunicación con backend
+    │       │   ├── StructuralAPI.js                    ( 424 líneas)  # API client para comunicación con backend
     │       │   └── Utils.js                            ( 171 líneas)
     │       ├── editing/
-    │       │   ├── ElementEditManager.js               ( 473 líneas)
+    │       │   ├── ElementEditManager.js               ( 479 líneas)
     │       │   └── RecalcButton.js                     ( 110 líneas)
     │       ├── filters/
     │       │   └── ColumnFilters.js                    ( 620 líneas)
     │       ├── managers/
     │       │   ├── MaterialsManager.js                 ( 145 líneas)
     │       │   ├── ProjectManager.js                   ( 471 líneas)
-    │       │   └── UploadManager.js                    ( 430 líneas)
+    │       │   └── UploadManager.js                    ( 622 líneas)
     │       ├── modals/
     │       │   ├── ModalUtils.js                       (  43 líneas)
     │       │   ├── PlotModal.js                        ( 219 líneas)  # Modal para diagrama P-M interactivo
     │       │   └── ReportModal.js                      ( 185 líneas)
     │       ├── modules/
-    │       │   ├── BeamsModule.js                      ( 197 líneas)
+    │       │   ├── BeamsModule.js                      ( 213 líneas)
+    │       │   ├── EtabsTablesModule.js                ( 234 líneas)
     │       │   └── WallsModule.js                      ( 714 líneas)
     │       ├── storage/
     │       │   └── ProjectStorage.js                   (  82 líneas)
     │       └── tables/
     │           ├── CombinationsManager.js              ( 274 líneas)
-    │           ├── CouplingBeamManager.js              ( 177 líneas)
+    │           ├── CouplingBeamManager.js              ( 202 líneas)
     │           ├── FilterableTable.js                  ( 121 líneas)
-    │           ├── ResultsTable.js                     ( 398 líneas)  # Renderizado de tabla de resultados
-    │           ├── RowFactory.js                       ( 307 líneas)
+    │           ├── ResultsTable.js                     ( 405 líneas)  # Renderizado de tabla de resultados
+    │           ├── RowFactory.js                       ( 406 líneas)
     │           └── cells/
-    │               ├── BeamCells.js                        ( 221 líneas)
+    │               ├── BeamCells.js                        ( 148 líneas)
     │               ├── ColumnCells.js                      ( 109 líneas)
     │               ├── PierCells.js                        ( 233 líneas)
-    │               └── SharedCells.js                      ( 256 líneas)
+    │               └── SharedCells.js                      ( 352 líneas)
     └── templates/
-        └── structural_standalone.html          ( 973 líneas)  # Template HTML principal
+        └── structural_standalone.html          ( 965 líneas)  # Template HTML principal
 
 ======================================================================
   RESUMEN
 ======================================================================
-  Total de archivos: 166
-  Total de líneas de código: 46,199
+  Total de archivos: 175
+  Total de líneas de código: 55,881
 
   Líneas por tipo de archivo:
-    .py        34,636 líneas ( 75.0%)
-    .js         7,140 líneas ( 15.5%)
-    .css        2,892 líneas (  6.3%)
-    .html         973 líneas (  2.1%)
-    .md           275 líneas (  0.6%)
-    .txt          251 líneas (  0.5%)
+    .py        38,775 líneas ( 69.4%)
+    .js         8,411 líneas ( 15.1%)
+    .log        4,119 líneas (  7.4%)
+    .css        3,053 líneas (  5.5%)
+    .html         965 líneas (  1.7%)
+    .md           275 líneas (  0.5%)
+    .txt          251 líneas (  0.4%)
     other          32 líneas (  0.1%)
 ======================================================================

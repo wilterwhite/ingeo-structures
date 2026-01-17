@@ -3,12 +3,17 @@
 Gestión de sesiones para el análisis estructural.
 Maneja el cache de datos parseados y actualizaciones de armadura.
 """
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
+import pandas as pd
+import logging
 
 from .excel_parser import EtabsExcelParser, ParsedData
 from ...domain.calculations import WallContinuityService
 from ...domain.entities.coupling_beam import CouplingBeamConfig, PierCouplingConfig
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
+from ..logging import claude_logger
+
+logger = logging.getLogger(__name__)
 
 
 class SessionManager:
@@ -26,27 +31,125 @@ class SessionManager:
         self._excel_parser = EtabsExcelParser()
         self._continuity_service = WallContinuityService()
 
-    def create_session(
+    # =========================================================================
+    # NUEVO FLUJO: Acumular → Fusionar → Procesar
+    # =========================================================================
+
+    def accumulate_tables(
         self,
         file_content: bytes,
+        session_id: str,
+        filename: str = "unknown.xlsx"
+    ) -> Dict[str, Any]:
+        """
+        Extrae y acumula tablas de un archivo Excel SIN procesar elementos.
+
+        Flujo multi-archivo:
+        1. accumulate_tables(archivo1) → acumula tablas
+        2. accumulate_tables(archivo2) → acumula más tablas
+        3. process_session() → fusiona y procesa
+
+        Args:
+            file_content: Contenido binario del Excel
+            session_id: ID de sesión
+            filename: Nombre del archivo para logging
+
+        Returns:
+            Dict con tablas encontradas en este archivo
+        """
+        # Log para Claude
+        claude_logger.set_session(session_id)
+        claude_logger.log_file_received(filename)
+
+        # Extraer tablas del archivo
+        tables = self._excel_parser.extract_tables_only(file_content)
+
+        # Crear sesión si no existe
+        if session_id not in self._cache:
+            self._cache[session_id] = ParsedData()
+
+        parsed_data = self._cache[session_id]
+
+        # Acumular tablas
+        for key, df in tables.items():
+            if key not in parsed_data.accumulated_tables:
+                parsed_data.accumulated_tables[key] = []
+            parsed_data.accumulated_tables[key].append(df)
+
+        # Generar resumen de tablas encontradas
+        tables_found = list(tables.keys())
+        total_accumulated = {
+            k: len(v) for k, v in parsed_data.accumulated_tables.items()
+        }
+
+        logger.info(
+            f"Session {session_id}: Acumuladas {len(tables)} tablas. "
+            f"Total: {total_accumulated}"
+        )
+
+        return {
+            'success': True,
+            'session_id': session_id,
+            'tables_found': tables_found,
+            'total_accumulated': total_accumulated
+        }
+
+    def process_session(
+        self,
         session_id: str,
         hn_ft: Optional[float] = None
     ) -> Dict[str, Any]:
         """
-        Crea una nueva sesión parseando el archivo Excel.
+        Fusiona tablas acumuladas y procesa elementos.
+
+        Debe llamarse DESPUÉS de accumulate_tables().
 
         Args:
-            file_content: Contenido binario del Excel
-            session_id: ID de sesión único
-            hn_ft: Altura del edificio en pies (opcional, se estima si no se provee)
+            session_id: ID de sesión
+            hn_ft: Altura del edificio en pies (opcional)
 
         Returns:
-            Diccionario con resumen de piers encontrados
+            Dict con resumen de elementos parseados
         """
-        parsed_data = self._excel_parser.parse_excel(file_content)
+        if session_id not in self._cache:
+            return {'success': False, 'error': 'Session not found'}
 
-        # Calcular continuidad de muros y hwcs para cada pier
-        # Filtrar solo piers (source=PIER) de vertical_elements
+        parsed_data = self._cache[session_id]
+
+        if not parsed_data.accumulated_tables:
+            return {'success': False, 'error': 'No tables accumulated'}
+
+        # Fusionar tablas del mismo tipo
+        merged_tables: Dict[str, pd.DataFrame] = {}
+        logger.info(f"[process_session] Tablas acumuladas: {list(parsed_data.accumulated_tables.keys())}")
+        for key, df_list in parsed_data.accumulated_tables.items():
+            if len(df_list) == 1:
+                merged_tables[key] = df_list[0]
+                logger.info(f"[process_session] Tabla '{key}': 1 archivo, {len(df_list[0])} filas")
+            else:
+                # Concatenar DataFrames del mismo tipo
+                merged_tables[key] = pd.concat(df_list, ignore_index=True)
+                logger.info(f"[process_session] Fusionadas {len(df_list)} tablas '{key}' -> {len(merged_tables[key])} filas")
+
+        logger.info(f"[process_session] Tablas fusionadas: {list(merged_tables.keys())}")
+        if 'frame_section' in merged_tables:
+            logger.info(f"[process_session] frame_section tiene {len(merged_tables['frame_section'])} filas")
+        else:
+            logger.warning("[process_session] NO SE ENCONTRÓ frame_section en tablas fusionadas!")
+
+        # Procesar elementos desde tablas fusionadas
+        new_parsed = self._excel_parser.parse_from_tables(merged_tables)
+
+        # Copiar datos procesados a la sesión actual
+        parsed_data.vertical_elements = new_parsed.vertical_elements
+        parsed_data.horizontal_elements = new_parsed.horizontal_elements
+        parsed_data.vertical_forces = new_parsed.vertical_forces
+        parsed_data.horizontal_forces = new_parsed.horizontal_forces
+        parsed_data.materials = new_parsed.materials
+        parsed_data.stories = new_parsed.stories
+        parsed_data.raw_tables = merged_tables  # Guardar tablas fusionadas
+
+        # Calcular continuidad de muros
         from ...domain.entities import VerticalElementSource
         piers = {k: v for k, v in parsed_data.vertical_elements.items()
                  if v.source == VerticalElementSource.PIER}
@@ -60,10 +163,9 @@ class SessionManager:
             parsed_data.continuity_info = continuity_info
             parsed_data.building_info = self._continuity_service.get_building_info()
 
-        self._cache[session_id] = parsed_data
+        # Generar resumen
         summary = self._excel_parser.get_summary(parsed_data)
 
-        # Agregar info del edificio al resumen
         if parsed_data.building_info:
             summary['building'] = {
                 'n_stories': parsed_data.building_info.n_stories,
@@ -78,74 +180,41 @@ class SessionManager:
             'summary': summary
         }
 
-    def create_session_with_progress(
-        self,
-        file_content: bytes,
-        session_id: str,
-        hn_ft: Optional[float] = None
-    ):
+    def get_raw_tables(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
-        Crea una nueva sesión parseando el archivo Excel con progreso.
-
-        Generador que emite eventos de progreso durante el parsing.
+        Retorna las tablas crudas de una sesión para vista de verificación.
 
         Args:
-            file_content: Contenido binario del Excel
-            session_id: ID de sesión único
-            hn_ft: Altura del edificio en pies (opcional)
+            session_id: ID de sesión
 
-        Yields:
-            dict: Eventos de progreso o resultado final
+        Returns:
+            Dict con tablas en formato serializable para JSON
         """
-        parsed_data = None
+        parsed_data = self.get_session(session_id)
+        if not parsed_data:
+            return None
 
-        # Usar el parser con progreso
-        for event in self._excel_parser.parse_excel_with_progress(file_content):
-            if event['type'] == 'complete':
-                parsed_data = event['result']
-            else:
-                yield event
+        result = {}
 
-        if parsed_data is None:
-            yield {'type': 'error', 'message': 'Error durante el parsing'}
-            return
+        # Usar raw_tables si ya se procesó, sino accumulated_tables
+        tables = parsed_data.raw_tables or {}
 
-        # Calcular continuidad de muros y hwcs para cada pier
-        yield {'type': 'progress', 'phase': 'continuity', 'current': 1, 'total': 1, 'element': 'Calculando continuidad de muros'}
-        # Filtrar solo piers (source=PIER) de vertical_elements
-        from ...domain.entities import VerticalElementSource
-        piers = {k: v for k, v in parsed_data.vertical_elements.items()
-                 if v.source == VerticalElementSource.PIER}
+        # Si no hay raw_tables, mostrar accumulated_tables fusionadas temporalmente
+        if not tables and parsed_data.accumulated_tables:
+            for key, df_list in parsed_data.accumulated_tables.items():
+                if df_list:
+                    tables[key] = df_list[0] if len(df_list) == 1 else pd.concat(df_list)
 
-        if piers and parsed_data.stories:
-            continuity_info = self._continuity_service.analyze_continuity(
-                piers=piers,
-                stories=parsed_data.stories,
-                hn_ft=hn_ft
-            )
-            parsed_data.continuity_info = continuity_info
-            parsed_data.building_info = self._continuity_service.get_building_info()
+        for key, df in tables.items():
+            if df is not None and not df.empty:
+                # Convertir DataFrame a formato JSON-serializable
+                result[key] = {
+                    'columns': [str(c) for c in df.columns.tolist()],
+                    'rows': df.head(100).fillna('').astype(str).values.tolist(),
+                    'total_rows': len(df)
+                }
 
-        self._cache[session_id] = parsed_data
-        summary = self._excel_parser.get_summary(parsed_data)
-
-        # Agregar info del edificio al resumen
-        if parsed_data.building_info:
-            summary['building'] = {
-                'n_stories': parsed_data.building_info.n_stories,
-                'hn_ft': round(parsed_data.building_info.hn_ft, 1),
-                'hn_m': round(parsed_data.building_info.hn_m, 2),
-                'total_height_mm': round(parsed_data.building_info.total_height_mm, 0)
-            }
-
-        yield {
-            'type': 'complete',
-            'result': {
-                'success': True,
-                'session_id': session_id,
-                'summary': summary
-            }
-        }
+        return result
 
     def get_session(self, session_id: str) -> Optional[ParsedData]:
         """Obtiene los datos de una sesión."""
@@ -519,6 +588,91 @@ class SessionManager:
             return False
 
         parsed_data.analysis_cache.clear()
+        # También limpiar curvas P-M (dependen de la armadura)
+        parsed_data.interaction_curves.clear()
+        return True
+
+    # =========================================================================
+    # CACHE DE CURVAS DE INTERACCIÓN P-M
+    # =========================================================================
+
+    def store_interaction_curve(
+        self,
+        session_id: str,
+        element_key: str,
+        direction: str,
+        curve: List[Any]
+    ) -> bool:
+        """
+        Almacena una curva de interacción P-M para un elemento.
+
+        La curva P-M es determinística para un elemento dado (depende solo de
+        geometría y armadura), por lo que se puede reutilizar en múltiples
+        verificaciones sin recalcular.
+
+        Args:
+            session_id: ID de sesión
+            element_key: Clave del elemento (Story_Label)
+            direction: 'primary' o 'secondary'
+            curve: Lista de InteractionPoint
+
+        Returns:
+            True si se guardó correctamente
+        """
+        parsed_data = self.get_session(session_id)
+        if not parsed_data:
+            return False
+
+        if element_key not in parsed_data.interaction_curves:
+            parsed_data.interaction_curves[element_key] = {}
+
+        parsed_data.interaction_curves[element_key][direction] = curve
+        return True
+
+    def get_interaction_curve(
+        self,
+        session_id: str,
+        element_key: str,
+        direction: str = 'primary'
+    ) -> Optional[List[Any]]:
+        """
+        Obtiene una curva de interacción P-M previamente calculada.
+
+        Args:
+            session_id: ID de sesión
+            element_key: Clave del elemento
+            direction: 'primary' o 'secondary'
+
+        Returns:
+            Lista de InteractionPoint o None si no existe
+        """
+        parsed_data = self.get_session(session_id)
+        if not parsed_data:
+            return None
+
+        element_curves = parsed_data.interaction_curves.get(element_key)
+        if not element_curves:
+            return None
+
+        return element_curves.get(direction)
+
+    def clear_interaction_curves(self, session_id: str) -> bool:
+        """
+        Limpia todas las curvas de interacción de una sesión.
+
+        Útil cuando se modifica la armadura y hay que recalcular.
+
+        Args:
+            session_id: ID de sesión
+
+        Returns:
+            True si se limpió correctamente
+        """
+        parsed_data = self.get_session(session_id)
+        if not parsed_data:
+            return False
+
+        parsed_data.interaction_curves.clear()
         return True
 
     # =========================================================================

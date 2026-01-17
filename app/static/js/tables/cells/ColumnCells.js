@@ -68,19 +68,20 @@ const ColumnCells = {
     },
 
     /**
-     * Celda de estribos.
+     * Celda de estribos o trabas.
      * @param {Object} result - Resultado del elemento
      * @param {string} colKey - Key del elemento
-     * @param {boolean} disabled - Si true, muestra estribos deshabilitados (para STRUT)
+     * @param {boolean} disabled - Si true, muestra estribos deshabilitados (para STRUT 1x1)
      */
     createStirrupsCell(result, colKey, disabled = false) {
         const reinf = result.reinforcement || {};
+        const hasCrossties = reinf.has_crossties || false;
         const td = document.createElement('td');
-        td.className = 'stirrups-cell' + (disabled ? ' strut-disabled' : '');
+        td.className = 'stirrups-cell' + (disabled ? ' strut-disabled' : '') + (hasCrossties ? ' crossties' : '');
         td.dataset.colKey = colKey;
 
         if (disabled) {
-            // STRUT: estribos deshabilitados (no confinado)
+            // STRUT 1x1: sin estribos (no confinado)
             td.innerHTML = `
                 <div class="stirrup-row">
                     <span class="disabled-label">Sin estribos</span>
@@ -89,15 +90,32 @@ const ColumnCells = {
                     <span class="disabled-note">(no confinado)</span>
                 </div>
             `;
-        } else {
+        } else if (hasCrossties) {
+            // Trabas: 1 rama en alguna dirección (no confinado)
+            // Formato compacto: Tr + T10 en fila 1, @150 + (no conf) en fila 2
             td.innerHTML = `
                 <div class="stirrup-row">
-                    <span class="stirrup-label">Estribo:</span>
-                    <select class="edit-stirrup-d" title="φ Estribo">
-                        ${StructuralConstants.generateDiameterOptions('estribos', reinf.stirrup_diameter, 'E')}
+                    <span class="stirrup-label">Tr</span>
+                    <select class="edit-stirrup-d" title="φ Traba">
+                        ${StructuralConstants.generateDiameterOptions('estribos', reinf.stirrup_diameter, 'T')}
+                    </select>
+                    <select class="edit-stirrup-s" title="@ Traba">
+                        ${StructuralConstants.generateSpacingOptions('columnas', reinf.stirrup_spacing)}
                     </select>
                 </div>
                 <div class="stirrup-row">
+                    <span class="disabled-note">(no confinado)</span>
+                </div>
+            `;
+        } else {
+            // Estribos normales (confinado)
+            // Formato compacto: E + E10 en fila 1, @150 en fila 2
+            td.innerHTML = `
+                <div class="stirrup-row">
+                    <span class="stirrup-label">E</span>
+                    <select class="edit-stirrup-d" title="φ Estribo">
+                        ${StructuralConstants.generateDiameterOptions('estribos', reinf.stirrup_diameter, 'E')}
+                    </select>
                     <select class="edit-stirrup-s" title="@ Estribo">
                         ${StructuralConstants.generateSpacingOptions('columnas', reinf.stirrup_spacing)}
                     </select>

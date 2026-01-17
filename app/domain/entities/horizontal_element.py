@@ -100,6 +100,16 @@ class HorizontalElement:
     location: str = ""      # Ubicación
     axis_angle: float = 0.0
 
+    # Property Modifiers (factores de rigidez ETABS, default 1.0 = sin modificar)
+    # Estos valores modifican la rigidez del elemento para modelar agrietamiento
+    pm_axial: float = 1.0       # A - Rigidez axial
+    pm_m2: float = 1.0          # M2 - Rigidez a flexion eje 2 (mayor)
+    pm_m3: float = 1.0          # M3 - Rigidez a flexion eje 3 (menor)
+    pm_v2: float = 1.0          # V2 - Rigidez a cortante eje 2
+    pm_v3: float = 1.0          # V3 - Rigidez a cortante eje 3
+    pm_torsion: float = 1.0     # T - Rigidez torsional
+    pm_weight: float = 1.0      # W - Peso propio
+
     # Areas de barra precalculadas
     _bar_area_stirrup: float = field(default=78.5, repr=False)
 
@@ -592,6 +602,14 @@ class HorizontalElement:
             'cover': self.cover,
             'is_seismic': self.is_seismic,
             'is_custom': self.is_custom,
+            # Property Modifiers
+            'pm_axial': self.pm_axial,
+            'pm_m2': self.pm_m2,
+            'pm_m3': self.pm_m3,
+            'pm_v2': self.pm_v2,
+            'pm_v3': self.pm_v3,
+            'pm_torsion': self.pm_torsion,
+            'pm_weight': self.pm_weight,
         }
 
         # Todos los tipos usan discrete_reinforcement
@@ -678,4 +696,212 @@ class HorizontalElement:
             axis_slab=data.get('axis_slab', ''),
             location=data.get('location', ''),
             axis_angle=data.get('axis_angle', 0.0),
+            # Property Modifiers
+            pm_axial=data.get('pm_axial', 1.0),
+            pm_m2=data.get('pm_m2', 1.0),
+            pm_m3=data.get('pm_m3', 1.0),
+            pm_v2=data.get('pm_v2', 1.0),
+            pm_v3=data.get('pm_v3', 1.0),
+            pm_torsion=data.get('pm_torsion', 1.0),
+            pm_weight=data.get('pm_weight', 1.0),
         )
+
+    # =========================================================================
+    # Property Modifiers - Metodos Helper
+    # =========================================================================
+
+    @property
+    def has_property_modifiers(self) -> bool:
+        """True si tiene algun property modifier diferente de 1.0."""
+        return any([
+            self.pm_axial != 1.0,
+            self.pm_m2 != 1.0,
+            self.pm_m3 != 1.0,
+            self.pm_v2 != 1.0,
+            self.pm_v3 != 1.0,
+            self.pm_torsion != 1.0,
+            self.pm_weight != 1.0,
+        ])
+
+    @property
+    def pm_dict(self) -> dict:
+        """Retorna los property modifiers como diccionario."""
+        return {
+            'A': self.pm_axial,
+            'M2': self.pm_m2,
+            'M3': self.pm_m3,
+            'V2': self.pm_v2,
+            'V3': self.pm_v3,
+            'T': self.pm_torsion,
+            'W': self.pm_weight,
+        }
+
+    @property
+    def pm_summary(self) -> str:
+        """
+        Resumen de property modifiers modificados para tooltip.
+
+        Ejemplo: "A=0.20, M2=0.35, M3=0.35"
+        """
+        modified = []
+        if self.pm_axial != 1.0:
+            modified.append(f"A={self.pm_axial:.2f}")
+        if self.pm_m2 != 1.0:
+            modified.append(f"M2={self.pm_m2:.2f}")
+        if self.pm_m3 != 1.0:
+            modified.append(f"M3={self.pm_m3:.2f}")
+        if self.pm_v2 != 1.0:
+            modified.append(f"V2={self.pm_v2:.2f}")
+        if self.pm_v3 != 1.0:
+            modified.append(f"V3={self.pm_v3:.2f}")
+        if self.pm_torsion != 1.0:
+            modified.append(f"T={self.pm_torsion:.2f}")
+        if self.pm_weight != 1.0:
+            modified.append(f"W={self.pm_weight:.2f}")
+        return ", ".join(modified) if modified else "Sin modificar"
+
+    @property
+    def base_section_name(self) -> str:
+        """
+        Nombre de seccion sin sufijo de property modifiers.
+
+        Ejemplo: "V30x60-PM:0.20A-0.35M2" -> "V30x60"
+        """
+        if '-PM:' in self.section_name:
+            return self.section_name.split('-PM:')[0]
+        return self.section_name
+
+    def generate_section_name_with_pm(self) -> str:
+        """
+        Genera nombre de seccion con nomenclatura PM.
+
+        Formato: "nombre_base-PM:0.01A-0.35M2-0.35M3"
+        Solo incluye los modifiers que son != 1.0
+
+        Returns:
+            Nombre de seccion con sufijo PM si hay modifiers, o base_section_name
+        """
+        if not self.has_property_modifiers:
+            return self.base_section_name
+
+        pm_parts = []
+
+        if self.pm_axial != 1.0:
+            pm_parts.append(f"{self.pm_axial:.2f}A")
+        if self.pm_m2 != 1.0:
+            pm_parts.append(f"{self.pm_m2:.2f}M2")
+        if self.pm_m3 != 1.0:
+            pm_parts.append(f"{self.pm_m3:.2f}M3")
+        if self.pm_v2 != 1.0:
+            pm_parts.append(f"{self.pm_v2:.2f}V2")
+        if self.pm_v3 != 1.0:
+            pm_parts.append(f"{self.pm_v3:.2f}V3")
+        if self.pm_torsion != 1.0:
+            pm_parts.append(f"{self.pm_torsion:.2f}T")
+        if self.pm_weight != 1.0:
+            pm_parts.append(f"{self.pm_weight:.2f}W")
+
+        return f"{self.base_section_name}-PM:{'-'.join(pm_parts)}"
+
+    @staticmethod
+    def parse_pm_from_section_name(section_name: str) -> dict:
+        """
+        Extrae property modifiers desde el nombre de seccion.
+
+        Formato esperado: "nombre-PM:0.01A-0.35M2-0.35M3"
+
+        Args:
+            section_name: Nombre de seccion con posible sufijo PM
+
+        Returns:
+            Dict con los PM parseados (solo los presentes en el nombre)
+        """
+        import re
+
+        result = {}
+        if '-PM:' not in section_name:
+            return result
+
+        # Extraer la parte despues de -PM:
+        pm_part = section_name.split('-PM:')[1]
+
+        # Patterns para cada modifier
+        patterns = {
+            'pm_axial': r'([\d.]+)A(?:-|$)',
+            'pm_m2': r'([\d.]+)M2(?:-|$)',
+            'pm_m3': r'([\d.]+)M3(?:-|$)',
+            'pm_v2': r'([\d.]+)V2(?:-|$)',
+            'pm_v3': r'([\d.]+)V3(?:-|$)',
+            'pm_torsion': r'([\d.]+)T(?:-|$)',
+            'pm_weight': r'([\d.]+)W(?:-|$)',
+        }
+
+        for key, pattern in patterns.items():
+            match = re.search(pattern, pm_part)
+            if match:
+                result[key] = float(match.group(1))
+
+        return result
+
+    def apply_pm_from_section_name(self) -> None:
+        """
+        Parsea y aplica los property modifiers desde section_name.
+
+        Modifica los atributos pm_* del elemento segun lo parseado.
+        """
+        pm_values = self.parse_pm_from_section_name(self.section_name)
+        for key, value in pm_values.items():
+            setattr(self, key, value)
+
+    def apply_cracking(self, dcr: float, mode: str = 'flexure') -> None:
+        """
+        Aplica agrietamiento basado en DCR.
+
+        El factor de agrietamiento es 1/DCR, aplicado sobre el PM actual.
+        Por ejemplo, si DCR=5.0 y pm_m2=1.0, el nuevo pm_m2=0.20
+
+        Args:
+            dcr: Demand/Capacity ratio (debe ser > 1.0 para agrietar)
+            mode: Tipo de agrietamiento:
+                - 'flexure': Aplica a M2 y M3
+                - 'shear': Aplica a V2 y V3
+                - 'axial': Aplica a A
+                - 'all': Aplica a A, M2, M3
+
+        Raises:
+            ValueError: Si DCR <= 0
+        """
+        if dcr <= 0:
+            raise ValueError(f"DCR debe ser > 0, recibido: {dcr}")
+
+        # Factor de reduccion: si DCR=5, factor=0.20
+        factor = min(1.0, 1.0 / dcr)
+
+        if mode == 'flexure':
+            self.pm_m2 = self.pm_m2 * factor
+            self.pm_m3 = self.pm_m3 * factor
+        elif mode == 'shear':
+            self.pm_v2 = self.pm_v2 * factor
+            self.pm_v3 = self.pm_v3 * factor
+        elif mode == 'axial':
+            self.pm_axial = self.pm_axial * factor
+        elif mode == 'all':
+            self.pm_axial = self.pm_axial * factor
+            self.pm_m2 = self.pm_m2 * factor
+            self.pm_m3 = self.pm_m3 * factor
+        else:
+            raise ValueError(f"Modo de agrietamiento invalido: {mode}")
+
+        # Actualizar section_name con la nueva nomenclatura
+        self.section_name = self.generate_section_name_with_pm()
+
+    def reset_property_modifiers(self) -> None:
+        """Resetea todos los property modifiers a 1.0."""
+        self.pm_axial = 1.0
+        self.pm_m2 = 1.0
+        self.pm_m3 = 1.0
+        self.pm_v2 = 1.0
+        self.pm_v3 = 1.0
+        self.pm_torsion = 1.0
+        self.pm_weight = 1.0
+        self.section_name = self.base_section_name

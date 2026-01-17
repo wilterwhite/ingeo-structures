@@ -47,7 +47,8 @@ class CompositePierParser:
         walls_df: pd.DataFrame,
         points_df: pd.DataFrame,
         pier_assigns_df: pd.DataFrame,
-        unit_factor: float = 1000.0  # Factor de conversion a mm (default: m -> mm)
+        unit_factor: float = 1000.0,  # Factor de conversion a mm (default: m -> mm)
+        pier_thicknesses: Optional[Dict[str, float]] = None  # Espesores de Pier Section Props (mm)
     ) -> Dict[str, CompositeSection]:
         """
         Parsea piers compuestos agrupando muros por Pier Name.
@@ -81,6 +82,7 @@ class CompositePierParser:
 
         # 4. Para cada grupo, crear CompositeSection
         result: Dict[str, CompositeSection] = {}
+        pier_thicknesses = pier_thicknesses or {}
 
         for (story, pier_name), wall_rectangles in pier_groups.items():
             if len(wall_rectangles) < 2:
@@ -88,8 +90,12 @@ class CompositePierParser:
                 continue
 
             try:
+                # Obtener espesor del pier desde Pier Section Properties (fallback)
+                pier_key = f"{story}_{pier_name}"
+                fallback_thickness = pier_thicknesses.get(pier_key, 0.0)
+
                 # Extraer segmentos de los muros
-                segments = self._extract_segments_from_walls(wall_rectangles)
+                segments = self._extract_segments_from_walls(wall_rectangles, fallback_thickness)
 
                 if not segments:
                     continue
@@ -292,7 +298,8 @@ class CompositePierParser:
 
     def _extract_segments_from_walls(
         self,
-        wall_rectangles: List[WallRectangle]
+        wall_rectangles: List[WallRectangle],
+        fallback_thickness: float = 0.0
     ) -> List[WallSegment]:
         """
         Extrae segmentos de linea central de los muros.
@@ -303,17 +310,29 @@ class CompositePierParser:
         segments = []
 
         for wall in wall_rectangles:
-            segment = self._wall_to_segment(wall)
+            segment = self._wall_to_segment(wall, fallback_thickness)
             if segment:
                 segments.append(segment)
 
         return segments
 
-    def _wall_to_segment(self, wall: WallRectangle) -> Optional[WallSegment]:
+    def _wall_to_segment(
+        self,
+        wall: WallRectangle,
+        fallback_thickness: float = 0.0
+    ) -> Optional[WallSegment]:
         """
         Convierte un muro rectangular a un segmento de linea central.
 
         Proyecta a 2D (plano XY) y calcula la linea central y espesor.
+
+        NOTA: En ETABS, los muros son elementos 3D verticales. Los 4 puntos definen
+        un rectangulo donde 2 puntos estan en la base (Z baja) y 2 en el tope (Z alta).
+        Cuando proyectamos a XY, los puntos base y tope pueden coincidir (mismo X,Y),
+        resultando en thickness=0.
+
+        Solucion: Si el calculo geometrico da thickness~0, inferimos el espesor
+        desde el area y perimetro del muro.
         """
         if len(wall.vertices) != 4:
             return None
@@ -322,10 +341,6 @@ class CompositePierParser:
         pts_2d = [(v[0], v[1]) for v in wall.vertices]
 
         # Calcular distancias entre puntos consecutivos
-        # Los muros ETABS tienen vertices en orden: 1-2-3-4
-        # donde 1-2 y 3-4 son lados paralelos (largo)
-        # y 2-3 y 4-1 son lados paralelos (ancho)
-
         d12 = self._distance_2d(pts_2d[0], pts_2d[1])
         d23 = self._distance_2d(pts_2d[1], pts_2d[2])
         d34 = self._distance_2d(pts_2d[2], pts_2d[3])
@@ -336,17 +351,49 @@ class CompositePierParser:
         avg_23_41 = (d23 + d41) / 2
 
         if avg_12_34 >= avg_23_41:
-            # Lados 1-2 y 4-3 son los largos (el segmento va en esa direccion)
-            # La linea central va del punto medio de 4-1 al punto medio de 2-3
             mid1 = self._midpoint_2d(pts_2d[3], pts_2d[0])
             mid2 = self._midpoint_2d(pts_2d[1], pts_2d[2])
             thickness = avg_23_41
+            length_2d = avg_12_34
         else:
-            # Lados 2-3 y 4-1 son los largos
-            # La linea central va del punto medio de 1-2 al punto medio de 3-4
             mid1 = self._midpoint_2d(pts_2d[0], pts_2d[1])
             mid2 = self._midpoint_2d(pts_2d[2], pts_2d[3])
             thickness = avg_12_34
+            length_2d = avg_23_41
+
+        # CASO ESPECIAL: Muros verticales en ETABS (proyeccion 2D colapsa a linea)
+        # En ETABS, los muros son rectangulos 3D verticales donde:
+        # - Area = longitud_en_planta * altura (superficie del muro, NO seccion transversal)
+        # - Perimeter = 2*(longitud + altura)
+        # El espesor NO esta en Area/Perimeter, viene de Pier Section Properties
+        if thickness < 1.0 and fallback_thickness > 0:
+            thickness = fallback_thickness
+            logger.debug(
+                f"[COMPOSITE] Wall {wall.wall_id}: thickness desde Pier Section Properties: "
+                f"t={thickness:.1f}mm"
+            )
+
+        # Calcular length del segmento en 2D
+        segment_length = self._distance_2d(mid1, mid2)
+
+        # Si la longitud en 2D es 0 (puntos coinciden), el muro es vertical
+        # y necesitamos usar los puntos unicos para definir la linea central
+        if segment_length < 1.0:
+            # Encontrar los 2 puntos unicos en XY
+            unique_pts = []
+            for p in pts_2d:
+                is_duplicate = False
+                for up in unique_pts:
+                    if self._distance_2d(p, up) < 1.0:
+                        is_duplicate = True
+                        break
+                if not is_duplicate:
+                    unique_pts.append(p)
+
+            if len(unique_pts) >= 2:
+                mid1 = unique_pts[0]
+                mid2 = unique_pts[1]
+                segment_length = self._distance_2d(mid1, mid2)
 
         # Crear segmento
         segment = WallSegment(
@@ -356,6 +403,10 @@ class CompositePierParser:
             y2=mid2[1],
             thickness=thickness,
             wall_id=wall.wall_id,
+        )
+
+        logger.debug(
+            f"[COMPOSITE] Wall {wall.wall_id}: thickness={thickness:.1f}mm, length={segment.length:.1f}mm"
         )
 
         return segment

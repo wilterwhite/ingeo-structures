@@ -3,10 +3,13 @@
 Servicio de propuesta automatica de armadura segun geometria.
 
 Reglas (practica chilena + ACI 318-25):
-1. Ambos lados < 15cm -> STRUT (1x1, sin estribos)
-2. Un lado >= 15cm, otro < 15cm -> grilla 1x2/2x1 con traba (1 rama)
-3. Ambos >= 15cm -> grilla 2x2+ con estribos (2 ramas)
-4. >=5 barras en cualquier lado -> MESH (malla distribuida)
+1. STRUT: Dimension menor < 15cm Y ratio lw/tw < 3 (estricto)
+   - Cuadrado (14x14): 1x1, sin estribos
+   - Rectangular (14x19, 19x14, 14x28): 1x2 o 2x1, con traba (1 rama)
+2. MESH: ratio >= 3 (es muro, siempre lleva malla)
+   - 14x42 (ratio=3.0) -> muro con malla
+3. MESH: >=5 barras en cualquier lado (columnas muy grandes)
+4. COLUMNA: Ambos >= 15cm -> grilla 2x2+ con estribos (2 ramas)
 
 Espaciamiento maximo entre barras: 20cm
 """
@@ -16,6 +19,7 @@ import math
 
 from ..constants.reinforcement import (
     STRUT_MAX_DIM_MM,
+    STRUT_MAX_RATIO,
     MAX_BAR_SPACING_MM,
     MIN_BARS_FOR_MESH,
     STRUT_DEFAULTS,
@@ -66,19 +70,28 @@ class ReinforcementProposer:
         Returns:
             ReinforcementProposal con la configuracion sugerida
         """
-        # Caso 1: STRUT (ambos < 15cm)
-        if length_mm < STRUT_MAX_DIM_MM and thickness_mm < STRUT_MAX_DIM_MM:
-            return cls._propose_strut()
+        # Caso 1: STRUT (dimension menor < 15cm Y ratio < 3, no es muro)
+        min_dim = min(length_mm, thickness_mm)
+        max_dim = max(length_mm, thickness_mm)
+        ratio = max_dim / min_dim if min_dim > 0 else 999.0
+
+        if min_dim < STRUT_MAX_DIM_MM and ratio < STRUT_MAX_RATIO:
+            return cls._propose_strut(length_mm, thickness_mm)
 
         # Calcular barras necesarias para cumplir espaciamiento maximo
         n_length = cls._calc_bars_for_dimension(length_mm)
         n_thickness = cls._calc_bars_for_dimension(thickness_mm)
 
-        # Caso 4: MESH (>=5 barras en algun lado)
+        # Caso 2: MESH si ratio >= 3 (es muro, no columna)
+        # Muros siempre llevan malla, independiente del numero de barras
+        if ratio >= STRUT_MAX_RATIO:
+            return cls._propose_mesh(n_length, n_thickness)
+
+        # Caso 3: MESH (>=5 barras en algun lado)
         if n_length >= MIN_BARS_FOR_MESH or n_thickness >= MIN_BARS_FOR_MESH:
             return cls._propose_mesh(n_length, n_thickness)
 
-        # Caso 2 y 3: STIRRUPS con grilla calculada
+        # Caso 4: STIRRUPS con grilla calculada (columnas)
         return cls._propose_stirrups(
             length_mm, thickness_mm, n_length, n_thickness
         )
@@ -99,22 +112,44 @@ class ReinforcementProposer:
         return max(2, math.ceil(dim_mm / MAX_BAR_SPACING_MM) + 1)
 
     @classmethod
-    def _propose_strut(cls) -> ReinforcementProposal:
+    def _propose_strut(
+        cls, length_mm: float, thickness_mm: float
+    ) -> ReinforcementProposal:
         """
-        Propuesta para strut (1x1, sin estribos).
+        Propuesta para strut.
 
-        Columnas pequenas donde no caben estribos alrededor de 1 sola barra.
+        - Cuadrado pequeno (14x14): 1x1, sin estribos
+        - Rectangular (14x19, 19x14): 1x2 o 2x1, con traba (1 rama)
         """
+        # Calcular barras en cada direccion
+        n_length = cls._calc_bars_for_dimension(length_mm)
+        n_thickness = cls._calc_bars_for_dimension(thickness_mm)
+
+        # Strut cuadrado pequeno: 1x1 sin estribos
+        if n_length == 1 and n_thickness == 1:
+            return ReinforcementProposal(
+                layout=ProposedLayout.STRUT,
+                n_bars_length=1,
+                n_bars_thickness=1,
+                diameter=STRUT_DEFAULTS['diameter'],
+                stirrup_diameter=0,
+                stirrup_spacing=0,
+                n_shear_legs=0,
+                n_shear_legs_secondary=0,
+                has_crossties=False,
+            )
+
+        # Strut rectangular: 1x2 o 2x1 con traba (1 rama)
         return ReinforcementProposal(
             layout=ProposedLayout.STRUT,
-            n_bars_length=STRUT_DEFAULTS['n_bars_length'],
-            n_bars_thickness=STRUT_DEFAULTS['n_bars_thickness'],
+            n_bars_length=n_length,
+            n_bars_thickness=n_thickness,
             diameter=STRUT_DEFAULTS['diameter'],
-            stirrup_diameter=STRUT_DEFAULTS['stirrup_diameter'],
-            stirrup_spacing=STRUT_DEFAULTS['stirrup_spacing'],
-            n_shear_legs=0,
-            n_shear_legs_secondary=0,
-            has_crossties=False,
+            stirrup_diameter=COLUMN_DEFAULTS['stirrup_diameter'],
+            stirrup_spacing=COLUMN_DEFAULTS['stirrup_spacing'],
+            n_shear_legs=1 if n_length == 1 else 2,
+            n_shear_legs_secondary=1 if n_thickness == 1 else 2,
+            has_crossties=True,
         )
 
     @classmethod

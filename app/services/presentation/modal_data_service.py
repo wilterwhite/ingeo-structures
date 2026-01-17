@@ -16,6 +16,7 @@ from typing import Dict, Any, Optional, List, Tuple, TYPE_CHECKING
 import logging
 
 from ..parsing.session_manager import SessionManager
+from .result_formatter import ResultFormatter
 
 logger = logging.getLogger(__name__)
 from ...domain.constants.units import TONF_TO_N, TONFM_TO_NMM
@@ -35,27 +36,6 @@ if TYPE_CHECKING:
     from ..analysis.element_orchestrator import ElementOrchestrator
 
 
-def calculate_boundary_stress(pier, P_tonf: float, M_tonfm: float) -> BoundaryStressAnalysis:
-    """
-    Wrapper que convierte unidades y delega a domain/.
-
-    Args:
-        pier: Pier con width, thickness y fc
-        P_tonf: Carga axial en tonf (positivo = compresión)
-        M_tonfm: Momento flector en tonf-m (valor absoluto)
-
-    Returns:
-        BoundaryStressAnalysis con esfuerzos calculados
-    """
-    P_N = P_tonf * TONF_TO_N
-    M_Nmm = abs(M_tonfm) * TONFM_TO_NMM
-    return _calculate_boundary_stress(
-        width=pier.width,
-        thickness=pier.thickness,
-        fc=pier.fc,
-        P_N=P_N,
-        M_Nmm=M_Nmm
-    )
 
 
 class ElementDetailsService:
@@ -344,7 +324,16 @@ class ElementDetailsService:
 
         for combo in pier_forces.combinations:
             M_max = max(abs(combo.M2), abs(combo.M3))
-            stress = calculate_boundary_stress(pier, combo.P, M_max)
+            # Convertir unidades: tonf -> N, tonf-m -> N-mm
+            P_N = combo.P * TONF_TO_N
+            M_Nmm = abs(M_max) * TONFM_TO_NMM
+            stress = _calculate_boundary_stress(
+                width=pier.width,
+                thickness=pier.thickness,
+                fc=pier.fc,
+                P_N=P_N,
+                M_Nmm=M_Nmm
+            )
             combo_name = f"{combo.name} ({combo.location})"
 
             if stress.sigma_left > max_sigma_left:
@@ -561,13 +550,22 @@ class ElementDetailsService:
 
         IMPORTANTE: Convención de signos:
         - ETABS: P negativo = compresión
-        - calculate_boundary_stress: P positivo = compresión
+        - _calculate_boundary_stress: P positivo = compresión
         - Por eso usamos -combo.P
         """
         # CORREGIDO: Convertir a convención positivo = compresión
         Pu = -combo.P
         Mu = max(abs(combo.M2), abs(combo.M3))
-        stress = calculate_boundary_stress(pier, Pu, Mu)
+        # Convertir unidades: tonf -> N, tonf-m -> N-mm
+        P_N = Pu * TONF_TO_N
+        M_Nmm = abs(Mu) * TONFM_TO_NMM
+        stress = _calculate_boundary_stress(
+            width=pier.width,
+            thickness=pier.thickness,
+            fc=pier.fc,
+            P_N=P_N,
+            M_Nmm=M_Nmm
+        )
 
         c_left = self._calculate_neutral_axis_depth(pier, Pu, Mu) if stress.required_left else None
         c_right = self._calculate_neutral_axis_depth(pier, Pu, Mu) if stress.required_right else None
@@ -658,11 +656,13 @@ class ElementDetailsService:
         # Esbeltez: extraer del cache si existe
         result['slenderness'] = cached.get('slenderness')
 
-        # Flexión: extraer del cache (mismo DCR que la tabla)
-        result['flexure_design'] = self._extract_flexure_from_cache(cached)
+        # Flexión: extraer del cache usando método unificado (mismo DCR que la tabla)
+        flexure_data = ResultFormatter.extract_flexure(cached)
+        result['flexure_design'] = self._format_flexure_for_modal(flexure_data, cached)
 
-        # Cortante: extraer del cache
-        result['shear_design'] = self._extract_shear_from_cache(cached)
+        # Cortante: extraer del cache usando método unificado
+        shear_data = ResultFormatter.extract_shear(cached)
+        result['shear_design'] = self._format_shear_for_modal(shear_data, cached)
 
         # Boundary: extraer del cache si existe
         result['boundary_check'] = cached.get('boundary_element')
@@ -796,13 +796,24 @@ class ElementDetailsService:
 
             As_bar = math.pi * (diameter / 2) ** 2
 
+            # Calcular ρ constructivo (aunque no aporta capacidad)
+            Ag = element.Ag if hasattr(element, 'Ag') else 0
+            rho_constructivo = As_bar / Ag if Ag > 0 else 0
+
             return {
                 'type': 'strut_unconfined',
                 'n_total_bars': 1,
                 'diameter_long': diameter,
                 'As_long_mm2': round(As_bar, 1),
+                # Campos compatibles con el frontend (aunque strut no usa estos conceptos)
+                'As_vertical_mm2': round(As_bar, 1),  # Solo la barra constructiva
+                'As_edge_mm2': 0,  # Sin barras de borde
+                'As_flexure_total_mm2': round(As_bar, 1),
+                'rho_vertical': round(rho_constructivo, 5),
+                'rho_horizontal': 0,
                 'stirrup_spacing': 0,  # Sin estribos
                 'note': 'Barra central como acero constructivo (no As de compresion)',
+                'is_strut': True,
                 'description': f'1phi{diameter} (strut sin confinamiento)'
             }
 
@@ -889,76 +900,70 @@ class ElementDetailsService:
     # Métodos de Extracción del Cache (sin recálculos)
     # =========================================================================
 
-    def _extract_flexure_from_cache(self, cached: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_flexure_for_modal(
+        self,
+        flexure_data: Dict[str, Any],
+        cached: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
-        Extrae datos de flexión del cache sin transformación.
+        Formatea datos de flexión extraídos por ResultFormatter para el modal.
 
-        El cache ya tiene los datos correctos calculados durante el análisis.
-        Esto garantiza que el modal muestre el mismo DCR que la tabla.
+        El modal espera estructura con 'rows' (lista de combinaciones).
+        ResultFormatter.extract_flexure() retorna datos planos.
         """
-        flexure = cached.get('flexure', {})
-        if not flexure:
+        if not flexure_data or not flexure_data.get('dcr'):
             return {'has_data': False, 'rows': []}
 
         is_strut = cached.get('element_type') == 'strut'
 
-        # DCR viene del cache (mismo que la tabla)
-        dcr = flexure.get('dcr', cached.get('dcr_max', 0))
-
-        # Momento: el cache usa 'Mu' singular para todos los tipos
-        Mu = flexure.get('Mu', 0)
-
-        # Capacidad: depende del tipo
-        if is_strut:
-            phi_Mn = flexure.get('phi_Mn_0', flexure.get('phi_Mcr', 0))
-        else:
-            phi_Mn = flexure.get('phi_Mn_at_Pu', flexure.get('phi_Mn_0', 0))
-
+        # Construir fila para la combinación crítica
         row = {
             'location': 'Critical',
-            'combo': flexure.get('critical_combo', cached.get('critical_combo', 'Envolvente')),
-            'Pu_tonf': flexure.get('Pu', 0),
+            'combo': flexure_data.get('critical_combo', 'Envolvente'),
+            'Pu_tonf': flexure_data.get('Pu', 0),
             'Mu2_tonf_m': 0,  # Simplificado: solo eje principal
-            'Mu3_tonf_m': Mu,
-            'phi_Mn_tonf_m': phi_Mn,
-            'c_mm': flexure.get('c', '—'),
-            'dcr': dcr,
+            'Mu3_tonf_m': flexure_data.get('Mu', 0),
+            'phi_Mn_tonf_m': flexure_data.get('phi_Mn_at_Pu', 0),
+            'c_mm': flexure_data.get('c', '—'),
+            'dcr': flexure_data.get('dcr', 0),
         }
 
         return {
             'has_data': True,
             'rows': [row],
             'is_strut': is_strut,
-            'has_tension': flexure.get('has_tension', False),
-            'tension_combos': flexure.get('tension_combos', 0),
-            'warnings': flexure.get('warnings', cached.get('warnings', [])),
-            # Resultados de TODAS las combinaciones (para modal sin recálculo)
-            'combo_results': flexure.get('combo_results', []),
+            'has_tension': flexure_data.get('has_tension', False),
+            'tension_combos': flexure_data.get('tension_combos', 0),
+            'warnings': flexure_data.get('warnings', cached.get('warnings', [])),
+            'combo_results': flexure_data.get('combo_results', []),
         }
 
-    def _extract_shear_from_cache(self, cached: Dict[str, Any]) -> Dict[str, Any]:
+    def _format_shear_for_modal(
+        self,
+        shear_data: Dict[str, Any],
+        cached: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
-        Extrae datos de cortante del cache y los formatea para el modal.
+        Formatea datos de cortante extraídos por ResultFormatter para el modal.
 
-        El cache tiene formato plano (Vu_2, Vu_3, phi_Vn_2, etc.)
-        El frontend espera filas por dirección con campos específicos.
+        El modal espera estructura con 'rows' por dirección.
+        ResultFormatter.extract_shear() retorna datos planos.
         """
-        shear = cached.get('shear', {})
-        if not shear:
+        if not shear_data or not shear_data.get('dcr'):
             return {'has_data': False, 'rows': []}
 
-        # Extraer datos del cache
-        Vu_2 = shear.get('Vu_2', 0) or 0
-        Vu_3 = shear.get('Vu_3', 0) or 0
-        phi_Vn_2 = shear.get('phi_Vn_2', 0) or 0
-        phi_Vn_3 = shear.get('phi_Vn_3', 0) or 0
-        Vc = shear.get('Vc', 0) or 0
-        phi_v = shear.get('phi_v', 0.60)
+        # Extraer datos
+        Vu_2 = shear_data.get('Vu_2', 0)
+        Vu_3 = shear_data.get('Vu_3', 0)
+        phi_Vn_2 = shear_data.get('phi_Vn_2', 0)
+        phi_Vn_3 = shear_data.get('phi_Vn_3', 0)
+        Vc = shear_data.get('Vc', 0)
+        phi_v = shear_data.get('phi_v', 0.60)
         phi_Vc = round(Vc * phi_v, 2)
 
-        dcr_2 = shear.get('dcr_2', 0) or 0
-        dcr_3 = shear.get('dcr_3', 0) or 0
-        combo = shear.get('critical_combo', 'Envolvente')
+        dcr_2 = shear_data.get('dcr_2', 0)
+        dcr_3 = shear_data.get('dcr_3', 0)
+        combo = shear_data.get('critical_combo', 'Envolvente')
 
         # Obtener Pu y Mu del análisis de flexión para contexto
         flexure = cached.get('flexure', {})
@@ -1010,8 +1015,9 @@ class ElementDetailsService:
             'has_data': True,
             'rows': rows,
             'phi_v': phi_v,
-            'warnings': shear.get('warnings', []),
+            'warnings': shear_data.get('warnings', []),
         }
+
 
     def _extract_capacities_from_cache(self, cached: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Extrae capacidades del cache."""
@@ -1021,13 +1027,26 @@ class ElementDetailsService:
         if not flexure and not shear:
             return None
 
-        return {
-            'phi_Pn_max_tonf': flexure.get('phi_Pn_max', flexure.get('phi_Fns', 0)),
-            'phi_Mn3_tonf_m': flexure.get('phi_Mn_at_Pu', flexure.get('phi_Mn_0', 0)),
-            'phi_Mn2_tonf_m': flexure.get('phi_Mn_at_Pu', flexure.get('phi_Mn_0', 0)),
-            'phi_Vn2_tonf': shear.get('phi_Vn_2', 0),
-            'phi_Vn3_tonf': shear.get('phi_Vn_3', 0),
-        }
+        # Detectar si es strut para extraer campos correctos
+        is_strut = cached.get('element_type') == 'strut'
+
+        if is_strut:
+            # Struts: usar phi_Fns para axial, phi_Mcr para momento
+            return {
+                'phi_Pn_max_tonf': flexure.get('phi_Fns', flexure.get('phi_Pn_max', 0)),
+                'phi_Mn3_tonf_m': flexure.get('phi_Mcr', flexure.get('phi_Mn_0', 0)),
+                'phi_Mn2_tonf_m': flexure.get('phi_Mcr', flexure.get('phi_Mn_0', 0)),
+                'phi_Vn2_tonf': shear.get('phi_Vn', shear.get('phi_Vn_2', 0)),
+                'phi_Vn3_tonf': shear.get('phi_Vn', shear.get('phi_Vn_3', 0)),
+            }
+        else:
+            return {
+                'phi_Pn_max_tonf': flexure.get('phi_Pn_max', flexure.get('phi_Fns', 0)),
+                'phi_Mn3_tonf_m': flexure.get('phi_Mn_at_Pu', flexure.get('phi_Mn_0', 0)),
+                'phi_Mn2_tonf_m': flexure.get('phi_Mn_at_Pu', flexure.get('phi_Mn_0', 0)),
+                'phi_Vn2_tonf': shear.get('phi_Vn_2', 0),
+                'phi_Vn3_tonf': shear.get('phi_Vn_3', 0),
+            }
 
     def _get_combinations_list_from_cache(
         self,
@@ -1061,6 +1080,7 @@ class ElementDetailsService:
                 continue
             seen_combos[full_name] = i
 
+            # Comparación directa: critical_combo ahora tiene formato normalizado "name (location)"
             is_critical_flexure = full_name == critical_flexure
             is_critical_shear = full_name == critical_shear
 

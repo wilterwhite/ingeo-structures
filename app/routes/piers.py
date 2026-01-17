@@ -95,12 +95,15 @@ def upload_stream():
         multipart/form-data con campos:
         - 'file': archivo Excel (requerido)
         - 'hn_ft': altura del edificio en pies (opcional)
+        - 'session_id': ID de sesión existente para merge (opcional)
 
     Response:
         Stream SSE con eventos:
         - progress: {type: 'progress', phase, current, total, element}
         - complete: {type: 'complete', result: {success, session_id, summary}}
         - error: {type: 'error', message}
+
+    Si se proporciona session_id existente, combina datos con la sesión existente.
     """
     # Validar archivo
     file, error = validate_upload_file(request, ['.xlsx'])
@@ -113,14 +116,25 @@ def upload_stream():
         logger.info(f"[Upload-Stream] Tamaño: {len(file_content) / 1024:.1f} KB")
 
         hn_ft = parse_hn_ft(request.form)
-        session_id = str(uuid.uuid4())
-        logger.info(f"[Upload-Stream] Iniciando parseo... session_id={session_id[:8]}")
+
+        # Obtener session_id existente o crear nuevo
+        existing_session_id = request.form.get('session_id')
+        session_id = existing_session_id or str(uuid.uuid4())
+        merge = bool(existing_session_id)
+
+        if merge:
+            logger.info(f"[Upload-Stream] Combinando con sesión existente: {session_id[:8]}")
+        else:
+            logger.info(f"[Upload-Stream] Nueva sesión: {session_id[:8]}")
 
         service = get_analysis_service()
+        filename = file.filename or "unknown.xlsx"
 
         def generate():
             try:
-                for event in service.parse_excel_with_progress(file_content, session_id, hn_ft=hn_ft):
+                for event in service.parse_excel_with_progress(
+                    file_content, session_id, hn_ft=hn_ft, merge=merge, filename=filename
+                ):
                     yield f"data: {json.dumps(event)}\n\n"
             except Exception as e:
                 logger.exception(f"[Upload-Stream] ERROR: {str(e)}")
@@ -619,6 +633,142 @@ def update_beam_reinforcement(session_id: str, data: dict, parsed_data, beam_key
 
 
 # =============================================================================
+# Property Modifiers (Cracking/Agrietamiento)
+# =============================================================================
+
+@bp.route('/apply-cracking', methods=['POST'])
+@handle_errors
+@require_session_data
+def apply_cracking(session_id: str, data: dict, parsed_data):
+    """
+    Aplica agrietamiento a un elemento basado en su DCR.
+
+    El factor de agrietamiento es 1/DCR, aplicado sobre los Property Modifiers
+    actuales del elemento. Esto modifica la rigidez del elemento para que
+    redistribuya cargas a otros elementos del modelo.
+
+    Request:
+        {
+            "session_id": "uuid-xxx",
+            "element_key": "Story1_C1",
+            "element_type": "column" | "pier" | "beam" | "strut",
+            "dcr": 5.0,
+            "mode": "flexure" | "shear" | "axial" | "all"
+        }
+
+    Response:
+        {
+            "success": true,
+            "element_key": "Story1_C1",
+            "new_section_name": "C45x45-PM:0.20M2-0.20M3",
+            "property_modifiers": {
+                "pm_axial": 1.0,
+                "pm_m2": 0.20,
+                "pm_m3": 0.20,
+                ...
+            }
+        }
+    """
+    element_key = data.get('element_key')
+    element_type = data.get('element_type', 'column')
+    dcr = float(data.get('dcr', 1.0))
+    mode = data.get('mode', 'flexure')
+
+    if not element_key:
+        return error_response('Se requiere element_key')
+
+    if dcr <= 0:
+        return error_response('DCR debe ser mayor a 0')
+
+    # Buscar elemento según tipo
+    element = None
+    if element_type in ('column', 'pier', 'strut'):
+        element = parsed_data.piers.get(element_key)
+    elif element_type in ('beam', 'drop_beam'):
+        element = parsed_data.beams.get(element_key)
+
+    if not element:
+        return error_response(f'{element_type.capitalize()} {element_key} no encontrado')
+
+    # Aplicar agrietamiento
+    try:
+        element.apply_cracking(dcr, mode)
+    except ValueError as e:
+        return error_response(str(e))
+
+    logger.info(
+        f"[Cracking] {element_type} {element_key}: DCR={dcr:.2f}, "
+        f"mode={mode}, new_section={element.section_name}"
+    )
+
+    return jsonify({
+        'success': True,
+        'element_key': element_key,
+        'new_section_name': element.section_name,
+        'property_modifiers': {
+            'pm_axial': element.pm_axial,
+            'pm_m2': element.pm_m2,
+            'pm_m3': element.pm_m3,
+            'pm_v2': element.pm_v2,
+            'pm_v3': element.pm_v3,
+            'pm_torsion': element.pm_torsion,
+            'pm_weight': element.pm_weight,
+            'summary': element.pm_summary,
+            'has_modifiers': element.has_property_modifiers,
+        }
+    })
+
+
+@bp.route('/reset-cracking', methods=['POST'])
+@handle_errors
+@require_session_data
+def reset_cracking(session_id: str, data: dict, parsed_data):
+    """
+    Resetea los Property Modifiers de un elemento a 1.0.
+
+    Request:
+        {
+            "session_id": "uuid-xxx",
+            "element_key": "Story1_C1",
+            "element_type": "column" | "pier" | "beam" | "strut"
+        }
+
+    Response:
+        {
+            "success": true,
+            "element_key": "Story1_C1",
+            "new_section_name": "C45x45"
+        }
+    """
+    element_key = data.get('element_key')
+    element_type = data.get('element_type', 'column')
+
+    if not element_key:
+        return error_response('Se requiere element_key')
+
+    # Buscar elemento según tipo
+    element = None
+    if element_type in ('column', 'pier', 'strut'):
+        element = parsed_data.piers.get(element_key)
+    elif element_type in ('beam', 'drop_beam'):
+        element = parsed_data.beams.get(element_key)
+
+    if not element:
+        return error_response(f'{element_type.capitalize()} {element_key} no encontrado')
+
+    # Resetear Property Modifiers
+    element.reset_property_modifiers()
+
+    logger.info(f"[Cracking] Reset {element_type} {element_key} -> {element.section_name}")
+
+    return jsonify({
+        'success': True,
+        'element_key': element_key,
+        'new_section_name': element.section_name,
+    })
+
+
+# =============================================================================
 # E2K Section Cuts Generator
 # =============================================================================
 
@@ -664,4 +814,137 @@ def process_e2k():
         return error_response(str(e))
     except Exception as e:
         logger.error(f"Error procesando E2K: {e}")
+        return error_response(str(e), 500)
+
+
+# =============================================================================
+# Tablas ETABS (Vista de verificación)
+# =============================================================================
+
+@bp.route('/session/<session_id>/tables', methods=['GET'])
+@handle_errors
+def get_session_tables(session_id: str):
+    """
+    Obtiene las tablas crudas de ETABS de una sesión.
+
+    Retorna las tablas extraídas del Excel en formato JSON para que el
+    usuario pueda verificar que los datos se leyeron correctamente.
+
+    Response:
+        {
+            "success": true,
+            "tables": {
+                "pier_props": {
+                    "columns": ["Story", "Pier", "Width Bottom", ...],
+                    "rows": [["Story1", "P1", "300", ...], ...],
+                    "total_rows": 45
+                },
+                "frame_section": {...},
+                ...
+            }
+        }
+    """
+    service = get_analysis_service()
+    tables = service.get_raw_tables(session_id)
+
+    if tables is None:
+        return error_response('Sesión no encontrada o sin tablas cargadas', 404)
+
+    return jsonify({
+        'success': True,
+        'tables': tables
+    })
+
+
+@bp.route('/export-cracked-e2k', methods=['POST'])
+@handle_errors
+@require_session_data
+def export_cracked_e2k(session_id: str, data: dict, parsed_data):
+    """
+    Exporta un archivo E2K con las secciones agrietadas.
+
+    Crea nuevas secciones de frame con Property Modifiers aplicados
+    y actualiza las asignaciones de elementos a las nuevas secciones.
+
+    Request:
+        multipart/form-data con campos:
+        - 'file': archivo E2K original (requerido)
+        - 'session_id': ID de sesión (requerido)
+
+    Response:
+        El archivo E2K modificado con secciones agrietadas.
+    """
+    from ..services.parsing.e2k_processor import E2KProcessor
+
+    # Validar archivo E2K
+    file, error = validate_upload_file(request, ['.e2k'])
+    if error:
+        return error_response(error)
+
+    # Recolectar elementos agrietados de la sesión
+    cracked_elements = []
+
+    # Columnas/Piers con PM modificados
+    for key, element in parsed_data.piers.items():
+        if element.has_property_modifiers:
+            cracked_elements.append({
+                'section_name': element.section_name,
+                'base_section_name': element.base_section_name,
+                'new_section_name': element.section_name,
+                'pm_axial': element.pm_axial,
+                'pm_m2': element.pm_m2,
+                'pm_m3': element.pm_m3,
+                'pm_v2': element.pm_v2,
+                'pm_v3': element.pm_v3,
+                'pm_torsion': element.pm_torsion,
+                'pm_weight': element.pm_weight,
+            })
+
+    # Vigas con PM modificados
+    for key, element in parsed_data.beams.items():
+        if element.has_property_modifiers:
+            cracked_elements.append({
+                'section_name': element.section_name,
+                'base_section_name': element.base_section_name,
+                'new_section_name': element.section_name,
+                'pm_axial': element.pm_axial,
+                'pm_m2': element.pm_m2,
+                'pm_m3': element.pm_m3,
+                'pm_v2': element.pm_v2,
+                'pm_v3': element.pm_v3,
+                'pm_torsion': element.pm_torsion,
+                'pm_weight': element.pm_weight,
+            })
+
+    if not cracked_elements:
+        return error_response('No hay elementos agrietados para exportar')
+
+    try:
+        processor = E2KProcessor()
+        result = processor.export_cracked_sections(
+            file.read(),
+            cracked_elements
+        )
+
+        # Nombre del archivo de salida
+        original_name = file.filename.rsplit('.', 1)[0]
+        output_filename = f"{original_name}_cracked.e2k"
+
+        logger.info(
+            f"[E2K Export] {result.n_sections_modified} secciones, "
+            f"{result.n_elements_updated} elementos actualizados"
+        )
+
+        return Response(
+            result.content.encode('utf-8'),
+            mimetype='application/octet-stream',
+            headers={
+                'Content-Disposition': f'attachment; filename="{output_filename}"',
+                'X-Sections-Modified': str(result.n_sections_modified),
+                'X-Elements-Updated': str(result.n_elements_updated)
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error exportando E2K agrietado: {e}")
         return error_response(str(e), 500)

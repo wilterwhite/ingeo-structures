@@ -36,8 +36,11 @@ COVER_DEFAULT_BEAM_MM = 40.0
 # LÍMITES GEOMÉTRICOS PARA PROPUESTA DE ARMADURA
 # =============================================================================
 
-# Límite para strut: ambas dimensiones < 150mm (práctica chilena, pilar 15x15)
+# Límite para strut: dimensión menor < 150mm (práctica chilena, pilar 15x15)
 STRUT_MAX_DIM_MM = 150.0
+
+# Ratio máximo lw/tw para considerar strut (si >= 3, es muro, no strut)
+STRUT_MAX_RATIO = 3.0
 
 # Espaciamiento máximo entre barras longitudinales (20cm)
 MAX_BAR_SPACING_MM = 200.0

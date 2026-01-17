@@ -26,6 +26,10 @@
                     <span class="nav-icon">━</span>
                     <span class="nav-label">Horizontales</span>
                 </button>
+                <button class="nav-tab" data-page="etabs-tables-page" title="Ver tablas crudas de ETABS">
+                    <span class="nav-icon">📋</span>
+                    <span class="nav-label">Tablas</span>
+                </button>
             </nav>
             <div class="header-spacer"></div>
             <div class="project-controls">
@@ -53,12 +57,12 @@
                 <div class="card-body">
                     <div class="upload-area" id="upload-area">
                         <div class="icon">📄</div>
-                        <p>Arrastra tu archivo aquí o haz clic para seleccionar</p>
-                        <p class="hint"><strong>Excel (.xlsx)</strong>: Análisis estructural | <strong>E2K (.e2k)</strong>: Generar Section Cuts</p>
+                        <p>Arrastra tus archivos aquí o haz clic para seleccionar</p>
+                        <p class="hint"><strong>Excel (.xlsx)</strong>: Análisis estructural (puedes subir varios) | <strong>E2K (.e2k)</strong>: Generar Section Cuts</p>
                         <img src="{{ url_for('structural_static', filename='img/Tablas_Etabs.png') }}?v=3"
                              alt="Tablas ETABS soportadas"
                              class="etabs-tables-img">
-                        <input type="file" id="file-input" accept=".xlsx,.e2k">
+                        <input type="file" id="file-input" accept=".xlsx,.e2k" multiple>
                     </div>
                     <div class="loading" id="upload-loading">
                         <div class="spinner"></div>
@@ -328,6 +332,42 @@
         <!-- Sección de vigas capitel eliminada: DROP_BEAM ahora usa la tabla de vigas -->
 
         </div><!-- Fin PAGE: Elementos Horizontales -->
+
+        <!-- ================================================================
+             PAGE: TABLAS ETABS (Vista de verificación)
+             ================================================================ -->
+        <div class="page-container hidden" id="etabs-tables-page">
+
+        <!-- Placeholder when no data -->
+        <div class="card" id="etabs-tables-placeholder">
+            <div class="card-body">
+                <div class="no-data-placeholder">
+                    <p class="no-data-msg">Carga un archivo de ETABS en la pestaña <strong>Config</strong> para ver las tablas.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tables Content -->
+        <div class="card hidden" id="etabs-tables-content">
+            <div class="card-header">Tablas de ETABS</div>
+            <div class="card-body">
+                <div class="toolbar-bar">
+                    <div class="filter-group">
+                        <label for="etabs-table-selector">Tabla:</label>
+                        <select id="etabs-table-selector">
+                            <option value="">Selecciona una tabla...</option>
+                        </select>
+                    </div>
+                    <span id="etabs-table-info" class="table-info"></span>
+                </div>
+
+                <div class="table-wrapper etabs-table-wrapper" id="etabs-table-container">
+                    <p class="no-data-msg">Selecciona una tabla para ver su contenido.</p>
+                </div>
+            </div>
+        </div>
+
+        </div><!-- Fin PAGE: Tablas ETABS -->
 
     </div><!-- Fin container -->
 
@@ -905,6 +945,7 @@
     <!-- Modules -->
     <script src="{{ url_for('structural_static', filename='js/modules/WallsModule.js') }}?v=1"></script>
     <script src="{{ url_for('structural_static', filename='js/modules/BeamsModule.js') }}?v=1"></script>
+    <script src="{{ url_for('structural_static', filename='js/modules/EtabsTablesModule.js') }}?v=1"></script>
     <!-- Storage & API -->
     <script src="{{ url_for('structural_static', filename='js/storage/ProjectStorage.js') }}?v=1"></script>
     <script src="{{ url_for('structural_static', filename='js/core/ProjectAPI.js') }}?v=1"></script>

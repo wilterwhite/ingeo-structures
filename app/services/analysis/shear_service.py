@@ -122,9 +122,10 @@ class ShearService:
             # Cachear resultado de este combo (ya se calculó, no desperdiciar)
             r2 = result.result_V2
             r3 = result.result_V3
+            combo_location = combo.location if hasattr(combo, 'location') else 'Middle'
             combo_shear_results.append({
-                'combo_name': combo.name,
-                'combo_location': combo.location if hasattr(combo, 'location') else 'Middle',
+                'combo_name': f"{combo.name} ({combo_location})",  # Formato normalizado con location
+                'combo_location': combo_location,
                 'Vu_2': round(Vu2, 2),
                 'Vu_3': round(Vu3, 2),
                 'Pu': round(-Nu, 2),
@@ -154,9 +155,11 @@ class ShearService:
         r2 = critical_result.result_V2
         r3 = critical_result.result_V3
 
+        # Formato normalizado: "name (location)" para consistencia con FlexureChecker
+        critical_location = critical_combo.location if critical_combo and hasattr(critical_combo, 'location') else 'Middle'
         return {
             'status': 'OK' if sf >= 1.0 else 'NO OK',
-            'critical_combo': critical_combo.name if critical_combo else 'N/A',
+            'critical_combo': f"{critical_combo.name} ({critical_location})" if critical_combo else 'N/A',
             'phi_Vn_2': round(r2.phi_Vn, 2),
             'Vu_2': round(r2.Vu, 2),
             'dcr_2': round(critical_result.dcr_2, 3),
@@ -447,40 +450,6 @@ class ShearService:
                 'hx_max_mm': result.transverse_reinforcement.hx_max,
             }
         return response
-
-    # =========================================================================
-    # VERIFICACIÓN COMPLETA
-    # =========================================================================
-
-    def check_complete(
-        self,
-        pier: 'VerticalElement',
-        pier_forces: Optional[ElementForces],
-        hwcs: Optional[float] = None,
-        hn_ft: Optional[float] = None
-    ) -> Dict[str, Any]:
-        """Realiza verificación completa del pier incluyendo todas las mejoras ACI 318-25."""
-        classification = self.get_classification_dict(pier)
-        shear_result = self.check_shear(pier, pier_forces)
-
-        Vu_max = shear_result.get('Vu_2', 0)
-        amplification = self.get_amplification_dict(pier, Vu_max, hwcs=hwcs, hn_ft=hn_ft)
-
-        boundary = None
-        if pier_forces and pier_forces.combinations:
-            for combo in pier_forces.combinations:
-                if combo.name == shear_result.get('critical_combo'):
-                    Pu = -combo.P
-                    Mu = abs(combo.M3)
-                    boundary = self.get_boundary_element_dict(pier, Pu, Mu)
-                    break
-
-        return {
-            'classification': classification,
-            'shear': shear_result,
-            'amplification': amplification,
-            'boundary_element': boundary,
-        }
 
     # =========================================================================
     # VIGAS DE ACOPLAMIENTO (§18.10.7)

@@ -89,6 +89,8 @@ class ElementEditManager {
         } finally {
             this.recalcButton.setLoading(false);
             this._setRowsLoading(pendingKeys, false);
+            // Actualizar log del frontend después de recalcular
+            this.table.page.logState();
         }
     }
 

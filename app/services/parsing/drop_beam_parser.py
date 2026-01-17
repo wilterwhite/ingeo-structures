@@ -20,7 +20,7 @@ from ...domain.entities import (
 )
 from ...domain.entities.reinforcement import BeamReinforcement
 from ...domain.entities.section_cut import SectionCutInfo
-from ...domain.entities.load_combination import LoadCombination
+from ...domain.entities.element_forces import COMBO_COLUMNS
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
 from .table_extractor import normalize_columns
 
@@ -73,6 +73,8 @@ class DropBeamParser:
         """
         Parsea vigas capitel desde Section Cut Forces - Analysis.
 
+        OPTIMIZADO: Usa operaciones vectorizadas y set_combinations_from_df.
+
         Args:
             section_cut_df: DataFrame con datos de Section Cut Forces
             materials: Diccionario de materiales {nombre: fc}
@@ -84,6 +86,7 @@ class DropBeamParser:
         drop_beams: Dict[str, HorizontalElement] = {}
         drop_beam_forces: Dict[str, ElementForces] = {}
         stories: List[str] = []
+        section_cut_cache: Dict[str, SectionCutInfo] = {}
 
         if section_cut_df is None or section_cut_df.empty:
             return drop_beams, drop_beam_forces, stories
@@ -91,32 +94,85 @@ class DropBeamParser:
         # Normalizar columnas
         df = normalize_columns(section_cut_df)
 
-        # Agrupar combinaciones por corte de sección
-        for _, row in df.iterrows():
-            # Obtener nombre del corte
-            section_cut_name = str(row.get('sectioncut', ''))
+        # Filtrar filas válidas
+        df = df[df['sectioncut'].notna() & (df['sectioncut'].astype(str) != 'nan')].copy()
 
-            # Intentar extraer datos del nombre
-            section_cut = self._parse_section_cut_name(section_cut_name)
+        if len(df) == 0:
+            return drop_beams, drop_beam_forces, stories
+
+        # Parsear nombres de section cut y obtener element_key para cada fila
+        def get_element_key(name: str) -> str:
+            if name not in section_cut_cache:
+                sc = self._parse_section_cut_name(name)
+                if sc:
+                    section_cut_cache[name] = sc
+                    return sc.element_key
+                return ''
+            return section_cut_cache[name].element_key
+
+        df['_element_key'] = df['sectioncut'].astype(str).apply(get_element_key)
+
+        # Filtrar filas con element_key válido
+        df = df[df['_element_key'] != '']
+
+        if len(df) == 0:
+            return drop_beams, drop_beam_forces, stories
+
+        # OPTIMIZADO: Preparar columnas para combinaciones
+        # Mapear columnas de Analysis a LoadCombination
+        # F1 -> P, F2 -> V3, F3 -> V2, M1 -> T, M2 -> M3, M3 -> M2
+        for col in ['f1', 'f2', 'f3', 'm1', 'm2', 'm3']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            else:
+                df[col] = 0
+
+        if 'output case' in df.columns:
+            df['_output_case'] = df['output case'].astype(str).fillna('')
+        else:
+            df['_output_case'] = ''
+
+        if 'step type' in df.columns:
+            df['_step_type'] = df['step type'].astype(str).replace('nan', '').fillna('')
+        else:
+            df['_step_type'] = ''
+
+        # Crear DataFrame de combinaciones con mapeo correcto de columnas
+        df_combos = pd.DataFrame({
+            'element_key': df['_element_key'],
+            'name': df['_output_case'],
+            'location': 'Section Cut',
+            'step_type': df['_step_type'],
+            'P': df['f1'],
+            'V2': df['f3'],   # F3 -> V2
+            'V3': df['f2'],   # F2 -> V3
+            'T': df['m1'],
+            'M2': df['m3'],   # M3 -> M2
+            'M3': df['m2']    # M2 -> M3
+        })
+
+        # Agrupar por element_key
+        grouped = df_combos.groupby('element_key')
+
+        for element_key, group in grouped:
+            if len(group) == 0:
+                continue
+
+            # Obtener SectionCutInfo del cache (ya parseado)
+            scut_name = df[df['_element_key'] == element_key]['sectioncut'].iloc[0]
+            section_cut = section_cut_cache.get(scut_name)
             if section_cut is None:
                 continue
 
-            drop_beam_key = section_cut.element_key
-
-            # Crear ElementForces si no existe
-            if drop_beam_key not in drop_beam_forces:
-                drop_beam_forces[drop_beam_key] = ElementForces(
-                    label=section_cut.display_name,
-                    story=section_cut.story,
-                    element_type=ElementForceType.DROP_BEAM,
-                    section_cut=section_cut,
-                    combinations=[]
-                )
-
-            # Parsear combinación de carga
-            combo = self._parse_combination(row)
-            if combo is not None:
-                drop_beam_forces[drop_beam_key].combinations.append(combo)
+            # Crear ElementForces usando set_combinations_from_df
+            forces = ElementForces(
+                label=section_cut.display_name,
+                story=section_cut.story,
+                element_type=ElementForceType.DROP_BEAM,
+                section_cut=section_cut
+            )
+            forces.set_combinations_from_df(group[COMBO_COLUMNS])
+            drop_beam_forces[element_key] = forces
 
             # Agregar story a la lista
             if section_cut.story not in stories:
@@ -202,52 +258,6 @@ class DropBeamParser:
             )
 
         return None
-
-    def _parse_combination(self, row: pd.Series) -> Optional[LoadCombination]:
-        """
-        Parsea una combinación de carga desde una fila.
-
-        Las columnas de Section Cut Forces - Analysis son:
-        - F1, F2, F3: Fuerzas en ejes globales (tonf)
-        - M1, M2, M3: Momentos en ejes globales (tonf-m)
-
-        Se mapean a P, V2, V3, T, M2, M3 para compatibilidad con LoadCombination.
-        """
-        try:
-            combo_name = str(row.get('output case', ''))
-            if not combo_name or combo_name == 'nan':
-                return None
-
-            case_type = str(row.get('case type', ''))
-            if case_type == 'nan':
-                case_type = ''
-
-            step_type = str(row.get('step type', ''))
-            if step_type == 'nan':
-                step_type = ''
-
-            # Mapear columnas de Analysis a LoadCombination
-            # F1 -> P (axial)
-            # F2 -> V3 (cortante en dir 2)
-            # F3 -> V2 (cortante en dir 3)
-            # M1 -> T (torsión)
-            # M2 -> M3
-            # M3 -> M2
-            return LoadCombination(
-                name=combo_name,
-                location='Section Cut',
-                step_type=step_type,
-                P=float(row.get('f1', 0)),
-                V2=float(row.get('f3', 0)),   # F3 -> V2
-                V3=float(row.get('f2', 0)),   # F2 -> V3
-                T=float(row.get('m1', 0)),
-                M2=float(row.get('m3', 0)),   # M3 -> M2
-                M3=float(row.get('m2', 0))    # M2 -> M3
-            )
-
-        except (ValueError, TypeError) as e:
-            logger.warning("Combinación inválida para drop_beam '%s', omitiendo: %s", combo_name, e)
-            return None
 
     def set_default_fc(self, fc: float):
         """Establece el f'c por defecto para las vigas capitel."""

@@ -45,15 +45,70 @@ class FrontendLogger {
     async _doLog() {
         try {
             const content = this._buildLogContent();
+            const structuredState = this._buildStructuredState();
+
             await fetch('/api/frontend-log', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content })
+                body: JSON.stringify({
+                    content,
+                    ...structuredState
+                })
             });
         } catch (e) {
             // Silenciar errores - el log es opcional
             console.debug('[FrontendLogger] Error:', e.message);
         }
+    }
+
+    /**
+     * Construye estado estructurado para ClaudeStateLogger.
+     */
+    _buildStructuredState() {
+        const tables = {};
+
+        // Helper para calcular resumen de tabla
+        const summarizeTable = (items, name) => {
+            if (items.length === 0) return;
+            const dcrs = items.map(r => r.flexure?.dcr || 0).filter(d => d > 0);
+            const minDcr = dcrs.length > 0 ? Math.min(...dcrs) : 0;
+            const maxDcr = dcrs.length > 0 ? Math.max(...dcrs) : 0;
+            tables[name] = `${items.length} rows, DCR [${minDcr.toFixed(2)}-${maxDcr.toFixed(2)}]`;
+        };
+
+        const piers = this.page.results || [];
+        const columns = this.page.columnResults || [];
+        const beams = this.page.beamResults || [];
+        const dropBeams = this.page.dropBeamResults || [];
+
+        summarizeTable(piers, 'Piers');
+        summarizeTable(columns, 'Columns');
+        summarizeTable(beams, 'Beams');
+        summarizeTable(dropBeams, 'DropBeams');
+
+        // Contar warnings
+        let warningsCount = 0;
+        [...piers, ...columns, ...beams, ...dropBeams].forEach(r => {
+            const reinf = r.reinforcement || {};
+            if (reinf.warnings_v?.length > 0) warningsCount += reinf.warnings_v.length;
+            if (reinf.warnings_h?.length > 0) warningsCount += reinf.warnings_h.length;
+            if (r.warnings?.length > 0) warningsCount += r.warnings.length;
+        });
+
+        return {
+            page: this.page.currentPage || 'config-page',
+            tables,
+            warnings_count: warningsCount,
+            last_action: this._lastAction || ''
+        };
+    }
+
+    /**
+     * Registra la última acción del usuario.
+     * @param {string} action - Descripción de la acción
+     */
+    setLastAction(action) {
+        this._lastAction = action;
     }
 
     _buildLogContent() {
@@ -90,9 +145,100 @@ class FrontendLogger {
             lines.push(this._buildBeamsTable());
         }
 
+        // Campos modificados (debug)
+        lines.push(this._buildModifiedFieldsSection());
+
+        // Warnings de elementos (espesor, cuantía, etc.)
+        lines.push(this._buildWarningsSection());
+
         // Errores de consola (últimos)
         lines.push(this._buildConsoleErrors());
 
+        return lines.join('\n');
+    }
+
+    _buildModifiedFieldsSection() {
+        const lines = [];
+        lines.push('-'.repeat(60));
+        lines.push('CAMPOS MODIFICADOS (marcados en azul en UI)');
+        lines.push('-'.repeat(60));
+
+        const allVertical = [
+            ...(this.page.results || []),
+            ...(this.page.columnResults || [])
+        ];
+
+        let hasModified = false;
+        allVertical.forEach(r => {
+            const label = r.pier_label || r.label || r.key || '-';
+            const reinf = r.reinforcement || {};
+            const modFields = reinf.modified_fields || [];
+
+            if (modFields.length > 0) {
+                hasModified = true;
+                lines.push(`${label}: ${modFields.join(', ')}`);
+            }
+        });
+
+        if (!hasModified) {
+            lines.push('(ninguno)');
+        }
+
+        lines.push('');
+        return lines.join('\n');
+    }
+
+    _buildWarningsSection() {
+        const lines = [];
+        lines.push('-'.repeat(60));
+        lines.push('WARNINGS (espesor, cuantía, etc.)');
+        lines.push('-'.repeat(60));
+
+        const allVertical = [
+            ...(this.page.results || []),
+            ...(this.page.columnResults || [])
+        ];
+
+        let hasWarnings = false;
+        allVertical.forEach(r => {
+            const label = r.pier_label || r.label || r.key || '-';
+            const reinf = r.reinforcement || {};
+            const warnings = [];
+
+            // Warnings de armadura vertical
+            if (reinf.warnings_v && reinf.warnings_v.length > 0) {
+                warnings.push(...reinf.warnings_v);
+            }
+
+            // Warnings de armadura horizontal
+            if (reinf.warnings_h && reinf.warnings_h.length > 0) {
+                warnings.push(...reinf.warnings_h);
+            }
+
+            // Warning de cuantía
+            if (reinf.rho_v_ok === false) {
+                warnings.push('ρv < ρmin');
+            }
+            if (reinf.rho_v_exceeds_max === true) {
+                warnings.push('ρv > ρmax (4%)');
+            }
+
+            // Warnings generales del resultado
+            if (r.warnings && r.warnings.length > 0) {
+                warnings.push(...r.warnings);
+            }
+
+            if (warnings.length > 0) {
+                hasWarnings = true;
+                lines.push(`${label}: ${warnings.join(', ')}`);
+            }
+        });
+
+        if (!hasWarnings) {
+            lines.push('(ninguno)');
+        }
+
+        lines.push('');
         return lines.join('\n');
     }
 
@@ -125,22 +271,40 @@ class FrontendLogger {
             // Geometría
             let geom = r.dimensions_display || '-';
 
-            // Enfierradura (malla): nM φV@sV / φH@sH
+            // Enfierradura - detectar tipo: STIRRUPS (columnas) vs MESH (piers)
             let enfierr = '-';
-            const reinf = r.reinforcement || {};
-            if (reinf.n_meshes !== undefined) {
-                const warnV = reinf.warnings_v?.length > 0 ? '⚠' : '';
-                const warnH = reinf.warnings_h?.length > 0 ? '⚠' : '';
-                enfierr = `${reinf.n_meshes}M φ${reinf.diameter_v || 8}@${reinf.spacing_v || 200}${warnV}`;
-            }
-
-            // Borde: nφ φdb + estribos
             let borde = '-';
-            if (reinf.n_edge_bars !== undefined) {
-                const warnRho = !reinf.rho_v_ok ? '⚠' : '';
-                borde = `${reinf.n_edge_bars}φ${reinf.diameter_edge || 12}${warnRho}`;
-                if (reinf.stirrup_diameter) {
-                    borde += ` E${reinf.stirrup_diameter}@${reinf.stirrup_spacing || 150}`;
+            const reinf = r.reinforcement || {};
+
+            // Campos modificados por el usuario (para debug)
+            const modFields = reinf.modified_fields || [];
+            const modMark = modFields.length > 0 ? '*' : '';
+
+            // Detectar si es armadura discreta (columnas) o malla (piers)
+            if (reinf.n_bars_depth > 0 || reinf.n_bars_width > 0) {
+                // STIRRUPS Layout (Columna): nxm φdb
+                const nDepth = reinf.n_bars_depth || 0;
+                const nWidth = reinf.n_bars_width || 0;
+                const dLong = reinf.diameter_long || 16;
+                enfierr = `${nDepth}x${nWidth} φ${dLong}${modMark}`;
+                // Estribos/Trabas para columnas
+                if (reinf.stirrup_diameter && reinf.stirrup_spacing) {
+                    const prefix = reinf.has_crossties ? 'T' : 'E';  // T=Traba, E=Estribo
+                    borde = `${prefix}${reinf.stirrup_diameter}@${reinf.stirrup_spacing}`;
+                } else {
+                    borde = 'Sin estribos';
+                }
+            } else if (reinf.n_meshes !== undefined && reinf.n_meshes > 0) {
+                // MESH Layout (Pier): nM φV@sV
+                const warnV = reinf.warnings_v?.length > 0 ? '⚠' : '';
+                enfierr = `${reinf.n_meshes}M φ${reinf.diameter_v || 8}@${reinf.spacing_v || 200}${warnV}${modMark}`;
+                // Borde: nφ φdb + estribos
+                if (reinf.n_edge_bars !== undefined) {
+                    const warnRho = !reinf.rho_v_ok ? '⚠' : '';
+                    borde = `${reinf.n_edge_bars}φ${reinf.diameter_edge || 12}${warnRho}`;
+                    if (reinf.stirrup_diameter) {
+                        borde += ` E${reinf.stirrup_diameter}@${reinf.stirrup_spacing || 150}`;
+                    }
                 }
             }
 
@@ -168,12 +332,18 @@ class FrontendLogger {
                 flexInfo = `Pu=${flex.Pu}t φMn=${phiMn.toFixed(0)}t-m`;
             }
 
-            // Corte
+            // Corte - manejar tanto muros/columnas (phi_Vn_2) como struts (phi_Vn)
             let shearInfo = '-';
             const sh = r.shear || {};
             if (sh.phi_Vn_2 !== undefined) {
+                // Muros y columnas
                 const Vu = sh.Vu_original || sh.Vu_2 || 0;
                 shearInfo = `φVn=${sh.phi_Vn_2.toFixed(0)}t Vu=${Vu.toFixed(0)}t`;
+            } else if (sh.phi_Vn !== undefined) {
+                // Struts (phi_Vn = phi_Vcr)
+                const Vu = sh.Vu || 0;
+                const cracked = sh.is_cracked ? '⚠' : '';
+                shearInfo = `φVc=${sh.phi_Vn.toFixed(1)}t Vu=${Vu.toFixed(1)}t${cracked}`;
             }
 
             // Estado
@@ -287,6 +457,149 @@ class FrontendLogger {
             const s = String(v || '-');
             return s.padEnd(widths[i] || 10);
         }).join(' ');
+    }
+
+    /**
+     * Loggea el proceso de importación de archivos.
+     * @param {string} phase - Fase del proceso: 'start', 'file', 'complete', 'error'
+     * @param {Object} data - Datos del evento
+     */
+    logImport(phase, data = {}) {
+        if (!this.enabled) return;
+
+        const now = new Date().toLocaleTimeString('es-CL');
+        let message = '';
+
+        switch (phase) {
+            case 'start':
+                message = `[${now}] IMPORT START: ${data.fileCount} archivo(s)`;
+                if (data.files) {
+                    data.files.forEach((f, i) => {
+                        message += `\n  - Archivo ${i + 1}: ${f.name} (${(f.size / 1024).toFixed(1)} KB)`;
+                    });
+                }
+                break;
+
+            case 'file':
+                message = `[${now}] PROCESANDO: Archivo ${data.fileIndex + 1}/${data.totalFiles} - ${data.fileName}`;
+                if (data.sessionId) {
+                    message += ` (session: ${data.sessionId.substring(0, 8)}...)`;
+                }
+                if (data.merge) {
+                    message += ' [MERGE]';
+                }
+                break;
+
+            case 'progress':
+                message = `[${now}] PROGRESO: ${data.current}/${data.total} - ${data.element || ''}`;
+                break;
+
+            case 'file_complete':
+                message = `[${now}] ARCHIVO COMPLETADO: ${data.fileName}`;
+                if (data.summary) {
+                    const s = data.summary;
+                    const counts = [];
+                    if (s.total_piers > 0) counts.push(`${s.total_piers} piers`);
+                    if (s.total_columns > 0) counts.push(`${s.total_columns} columnas`);
+                    if (s.total_beams > 0) counts.push(`${s.total_beams} vigas`);
+                    if (s.total_drop_beams > 0) counts.push(`${s.total_drop_beams} drop beams`);
+                    message += `\n  Elementos: ${counts.join(', ') || 'ninguno'}`;
+                }
+                if (data.merged) {
+                    message += ' [DATOS COMBINADOS]';
+                }
+                break;
+
+            case 'analysis_start':
+                message = `[${now}] ANALISIS START: session=${data.sessionId?.substring(0, 8) || '-'}...`;
+                break;
+
+            case 'analysis_progress':
+                message = `[${now}] ANALIZANDO: ${data.current}/${data.total} - ${data.element || ''}`;
+                break;
+
+            case 'complete':
+                message = `[${now}] IMPORT COMPLETE`;
+                if (data.summary) {
+                    const s = data.summary;
+                    message += `\n  Total: ${s.total_piers || 0} piers, ${s.total_columns || 0} columnas, ${s.total_beams || 0} vigas`;
+                }
+                if (data.duration) {
+                    message += `\n  Duracion: ${data.duration}ms`;
+                }
+                break;
+
+            case 'error':
+                message = `[${now}] ERROR: ${data.message || 'Error desconocido'}`;
+                if (data.fileName) {
+                    message += ` (archivo: ${data.fileName})`;
+                }
+                break;
+
+            default:
+                message = `[${now}] ${phase}: ${JSON.stringify(data)}`;
+        }
+
+        // Agregar al buffer de import log
+        if (!this._importLog) {
+            this._importLog = [];
+        }
+        this._importLog.push(message);
+
+        // Throttle: solo enviar cada 2 segundos para eventos de progreso
+        // Enviar inmediatamente para eventos importantes
+        const immediateEvents = ['start', 'file', 'file_complete', 'analysis_start', 'complete', 'error'];
+        if (immediateEvents.includes(phase)) {
+            this._sendImportLogNow();
+        } else {
+            this._sendImportLogThrottled();
+        }
+    }
+
+    _sendImportLogThrottled() {
+        if (this._importLogTimer) return;
+        this._importLogTimer = setTimeout(() => {
+            this._importLogTimer = null;
+            this._sendImportLogNow();
+        }, 2000);
+    }
+
+    async _sendImportLogNow() {
+        if (!this.enabled || !this._importLog) return;
+        if (this._sendingLog) return; // Evitar requests simultáneas
+
+        this._sendingLog = true;
+        try {
+            const lines = [];
+            lines.push('='.repeat(70));
+            lines.push('IMPORT/ANALYSIS LOG');
+            lines.push('='.repeat(70));
+            lines.push('');
+            lines.push(...this._importLog);
+            lines.push('');
+            lines.push('='.repeat(70));
+            lines.push('');
+
+            // Agregar estado actual de datos
+            lines.push(this._buildLogContent());
+
+            await fetch('/api/frontend-log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: lines.join('\n') })
+            });
+        } catch (e) {
+            console.debug('[FrontendLogger] Error sending import log:', e.message);
+        } finally {
+            this._sendingLog = false;
+        }
+    }
+
+    /**
+     * Limpia el log de importación (llamar al inicio de nuevo import).
+     */
+    clearImportLog() {
+        this._importLog = [];
     }
 
     /**

@@ -62,20 +62,27 @@ class StrutCapacityResult:
     Mcr: float              # Momento de agrietamiento (tonf-m)
     phi_Mcr: float          # Momento de agrietamiento de diseno (tonf-m)
 
+    # Capacidades - Cortante (22.5) - Solo Vc, sin estribos
+    Vcr: float              # Cortante de agrietamiento (tonf)
+    phi_Vcr: float          # Cortante de diseno (tonf) - phi=0.75
+
     # Demandas
     Pu: float               # Carga axial factorizada (tonf)
     Mu: float               # Momento factorizado (tonf-m)
+    Vu: float               # Cortante factorizado (tonf)
 
     # Verificacion
     dcr: float              # Demand/Capacity ratio (flexocompresion)
     dcr_P: float            # DCR solo axial
     dcr_M: float            # DCR solo momento
+    dcr_V: float            # DCR cortante = Vu / phi_Vcr
     is_ok: bool             # True si dcr <= 1.0
+    is_cracked_shear: bool  # True si Vu > phi_Vcr (agrietado al corte)
 
-    # Diagrama
+    # Diagrama (con default)
     diagram_points: List['InteractionPoint'] = field(default_factory=list)
 
-    # Metadata
+    # Metadata (con default)
     warnings: List[str] = field(default_factory=list)
     aci_reference: str = "ACI 318-25 23.4"
 
@@ -103,6 +110,7 @@ class StrutCapacityService:
         fc: float,           # f'c (MPa)
         Pu: float,           # Carga axial factorizada (tonf)
         Mu: float = 0.0,     # Momento factorizado (tonf-m)
+        Vu: float = 0.0,     # Cortante factorizado (tonf)
         *,
         b: Optional[float] = None,   # Ancho (mm) - para calcular Mcr
         h: Optional[float] = None,   # Altura (mm) - para calcular Mcr
@@ -174,7 +182,23 @@ class StrutCapacityService:
         phi_Mcr_tonfm = PHI_STRUT * Mcr_tonfm
 
         # =====================================================================
-        # 3. Generar diagrama de interaccion simplificado
+        # 3. Calcular resistencia a cortante - Vcr (22.5.5.1)
+        # =====================================================================
+        # Para struts sin estribos, solo cuenta Vc (contribucion del hormigon)
+        # Vc = 0.17 × λ × sqrt(f'c) × bw × d
+        # donde d ≈ 0.8 × h (peralte efectivo aproximado)
+        d = 0.8 * h  # mm - peralte efectivo aproximado
+
+        # Vc en N: 0.17 × λ × sqrt(f'c en MPa) × bw × d
+        Vcr_N = 0.17 * lambda_factor * math.sqrt(fc) * b * d  # N
+        Vcr_tonf = Vcr_N / N_TO_TONF  # tonf
+
+        # phi para cortante = 0.75 (Tabla 21.2.1)
+        PHI_SHEAR = 0.75
+        phi_Vcr_tonf = PHI_SHEAR * Vcr_tonf
+
+        # =====================================================================
+        # 4. Generar diagrama de interaccion simplificado
         # =====================================================================
         from ..flexure.interaction_diagram import (
             InteractionDiagramService,
@@ -206,10 +230,19 @@ class StrutCapacityService:
             Pu_abs, Mu_abs, phi_Fns_tonf, phi_Mcr_tonfm
         )
 
+        # =====================================================================
+        # 6. Calcular DCR de cortante
+        # =====================================================================
+        Vu_abs = abs(Vu)
+        dcr_V = Vu_abs / phi_Vcr_tonf if phi_Vcr_tonf > 0 else 0.0
+
+        # Si Vu > phi_Vcr, el strut se agrieta al corte
+        is_cracked_shear = dcr_V > 1.0
+
         is_ok = dcr <= 1.0
 
         # =====================================================================
-        # 5. Warnings
+        # 7. Warnings
         # =====================================================================
         # Warning si Pu negativo (traccion) - falla pero mostramos DCR real
         if Pu < 0:
@@ -230,6 +263,14 @@ class StrutCapacityService:
                 f"Capacidad insuficiente: DCR={dcr:.2f} > 1.0"
             )
 
+        # Warning de agrietamiento por corte
+        if is_cracked_shear:
+            warnings.append(
+                f"AGRIETADO AL CORTE: Vu={Vu_abs:.2f}t > φVcr={phi_Vcr_tonf:.2f}t (DCR={dcr_V:.2f}). "
+                f"El strut pierde rigidez progresivamente. "
+                f"Reducir rigidez en ETABS (sugerido: 10-30% de EI original)."
+            )
+
         # Info sobre tipo de elemento
         warnings.insert(0, "Elemento tratado como strut no confinado (Cap. 23)")
         warnings.insert(1, "La barra se considera constructiva - no aporta capacidad")
@@ -247,12 +288,17 @@ class StrutCapacityService:
             fr=round(fr, 2),
             Mcr=round(Mcr_tonfm, 4),
             phi_Mcr=round(phi_Mcr_tonfm, 4),
+            Vcr=round(Vcr_tonf, 2),
+            phi_Vcr=round(phi_Vcr_tonf, 2),
             Pu=round(Pu_abs, 2),
             Mu=round(Mu_abs, 4),
+            Vu=round(Vu_abs, 2),
             dcr=round(dcr, 3),
             dcr_P=round(dcr_P, 3),
             dcr_M=round(dcr_M, 3),
+            dcr_V=round(dcr_V, 3),
             is_ok=is_ok,
+            is_cracked_shear=is_cracked_shear,
             diagram_points=diagram_points,
             warnings=warnings,
         )

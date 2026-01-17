@@ -44,15 +44,155 @@ class UploadManager {
             e.stopPropagation();
             uploadArea.classList.remove('dragover');
             if (e.dataTransfer.files.length > 0) {
-                this.handleFile(e.dataTransfer.files[0]);
+                this.handleFiles(e.dataTransfer.files);
             }
         });
 
         fileInput?.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
-                this.handleFile(e.target.files[0]);
+                this.handleFiles(e.target.files);
             }
         });
+    }
+
+    /**
+     * Maneja la carga de múltiples archivos.
+     * @param {FileList} files - Lista de archivos seleccionados
+     */
+    async handleFiles(files) {
+        const fileArray = Array.from(files);
+        const excelFiles = fileArray.filter(f => f.name.toLowerCase().endsWith('.xlsx'));
+        const e2kFiles = fileArray.filter(f => f.name.toLowerCase().endsWith('.e2k'));
+
+        // E2K se procesan por separado (no se combinan)
+        if (e2kFiles.length > 0) {
+            return this.handleE2KFile(e2kFiles[0]);
+        }
+
+        // Si solo hay un archivo Excel, usar el flujo original
+        if (excelFiles.length === 1) {
+            return this.handleFile(excelFiles[0]);
+        }
+
+        // Validar que hay archivos Excel
+        if (excelFiles.length === 0) {
+            this.page.showNotification('No hay archivos Excel válidos', 'error');
+            return;
+        }
+
+        // Procesar múltiples Excel
+        await this.handleMultipleExcelFiles(excelFiles);
+    }
+
+    /**
+     * Procesa múltiples archivos Excel secuencialmente.
+     * El primer archivo crea la sesión, los siguientes agregan datos.
+     * @param {File[]} files - Array de archivos Excel
+     */
+    async handleMultipleExcelFiles(files) {
+        // Guardar referencia al primer archivo
+        this.lastUploadedFile = files[0];
+        const startTime = Date.now();
+
+        // Log inicio de importación
+        this._logImport('start', { fileCount: files.length, files });
+
+        this.page.elements.uploadArea?.classList.add('hidden');
+        this.page.elements.uploadLoading?.classList.add('active');
+
+        try {
+            let sessionId = null;
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+
+                // Validar cada archivo
+                if (!this.validateFile(file)) {
+                    throw new Error(`Archivo inválido: ${file.name}`);
+                }
+
+                // Log procesando archivo
+                this._logImport('file', {
+                    fileIndex: i,
+                    totalFiles: files.length,
+                    fileName: file.name,
+                    sessionId: sessionId,
+                    merge: i > 0
+                });
+
+                this.updateUploadStatus(
+                    `Procesando archivo ${i + 1} de ${files.length}`,
+                    file.name
+                );
+
+                // Primer archivo: crea sesión (sessionId = null)
+                // Siguientes: agregan a la sesión existente
+                const uploadData = await structuralAPI.uploadWithProgress(
+                    file,
+                    (current, total, element) => {
+                        this.updateUploadStatus(
+                            `Archivo ${i + 1}/${files.length}: ${current}/${total}`,
+                            element
+                        );
+                        this._logImport('progress', { current, total, element });
+                    },
+                    sessionId
+                );
+
+                if (!uploadData.success) throw new Error(uploadData.error);
+
+                // Guardar session_id del primer archivo
+                if (i === 0) {
+                    sessionId = uploadData.session_id;
+                }
+
+                // Log archivo completado
+                this._logImport('file_complete', {
+                    fileName: file.name,
+                    summary: uploadData.summary,
+                    merged: uploadData.merged
+                });
+
+                // Actualizar datos acumulados
+                this.storeUploadData(uploadData);
+            }
+
+            // Delay antes del análisis
+            await new Promise(r => setTimeout(r, 100));
+
+            // Log inicio de análisis
+            this._logImport('analysis_start', { sessionId });
+
+            // Ejecutar análisis
+            await this._executeAnalysis();
+
+            // Log completado
+            this._logImport('complete', {
+                duration: Date.now() - startTime,
+                summary: {
+                    total_piers: this.page.results?.length || 0,
+                    total_columns: this.page.columnResults?.length || 0,
+                    total_beams: this.page.beamResults?.length || 0
+                }
+            });
+
+        } catch (error) {
+            console.error('Error procesando archivos:', error);
+            this._logImport('error', { message: error.message });
+            this.page.showNotification('Error: ' + error.message, 'error');
+            this.hideProgressModal();
+            this.resetUploadArea();
+        }
+    }
+
+    /**
+     * Helper para logging de importación.
+     * @private
+     */
+    _logImport(phase, data) {
+        if (this.page.frontendLogger) {
+            this.page.frontendLogger.logImport(phase, data);
+        }
     }
 
     /**
@@ -78,20 +218,41 @@ class UploadManager {
 
         // Guardar referencia al archivo para poder crear proyecto despues
         this.lastUploadedFile = file;
+        const startTime = Date.now();
+
+        // Log inicio de importación
+        this._logImport('start', { fileCount: 1, files: [file] });
 
         this.page.elements.uploadArea?.classList.add('hidden');
         this.page.elements.uploadLoading?.classList.add('active');
 
         try {
+            // Log procesando archivo
+            this._logImport('file', {
+                fileIndex: 0,
+                totalFiles: 1,
+                fileName: file.name,
+                sessionId: null,
+                merge: false
+            });
+
             // Fase 1: Upload con progreso
             const uploadData = await structuralAPI.uploadWithProgress(
                 file,
                 (current, total, element) => {
                     this.updateUploadStatus(`Parseando ${current} de ${total}`, element);
+                    this._logImport('progress', { current, total, element });
                 }
             );
 
             if (!uploadData.success) throw new Error(uploadData.error);
+
+            // Log archivo completado
+            this._logImport('file_complete', {
+                fileName: file.name,
+                summary: uploadData.summary
+            });
+
             this.storeUploadData(uploadData);
 
             // Delay necesario: el navegador limita conexiones simultáneas al mismo host.
@@ -99,11 +260,25 @@ class UploadManager {
             // la conexión del upload-stream se libere completamente.
             await new Promise(r => setTimeout(r, 100));
 
+            // Log inicio de análisis
+            this._logImport('analysis_start', { sessionId: uploadData.session_id });
+
             // Fase 2: Análisis con progreso (usa método unificado)
             await this._executeAnalysis();
 
+            // Log completado
+            this._logImport('complete', {
+                duration: Date.now() - startTime,
+                summary: {
+                    total_piers: this.page.results?.length || 0,
+                    total_columns: this.page.columnResults?.length || 0,
+                    total_beams: this.page.beamResults?.length || 0
+                }
+            });
+
         } catch (error) {
             console.error('Error en análisis:', error);
+            this._logImport('error', { message: error.message, fileName: file.name });
             this.page.showNotification('Error: ' + error.message, 'error');
             this.hideProgressModal();
             this.resetUploadArea();
@@ -139,6 +314,23 @@ class UploadManager {
             this.page.piersData,
             this.page.columnsData
         );
+
+        // Cargar tablas ETABS para vista de verificación
+        this._loadEtabsTables();
+    }
+
+    /**
+     * Carga las tablas ETABS para la vista de verificación.
+     * @private
+     */
+    async _loadEtabsTables() {
+        if (this.page.etabsTablesModule && this.page.sessionId) {
+            const success = await this.page.etabsTablesModule.loadTables();
+            if (success) {
+                const tableCount = this.page.etabsTablesModule.getTableCount();
+                console.log(`[UploadManager] ${tableCount} tablas ETABS cargadas`);
+            }
+        }
     }
 
     /**
@@ -326,6 +518,7 @@ class UploadManager {
                 params,
                 (current, total, pier) => {
                     this.updateProgress(current, total, pier);
+                    this._logImport('analysis_progress', { current, total, element: pier });
                 }
             );
 

@@ -21,6 +21,7 @@ from .flexocompression_service import FlexocompressionService
 from .shear_service import ShearService
 from .force_extractor import ForceExtractor
 from .geometry_normalizer import GeometryNormalizer
+from ..logging import claude_logger
 from ...domain.chapter18 import (
     SeismicColumnService,
     SeismicBeamService,
@@ -178,6 +179,7 @@ class ElementOrchestrator:
         hwcs: Optional[float] = None,
         hn_ft: Optional[float] = None,
         moment_axis: str = 'M3',
+        interaction_curve: Optional[List] = None,
     ) -> OrchestrationResult:
         """
         Verifica un elemento estructural delegando al servicio apropiado.
@@ -227,27 +229,39 @@ class ElementOrchestrator:
         service_type = design_behavior.service_type
 
         if service_type == 'column':
-            return self._verify_as_column(
+            result = self._verify_as_column(
                 element, forces, element_type, design_behavior,
-                lambda_factor, category
+                lambda_factor, category, interaction_curve
             )
 
         elif service_type == 'wall':
-            return self._verify_as_wall(
+            result = self._verify_as_wall(
                 element, forces, element_type, design_behavior,
-                lambda_factor, category, hwcs, hn_ft
+                lambda_factor, category, hwcs, hn_ft, interaction_curve
             )
 
         elif service_type == 'beam':
-            return self._verify_as_beam(
+            result = self._verify_as_beam(
                 element, forces, element_type, design_behavior,
-                lambda_factor, category
+                lambda_factor, category, interaction_curve
             )
 
         else:  # 'flexure'
-            return self._verify_flexure(
-                element, forces, element_type, design_behavior, moment_axis
+            result = self._verify_flexure(
+                element, forces, element_type, design_behavior, moment_axis,
+                interaction_curve
             )
+
+        # Log resultado para Claude
+        label = getattr(element, 'label', 'unknown')
+        story = getattr(element, 'story', '')
+        claude_logger.log_element_result(
+            label=label,
+            story=story,
+            dcr=result.dcr_max,
+        )
+
+        return result
 
     # =========================================================================
     # MÉTODOS DE DELEGACIÓN
@@ -261,6 +275,7 @@ class ElementOrchestrator:
         design_behavior: DesignBehavior,
         lambda_factor: float,
         category: SeismicCategory,
+        interaction_curve: Optional[List] = None,
     ) -> OrchestrationResult:
         """Delega verificación a SeismicColumnService (§18.7)."""
         # Usar servicios auxiliares para normalizar datos
@@ -279,7 +294,10 @@ class ElementOrchestrator:
         )
 
         # Calcular datos de flexión usando FlexocompressionService (incluye combo_results)
-        flexure_data = self._flexo_service.check_flexure(element, forces, moment_axis='M3')
+        # Usar curva pre-calculada si está disponible
+        flexure_data = self._flexo_service.check_flexure(
+            element, forces, moment_axis='M3', interaction_points=interaction_curve
+        )
 
         # Calcular datos de cortante usando ShearService (incluye combo_results)
         shear_data = self._shear_service.check_shear(
@@ -309,6 +327,7 @@ class ElementOrchestrator:
         category: SeismicCategory,
         hwcs: Optional[float],
         hn_ft: Optional[float],
+        interaction_curve: Optional[List] = None,
     ) -> OrchestrationResult:
         """Delega verificación a SeismicWallService (§18.10)."""
         # Usar ForceExtractor para normalizar fuerzas
@@ -336,7 +355,10 @@ class ElementOrchestrator:
             )
 
         # Calcular datos de flexión usando FlexocompressionService (incluye combo_results)
-        flexure_data = self._flexo_service.check_flexure(element, forces, moment_axis='M3')
+        # Usar curva pre-calculada si está disponible
+        flexure_data = self._flexo_service.check_flexure(
+            element, forces, moment_axis='M3', interaction_points=interaction_curve
+        )
 
         # Calcular datos de cortante usando ShearService (incluye combo_results)
         shear_data = self._shear_service.check_shear(
@@ -364,6 +386,7 @@ class ElementOrchestrator:
         design_behavior: DesignBehavior,
         lambda_factor: float,
         category: SeismicCategory,
+        interaction_curve: Optional[List] = None,
     ) -> OrchestrationResult:
         """Delega verificación a SeismicBeamService (§18.6)."""
         # Usar servicios auxiliares para normalizar datos
@@ -392,7 +415,10 @@ class ElementOrchestrator:
         )
 
         # Calcular datos de flexión usando FlexocompressionService
-        flexure_data = self._flexo_service.check_flexure(element, forces, moment_axis='M3')
+        # Usar curva pre-calculada si está disponible
+        flexure_data = self._flexo_service.check_flexure(
+            element, forces, moment_axis='M3', interaction_points=interaction_curve
+        )
 
         return OrchestrationResult(
             element_type=element_type,
@@ -413,10 +439,14 @@ class ElementOrchestrator:
         element_type: ElementType,
         design_behavior: DesignBehavior,
         moment_axis: str,
+        interaction_curve: Optional[List] = None,
     ) -> OrchestrationResult:
         """Delega verificación a FlexocompressionService."""
         # Calcular capacidad usando flexocompression service
-        flexure_data = self._flexo_service.check_flexure(element, forces, moment_axis)
+        # Usar curva pre-calculada si está disponible
+        flexure_data = self._flexo_service.check_flexure(
+            element, forces, moment_axis, interaction_points=interaction_curve
+        )
 
         # DCR viene directamente del servicio (centralizado)
         dcr = flexure_data.get('dcr', 0) if flexure_data else 0
@@ -529,6 +559,7 @@ class ElementOrchestrator:
         # Si hay tracción (P_min < 0 después de conversión), es crítico
         Pu = envelope.P_min if envelope.P_min < 0 else envelope.P_max
         Mu = abs(envelope.M3_max)  # M3_max ya es el máximo absoluto
+        Vu = abs(envelope.V2_max)  # Cortante máximo para verificación
 
         # Contar combinaciones con tracción
         # ETABS: P > 0 = tracción (al igual que get_critical_pm_points usa -combo.P)
@@ -554,13 +585,14 @@ class ElementOrchestrator:
             import math
             b = h = math.sqrt(element.Ag)
 
-        # Verificar como strut con diagrama P-M
+        # Verificar como strut con diagrama P-M y cortante
         strut_service = StrutCapacityService()
         strut_result = strut_service.verify_strut(
             Acs=element.Ag,
             fc=element.fc,
             Pu=Pu,
             Mu=Mu,
+            Vu=Vu,
             b=b,
             h=h,
             sdc=sdc,
@@ -577,6 +609,7 @@ class ElementOrchestrator:
                 # Internamente: P>0=compresión
                 combo_Pu = -combo.P
                 combo_Mu = max(abs(combo.M2), abs(combo.M3))
+                combo_Vu = max(abs(combo.V2), abs(combo.V3)) if hasattr(combo, 'V3') else abs(combo.V2)
 
                 # Verificar este combo con el strut service
                 combo_strut = strut_service.verify_strut(
@@ -584,6 +617,7 @@ class ElementOrchestrator:
                     fc=element.fc,
                     Pu=combo_Pu,
                     Mu=combo_Mu,
+                    Vu=combo_Vu,
                     b=b,
                     h=h,
                     sdc=sdc,
@@ -594,10 +628,14 @@ class ElementOrchestrator:
                     'location': combo.location,
                     'Pu': round(combo_Pu, 2),
                     'Mu': round(combo_Mu, 4),
+                    'Vu': round(combo_Vu, 2),
                     'dcr': round(combo_strut.dcr, 3),
+                    'dcr_V': round(combo_strut.dcr_V, 3),
                     'sf': round(1.0 / combo_strut.dcr, 2) if combo_strut.dcr > 0 else 100.0,
                     'phi_Mn_at_Pu': round(combo_strut.phi_Mcr, 4),
+                    'phi_Vcr': round(combo_strut.phi_Vcr, 2),
                     'is_tension': combo.P > 0,  # ETABS: P>0 = tracción
+                    'is_cracked_shear': combo_strut.is_cracked_shear,
                     'status': 'OK' if combo_strut.is_ok else 'NO OK',
                 })
 
@@ -607,6 +645,19 @@ class ElementOrchestrator:
         # El elemento falla si hay tracción O si DCR > 1.0
         # Ya no forzamos DCR=100 para tracción - mostramos el valor real
         is_ok = not has_tension and strut_result.dcr <= 1.0
+
+        # Encontrar el combo crítico (mayor DCR) para flexión y cortante
+        critical_combo_flexure = 'Envolvente'
+        critical_combo_shear = 'Envolvente'
+        max_dcr_flexure = 0.0
+        max_dcr_shear = 0.0
+        for cr in combo_results:
+            if cr['dcr'] > max_dcr_flexure:
+                max_dcr_flexure = cr['dcr']
+                critical_combo_flexure = cr['name']
+            if cr['dcr_V'] > max_dcr_shear:
+                max_dcr_shear = cr['dcr_V']
+                critical_combo_shear = cr['name']
 
         # Preparar flexure_data para el diagrama
         flexure_data = {
@@ -619,7 +670,7 @@ class ElementOrchestrator:
             'dcr_M': strut_result.dcr_M,
             'diagram_points': strut_result.diagram_points,
             'is_strut': True,
-            'critical_combo': 'Envolvente',
+            'critical_combo': critical_combo_flexure,  # Combo crítico real
             # Info de tracción para UI (truenito ⚡)
             'has_tension': has_tension,
             'tension_combos': tension_combos,
@@ -627,70 +678,38 @@ class ElementOrchestrator:
             'combo_results': combo_results,
         }
 
+        # Preparar shear_data para strut (solo Vc, sin Vs)
+        shear_data = {
+            'Vu': strut_result.Vu,
+            'phi_Vn': strut_result.phi_Vcr,
+            'Vc': strut_result.Vcr,
+            'Vs': 0.0,  # Sin estribos
+            'dcr': strut_result.dcr_V,
+            'is_cracked': strut_result.is_cracked_shear,
+            'formula_type': 'strut',
+            'critical_combo': critical_combo_shear,  # Combo crítico real
+        }
+
+        # Determinar check crítico
+        if strut_result.is_cracked_shear:
+            critical_check = 'strut_shear_cracking'
+        elif not is_ok:
+            critical_check = 'strut_flexocompression'
+        else:
+            critical_check = ''
+
         return OrchestrationResult(
             element_type=element_type,
             design_behavior=design_behavior,
             service_used='strut',
             domain_result=strut_result,
             is_ok=is_ok,
-            dcr_max=strut_result.dcr,  # DCR real de la envolvente
-            critical_check='strut_flexocompression' if not is_ok else '',
+            dcr_max=max(strut_result.dcr, strut_result.dcr_V),  # Mayor de flexo y corte
+            critical_check=critical_check,
             warnings=strut_result.warnings,
             flexure_data=flexure_data,
+            shear_data=shear_data,
         )
-
-    # =========================================================================
-    # MÉTODOS DE CONVENIENCIA
-    # =========================================================================
-
-    def classify(
-        self,
-        element: Union['HorizontalElement', 'VerticalElement'],
-    ) -> ElementType:
-        """Clasifica un elemento. Alias para acceso directo."""
-        return self._classifier.classify(element)
-
-    def resolve_behavior(
-        self,
-        element: Union['HorizontalElement', 'VerticalElement'],
-        forces: Optional['ElementForces'] = None,
-    ) -> DesignBehavior:
-        """Resuelve el comportamiento de diseño. Alias para acceso directo."""
-        element_type = self._classifier.classify(element)
-        is_seismic = getattr(element, 'is_seismic', True)
-        return self._resolver.resolve(element_type, element, forces, is_seismic)
-
-    def get_verification_info(
-        self,
-        element: Union['HorizontalElement', 'VerticalElement'],
-        forces: Optional['ElementForces'] = None,
-    ) -> Dict[str, Any]:
-        """
-        Obtiene información sobre cómo se verificaría un elemento.
-
-        Útil para debug o UI.
-        """
-        element_type = self._classifier.classify(element)
-        is_seismic = getattr(element, 'is_seismic', True)
-        behavior = self._resolver.resolve(element_type, element, forces, is_seismic)
-
-        # Determinar servicio basado en service_type
-        service_names = {
-            'column': 'SeismicColumnService (§18.7)',
-            'beam': 'SeismicBeamService (§18.6)',
-            'wall': 'SeismicWallService (§18.10)',
-            'flexure': 'FlexocompressionService',
-        }
-        service = service_names.get(behavior.service_type, 'FlexocompressionService')
-
-        return {
-            'element_type': element_type.value,
-            'design_behavior': behavior.name,
-            'aci_section': behavior.aci_section,
-            'service': service,
-            'requires_pm_diagram': behavior.requires_pm_diagram,
-            'requires_seismic_checks': behavior.requires_seismic_checks,
-        }
 
     # =========================================================================
     # VERIFICACIÓN POR COMBINACIÓN

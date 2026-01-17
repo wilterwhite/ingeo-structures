@@ -11,8 +11,14 @@ Acceder en: http://localhost:5001
 """
 import os
 import sys
+import logging
 
 from flask import Flask, render_template, send_from_directory
+
+# Configurar logger de performance
+logging.basicConfig(level=logging.INFO, format='%(name)s - %(message)s')
+perf_logger = logging.getLogger('perf')
+perf_logger.setLevel(logging.INFO)
 
 from app.routes import piers_bp, projects_bp, common_bp
 

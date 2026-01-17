@@ -605,6 +605,25 @@ select.field-modified:focus {
 }
 .formula-tag.formula-column { background: #ede9fe; color: #7c3aed; }
 .formula-tag.formula-wall { background: #e0f2fe; color: #0369a1; }
+.formula-tag.formula-strut { background: #fef3c7; color: #b45309; }
+
+/* Strut cracked warning */
+.cracked-warning {
+    margin-left: 4px;
+    animation: pulse-warning 1.5s infinite;
+}
+.cracked-note {
+    font-size: 0.75rem;
+    color: #dc2626;
+    font-weight: 600;
+}
+.strut-cracked {
+    background: #fef2f2 !important;
+}
+@keyframes pulse-warning {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
 
 /* Phi factor tag */
 .phi-tag {
@@ -1163,5 +1182,147 @@ select.field-modified:focus {
     margin-top: 16px;
     padding-top: 12px;
     border-top: 1px solid var(--border-color);
+}
+
+/* ==========================================================================
+   CRACKING BUTTON (Botón de agrietamiento)
+   ========================================================================== */
+
+.crack-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-left: 4px;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s ease;
+    vertical-align: middle;
+}
+
+.crack-btn:hover {
+    background: var(--warning-color);
+    border-color: var(--warning-color);
+    transform: scale(1.1);
+}
+
+.crack-btn:active {
+    transform: scale(0.95);
+}
+
+/* Property Modifiers indicator */
+.pm-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 3px;
+    font-size: 11px;
+    cursor: help;
+    opacity: 0.8;
+    vertical-align: middle;
+}
+
+.pm-indicator:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+/* Celda con PM aplicado - resaltar ligeramente */
+.fs-value.has-pm {
+    background: rgba(245, 158, 11, 0.1);
+}
+
+/* Fila de elemento agrietado */
+.pier-row.cracked-element {
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.pier-row.cracked-element:hover {
+    background: rgba(245, 158, 11, 0.15);
+}
+
+/* Animaciones para notificaciones de agrietamiento */
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+/* ==========================================================================
+   ETABS RAW TABLES (Vista de verificación)
+   ========================================================================== */
+
+.etabs-table-wrapper {
+    max-height: 60vh;
+    overflow: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.etabs-raw-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Consolas', monospace;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.etabs-raw-table th,
+.etabs-raw-table td {
+    padding: 4px 8px;
+    border: 1px solid var(--border-color);
+    text-align: left;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.etabs-raw-table th {
+    position: sticky;
+    top: 0;
+    background: #f1f5f9;
+    color: var(--text-color);
+    font-weight: 600;
+    z-index: 1;
+    border-bottom: 2px solid var(--primary-color);
+}
+
+.etabs-raw-table tbody tr.even {
+    background: #fff;
+}
+
+.etabs-raw-table tbody tr.odd {
+    background: #f9fafb;
+}
+
+.etabs-raw-table tbody tr:hover {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.table-info {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-left: auto;
 }
 

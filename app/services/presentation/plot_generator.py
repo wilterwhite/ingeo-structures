@@ -557,19 +557,31 @@ class PlotGenerator:
         info_x = x0 + width + dim_offset + 20
         info_y = y0 + depth
 
+        # Determinar tipo de refuerzo transversal
+        if column.has_crossties:
+            transverse_label = f"Trabas: T{column.stirrup_diameter}@{column.stirrup_spacing}"
+            transverse_note = "  (no confinado)"
+        else:
+            transverse_label = f"Estribos: E{column.stirrup_diameter}@{column.stirrup_spacing}"
+            transverse_note = ""
+
         info_lines = [
             f"ARMADURA:",
             f"",
             f"Longitudinal: {column.n_total_bars}phi{column.diameter_long}",
             f"  ({n_bars_depth} x {n_bars_width})",
             f"",
-            f"Estribos: E{column.stirrup_diameter}@{column.stirrup_spacing}",
+            transverse_label,
+        ]
+        if transverse_note:
+            info_lines.append(transverse_note)
+        info_lines.extend([
             f"",
             f"Recubrimiento: {cover:.0f} mm",
             f"",
             f"As total: {column.As_longitudinal:.0f} mm2",
             f"rho: {column.rho_longitudinal*100:.2f}%",
-        ]
+        ])
 
         for i, line in enumerate(info_lines):
             ax.text(info_x, info_y - i * 18, line,

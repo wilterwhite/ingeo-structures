@@ -103,7 +103,8 @@ class ResultFormatter:
         geometry: Dict[str, Any],
         reinforcement: Dict[str, Any],
         pm_plot: str = None,
-        seismic_category: str = None
+        seismic_category: str = None,
+        property_modifiers: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
         Construye la estructura base común para todos los tipos de elementos.
@@ -163,7 +164,44 @@ class ResultFormatter:
             'critical_check': result.critical_check,
             'warnings': result.warnings,
             # Categoría sísmica individual del elemento (null = usar global)
-            'seismic_category': seismic_category
+            'seismic_category': seismic_category,
+            # Property Modifiers (factores de rigidez para agrietamiento)
+            'property_modifiers': property_modifiers or {
+                'has_modifiers': False,
+                'pm_axial': 1.0,
+                'pm_m2': 1.0,
+                'pm_m3': 1.0,
+                'pm_v2': 1.0,
+                'pm_v3': 1.0,
+                'pm_torsion': 1.0,
+                'pm_weight': 1.0,
+                'summary': 'Sin modificar'
+            }
+        }
+
+    @staticmethod
+    def _extract_property_modifiers(element: Union['VerticalElement', 'HorizontalElement']) -> Dict[str, Any]:
+        """
+        Extrae los property modifiers de un elemento para enviar al frontend.
+
+        Args:
+            element: VerticalElement o HorizontalElement
+
+        Returns:
+            Dict con los PM y metadata para la UI
+        """
+        return {
+            'has_modifiers': element.has_property_modifiers,
+            'pm_axial': element.pm_axial,
+            'pm_m2': element.pm_m2,
+            'pm_m3': element.pm_m3,
+            'pm_v2': element.pm_v2,
+            'pm_v3': element.pm_v3,
+            'pm_torsion': element.pm_torsion,
+            'pm_weight': element.pm_weight,
+            'summary': element.pm_summary,
+            'section_name': element.section_name,
+            'base_section_name': element.base_section_name,
         }
 
     @staticmethod
@@ -182,7 +220,9 @@ class ResultFormatter:
             ReinforcementProposer,
             ProposedLayout,
         )
-        from ...domain.constants.reinforcement import MESH_DEFAULTS
+        from ...domain.calculations.minimum_reinforcement import (
+            MinimumReinforcementCalculator,
+        )
 
         geometry = {
             'width_mm': pier.length,
@@ -204,20 +244,32 @@ class ResultFormatter:
         modified_fields = []
 
         if proposal.layout == ProposedLayout.MESH or pier.is_mesh_layout:
-            # Comparar contra MESH_DEFAULTS para layout de malla
-            if pier.n_meshes != MESH_DEFAULTS['n_meshes']:
+            # Calcular valores propuestos dinámicamente para esta geometría
+            # (NO usar MESH_DEFAULTS fijos que no consideran el espesor)
+            mesh_config = MinimumReinforcementCalculator.calculate_for_pier(
+                thickness=pier.thickness
+            )
+            n_edge_proposed, diam_edge_proposed = (
+                MinimumReinforcementCalculator.calculate_edge_reinforcement(
+                    thickness=pier.thickness
+                )
+            )
+
+            # Comparar contra valores propuestos calculados
+            if pier.n_meshes != mesh_config.n_meshes:
                 modified_fields.append('n_meshes')
-            if pier.diameter_v != MESH_DEFAULTS['diameter_v']:
+            if pier.diameter_v != mesh_config.diameter:
                 modified_fields.append('diameter_v')
-            if pier.spacing_v != MESH_DEFAULTS['spacing_v']:
+            if pier.spacing_v != mesh_config.spacing:
                 modified_fields.append('spacing_v')
-            if pier.diameter_h != MESH_DEFAULTS['diameter_h']:
+            # Para horizontal, usar mismos valores que vertical (propuesta típica)
+            if pier.diameter_h != mesh_config.diameter:
                 modified_fields.append('diameter_h')
-            if pier.spacing_h != MESH_DEFAULTS['spacing_h']:
+            if pier.spacing_h != mesh_config.spacing:
                 modified_fields.append('spacing_h')
-            if pier.n_edge_bars != MESH_DEFAULTS['n_edge_bars']:
+            if pier.n_edge_bars != n_edge_proposed:
                 modified_fields.append('n_edge_bars')
-            if pier.diameter_edge != MESH_DEFAULTS['diameter_edge']:
+            if pier.diameter_edge != diam_edge_proposed:
                 modified_fields.append('diameter_edge')
         else:
             # Comparar contra propuesta para layout STIRRUPS
@@ -272,7 +324,12 @@ class ResultFormatter:
         base_dcr: float,
         formula_type: str = 'wall'
     ) -> Dict[str, Any]:
-        """Extrae datos de cortante del resultado de dominio."""
+        """
+        Extrae datos de cortante del resultado de dominio.
+
+        DEPRECADO: Usar extract_shear() que soporta múltiples fuentes.
+        Mantenido por compatibilidad durante transición.
+        """
         shear_data = {
             'sf': 1.0 / base_dcr if base_dcr > 0 else 100.0,
             'dcr': base_dcr,
@@ -314,6 +371,7 @@ class ResultFormatter:
                 'Vc': round(Vc, 2),
                 'Vs': round(Vs, 2),
                 'phi_v': getattr(sh, 'phi_v', 0.60),  # Factor φv usado
+                'critical_combo': getattr(sh, 'critical_combo', 'envelope'),  # Combo crítico
             })
             if dcr > 0:
                 shear_data['sf'] = round(1.0 / dcr, 2)
@@ -327,6 +385,9 @@ class ResultFormatter:
     ) -> Dict[str, Any]:
         """
         Extrae datos de flexión del OrchestrationResult.
+
+        DEPRECADO: Usar extract_flexure() que soporta múltiples fuentes.
+        Mantenido por compatibilidad durante transición.
 
         Prioriza flexure_data del result (calculado por FlexocompressionService)
         sobre datos del domain_result (que puede no tener flexure).
@@ -374,6 +435,205 @@ class ResultFormatter:
             flexure_data['dcr_class'] = get_dcr_css_class(flexure_data['dcr'])
 
         return flexure_data
+
+    # =========================================================================
+    # Métodos unificados de extracción (soportan Dict y OrchestrationResult)
+    # =========================================================================
+
+    @staticmethod
+    def extract_flexure(
+        source: Union['OrchestrationResult', Dict[str, Any]],
+        base_dcr: float = None
+    ) -> Dict[str, Any]:
+        """
+        Extrae datos de flexión desde OrchestrationResult o Dict (cache).
+
+        Este método unificado reemplaza:
+        - _extract_flexure_from_result() (para OrchestrationResult)
+        - _extract_flexure_from_cache() (para Dict del cache)
+
+        Args:
+            source: OrchestrationResult o Dict con datos cacheados
+            base_dcr: DCR base para fallback (opcional)
+
+        Returns:
+            Dict con datos de flexión normalizados para UI
+        """
+        # Detectar tipo de fuente
+        is_dict = isinstance(source, dict)
+
+        if is_dict:
+            # CASO 1: Extracción desde Dict (cache)
+            flexure = source.get('flexure', {})
+            if not flexure:
+                return {
+                    'sf': 0,
+                    'dcr': base_dcr or 0,
+                    'dcr_class': get_dcr_css_class(base_dcr or 0),
+                    'status': 'N/A',
+                    'critical_combo': 'envelope',
+                    'phi_Mn_at_Pu': 0,
+                    'Mu': 0,
+                    'phi_Mn_0': 0,
+                    'Pu': 0,
+                    'phi_Pn_max': 0,
+                    'exceeds_axial': False,
+                    'has_tension': False,
+                    'tension_combos': 0,
+                    'combo_results': []
+                }
+
+            # Extraer DCR del cache (mismo que la tabla)
+            dcr = flexure.get('dcr', source.get('dcr_max', base_dcr or 0))
+            sf = flexure.get('sf', 1.0 / dcr if dcr > 0 else 100.0)
+
+            # Determinar si es strut
+            is_strut = source.get('element_type') == 'strut'
+
+            # Momento y capacidad según tipo
+            Mu = flexure.get('Mu', 0)
+            if is_strut:
+                phi_Mn = flexure.get('phi_Mn_0', flexure.get('phi_Mcr', 0))
+            else:
+                phi_Mn = flexure.get('phi_Mn_at_Pu', flexure.get('phi_Mn_0', 0))
+
+            return {
+                'sf': round(sf, 2) if sf < 100 else 100.0,
+                'dcr': round(dcr, 3),
+                'dcr_class': get_dcr_css_class(dcr),
+                'status': flexure.get('status', 'OK' if dcr <= 1.0 else 'NO OK'),
+                'critical_combo': flexure.get('critical_combo', source.get('critical_combo', 'envelope')),
+                'phi_Mn_at_Pu': round(phi_Mn, 2),
+                'Mu': round(Mu, 2),
+                'phi_Mn_0': round(flexure.get('phi_Mn_0', 0), 2),
+                'Pu': round(flexure.get('Pu', 0), 2),
+                'phi_Pn_max': round(flexure.get('phi_Pn_max', 0), 2),
+                'exceeds_axial': flexure.get('exceeds_axial', False),
+                'exceeds_tension': flexure.get('exceeds_tension', False),
+                'phi_Pt_min': round(flexure.get('phi_Pt_min', 0), 2),
+                'has_tension': flexure.get('has_tension', False),
+                'tension_combos': flexure.get('tension_combos', 0),
+                'combo_results': flexure.get('combo_results', []),
+            }
+        else:
+            # CASO 2: Extracción desde OrchestrationResult
+            # Delegar al método existente (mantener compatibilidad)
+            if base_dcr is None:
+                base_dcr = getattr(source, 'dcr_max', 0)
+            return ResultFormatter._extract_flexure_from_result(source, base_dcr)
+
+    @staticmethod
+    def extract_shear(
+        source: Union['OrchestrationResult', Dict[str, Any]],
+        base_dcr: float = None,
+        formula_type: str = 'wall'
+    ) -> Dict[str, Any]:
+        """
+        Extrae datos de cortante desde OrchestrationResult o Dict (cache).
+
+        Este método unificado reemplaza:
+        - _extract_shear_from_domain() (para domain_result)
+        - _extract_shear_from_cache() (para Dict del cache)
+
+        Args:
+            source: OrchestrationResult, domain_result o Dict con datos cacheados
+            base_dcr: DCR base para fallback (opcional)
+            formula_type: Tipo de fórmula ('wall', 'column', 'beam', 'strut')
+
+        Returns:
+            Dict con datos de cortante normalizados para UI
+        """
+        # Detectar tipo de fuente
+        is_dict = isinstance(source, dict)
+
+        if is_dict:
+            # CASO 1: Extracción desde Dict (cache)
+            shear = source.get('shear', {})
+            if not shear:
+                return {
+                    'sf': 0,
+                    'dcr': base_dcr or 0,
+                    'dcr_class': get_dcr_css_class(base_dcr or 0),
+                    'status': 'N/A',
+                    'critical_combo': 'envelope',
+                    'dcr_2': 0,
+                    'dcr_3': 0,
+                    'dcr_combined': base_dcr or 0,
+                    'phi_Vn_2': 0,
+                    'phi_Vn_3': 0,
+                    'Vu_2': 0,
+                    'Vu_3': 0,
+                    'Vc': 0,
+                    'Vs': 0,
+                    'Ve': 0,
+                    'phi_v': 0.60,
+                    'formula_type': formula_type,
+                    'combo_results': []
+                }
+
+            # Detectar si es strut (usa campos diferentes)
+            is_strut = source.get('element_type') == 'strut' or shear.get('formula_type') == 'strut'
+
+            # Extraer datos del cache - con fallbacks para struts
+            # Struts usan 'Vu' y 'phi_Vn' en lugar de 'Vu_2' y 'phi_Vn_2'
+            if is_strut:
+                Vu_2 = shear.get('Vu', shear.get('Vu_2', 0)) or 0
+                phi_Vn_2 = shear.get('phi_Vn', shear.get('phi_Vn_2', 0)) or 0
+                dcr_2 = shear.get('dcr', shear.get('dcr_2', 0)) or 0
+            else:
+                Vu_2 = shear.get('Vu_2', 0) or 0
+                phi_Vn_2 = shear.get('phi_Vn_2', 0) or 0
+                dcr_2 = shear.get('dcr_2', 0) or 0
+
+            Vu_3 = shear.get('Vu_3', 0) or 0
+            phi_Vn_3 = shear.get('phi_Vn_3', 0) or 0
+            Vc = shear.get('Vc', 0) or 0
+            Vs = shear.get('Vs', 0) or 0
+            phi_v = shear.get('phi_v', 0.60)
+
+            dcr_3 = shear.get('dcr_3', 0) or 0
+            dcr_combined = shear.get('dcr_combined', shear.get('dcr', base_dcr or 0))
+
+            # SF calculado del DCR combinado
+            sf = 1.0 / dcr_combined if dcr_combined > 0 else 100.0
+
+            return {
+                'sf': round(sf, 2) if sf < 100 else 100.0,
+                'dcr': round(dcr_combined, 2),
+                'dcr_class': get_dcr_css_class(dcr_combined),
+                'status': shear.get('status', 'OK' if dcr_combined <= 1.0 else 'NO OK'),
+                'critical_combo': shear.get('critical_combo', 'envelope'),
+                'dcr_2': round(dcr_2, 2),
+                'dcr_3': round(dcr_3, 2),
+                'dcr_combined': round(dcr_combined, 2),
+                'phi_Vn_2': round(phi_Vn_2, 2),
+                'phi_Vn_3': round(phi_Vn_3, 2),
+                'Vu_2': round(Vu_2, 2),
+                'Vu_3': round(Vu_3, 2),
+                'Vu_original': round(shear.get('Vu_original', Vu_2), 2),
+                'Ve': round(shear.get('Ve', Vu_2), 2),
+                'Vc': round(Vc, 2),
+                'Vs': round(Vs, 2),
+                'phi_v': phi_v,
+                'formula_type': shear.get('formula_type', formula_type),
+                'combo_results': shear.get('combo_results', []),
+            }
+        else:
+            # CASO 2: Extracción desde OrchestrationResult
+            # Determinar si es dict-like (domain_result) u OrchestrationResult
+            if hasattr(source, 'domain_result'):
+                # Es OrchestrationResult, extraer domain_result
+                domain_result = source.domain_result
+                if base_dcr is None:
+                    base_dcr = getattr(source, 'dcr_max', 0)
+            else:
+                # Es domain_result directamente
+                domain_result = source
+                if base_dcr is None:
+                    base_dcr = 0
+
+            # Delegar al método existente (mantener compatibilidad)
+            return ResultFormatter._extract_shear_from_domain(domain_result, base_dcr, formula_type)
 
     # =========================================================================
     # Extracción centralizada de geometry_warnings
@@ -515,9 +775,12 @@ class ResultFormatter:
             'warnings_h': warnings_h,
         })
 
-        # Determinar tipo de elemento: priorizar service_used, luego source
+        # Determinar tipo de elemento: priorizar service_used, luego layout/source
         if service_used == 'strut':
             element_type = 'strut'
+        elif pier.is_mesh_layout:
+            # Elementos con layout MESH se tratan como pier (muro) aunque vengan de FRAME
+            element_type = 'pier'
         elif pier.is_frame_source:
             element_type = 'column'
         else:
@@ -533,7 +796,8 @@ class ResultFormatter:
             geometry=geometry,
             reinforcement=reinforcement,
             pm_plot=pm_plot,
-            seismic_category=getattr(pier, 'seismic_category', None)
+            seismic_category=getattr(pier, 'seismic_category', None),
+            property_modifiers=ResultFormatter._extract_property_modifiers(pier)
         )
 
         # Campos comunes de pier
@@ -826,6 +1090,7 @@ class ResultFormatter:
             'diameter_long': column.diameter_long,
             'stirrup_diameter': column.stirrup_diameter,
             'stirrup_spacing': column.stirrup_spacing,
+            'has_crossties': column.has_crossties,
             'As_longitudinal_mm2': round(column.As_longitudinal, 0),
             'rho_longitudinal': round(column.rho_longitudinal, 4),
             'description': column.reinforcement_description
@@ -840,7 +1105,8 @@ class ResultFormatter:
             geometry=geometry,
             reinforcement=reinforcement,
             pm_plot=pm_plot,
-            seismic_category=getattr(column, 'seismic_category', None)
+            seismic_category=getattr(column, 'seismic_category', None),
+            property_modifiers=ResultFormatter._extract_property_modifiers(column)
         )
 
         # Extraer datos de flexión y cortante
@@ -910,24 +1176,36 @@ class ResultFormatter:
             'fy': getattr(element, 'fy', 0)
         }
 
-        # Refuerzo simplificado para strut
-        # Calcular As de la barra central (aunque no cuenta para compresión)
+        # Refuerzo para strut - usar valores reales del elemento
         import math
         diameter = getattr(element, 'diameter_long', 12)
         n_bars = getattr(element, 'n_total_bars', 1)
+        n_bars_depth = getattr(element, 'n_bars_depth', 1)
+        n_bars_width = getattr(element, 'n_bars_width', 1)
+        has_crossties = getattr(element, 'has_crossties', False)
+        stirrup_diameter = getattr(element, 'stirrup_diameter', 0)
+        stirrup_spacing = getattr(element, 'stirrup_spacing', 0)
         As_per_bar = math.pi * (diameter / 2) ** 2  # mm²
         As_total = As_per_bar * n_bars
+
+        # Descripción según tipo de strut
+        if n_bars_depth == 1 and n_bars_width == 1:
+            description = f"1phi{diameter} (strut)"
+        else:
+            description = f"{n_bars_depth}x{n_bars_width} phi{diameter} (strut)"
 
         reinforcement = {
             'type': 'strut_unconfined',
             'n_total_bars': n_bars,
-            'n_bars_depth': 1,  # STRUT siempre 1×1
-            'n_bars_width': 1,
+            'n_bars_depth': n_bars_depth,
+            'n_bars_width': n_bars_width,
             'diameter_long': diameter,
+            'stirrup_diameter': stirrup_diameter,
+            'stirrup_spacing': stirrup_spacing,
+            'has_crossties': has_crossties,
             'As_longitudinal_mm2': round(As_total, 0),
-            'stirrup_spacing': 0,  # Sin estribos
-            'note': 'Barra central como acero constructivo (no As de compresion)',
-            'description': f"1phi{diameter} (strut)"
+            'note': 'Barras como acero constructivo (no As de compresion)',
+            'description': description
         }
 
         # Datos específicos de strut desde StrutCapacityResult
@@ -985,7 +1263,8 @@ class ResultFormatter:
             geometry=geometry,
             reinforcement=reinforcement,
             pm_plot=pm_plot,  # Ahora sí incluye diagrama P-M simplificado
-            seismic_category=getattr(element, 'seismic_category', None)
+            seismic_category=getattr(element, 'seismic_category', None),
+            property_modifiers=ResultFormatter._extract_property_modifiers(element)
         )
 
         # Agregar datos específicos de strut
@@ -1025,10 +1304,33 @@ class ResultFormatter:
             # Resultados de TODAS las combinaciones (para modal sin recálculo)
             'combo_results': combo_results,
         }
-        formatted['shear'] = {
-            'status': 'N/A',
-            'note': 'Struts sin estribos - cortante no verificado',
-        }
+        # Cortante para struts: solo Vc (sin estribos)
+        shear_data = result.shear_data or {}
+        dcr_V = shear_data.get('dcr', domain_result.dcr_V if hasattr(domain_result, 'dcr_V') else 0)
+        is_cracked = shear_data.get('is_cracked', domain_result.is_cracked_shear if hasattr(domain_result, 'is_cracked_shear') else False)
+        phi_Vcr = domain_result.phi_Vcr if hasattr(domain_result, 'phi_Vcr') else 0
+        Vcr = domain_result.Vcr if hasattr(domain_result, 'Vcr') else 0
+        Vu = domain_result.Vu if hasattr(domain_result, 'Vu') else 0
+
+        # Si hay cortante, mostrarlo
+        if Vu > 0 or phi_Vcr > 0:
+            formatted['shear'] = {
+                'status': 'AGRIETADO' if is_cracked else 'OK',
+                'dcr': dcr_V,
+                'dcr_class': get_dcr_css_class(dcr_V),
+                'Vu': Vu,
+                'phi_Vn': phi_Vcr,
+                'Vc': Vcr,
+                'Vs': 0.0,  # Sin estribos
+                'is_cracked': is_cracked,
+                'formula_type': 'strut',
+                'note': 'Solo Vc (sin estribos). Si DCR>1: agrietado, reducir rigidez en ETABS.',
+            }
+        else:
+            formatted['shear'] = {
+                'status': 'N/A',
+                'note': 'Sin datos de cortante',
+            }
         formatted['boundary_element'] = {
             'required': False,
             'method': 'N/A',
@@ -1099,7 +1401,8 @@ class ResultFormatter:
             geometry=geometry,
             reinforcement=reinforcement,
             pm_plot=pm_plot,
-            seismic_category=getattr(beam, 'seismic_category', None)
+            seismic_category=getattr(beam, 'seismic_category', None),
+            property_modifiers=ResultFormatter._extract_property_modifiers(beam)
         )
 
         # Extraer datos de flexión y cortante

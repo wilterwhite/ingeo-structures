@@ -40,6 +40,14 @@ class ParsedData:
     stories: List[str] = field(default_factory=list)
     raw_data: Dict[str, Any] = field(default_factory=dict)
 
+    # Tablas extraídas del Excel (para vista de verificación)
+    # Dict[table_key -> DataFrame] ej: {'pier_props': df, 'frame_section': df}
+    raw_tables: Dict[str, Any] = field(default_factory=dict)
+
+    # Tablas acumuladas de múltiples archivos (antes de fusionar)
+    # Dict[table_key -> List[DataFrame]] ej: {'frame_section': [df1, df2]}
+    accumulated_tables: Dict[str, List[Any]] = field(default_factory=dict)
+
     # Datos calculados
     continuity_info: Optional[Dict[str, 'WallContinuityInfo']] = field(default=None)
     building_info: Optional['BuildingInfo'] = field(default=None)
@@ -48,6 +56,12 @@ class ParsedData:
 
     # Cache de resultados de analisis
     analysis_cache: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+
+    # Cache de curvas de interacción P-M por elemento
+    # Estructura: {element_key: {'primary': [InteractionPoint, ...], 'secondary': [...]}}
+    # La curva P-M es determinística para un elemento dado (depende solo de geometría y armadura)
+    # Se invalida automáticamente si cambia la armadura del elemento
+    interaction_curves: Dict[str, Dict[str, List[Any]]] = field(default_factory=dict)
 
     @property
     def has_vertical_elements(self) -> bool:

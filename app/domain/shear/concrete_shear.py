@@ -17,10 +17,7 @@ import math
 from typing import Optional
 from dataclasses import dataclass
 
-from ..constants.shear import VC_COEF_COLUMN
-
-# f'c máximo efectivo para cortante (§22.5.3.1)
-FC_EFF_SHEAR_MAX_MPA = 70
+from ..constants.shear import VC_COEF_COLUMN, FC_EFF_SHEAR_MAX_MPA
 
 
 @dataclass
@@ -79,71 +76,6 @@ def calculate_Vc_beam(
     )
 
 
-def calculate_Vc_column(
-    bw: float,
-    d: float,
-    fc: float,
-    Ag: float,
-    Nu: float = 0,
-    lambda_factor: float = 1.0,
-    force_Vc_zero: bool = False,
-) -> VcResult:
-    """
-    Calcula Vc para columnas según §22.5.6.
-
-    Para columnas con carga axial de compresión:
-    Vc = 0.17 × (1 + Nu/(14×Ag)) × λ × √f'c × bw × d  (§22.5.6.1 SI)
-
-    Para columnas con carga axial de tracción:
-    Vc = 0.17 × (1 + Nu/(3.5×Ag)) × λ × √f'c × bw × d ≥ 0  (§22.5.6.2 SI)
-
-    Para columnas sísmicas (§18.7.6.2), puede forzarse Vc = 0 cuando aplica.
-
-    Args:
-        bw: Ancho de sección (mm)
-        d: Altura efectiva (mm)
-        fc: Resistencia del concreto (MPa)
-        Ag: Área bruta (mm²)
-        Nu: Carga axial (N), positivo = compresión
-        lambda_factor: Factor para concreto liviano (default 1.0)
-        force_Vc_zero: Si True, retorna Vc = 0 (condición §18.7.6.2)
-
-    Returns:
-        VcResult con Vc en Newtons
-    """
-    if force_Vc_zero:
-        return VcResult(
-            Vc_N=0,
-            fc_eff=fc,
-            lambda_factor=lambda_factor,
-            formula="Vc = 0 (§18.7.6.2)",
-            aci_reference="§18.7.6.2"
-        )
-
-    fc_eff = min(fc, FC_EFF_SHEAR_MAX_MPA)
-
-    if Nu >= 0:  # Compresión
-        # §22.5.6.1: Factor = 1 + Nu/(14×Ag)
-        axial_factor = 1 + Nu / (14 * Ag) if Ag > 0 else 1
-        aci_ref = "§22.5.6.1"
-        formula = f"0.17 × (1 + Nu/(14Ag)) × λ × √f'c × bw × d"
-    else:  # Tracción
-        # §22.5.6.2: Factor = 1 + Nu/(3.5×Ag), pero no menor que 0
-        axial_factor = max(0, 1 + Nu / (3.5 * Ag)) if Ag > 0 else 0
-        aci_ref = "§22.5.6.2"
-        formula = f"0.17 × (1 + Nu/(3.5Ag)) × λ × √f'c × bw × d ≥ 0"
-
-    Vc_N = VC_COEF_COLUMN * axial_factor * lambda_factor * math.sqrt(fc_eff) * bw * d
-
-    return VcResult(
-        Vc_N=Vc_N,
-        fc_eff=fc_eff,
-        lambda_factor=lambda_factor,
-        formula=formula,
-        aci_reference=aci_ref
-    )
-
-
 def check_Vc_zero_condition(
     Ve: float,
     Vu: float,
@@ -195,6 +127,5 @@ def check_Vc_zero_condition(
 __all__ = [
     'VcResult',
     'calculate_Vc_beam',
-    'calculate_Vc_column',
     'check_Vc_zero_condition',
 ]

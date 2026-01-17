@@ -47,6 +47,7 @@ const SharedCells = {
 
     /**
      * Celda de factor de seguridad a flexión (DCR).
+     * Incluye botón de agrietamiento si DCR > 1.0
      */
     createFlexureSfCell(result) {
         const hasTension = result.flexure?.has_tension || false;
@@ -62,13 +63,20 @@ const SharedCells = {
             ? `Esbeltez: λ=${sl.lambda} (Mu×${sl.delta_ns?.toFixed(2) || '1.00'})`
             : `Esbeltez: λ=${sl.lambda || 0}`;
 
+        // Info de Property Modifiers para tooltip
+        const pm = result.property_modifiers || {};
+        const pmInfo = pm.has_modifiers
+            ? `\nPM: ${pm.summary}`
+            : '';
+
         const td = document.createElement('td');
         td.className = `fs-value ${dcrClass}`;
-        td.title = `Combo: ${result.flexure?.critical_combo || '-'}\n${slenderInfo}`;
+        td.title = `Combo: ${result.flexure?.critical_combo || '-'}\n${slenderInfo}${pmInfo}`;
 
         const elementType = result.element_type || '';
         const designBehavior = result.design_behavior || '';
         let warningHtml = '';
+        let crackBtnHtml = '';
 
         if (elementType === 'beam' && designBehavior === 'SEISMIC_BEAM_COLUMN') {
             // Vigas con axial significativo → se diseñan como columna (§18.6.4.6)
@@ -78,7 +86,18 @@ const SharedCells = {
             warningHtml = `<span class="tension-warning" title="${tensionCombos} combinación(es) con tracción">⚡${tensionCombos}</span>`;
         }
 
-        td.innerHTML = `<span class="fs-number">${dcrDisplay}</span>${warningHtml}`;
+        // Indicador de PM si tiene modificadores aplicados
+        const pmIndicator = pm.has_modifiers
+            ? `<span class="pm-indicator" title="Property Modifiers: ${pm.summary}">🔧</span>`
+            : '';
+
+        // Botón de agrietamiento si DCR > 1.0 (elemento sobrepasado)
+        if (dcr > 1.0) {
+            const crackFactor = (1 / dcr).toFixed(2);
+            crackBtnHtml = `<button class="crack-btn" data-action="crack" data-mode="flexure" data-dcr="${dcr}" title="Agrietar a flexión (PM×${crackFactor})">🔨</button>`;
+        }
+
+        td.innerHTML = `<span class="fs-number">${dcrDisplay}</span>${pmIndicator}${warningHtml}${crackBtnHtml}`;
         return td;
     },
 
@@ -112,6 +131,7 @@ const SharedCells = {
 
     /**
      * Celda de factor de seguridad a cortante (DCR).
+     * Incluye botón de agrietamiento si DCR > 1.0
      */
     createShearSfCell(result) {
         const formulaType = result.shear?.formula_type || 'wall';
@@ -135,12 +155,20 @@ const SharedCells = {
         // Factor φv usado (§21.2.4.1: 0.60 SPECIAL, 0.75 otros)
         const phi_v = result.shear?.phi_v || 0.60;
 
+        // Botón de agrietamiento para cortante si DCR > 1.0
+        let crackBtnHtml = '';
+        if (dcr > 1.0) {
+            const crackFactor = (1 / dcr).toFixed(2);
+            crackBtnHtml = `<button class="crack-btn" data-action="crack" data-mode="shear" data-dcr="${dcr}" title="Agrietar a cortante (PM×${crackFactor})">🔨</button>`;
+        }
+
         const td = document.createElement('td');
         td.className = `fs-value ${dcrClass}`;
         td.title = `Combo: ${result.shear?.critical_combo || '-'}\n${shearTitle}\nφv = ${phi_v.toFixed(2)} (§21.2.4)`;
         td.innerHTML = `
             <span class="fs-number">${dcrDisplay}</span>
             <span class="formula-tag formula-${formulaType}">${shearType}</span>
+            ${crackBtnHtml}
         `;
         return td;
     },
@@ -188,6 +216,74 @@ const SharedCells = {
                 <button class="action-btn" data-action="info" title="Ver capacidades y combinaciones">ℹ️</button>
             </div>
         `;
+        return td;
+    },
+
+    /**
+     * Celda de factor de seguridad a cortante para STRUT.
+     * Los struts usan campos diferentes: phi_Vn (no phi_Vn_2), Vu (no Vu_2).
+     */
+    createStrutShearSfCell(result) {
+        const shear = result.shear || {};
+
+        // Si no hay datos de cortante, mostrar celda vacía
+        if (shear.status === 'N/A' || shear.phi_Vn === undefined) {
+            const td = document.createElement('td');
+            td.className = 'empty-cell';
+            td.innerHTML = '<span class="na-value">-</span>';
+            return td;
+        }
+
+        const dcr = shear.dcr ?? 0;
+        const dcrDisplay = formatDcr(dcr);
+        const dcrClass = shear.dcr_class || getDcrClass(dcr);
+        const isCracked = shear.is_cracked || false;
+
+        const td = document.createElement('td');
+        td.className = `fs-value ${dcrClass}`;
+        td.title = `Cortante strut (ACI 22.5)\n${isCracked ? '⚠️ AGRIETADO: Vu > φVc' : 'OK'}`;
+
+        // Mostrar indicador de agrietamiento si aplica
+        const crackedIcon = isCracked ? '<span class="cracked-warning" title="Strut agrietado - reducir rigidez en ETABS">🔥</span>' : '';
+
+        td.innerHTML = `
+            <span class="fs-number">${dcrDisplay}</span>
+            <span class="formula-tag formula-strut">STRUT</span>
+            ${crackedIcon}
+        `;
+        return td;
+    },
+
+    /**
+     * Celda de capacidad a cortante para STRUT.
+     * Muestra Vu, φVc y warning de agrietamiento si aplica.
+     */
+    createStrutShearCapCell(result) {
+        const shear = result.shear || {};
+
+        // Si no hay datos de cortante, mostrar celda vacía
+        if (shear.status === 'N/A' || shear.phi_Vn === undefined) {
+            const td = document.createElement('td');
+            td.className = 'empty-cell';
+            td.innerHTML = '<span class="na-value">-</span>';
+            return td;
+        }
+
+        const phiVc = shear.phi_Vn || 0;  // Para struts, phi_Vn = phi_Vcr
+        const Vu = shear.Vu || 0;
+        const Vc = shear.Vc || 0;
+        const isCracked = shear.is_cracked || false;
+
+        const td = document.createElement('td');
+        td.className = 'capacity-cell' + (isCracked ? ' strut-cracked' : '');
+
+        if (isCracked) {
+            td.title = `⚠️ AGRIETADO AL CORTE\nVu=${Vu}t > φVc=${phiVc}t\nReducir rigidez en ETABS (10-30% EI)`;
+            td.innerHTML = `φVc=${phiVc.toFixed(1)}t, Vu=${Vu.toFixed(1)}t<br><span class="cracked-note">⚠️ Agrietado</span>`;
+        } else {
+            td.title = `Vc=${Vc}t (solo concreto, sin estribos)`;
+            td.innerHTML = `φVc=${phiVc.toFixed(1)}t, Vu=${Vu.toFixed(1)}t<br>Vc=${Vc.toFixed(1)}t (sin Vs)`;
+        }
         return td;
     },
 

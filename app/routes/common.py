@@ -14,6 +14,7 @@ from flask import request, jsonify, Blueprint
 
 from ..services.structural_analysis import StructuralAnalysisService
 from ..services.factory import ServiceFactory
+from ..services.logging import claude_logger
 from ..services.analysis.element_orchestrator import ElementOrchestrator
 from ..services.presentation.modal_data_service import ElementDetailsService
 from ..services.presentation.result_formatter import ResultFormatter
@@ -497,9 +498,25 @@ def write_frontend_log():
 
     Se sobreescribe en cada llamada (no acumula).
     Útil para debugging: permite ver el estado de las tablas sin acceso al navegador.
+
+    También actualiza el ClaudeStateLogger con estado estructurado del frontend.
     """
     data = get_json_data()
     content = data.get('content', '')
+
+    # Actualizar estado estructurado para Claude
+    page = data.get('page', '')
+    tables = data.get('tables', {})
+    warnings_count = data.get('warnings_count', 0)
+    last_action = data.get('last_action', '')
+
+    if page or tables or last_action:
+        claude_logger.update_frontend_state(
+            page=page,
+            tables=tables,
+            warnings=warnings_count,
+            action=last_action
+        )
 
     try:
         with open(FRONTEND_LOG_PATH, 'w', encoding='utf-8') as f:

@@ -159,6 +159,10 @@ def calculate_alpha_sh(
 # Coeficiente para Vc (Ec. 22.5.5.1): Vc = 0.17 x lambda x sqrt(f'c) x bw x d
 VC_COEF_COLUMN = 0.17
 
+# Limite de f'c efectivo para calculo de Vc (Seccion 22.5.3.1)
+# sqrt(f'c) se limita a sqrt(70 MPa) para hormigones de alta resistencia
+FC_EFF_SHEAR_MAX_MPA = 70
+
 # Limite del aporte del acero (Seccion 22.5.1.2): Vs <= 0.66 x sqrt(f'c) x bw x d
 VS_MAX_COEF = 0.66
 

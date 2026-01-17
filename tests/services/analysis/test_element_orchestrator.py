@@ -235,76 +235,6 @@ class TestOrchestratorInit:
 
 
 # =============================================================================
-# Tests para ElementOrchestrator - Clasificación
-# =============================================================================
-
-class TestOrchestratorClassify:
-    """Tests para método classify()."""
-
-    def test_classify_column(self, sample_column):
-        """Clasifica columna correctamente."""
-        orchestrator = ElementOrchestrator()
-        element_type = orchestrator.classify(sample_column)
-        # Columna sísmica por defecto
-        assert element_type == ElementType.COLUMN_SEISMIC
-
-    def test_classify_beam(self, sample_beam):
-        """Clasifica viga correctamente."""
-        orchestrator = ElementOrchestrator()
-        element_type = orchestrator.classify(sample_beam)
-        assert element_type == ElementType.BEAM
-
-    def test_classify_wall(self, sample_pier):
-        """Clasifica muro correctamente."""
-        orchestrator = ElementOrchestrator()
-        element_type = orchestrator.classify(sample_pier)
-        # Pier con lw/tw = 10 es WALL o WALL_SQUAT dependiendo de hw/lw
-        assert element_type.is_wall
-
-    def test_classify_drop_beam(self, sample_drop_beam):
-        """Clasifica viga capitel correctamente."""
-        orchestrator = ElementOrchestrator()
-        element_type = orchestrator.classify(sample_drop_beam)
-        assert element_type == ElementType.DROP_BEAM
-
-
-# =============================================================================
-# Tests para ElementOrchestrator - Resolución de comportamiento
-# =============================================================================
-
-class TestOrchestratorResolveBehavior:
-    """Tests para método resolve_behavior()."""
-
-    def test_column_gets_seismic_column(self, sample_column):
-        """Columna sísmica obtiene comportamiento SEISMIC_COLUMN."""
-        orchestrator = ElementOrchestrator()
-        behavior = orchestrator.resolve_behavior(sample_column)
-        assert behavior == DesignBehavior.SEISMIC_COLUMN
-        assert behavior.service_type == 'column'
-
-    def test_beam_gets_seismic_beam(self, sample_beam):
-        """Viga sísmica obtiene comportamiento SEISMIC_BEAM."""
-        orchestrator = ElementOrchestrator()
-        behavior = orchestrator.resolve_behavior(sample_beam)
-        assert behavior == DesignBehavior.SEISMIC_BEAM
-        assert behavior.service_type == 'beam'
-
-    def test_wall_gets_seismic_wall(self, sample_pier):
-        """Muro sísmico obtiene comportamiento SEISMIC_WALL."""
-        orchestrator = ElementOrchestrator()
-        behavior = orchestrator.resolve_behavior(sample_pier)
-        assert behavior == DesignBehavior.SEISMIC_WALL
-        assert behavior.service_type == 'wall'
-
-    def test_drop_beam_gets_drop_beam(self, sample_drop_beam):
-        """Viga capitel obtiene comportamiento DROP_BEAM."""
-        orchestrator = ElementOrchestrator()
-        behavior = orchestrator.resolve_behavior(sample_drop_beam)
-        assert behavior == DesignBehavior.DROP_BEAM
-        assert behavior.service_type == 'wall'
-
-
-# =============================================================================
 # Tests para ElementOrchestrator - Verificación
 # =============================================================================
 
@@ -396,54 +326,6 @@ class TestOrchestratorVerifyWall:
         assert mock_wall_service.verify_drop_beam.called
         assert result.service_used == 'wall'
         assert result.element_type == ElementType.DROP_BEAM
-
-
-# =============================================================================
-# Tests para ElementOrchestrator - get_verification_info
-# =============================================================================
-
-class TestOrchestratorVerificationInfo:
-    """Tests para método get_verification_info()."""
-
-    def test_column_info(self, sample_column):
-        """Retorna info correcta para columna."""
-        orchestrator = ElementOrchestrator()
-        info = orchestrator.get_verification_info(sample_column)
-
-        assert info['element_type'] == 'column_seismic'
-        assert info['design_behavior'] == 'SEISMIC_COLUMN'
-        assert info['aci_section'] == '§18.7'
-        assert 'SeismicColumnService' in info['service']
-        assert info['requires_seismic_checks'] is True
-
-    def test_beam_info(self, sample_beam):
-        """Retorna info correcta para viga."""
-        orchestrator = ElementOrchestrator()
-        info = orchestrator.get_verification_info(sample_beam)
-
-        assert info['element_type'] == 'beam'
-        assert info['design_behavior'] == 'SEISMIC_BEAM'
-        assert info['aci_section'] == '§18.6'
-        assert 'SeismicBeamService' in info['service']
-
-    def test_wall_info(self, sample_pier):
-        """Retorna info correcta para muro."""
-        orchestrator = ElementOrchestrator()
-        info = orchestrator.get_verification_info(sample_pier)
-
-        # Puede ser wall o wall_squat dependiendo de hw/lw
-        assert 'wall' in info['element_type']
-        assert info['design_behavior'] == 'SEISMIC_WALL'
-        assert '§18.10' in info['aci_section']
-        assert 'SeismicWallService' in info['service']
-
-    def test_drop_beam_info(self, sample_drop_beam):
-        """Retorna info correcta para viga capitel."""
-        orchestrator = ElementOrchestrator()
-        info = orchestrator.get_verification_info(sample_drop_beam)
-
-        assert info['element_type'] == 'drop_beam'
-        assert info['design_behavior'] == 'DROP_BEAM'
 
 
 # =============================================================================

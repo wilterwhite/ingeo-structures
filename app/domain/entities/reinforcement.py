@@ -70,13 +70,19 @@ class DiscreteReinforcement:
     @property
     def n_total_bars(self) -> int:
         """Número total de barras."""
-        # Caso especial: 1 fierro centrado
+        # Caso especial: 1 fierro centrado (strut cuadrado pequeño)
         if self.n_bars_length == 1 and self.n_bars_thickness == 1:
             return 1
 
-        # Caso normal: distribución perimetral
-        if self.n_bars_length < 2 or self.n_bars_thickness < 2:
-            return 4  # mínimo 4 esquinas
+        # Caso especial: strut rectangular (una dimensión = 1)
+        # Ej: 2x1 = 2 barras en línea, 3x1 = 3 barras en línea
+        if self.n_bars_length == 1:
+            return self.n_bars_thickness
+        if self.n_bars_thickness == 1:
+            return self.n_bars_length
+
+        # Caso normal: distribución perimetral (columnas)
+        # 2x2 = 4, 3x2 = 6, 3x3 = 8, etc.
         n_corners = 4
         n_sides_length = max(0, self.n_bars_length - 2) * 2
         n_sides_thickness = max(0, self.n_bars_thickness - 2) * 2

@@ -15,6 +15,7 @@ Referencias ACI 318-25:
 - Capitulo 18: Estructuras resistentes a sismos
 """
 from typing import Dict, List, Any, Optional
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import uuid
 import math
 
@@ -146,9 +147,75 @@ class StructuralAnalysisService:
         """Parsea Excel de ETABS y crea una sesión."""
         return self._session_manager.create_session(file_content, session_id, hn_ft=hn_ft)
 
-    def parse_excel_with_progress(self, file_content: bytes, session_id: str, hn_ft: Optional[float] = None):
-        """Parsea Excel de ETABS con progreso SSE."""
-        yield from self._session_manager.create_session_with_progress(file_content, session_id, hn_ft=hn_ft)
+    def parse_excel_with_progress(
+        self,
+        file_content: bytes,
+        session_id: str,
+        hn_ft: Optional[float] = None,
+        merge: bool = False,
+        filename: str = "unknown.xlsx"
+    ):
+        """
+        Parsea Excel de ETABS con progreso SSE.
+
+        Nuevo flujo multi-archivo:
+        1. Acumular tablas del archivo
+        2. Fusionar tablas acumuladas
+        3. Procesar elementos desde tablas fusionadas
+
+        Args:
+            file_content: Contenido binario del Excel
+            session_id: ID de sesión
+            hn_ft: Altura del edificio en pies (opcional)
+            merge: Si True y la sesión existe, combina datos en vez de sobrescribir
+            filename: Nombre del archivo para logging
+        """
+        # Fase 1: Acumular tablas del archivo
+        yield {
+            'type': 'progress',
+            'phase': 'extracting',
+            'current': 0,
+            'total': 1,
+            'element': 'Extrayendo tablas del Excel...'
+        }
+
+        accum_result = self._session_manager.accumulate_tables(file_content, session_id, filename=filename)
+        if not accum_result.get('success'):
+            yield {'type': 'error', 'message': accum_result.get('error', 'Error acumulando tablas')}
+            return
+
+        tables_found = accum_result.get('tables_found', [])
+        yield {
+            'type': 'progress',
+            'phase': 'extracted',
+            'current': 1,
+            'total': 1,
+            'element': f'Encontradas {len(tables_found)} tablas'
+        }
+
+        # Fase 2: Procesar sesión (fusionar tablas y parsear elementos)
+        yield {
+            'type': 'progress',
+            'phase': 'processing',
+            'current': 0,
+            'total': 1,
+            'element': 'Procesando elementos...'
+        }
+
+        process_result = self._session_manager.process_session(session_id, hn_ft=hn_ft)
+        if not process_result.get('success'):
+            yield {'type': 'error', 'message': process_result.get('error', 'Error procesando sesión')}
+            return
+
+        yield {
+            'type': 'complete',
+            'result': {
+                'success': True,
+                'session_id': session_id,
+                'summary': process_result.get('summary', {}),
+                'merged': merge
+            }
+        }
 
     def clear_session(self, session_id: str) -> bool:
         """Limpia una sesión del cache."""
@@ -252,7 +319,8 @@ class StructuralAnalysisService:
         continuity_info=None,
         hn_ft: Optional[float] = None,
         seismic_category: SeismicCategory = SeismicCategory.SPECIAL,
-        coupling_config=None
+        coupling_config=None,
+        interaction_curve=None
     ) -> Dict[str, Any]:
         """
         Analiza un elemento individual usando ElementOrchestrator.
@@ -269,6 +337,7 @@ class StructuralAnalysisService:
             hn_ft: Altura del edificio en pies (opcional)
             seismic_category: Categoría sísmica (SPECIAL, INTERMEDIATE, ORDINARY)
             coupling_config: Configuración de vigas de acople (PierCouplingConfig)
+            interaction_curve: Curva P-M pre-calculada (optimización)
 
         Returns:
             Diccionario formateado para la UI
@@ -282,6 +351,7 @@ class StructuralAnalysisService:
         hwcs = continuity_info.hwcs if continuity_info else None
 
         # Verificar usando el orquestador unificado
+        # Pasar curva pre-calculada si está disponible
         result = self._orchestrator.verify(
             element=element,
             forces=forces,
@@ -289,6 +359,7 @@ class StructuralAnalysisService:
             category=seismic_category,
             hwcs=hwcs,
             hn_ft=hn_ft,
+            interaction_curve=interaction_curve,
         )
 
         # Formatear resultado
@@ -418,98 +489,203 @@ class StructuralAnalysisService:
         hn_ft = parsed_data.building_info.hn_ft if parsed_data.building_info else None
 
         # =====================================================================
-        # FASE 1: Analizar PIERS (usando _analyze_element)
+        # PRE-GENERACIÓN DE CURVAS P-M (OPTIMIZACIÓN)
+        # Las curvas P-M son determinísticas por elemento. Se generan UNA VEZ
+        # y se reutilizan en todo el análisis.
         # =====================================================================
-        pier_results = []
+        yield {
+            "type": "progress",
+            "current": 0,
+            "total": total_elements,
+            "pier": "Generando curvas de interacción P-M..."
+        }
+
+        # Pre-generar curvas para elementos verticales (piers y columnas)
+        for key, element in vertical_elements.items():
+            # Solo generar si no existe en cache
+            if not self._session_manager.get_interaction_curve(session_id, key, 'primary'):
+                try:
+                    curve_primary, _ = self._flexo_service.generate_interaction_curve(
+                        element, direction='primary', use_cache=False
+                    )
+                    self._session_manager.store_interaction_curve(
+                        session_id, key, 'primary', curve_primary
+                    )
+                except Exception:
+                    pass  # Continuar si falla un elemento
+
+            if not self._session_manager.get_interaction_curve(session_id, key, 'secondary'):
+                try:
+                    curve_secondary, _ = self._flexo_service.generate_interaction_curve(
+                        element, direction='secondary', use_cache=False
+                    )
+                    self._session_manager.store_interaction_curve(
+                        session_id, key, 'secondary', curve_secondary
+                    )
+                except Exception:
+                    pass
+
+        # Pre-generar curvas para vigas (solo primary)
+        for key, element in horizontal_elements.items():
+            if not self._session_manager.get_interaction_curve(session_id, key, 'primary'):
+                try:
+                    curve_primary, _ = self._flexo_service.generate_interaction_curve(
+                        element, direction='primary', use_cache=False
+                    )
+                    self._session_manager.store_interaction_curve(
+                        session_id, key, 'primary', curve_primary
+                    )
+                except Exception:
+                    pass
+
+        # =====================================================================
+        # ANÁLISIS PARALELO - Usa curvas pre-generadas
+        # =====================================================================
+        import os
         vertical_forces = parsed_data.vertical_forces or {}
         horizontal_forces = parsed_data.horizontal_forces or {}
 
-        for i, (key, pier) in enumerate(piers.items(), 1):
-            yield {
-                "type": "progress",
-                "current": i,
-                "total": total_elements,
-                "pier": f"Pier: {pier.story} - {pier.label}"
-            }
+        # Configuración de paralelización AGRESIVA
+        MAX_WORKERS = (os.cpu_count() or 8) * 4  # 96 workers - compensar GIL
+        PROGRESS_INTERVAL = 200  # Solo para progreso, sin batching real
+
+        # Preparar todas las tareas de análisis (con curvas P-M pre-calculadas)
+        all_tasks = []
+
+        # Tareas de PIERS (incluir curva P-M pre-calculada)
+        for key, pier in piers.items():
             continuity_info = None
             if parsed_data.continuity_info and key in parsed_data.continuity_info:
                 continuity_info = parsed_data.continuity_info[key]
-
-            # Obtener configuración de vigas de acople para este pier
             coupling_config = parsed_data.pier_coupling_configs.get(key)
-
-            formatted = self._analyze_element(
-                key, pier, vertical_forces.get(key),
-                materials_config=materials_config,
-                continuity_info=continuity_info,
-                hn_ft=hn_ft,
-                seismic_category=category_enum,
-                coupling_config=coupling_config
+            # Obtener curva pre-calculada del cache
+            interaction_curve = self._session_manager.get_interaction_curve(
+                session_id, key, 'primary'
             )
-            pier_results.append(formatted)
 
-            # Guardar en cache para que el modal no recalcule
-            self._session_manager.store_analysis_result(session_id, key, formatted)
+            all_tasks.append({
+                'type': 'pier',
+                'key': key,
+                'element': pier,
+                'forces': vertical_forces.get(key),
+                'materials_config': materials_config,
+                'continuity_info': continuity_info,
+                'hn_ft': hn_ft,
+                'seismic_category': category_enum,
+                'coupling_config': coupling_config,
+                'interaction_curve': interaction_curve,
+                'label': f"Pier: {pier.story} - {pier.label}"
+            })
 
-        # =====================================================================
-        # FASE 2: Analizar COLUMNAS (usando _analyze_element)
-        # =====================================================================
+        # Tareas de COLUMNAS (incluir curva P-M pre-calculada)
+        for key, column in columns.items():
+            interaction_curve = self._session_manager.get_interaction_curve(
+                session_id, key, 'primary'
+            )
+            all_tasks.append({
+                'type': 'column',
+                'key': key,
+                'element': column,
+                'forces': vertical_forces.get(key),
+                'seismic_category': category_enum,
+                'interaction_curve': interaction_curve,
+                'label': f"Columna: {column.story} - {column.label}"
+            })
+
+        # Tareas de VIGAS (incluir curva P-M pre-calculada)
+        for key, beam in beams.items():
+            interaction_curve = self._session_manager.get_interaction_curve(
+                session_id, key, 'primary'
+            )
+            all_tasks.append({
+                'type': 'beam',
+                'key': key,
+                'element': beam,
+                'forces': horizontal_forces.get(key),
+                'seismic_category': category_enum,
+                'interaction_curve': interaction_curve,
+                'label': f"Viga: {beam.story} - {beam.label}"
+            })
+
+        # Tareas de VIGAS CAPITEL (incluir curva P-M pre-calculada)
+        for key, drop_beam in drop_beams.items():
+            interaction_curve = self._session_manager.get_interaction_curve(
+                session_id, key, 'primary'
+            )
+            all_tasks.append({
+                'type': 'drop_beam',
+                'key': key,
+                'element': drop_beam,
+                'forces': horizontal_forces.get(key),
+                'seismic_category': category_enum,
+                'interaction_curve': interaction_curve,
+                'label': f"V. Capitel: {drop_beam.story} - {drop_beam.label}"
+            })
+
+        # Función worker para ejecutar en threads
+        def analyze_task(task):
+            """Analiza un elemento y retorna resultado con metadata."""
+            formatted = self._analyze_element(
+                task['key'],
+                task['element'],
+                task['forces'],
+                materials_config=task.get('materials_config'),
+                continuity_info=task.get('continuity_info'),
+                hn_ft=task.get('hn_ft'),
+                seismic_category=task.get('seismic_category'),
+                coupling_config=task.get('coupling_config'),
+                interaction_curve=task.get('interaction_curve')
+            )
+            return {
+                'type': task['type'],
+                'key': task['key'],
+                'result': formatted,
+                'label': task['label']
+            }
+
+        # Resultados por tipo
+        pier_results = []
         column_results = []
-        for i, (key, column) in enumerate(columns.items(), 1):
-            yield {
-                "type": "progress",
-                "current": total_piers + i,
-                "total": total_elements,
-                "pier": f"Columna: {column.story} - {column.label}"
-            }
-            formatted = self._analyze_element(
-                key, column, vertical_forces.get(key),
-                seismic_category=category_enum
-            )
-            column_results.append(formatted)
-
-            # Guardar en cache para que el modal no recalcule
-            self._session_manager.store_analysis_result(session_id, key, formatted)
-
-        # =====================================================================
-        # FASE 3: Analizar VIGAS (usando _analyze_element)
-        # =====================================================================
         beam_results = []
-        for i, (key, beam) in enumerate(beams.items(), 1):
-            yield {
-                "type": "progress",
-                "current": total_piers + total_columns + i,
-                "total": total_elements,
-                "pier": f"Viga: {beam.story} - {beam.label}"
-            }
-            formatted = self._analyze_element(
-                key, beam, horizontal_forces.get(key),
-                seismic_category=category_enum
-            )
-            beam_results.append(formatted)
-
-            # Guardar en cache para que el modal no recalcule
-            self._session_manager.store_analysis_result(session_id, key, formatted)
-
-        # =====================================================================
-        # FASE 4: Analizar VIGAS CAPITEL (usando _analyze_element)
-        # =====================================================================
         drop_beam_results = []
-        for i, (key, drop_beam) in enumerate(drop_beams.items(), 1):
-            yield {
-                "type": "progress",
-                "current": total_piers + total_columns + total_beams + i,
-                "total": total_elements,
-                "pier": f"V. Capitel: {drop_beam.story} - {drop_beam.label}"
-            }
-            formatted = self._analyze_element(
-                key, drop_beam, horizontal_forces.get(key),
-                seismic_category=category_enum
-            )
-            drop_beam_results.append(formatted)
 
-            # Guardar en cache para que el modal no recalcule
-            self._session_manager.store_analysis_result(session_id, key, formatted)
+        # ULTRA-AGRESIVO: Lanzar TODOS los elementos en paralelo sin batching
+        completed = 0
+        last_progress = 0
+        
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            # Enviar TODAS las tareas de una vez
+            futures = {executor.submit(analyze_task, task): task for task in all_tasks}
+
+            # Recoger resultados a medida que terminan
+            for future in as_completed(futures):
+                result = future.result()
+                completed += 1
+
+                # Clasificar resultado
+                if result['type'] == 'pier':
+                    pier_results.append(result['result'])
+                elif result['type'] == 'column':
+                    column_results.append(result['result'])
+                elif result['type'] == 'beam':
+                    beam_results.append(result['result'])
+                elif result['type'] == 'drop_beam':
+                    drop_beam_results.append(result['result'])
+
+                # Guardar en cache
+                self._session_manager.store_analysis_result(
+                    session_id, result['key'], result['result']
+                )
+
+                # Emitir progreso cada PROGRESS_INTERVAL elementos
+                if completed - last_progress >= PROGRESS_INTERVAL or completed == total_elements:
+                    last_progress = completed
+                    yield {
+                        "type": "progress",
+                        "current": completed,
+                        "total": total_elements,
+                        "pier": f"Procesando {completed} de {total_elements}"
+                    }
 
         # Calcular estadísticas
         statistics = self._calculate_statistics(
@@ -971,4 +1147,23 @@ class StructuralAnalysisService:
             'success': True,
             'plot': plot
         }
+
+    # =========================================================================
+    # API Pública - Tablas ETABS (Vista de verificación)
+    # =========================================================================
+
+    def get_raw_tables(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Obtiene las tablas crudas de ETABS de una sesión.
+
+        Retorna las tablas extraídas del Excel para que el usuario pueda
+        verificar que los datos se leyeron correctamente.
+
+        Args:
+            session_id: ID de sesión
+
+        Returns:
+            Dict con tablas en formato JSON-serializable, o None si no existe
+        """
+        return self._session_manager.get_raw_tables(session_id)
 

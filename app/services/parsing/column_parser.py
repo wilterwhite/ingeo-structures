@@ -6,9 +6,15 @@ Tablas requeridas:
 - Frame Section Property Definitions - Concrete Rectangular: geometria
 - Frame Assignments - Section Properties: mapeo columna -> seccion
 - Element Forces - Columns: fuerzas por combinacion de carga
+
+OPTIMIZADO: Usa operaciones vectorizadas de pandas en lugar de iterrows()
+para procesar tablas grandes (180k+ filas) eficientemente.
 """
 from typing import Dict, List, Tuple, Optional
 import pandas as pd
+import numpy as np
+import os
+from concurrent.futures import ThreadPoolExecutor
 
 from ...domain.entities import (
     VerticalElement,
@@ -16,10 +22,11 @@ from ...domain.entities import (
     ElementForces,
     ElementForceType,
 )
-from ...domain.entities.load_combination import LoadCombination
+from ...domain.entities.element_forces import COMBO_COLUMNS
 from ...domain.constants.reinforcement import FY_DEFAULT_MPA
 from .material_mapper import parse_material_to_fc
 from .table_extractor import normalize_columns, extract_units_from_df
+from ..logging import claude_logger
 import logging
 
 logger = logging.getLogger(__name__)
@@ -61,8 +68,8 @@ class ColumnParser:
         # Parsear asignaciones columna -> seccion
         column_sections = self._parse_section_assignments(assigns_df)
 
-        # Parsear fuerzas y crear columnas
-        columns, column_forces, stories = self._parse_forces_and_columns(
+        # Parsear fuerzas y crear columnas (VECTORIZADO)
+        columns, column_forces, stories = self._parse_forces_and_columns_vectorized(
             forces_df, section_defs, column_sections, materials
         )
 
@@ -75,7 +82,6 @@ class ColumnParser:
     ) -> Dict[str, dict]:
         """
         Parsea las definiciones de secciones de columnas.
-
         Retorna diccionario con nombre de seccion -> propiedades
         """
         sections = {}
@@ -85,30 +91,41 @@ class ColumnParser:
 
         df = normalize_columns(df)
 
-        # Extraer factores de conversión de unidades de la primera fila
+        # Extraer factores de conversion de unidades de la primera fila
         units = extract_units_from_df(df)
-        logger.info(f"Column sections: Unidades detectadas - depth: {units.get('depth', 1.0)}, width: {units.get('width', 1.0)}")
 
-        # Saltar la fila de unidades (primera fila del DataFrame normalizado)
+        # Saltar la fila de unidades
         df = df.iloc[1:]
 
-        for _, row in df.iterrows():
-            name = str(row.get('name', ''))
-            design_type = str(row.get('design type', '')).lower()
+        # Filtrar solo columnas y filas validas
+        df = df[df['name'].notna() & (df['name'] != 'nan')]
+        if 'design type' in df.columns:
+            mask = df['design type'].astype(str).str.lower().str.contains('column', na=False)
+            df = df[mask]
 
-            # Solo procesar columnas
-            if 'column' not in design_type:
-                continue
+        if len(df) == 0:
+            return sections
 
+        # Vectorizado: extraer todas las secciones de una vez
+        depth_factor = units.get('depth', 1.0)
+        width_factor = units.get('width', 1.0)
+
+        # Convertir columnas numéricas
+        df['depth'] = pd.to_numeric(df['depth'], errors='coerce').fillna(0) * depth_factor
+        df['width'] = pd.to_numeric(df['width'], errors='coerce').fillna(0) * width_factor
+        df['_material'] = df.get('material', pd.Series(['4000Psi'] * len(df))).astype(str).fillna('4000Psi')
+
+        # OPTIMIZADO: Usar to_dict('records') en lugar de iterrows
+        records = df[['name', 'depth', 'width', '_material']].to_dict('records')
+
+        for r in records:
+            name = str(r.get('name', ''))
             if not name or name == 'nan':
                 continue
 
-            # Geometria - aplicar factor de conversión según unidades del Excel
-            depth = float(row.get('depth', 0)) * units.get('depth', 1.0)  # eje 2
-            width = float(row.get('width', 0)) * units.get('width', 1.0)  # eje 3
-
-            # Material
-            material_name = str(row.get('material', '4000Psi'))
+            depth = float(r.get('depth', 0))
+            width = float(r.get('width', 0))
+            material_name = r['_material']
             fc = materials.get(material_name, parse_material_to_fc(material_name))
 
             sections[name] = {
@@ -126,34 +143,32 @@ class ColumnParser:
     ) -> Dict[str, str]:
         """
         Parsea las asignaciones de secciones a columnas.
-
         Retorna diccionario con (story, label) -> nombre_seccion
         """
-        assignments = {}
-
         if df is None:
-            return assignments
+            return {}
 
         df = normalize_columns(df)
 
-        for _, row in df.iterrows():
-            story = str(row.get('story', ''))
-            label = str(row.get('label', ''))
-            section_prop = str(row.get('section property', ''))
+        # Filtrar filas validas
+        df = df[
+            df['story'].notna() & (df['story'] != 'nan') &
+            df['label'].notna() & (df['label'] != 'nan') &
+            df['section property'].notna() & (df['section property'] != 'nan')
+        ]
 
-            if not story or story == 'nan' or not label or label == 'nan':
-                continue
+        if len(df) == 0:
+            return {}
 
-            if not section_prop or section_prop == 'nan':
-                continue
+        # Vectorizado: crear keys y valores
+        keys = df['story'].astype(str) + '_' + df['label'].astype(str)
+        values = df['section property'].astype(str)
 
-            key = f"{story}_{label}"
-            assignments[key] = section_prop
-
+        assignments = dict(zip(keys, values))
         logger.info(f"Column assignments: {len(assignments)} asignaciones parseadas")
         return assignments
 
-    def _parse_forces_and_columns(
+    def _parse_forces_and_columns_vectorized(
         self,
         df: pd.DataFrame,
         section_defs: Dict[str, dict],
@@ -161,75 +176,126 @@ class ColumnParser:
         materials: Dict[str, float]
     ) -> Tuple[Dict[str, VerticalElement], Dict[str, ElementForces], List[str]]:
         """
-        Parsea las fuerzas de columnas y crea las entidades VerticalElement.
+        Parsea las fuerzas de columnas usando operaciones VECTORIZADAS.
+        Mucho mas rapido que iterrows() para 180k+ filas.
         """
         columns: Dict[str, VerticalElement] = {}
         column_forces: Dict[str, ElementForces] = {}
         stories: List[str] = []
-        column_heights: Dict[str, Tuple[float, float]] = {}  # min, max station
 
-        if df is None:
+        if df is None or len(df) == 0:
             return columns, column_forces, stories
 
         df = normalize_columns(df)
 
-        for _, row in df.iterrows():
-            story = str(row.get('story', ''))
-            column_label = str(row.get('column', ''))
+        # Filtrar filas validas
+        df = df[df['column'].notna() & (df['column'].astype(str) != 'nan')].copy()
 
-            if not column_label or column_label == 'nan':
-                continue
+        if len(df) == 0:
+            return columns, column_forces, stories
 
-            column_key = f"{story}_{column_label}"
+        # Crear column_key vectorizado
+        df['column_key'] = df['story'].astype(str) + '_' + df['column'].astype(str)
 
-            # Tracking de stations para calcular altura
-            try:
-                station = float(row.get('station', 0))
-            except (ValueError, TypeError):
-                station = 0
+        # Convertir columnas numericas de una vez (vectorizado)
+        numeric_cols = ['station', 'p', 'v2', 'v3', 't', 'm2', 'm3']
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-            if column_key not in column_heights:
-                column_heights[column_key] = (station, station)
-            else:
-                min_s, max_s = column_heights[column_key]
-                column_heights[column_key] = (min(min_s, station), max(max_s, station))
+        # Calcular min/max station por columna (vectorizado con groupby)
+        station_stats = df.groupby('column_key')['station'].agg(['min', 'max'])
+        column_heights = {
+            key: (row['min'], row['max'])
+            for key, row in station_stats.iterrows()
+        }
 
-            # Crear ElementForces si no existe
-            if column_key not in column_forces:
-                column_forces[column_key] = ElementForces(
+        # Obtener stories unicos (vectorizado)
+        stories = df['story'].astype(str).unique().tolist()
+
+        # OPTIMIZADO: Preparar columnas antes de agrupar
+        # Derivar location desde station (ETABS da Station numérico para columnas)
+        # Nota: ETABS puede tener columna 'location' pero vacía para columnas
+        # Validar que existan valores de ubicación reales (Top/Bottom/Middle)
+        valid_locations = {'Top', 'Bottom', 'Middle', 'top', 'bottom', 'middle'}
+        has_valid_location = (
+            'location' in df.columns and
+            df['location'].astype(str).str.strip().isin(valid_locations).any()
+        )
+        if has_valid_location:
+            df['_location'] = df['location'].astype(str).replace('nan', 'Middle').replace('None', 'Middle').fillna('Middle')
+        elif 'station' in df.columns:
+            # Convertir station numérico a Top/Bottom/Middle
+            # station=0 o min → Bottom, station=max → Top, otros → Middle
+            def station_to_location(row):
+                station = row['station']
+                col_key = row['column_key']
+                if col_key not in column_heights:
+                    return 'Middle'
+                min_st, max_st = column_heights[col_key]
+                # Tolerancia para comparación de floats
+                tol = 0.001
+                if abs(station - min_st) < tol:
+                    return 'Bottom'
+                elif abs(station - max_st) < tol:
+                    return 'Top'
+                else:
+                    return 'Middle'
+            df['_location'] = df.apply(station_to_location, axis=1)
+        else:
+            df['_location'] = 'Middle'
+
+        if 'output case' in df.columns:
+            df['_output_case'] = df['output case'].astype(str).fillna('')
+        else:
+            df['_output_case'] = ''
+
+        if 'step type' in df.columns:
+            df['_step_type'] = df['step type'].astype(str).replace('nan', '').fillna('')
+        else:
+            df['_step_type'] = ''
+
+        # OPTIMIZADO: Renombrar columnas para match con COMBO_COLUMNS antes de agrupar
+        df_combos = df[['column_key', '_output_case', '_location', '_step_type', 'p', 'v2', 'v3', 't', 'm2', 'm3']].copy()
+        df_combos.columns = ['column_key', 'name', 'location', 'step_type', 'P', 'V2', 'V3', 'T', 'M2', 'M3']
+
+        # AGRESIVO: Procesar grupos en PARALELO con todos los cores
+        grouped = df_combos.groupby('column_key')
+        group_items = list(grouped)
+        
+        # Función worker para procesar un chunk de grupos
+        def process_chunk(chunk_items):
+            chunk_forces = {}
+            for column_key, group in chunk_items:
+                parts = column_key.split('_', 1)
+                if len(parts) != 2 or len(group) == 0:
+                    continue
+                story, column_label = parts
+                forces = ElementForces(
                     label=column_label,
                     story=story,
-                    element_type=ElementForceType.COLUMN,
-                    combinations=[]
+                    element_type=ElementForceType.COLUMN
                 )
-
-            # Determinar location basado en station
-            # La station mas baja es "Bottom", la mas alta es "Top"
-            location = str(row.get('location', ''))
-            if not location or location == 'nan':
-                location = 'Middle'
-
-            # Parsear combinacion
-            try:
-                combo = LoadCombination(
-                    name=str(row.get('output case', '')),
-                    location=location,
-                    step_type=self._clean_step_type(row.get('step type', '')),
-                    P=float(row.get('p', 0)),
-                    V2=float(row.get('v2', 0)),
-                    V3=float(row.get('v3', 0)),
-                    T=float(row.get('t', 0)),
-                    M2=float(row.get('m2', 0)),
-                    M3=float(row.get('m3', 0))
-                )
-                column_forces[column_key].combinations.append(combo)
-            except (ValueError, TypeError):
-                continue
-
-            if story not in stories:
-                stories.append(story)
+                forces.set_combinations_from_df(group[COMBO_COLUMNS])
+                chunk_forces[column_key] = forces
+            return chunk_forces
+        
+        # Dividir en chunks y procesar en paralelo
+        n_workers = min(os.cpu_count() or 8, len(group_items))
+        if n_workers > 1 and len(group_items) > 100:
+            chunk_size = max(1, len(group_items) // n_workers)
+            chunks = [group_items[i:i+chunk_size] for i in range(0, len(group_items), chunk_size)]
+            
+            with ThreadPoolExecutor(max_workers=n_workers) as executor:
+                results = list(executor.map(process_chunk, chunks))
+                for chunk_result in results:
+                    column_forces.update(chunk_result)
+        else:
+            # Secuencial para datasets pequeños
+            column_forces = process_chunk(group_items)
 
         # Crear columnas con altura calculada
+        skipped_columns = []
         for column_key, forces in column_forces.items():
             story, column_label = column_key.split('_', 1)
 
@@ -241,19 +307,14 @@ class ColumnParser:
                 section_name = column_sections[column_key]
                 section = section_defs.get(section_name)
 
-            # 2. Fallback: buscar por label directo en secciones
+            # 2. Buscar por label directo en secciones
             if section is None:
                 section = section_defs.get(column_label)
 
-            # 3. Fallback: usar la primera seccion disponible
+            # 3. Si no hay seccion, saltar esta columna y registrar error
             if section is None:
-                for sec_name, sec_props in section_defs.items():
-                    section = sec_props
-                    break
-
-            # 4. Valores por defecto si no hay seccion
-            if section is None:
-                section = {'depth': 450, 'width': 450, 'fc': 28}
+                skipped_columns.append(f"{column_label} ({story})")
+                continue
 
             # Calcular altura desde stations
             if column_key in column_heights:
@@ -268,28 +329,38 @@ class ColumnParser:
             forces.height = height
 
             # Crear VerticalElement con source=FRAME (columna)
-            # La armadura se propone automaticamente en __post_init__
-            # segun ReinforcementProposer basado en geometria
             depth = section['depth']
             width = section['width']
 
-            columns[column_key] = VerticalElement(
+            # Obtener nombre de seccion para PM
+            section_name = column_sections.get(column_key, column_label)
+
+            column = VerticalElement(
                 label=column_label,
                 story=story,
-                # length=depth (eje 2), thickness=width (eje 3)
                 length=depth,
                 thickness=width,
                 height=height,
                 fc=section['fc'],
                 fy=FY_DEFAULT_MPA,
                 source=VerticalElementSource.FRAME,
-                # discrete_reinforcement se inicializa automaticamente
-                # en __post_init__ segun propuesta del ReinforcementProposer
+                section_name=section_name,
             )
 
-        return columns, column_forces, stories
+            # Aplicar property modifiers si estan en el nombre de seccion
+            column.apply_pm_from_section_name()
 
-    def _clean_step_type(self, value) -> str:
-        """Limpia el step_type de valores nan."""
-        step_type = str(value) if value else ''
-        return '' if step_type == 'nan' else step_type
+            columns[column_key] = column
+
+        # Log para Claude
+        claude_logger.log_elements_created("Columns", len(columns))
+
+        # Registrar columnas sin seccion como errores
+        if skipped_columns:
+            logger.warning(f"Column parser: {len(skipped_columns)} columnas sin seccion definida (no creadas)")
+            for col in skipped_columns[:20]:
+                claude_logger.log_parsing_warning(f"Columna sin seccion: {col}")
+            if len(skipped_columns) > 20:
+                claude_logger.log_parsing_warning(f"... y {len(skipped_columns) - 20} columnas mas sin seccion")
+
+        return columns, column_forces, stories

@@ -75,7 +75,8 @@ class RowFactory {
 
     /**
      * Fila para STRUTs (columnas pequeñas sin refuerzo confinado).
-     * Usa mismas celdas que columna pero con estribos deshabilitados.
+     * - Strut cuadrado (1x1): sin estribos
+     * - Strut rectangular (2x1, 1x2, etc): con trabas (1 rama, no confinado)
      * Si usuario cambia grilla de 1x1 a 2x2+, se recalcula como COLUMN.
      */
     _createStrutRow(row, result, strutKey, isExpanded) {
@@ -84,13 +85,16 @@ class RowFactory {
         row.appendChild(PierCells.createSeismicCategoryCell(result, strutKey));  // Categoría sísmica
         row.appendChild(ColumnCells.createGeometryCell(result));
         row.appendChild(ColumnCells.createLongitudinalCell(result, strutKey));  // Armadura editable
-        row.appendChild(ColumnCells.createStirrupsCell(result, strutKey, true));  // Estribos disabled
+        // Solo deshabilitar estribos si es strut cuadrado (1x1 sin trabas)
+        const reinf = result.reinforcement || {};
+        const isSquareStrut = (reinf.n_bars_depth === 1 && reinf.n_bars_width === 1);
+        row.appendChild(ColumnCells.createStirrupsCell(result, strutKey, isSquareStrut));
         row.appendChild(SharedCells.createEmptyCell());  // Sin viga izq
         row.appendChild(SharedCells.createEmptyCell());  // Sin viga der
         row.appendChild(SharedCells.createFlexureSfCell(result));
         row.appendChild(SharedCells.createFlexureCapCell(result));
-        row.appendChild(SharedCells.createEmptyCell());  // Sin cortante (struts no verifican)
-        row.appendChild(SharedCells.createEmptyCell());  // Sin cap cortante
+        row.appendChild(SharedCells.createStrutShearSfCell(result));  // DCR cortante strut
+        row.appendChild(SharedCells.createStrutShearCapCell(result));  // Cap cortante strut
         row.appendChild(SharedCells.createEmptyCell());  // Sin propuesta
         row.appendChild(SharedCells.createActionsCell(result, strutKey, isExpanded));
 
@@ -243,6 +247,19 @@ class RowFactory {
             });
         });
 
+        // Botones de agrietamiento (crack-btn)
+        row.querySelectorAll('.crack-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const action = btn.dataset.action;
+                if (action === 'crack') {
+                    const dcr = parseFloat(btn.dataset.dcr);
+                    const mode = btn.dataset.mode || 'flexure';
+                    await this._applyCracking(elementKey, elementType, dcr, mode, btn, row);
+                }
+            });
+        });
+
         // Configuración de selectores para event listeners
         // Nota: los selectores deben coincidir con los definidos en BeamCells.js
         const selectorsByType = {
@@ -293,5 +310,101 @@ class RowFactory {
                 });
             }
         }
+    }
+
+    // =========================================================================
+    // Agrietamiento (Cracking)
+    // =========================================================================
+
+    /**
+     * Aplica agrietamiento a un elemento.
+     * Llama al API y actualiza la UI con el resultado.
+     */
+    async _applyCracking(elementKey, elementType, dcr, mode, btn, row) {
+        const sessionId = this.table.sessionId;
+        const factor = (1 / dcr).toFixed(2);
+
+        // Feedback visual: deshabilitar botón y mostrar loading
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = '⏳';
+
+        try {
+            const result = await structuralAPI.applyCracking(
+                sessionId,
+                elementKey,
+                elementType,
+                dcr,
+                mode
+            );
+
+            if (result.success) {
+                console.log(`[Cracking] ${elementKey}: ${mode} PM×${factor} → ${result.new_section_name}`);
+
+                // Mostrar notificación de éxito
+                this._showCrackingNotification(
+                    `✓ ${elementKey} agrietado (PM×${factor})`,
+                    'success'
+                );
+
+                // Marcar fila como agrietada visualmente
+                row.classList.add('cracked-element');
+
+                // El botón ya no es necesario (DCR cambiará al re-analizar)
+                btn.remove();
+
+                // Agregar indicador de PM si no existe
+                const pmCell = row.querySelector('.fs-value');
+                if (pmCell && !pmCell.querySelector('.pm-indicator')) {
+                    const pmIndicator = document.createElement('span');
+                    pmIndicator.className = 'pm-indicator';
+                    pmIndicator.title = `Property Modifiers: ${result.property_modifiers.summary}`;
+                    pmIndicator.textContent = '🔧';
+                    pmCell.appendChild(pmIndicator);
+                }
+            } else {
+                throw new Error(result.error || 'Error desconocido');
+            }
+        } catch (error) {
+            console.error('[Cracking] Error:', error);
+            this._showCrackingNotification(
+                `✗ Error: ${error.message}`,
+                'error'
+            );
+            // Restaurar botón
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+    /**
+     * Muestra una notificación temporal de agrietamiento.
+     */
+    _showCrackingNotification(message, type = 'info') {
+        // Crear notificación flotante
+        const notification = document.createElement('div');
+        notification.className = `cracking-notification ${type}`;
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            background: ${type === 'success' ? '#10b981' : '#ef4444'};
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+        `;
+
+        document.body.appendChild(notification);
+
+        // Auto-remover después de 3 segundos
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
     }
 }
